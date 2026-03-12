@@ -2299,7 +2299,6 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           background: 'var(--bg-base)'
         }}
       >
-      </div>
         {/* SIDEBAR — desktop: left column | tablet/mobile: collapsible strip */}
         <aside className="cpf-sidebar-wrap" style={{background:"var(--bg-base)"}}>
           {/* Toggle bar — only visible on tablet/mobile via CSS .sidebar-toggle-btn */}
@@ -2949,7 +2948,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     </div>
                     <div className="pie-chart-wrap" style={{display:"flex",alignItems:"center",gap:24,flexWrap:"wrap"}}>
                       <div style={{width:240,height:240,flexShrink:0,minWidth:0}}>
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="99%" height="100%">
                           <RechartsPieChart>
                             <RechartsPie data={slices} cx="50%" cy="50%" innerRadius={55} outerRadius={105} paddingAngle={3} dataKey="value" labelLine={false} label={renderLabel}>
                               {slices.map((entry,i)=><RechartsCell key={i} fill={entry.color} stroke="transparent"/>)}
@@ -3046,7 +3045,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       {whatIfProjection && (
                         <div style={{height:260}}>
                           <p style={{fontSize:10,color:"var(--text-muted)",marginBottom:8}}>Blue = base · Green = what-if</p>
-                          <ResponsiveContainer width="100%" height="100%">
+                          <ResponsiveContainer width="99%" height="100%">
                             <LineChart>
                               <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                               <XAxis dataKey="age" type="number" domain={["dataMin","dataMax"]} stroke="var(--chart-text)" fontSize={10}/>
@@ -3087,7 +3086,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 </div>);
               })()}
               <div style={{height:380}}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="99%" height="100%">
                   <AreaChart data={(() => {
                     const base=displayAccumulation.filter(d=>d.age<=inputs.payoutAge);
                     if(!showMonteCarlo||!monteCarloData) return base;
@@ -3158,7 +3157,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 ))}
               </div>
               <div style={{height:350}}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="99%" height="100%">
                   <LineChart data={displayProjection.filter(d=>d.age>=inputs.payoutAge)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                     <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
@@ -3283,7 +3282,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 ))}
               </div>
               {scenarioA&&scenarioB?(<div style={{height:350}}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="99%" height="100%">
                   <LineChart data={comparisonData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                     <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
