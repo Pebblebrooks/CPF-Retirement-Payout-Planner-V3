@@ -1509,8 +1509,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
   };
 
   return (
-    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{minHeight:"100vh",background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflowX:"hidden"}}>
-      <style>{`
+        <style>{`
+        /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
+        #root { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; text-align: left !important; }
+        body { margin: 0 !important; background-color: var(--bg-base) !important; }
+
         .theme-dark {
           --bg-base: #060d1f;
           --bg-panel: #0d1b2e;
@@ -1553,6 +1556,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           from { opacity:0; transform:translateY(-6px); }
           to   { opacity:1; transform:translateY(0);    }
         }
+        
         /* ─── BASE LAYOUT (desktop default) ─────────────────────────── */
         .cpf-layout {
           display: grid;
@@ -1566,51 +1570,14 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           transition: max-width 0.3s ease, grid-template-columns 0.3s ease, padding 0.3s ease;
         }
         /* ─── DESKTOP VIEWPORT MODES ─────────────────────────────────── */
-        /* FHD: forced 1920 max */
-        .cpf-layout[data-mode="fhd"] {
-          grid-template-columns: 380px 1fr;
-          max-width: 1920px;
-          gap: 28px;
-          padding: 28px 32px;
-        }
-        /* HD: forced 1440 max */
-        .cpf-layout[data-mode="hd"] {
-          grid-template-columns: 360px 1fr;
-          max-width: 1440px;
-          gap: 24px;
-          padding: 24px 28px;
-        }
-        /* Auto: follows actual viewport width */
-        @media (min-width: 1920px) {
-          .cpf-layout[data-mode="auto"] {
-            grid-template-columns: 380px 1fr;
-            gap: 28px;
-            padding: 28px 32px;
-          }
-        }
-        @media (min-width: 1440px) and (max-width: 1919px) {
-          .cpf-layout[data-mode="auto"] {
-            grid-template-columns: 360px 1fr;
-            gap: 24px;
-            padding: 24px 24px;
-          }
-        }
-        @media (max-width: 1439px) and (min-width: 1025px) {
-          .cpf-layout[data-mode="auto"] {
-            grid-template-columns: 300px 1fr;
-            gap: 16px;
-            padding: 16px 16px;
-          }
-        }
+        .cpf-layout[data-mode="fhd"] { grid-template-columns: 380px 1fr; max-width: 1920px; gap: 28px; padding: 28px 32px; }
+        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 28px; }
+        @media (min-width: 1920px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 380px 1fr; gap: 28px; padding: 28px 32px; } }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 24px; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 16px; } }
 
-        /* ─── PAGE-WIDE WRAPPER (header + footer align with content panels) ─── */
-        .cpf-page-wrap {
-          max-width: 1920px;
-          margin: 0 auto;
-          padding: 6px 20px;
-          width: 100%;
-          box-sizing: border-box;
-        }
+        /* ─── PAGE-WIDE WRAPPER ─── */
+        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 20px; width: 100%; box-sizing: border-box; }
         .cpf-page-wrap[data-mode="fhd"] { max-width: 1920px; padding: 6px 32px; }
         .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 28px; }
         .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 20px; }
@@ -1618,164 +1585,70 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
         @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 24px; } }
         @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 16px; } }
 
-        /* ─── HEADER ACTIONS ─────────────────────────────────────────── */
-        .cpf-header-actions {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-          flex: 1 1 auto;
-          min-width: 0;
-        }
-        .mobile-menu-btn    { display: none; }
-        .desktop-only       { display: flex; }
-
-        /* ─── TAB STRIP ──────────────────────────────────────────────── */
-        .cpf-tabs {
-          display: flex;
-          gap: 4px;
-          flex-wrap: nowrap;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-          scrollbar-width: none;
-          padding-bottom: 2px;
-        }
+        .cpf-header-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
+        .mobile-menu-btn { display: none; }
+        .desktop-only { display: flex; }
+        .cpf-tabs { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
         .cpf-tabs::-webkit-scrollbar { display: none; }
 
-        /* ─── RESPONSIVE GRID HELPERS ────────────────────────────────── */
-        /* Applied via className; overridden per breakpoint below */
         .rg-6 { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
         .rg-5 { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
         .rg-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
         .rg-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-        .rg-2 { display:grid; grid-template-columns:1fr 1fr;       gap:12px; }
-
-        /* ─── SIDEBAR TOGGLE BUTTON (hidden on desktop) ──────────────── */
+        .rg-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
         .sidebar-toggle-btn { display: none; }
 
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
         @media (max-width: 1024px) and (min-width: 769px) {
-          .cpf-layout {
-            grid-template-columns: 1fr !important;
-            gap: 0 !important;
-            padding: 0 !important;
-            max-width: 100% !important;
-          }
-          .cpf-sidebar-wrap {
-            width: 100%;
-            border-bottom: 2px solid var(--border-subtle);
-            /* Not sticky on tablet: sticky clips expanded panel content */
-            position: static;
-            background: var(--bg-base);
-          }
-          .cpf-sidebar-inner {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            padding: 12px 14px 16px;
-            animation: sidebarIn 0.2s ease-out;
-            /* No max-height: let expanded panels push content down naturally */
-            overflow-y: visible;
-          }
+          .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; }
+          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static; background: var(--bg-base); }
+          .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           .cpf-main-wrap { padding: 16px 14px; }
           .sidebar-toggle-btn { display: flex !important; }
           .desktop-only { display: none !important; }
-          /* Fix inner grids for this breakpoint */
-          .rg-6 { grid-template-columns: repeat(3,1fr) !important; }
-          .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
-          .rg-4 { grid-template-columns: 1fr 1fr !important; }
-          .rg-3 { grid-template-columns: 1fr 1fr !important; }
-          .rg-2 { grid-template-columns: 1fr 1fr !important; }
-          .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
-          /* Charts: prevent overflow */
-          .recharts-responsive-container { min-width: 0 !important; }
-          /* Tables: horizontal scroll */
+          .rg-6, .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
+          .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
-          /* Modals: full width */
           .cpf-modal-inner { max-width: 100% !important; margin: 0 !important; border-radius: 0 !important; }
         }
 
         /* ─── TABLET PORTRAIT + MOBILE  ≤ 768 px ────────────────────── */
         @media (max-width: 768px) {
-          .cpf-layout {
-            grid-template-columns: 1fr !important;
-            gap: 0 !important;
-            padding: 0 !important;
-            max-width: 100% !important;
-          }
+          .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; }
           .cpf-header-actions .hide-mobile { display: none; }
-          .cpf-sidebar-wrap {
-            width: 100%;
-            border-bottom: 2px solid var(--border-subtle);
-            /* Not sticky on mobile: sticky clips expanded panel content */
-            position: static;
-            background: var(--bg-base);
-          }
-          .cpf-sidebar-inner {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding: 10px 12px 14px;
-            animation: sidebarIn 0.2s ease-out;
-            /* No max-height: let expanded panels push content down naturally */
-            overflow-y: visible;
-          }
+          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static; background: var(--bg-base); }
+          .cpf-sidebar-inner { display: flex; flex-direction: column; gap: 12px; padding: 10px 12px 14px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           .cpf-main-wrap { padding: 10px 10px; }
           .sidebar-toggle-btn { display: flex !important; }
           .desktop-only { display: none !important; }
-          /* Fix inner grids */
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
-          .rg-5 { grid-template-columns: 1fr 1fr !important; }
-          .rg-4 { grid-template-columns: 1fr 1fr !important; }
-          .rg-3 { grid-template-columns: 1fr 1fr !important; }
-          .rg-2 { grid-template-columns: 1fr 1fr !important; }
+          .rg-5, .rg-4, .rg-3, .rg-2 { grid-template-columns: 1fr 1fr !important; }
           .life-plans-grid { grid-template-columns: 1fr !important; }
-          /* Charts: prevent overflow */
-          .recharts-responsive-container { min-width: 0 !important; }
-          /* Tables: horizontal scroll */
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
-          /* Tab strip: always scrollable */
           .cpf-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; }
-          /* Modals: full width, no rounded corners on small screens */
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
-          /* Welcome modal body: scrollable */
           .cpf-welcome-body { max-height: 50vh !important; overflow-y: auto !important; }
-          /* KPI strip: 2 columns */
           .kpi-strip { grid-template-columns: 1fr 1fr !important; }
-          /* Prevent horizontal overflow on the whole page */
           body { overflow-x: hidden !important; }
-          /* Pie chart: stack chart above legend */
           .pie-chart-wrap { flex-direction: column !important; align-items: stretch !important; }
           .pie-chart-wrap > div:first-child { width: 100% !important; }
           .pie-legend { grid-template-columns: 1fr 1fr !important; }
-          /* Docs tab: single column */
           .docs-two-col { grid-template-columns: 1fr !important; }
-          /* LIFE chart header: always column */
           .life-chart-header { flex-direction: column !important; }
-          /* Hero split: stack vertically on mobile */
           .hero-split { grid-template-columns: 1fr !important; }
         }
 
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
         @media (max-width: 480px) {
           .cpf-main-wrap { padding: 6px 6px; }
-          .rg-6 { grid-template-columns: 1fr 1fr !important; gap: 5px !important; }
-          .rg-5 { grid-template-columns: 1fr 1fr !important; }
-          .rg-4 { grid-template-columns: 1fr 1fr !important; }
-          .rg-3 { grid-template-columns: 1fr 1fr !important; }
-          .rg-2 { grid-template-columns: 1fr !important; }
-          .life-plans-grid { grid-template-columns: 1fr !important; }
-          /* Reduce font sizes for very small screens */
+          .rg-6, .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; gap: 5px !important; }
+          .rg-2, .life-plans-grid { grid-template-columns: 1fr !important; }
           .cpf-kpi-value { font-size: 14px !important; }
           .cpf-kpi-label { font-size: 9px !important; }
-          /* Tab buttons: smaller text */
           .cpf-tab-btn { font-size: 9px !important; padding: 6px 8px !important; }
-          /* Sidebar toggle bar: compact */
           .sidebar-toggle-btn span { font-size: 9px !important; }
-          /* Welcome modal: compact padding */
           .cpf-welcome-header { padding: 16px 16px !important; }
           .cpf-welcome-body { padding: 16px !important; max-height: 45vh !important; overflow-y: auto !important; }
           .cpf-welcome-footer { padding: 14px 16px !important; }
@@ -1784,44 +1657,24 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
         /* ─── MOBILE HEADER  ≤ 640 px ───────────────────────────────── */
         @media (max-width: 640px) {
           .mobile-menu-btn { display: flex !important; }
-          .cpf-header-actions > *:not(.mobile-menu-btn):not(.sidebar-toggle-btn) {
-            display: none !important;
-          }
+          .cpf-header-actions > *:not(.mobile-menu-btn):not(.sidebar-toggle-btn) { display: none !important; }
           .cpf-header-actions { gap: 4px; }
-          .cpf-mobile-menu {
-            display: flex !important;
-            flex-direction: column;
-            gap: 8px;
-            position: fixed;
-            top: 54px; right: 0; left: 0;
-            background: var(--bg-panel);
-            border-bottom: 1px solid var(--border-subtle);
-            padding: 12px 14px;
-            z-index: 49;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-            max-height: calc(100vh - 54px);
-            overflow-y: auto;
-          }
-          .cpf-mobile-menu-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-          }
+          .cpf-mobile-menu { display: flex !important; flex-direction: column; gap: 8px; position: fixed; top: 54px; right: 0; left: 0; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); padding: 12px 14px; z-index: 49; box-shadow: 0 8px 24px rgba(0,0,0,0.3); max-height: calc(100vh - 54px); overflow-y: auto; }
+          .cpf-mobile-menu-row { display: flex; gap: 8px; flex-wrap: wrap; }
           .cpf-logo-text { font-size: 13px !important; }
           .cpf-logo-sub  { display: none !important; }
           .sidebar-toggle-btn { display: flex !important; }
           .desktop-only { display: none !important; }
-          .rg-5, .rg-4 { grid-template-columns: 1fr 1fr !important; }
-          .rg-3 { grid-template-columns: 1fr 1fr !important; }
+          .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
         }
         @media (min-width: 641px) {
           .cpf-mobile-menu { display: none !important; }
         }
 
-        /* ─── GLOBAL OVERFLOW GUARD ──────────────────────────────────── */
+        /* ─── GLOBAL OVERFLOW GUARD (Fixed for Recharts) ───────────── */
         @media (max-width: 1024px) {
-          * { max-width: 100%; box-sizing: border-box; }
-          img { max-width: 100%; height: auto; }/* REMOVED 'svg' FROM THIS LINE */
+          body, html, #root, .cpf-page-wrap, .cpf-layout, .cpf-main-wrap { max-width: 100vw; box-sizing: border-box; overflow-x: hidden; }
+          img { max-width: 100%; height: auto; }
           pre, code { white-space: pre-wrap; word-break: break-word; }
           input, select, textarea { max-width: 100%; }
           table { table-layout: auto; }
@@ -3282,7 +3135,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 ))}
               </div>
               {scenarioA&&scenarioB?(<div style={{height:350}}>
-                <ResponsiveContainer width="99%" height="100%">
+                <ResponsiveContainer width="%" height="100%">
                   <LineChart data={comparisonData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                     <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
