@@ -1678,6 +1678,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           input, select, textarea { max-width: 100%; }
           table { table-layout: auto; }
         }
+
+        /* ─── MOBILE TOUCH SCROLL FIX ─── */
+        .recharts-wrapper, .recharts-surface, input[type="range"] {
+          touch-action: pan-y !important;
+        }
       `}</style>
 
       {/* TOAST NOTIFICATION */}
@@ -2805,7 +2810,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                             <RechartsPie data={slices} cx="50%" cy="50%" innerRadius={55} outerRadius={105} paddingAngle={3} dataKey="value" labelLine={false} label={renderLabel}>
                               {slices.map((entry,i)=><RechartsCell key={i} fill={entry.color} stroke="transparent"/>)}
                             </RechartsPie>
-                            <Tooltip formatter={(v,n)=>[formatCurrency(v),n]} contentStyle={{background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:10,fontSize:11,color:"var(--text-bright)"}}/>
+                            <Tooltip formatter={(v,n)=>[formatCurrency(v),n]} contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"4px 8px",color:"#fff"}} itemStyle={{padding:0}} wrapperStyle={{pointerEvents:"none"}}/>
                           </RechartsPieChart>
                         </ResponsiveContainer>
                       </div>
@@ -2857,7 +2862,16 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",padding:24,borderRadius:24}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}><SlidersHorizontal style={{width:18,height:18,color:"#34d399"}}/><h3 style={{fontSize:16,fontWeight:800}}>What-If Explorer</h3><span style={{fontSize:9,background:"var(--bg-input)",color:"var(--text-muted)",padding:"3px 8px",borderRadius:999,border:"1px solid var(--border-strong)"}}>Live Simulation</span></div>
-                  <button onClick={()=>{setShowWhatIf(v=>!v);if(showWhatIf){setWhatIfPayoutAge(null);setWhatIfSaTopup(null);setWhatIfHousing(null);setWhatIfSalaryBump(null);}}} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",borderRadius:12,fontSize:11,fontWeight:700,border:`1px solid ${showWhatIf?"rgba(16,185,129,0.5)":"var(--border-strong)"}`,background:showWhatIf?"rgba(16,185,129,0.15)":"var(--bg-input)",color:showWhatIf?"#34d399":"var(--text-muted)",cursor:"pointer"}}>
+                  <button onClick={(e)=>{
+                    const target = e.currentTarget;
+                    const willShow = !showWhatIf;
+                    setShowWhatIf(willShow);
+                    if(!willShow){
+                      setWhatIfPayoutAge(null);setWhatIfSaTopup(null);setWhatIfHousing(null);setWhatIfSalaryBump(null);
+                    } else {
+                      setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+                    }
+                  }} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",borderRadius:12,fontSize:11,fontWeight:700,border:`1px solid ${showWhatIf?"rgba(16,185,129,0.5)":"var(--border-strong)"}`,background:showWhatIf?"rgba(16,185,129,0.15)":"var(--bg-input)",color:showWhatIf?"#34d399":"var(--text-muted)",cursor:"pointer"}}>
                     <SlidersHorizontal style={{width:13,height:13}}/>{showWhatIf?"Close Explorer":"Open What-If Explorer"}
                   </button>
                 </div>
@@ -2902,10 +2916,10 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                               <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                               <XAxis dataKey="age" type="number" domain={["dataMin","dataMax"]} stroke="var(--chart-text)" fontSize={10}/>
                               <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={10}/>
-                              <Tooltip contentStyle={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:10,color:"var(--text-bright)"}} formatter={(v,n)=>[formatCurrency(v),n]}/>
+                              <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={(v,n)=>[formatCurrency(v),n]} wrapperStyle={{pointerEvents:"none"}}/>
                               <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={{fontSize:9,fontWeight:600}}/>
-                              <Line data={displayAccumulation.filter(d=>d.age<=Number(inputs.payoutAge)).map(d=>({age:d.age,total:d.total}))} type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} dot={false} name="Base Projection"/>
-                              <Line data={whatIfProjection.rows} type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2.5} dot={false} name={`What-If (Payout ${effPA})`}/>
+                              <Line data={displayAccumulation.filter(d=>d.age<=Number(inputs.payoutAge)).map(d=>({age:d.age,total:d.total}))} type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} dot={false} name="Base"/>
+                              <Line data={whatIfProjection.rows} type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2.5} dot={false} name={`What-If (PA:${effPA})`}/>
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
@@ -2947,17 +2961,17 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                     <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
                     <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
-                    <Tooltip contentStyle={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:10,color:"var(--text-bright)"}} formatter={(v,n)=>{if(n==="MC Band") return null; return [formatCurrency(v),n];}}/>
+                    <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={(v,n)=>{if(n==="MC Band") return null; return [formatCurrency(v),n];}} wrapperStyle={{pointerEvents:"none"}}/>
                     <Legend verticalAlign="top" height={28} iconSize={8} wrapperStyle={{fontSize:10,fontWeight:600}}/>
                     {showMonteCarlo&&monteCarloData&&<><Area type="monotone" dataKey="mcP90" stroke="none" fill="#7c3aed" fillOpacity={0.12} name="MC Band" legendType="none"/><Area type="monotone" dataKey="mcP10" stroke="none" fill="var(--bg-base)" fillOpacity={1} name="" legendType="none"/><Line type="monotone" dataKey="mcP50" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="MC Median (P50)"/></>}
                     {milestones.filter(m=>m.age<=Number(inputs.payoutAge)).map((m,idx)=>{
                       const sc=m.type==="success"?"#10b981":m.type==="gold"?"#f59e0b":m.type==="warning"?"#f97316":"#ef4444";
                       return <ReferenceLine key={idx} x={m.age} stroke={sc} strokeWidth={1.5} strokeDasharray="3 3" label={{position:"insideTopRight",value:`Age ${m.age}`,fill:sc,fontSize:8,fontWeight:"bold"}}/>;
                     })}
-                    <Area type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" fill="#1d4ed8" fillOpacity={0.85} name="Ordinary Account"/>
-                    <Area type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="Special Account"/>
-                    <Area type="monotone" dataKey="ma" stackId="1" stroke="#059669" fill="#059669" fillOpacity={0.85} name="MediSave Account"/>
-                    <Area type="monotone" dataKey="ra" stackId="1" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.85} name="Retirement Account"/>
+                    <Area type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" fill="#1d4ed8" fillOpacity={0.85} name="OA"/>
+                    <Area type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="SA"/>
+                    <Area type="monotone" dataKey="ma" stackId="1" stroke="#059669" fill="#059669" fillOpacity={0.85} name="MA"/>
+                    <Area type="monotone" dataKey="ra" stackId="1" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.85} name="RA"/>
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -3014,7 +3028,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                     <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
                     <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
-                    <Tooltip contentStyle={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:10,color:"var(--text-bright)"}} formatter={v=>formatCurrency(v)}/>
+                    <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={v=>formatCurrency(v)} wrapperStyle={{pointerEvents:"none"}}/>
                     <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{fontSize:9,fontWeight:600}}/>
                     {viewMode==="total"&&intersectionEscVsStd&&<ReferenceLine x={intersectionEscVsStd} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 4" label={{position:"insideTopLeft",value:`Break-Even Age ${intersectionEscVsStd}`,fill:"#f59e0b",fontSize:9,fontWeight:"bold"}}/>}
                     {viewMode==="total"&&intersectionStdVsBasic&&<ReferenceLine x={intersectionStdVsBasic} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="4 4" label={{position:"insideBottomRight",value:`Std>Basic Age ${intersectionStdVsBasic}`,fill:"#3b82f6",fontSize:9,fontWeight:"bold"}}/>}
@@ -3139,10 +3153,10 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                     <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
                     <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
-                    <Tooltip contentStyle={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:10,color:"var(--text-bright)"}} formatter={v=>formatCurrency(v)}/>
+                    <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={v=>formatCurrency(v)} wrapperStyle={{pointerEvents:"none"}}/>
                     <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{fontSize:10,fontWeight:600}}/>
-                    <Line type="monotone" dataKey="yieldA" stroke="#3b82f6" strokeWidth={3} dot={false} name={`Scenario A${scenarioLabelA?` — ${scenarioLabelA}`:""} (${highlightPlan} net worth)`}/>
-                    <Line type="monotone" dataKey="yieldB" stroke="#f97316" strokeWidth={3} dot={false} name={`Scenario B${scenarioLabelB?` — ${scenarioLabelB}`:""} (${highlightPlan} net worth)`}/>
+                    <Line type="monotone" dataKey="yieldA" stroke="#3b82f6" strokeWidth={3} dot={false} name={`Slot A${scenarioLabelA?`: ${scenarioLabelA}`:""}`}/>
+                    <Line type="monotone" dataKey="yieldB" stroke="#f97316" strokeWidth={3} dot={false} name={`Slot B${scenarioLabelB?`: ${scenarioLabelB}`:""}`}/>
                   </LineChart>
                 </ResponsiveContainer>
               </div>):<div style={{height:280,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"var(--text-muted)",fontStyle:"italic",border:"2px dashed var(--border-strong)",borderRadius:16}}>Save both scenarios to view comparison chart</div>}
