@@ -1163,9 +1163,9 @@ export default function App() {
           onMouseLeave={handleMouseLeave}
         />
         {isOpen && (
-          <span style={{position:"absolute",zIndex:9999,bottom:"calc(100% + 8px)",left:"50%",transform:"translateX(-50%)",width:200,padding:"9px 11px",background:"#1e293b",color:"#e2e8f0",fontSize:11,borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.5)",border:"1px solid #334155",lineHeight:1.5,display:"block",whiteSpace:"normal",pointerEvents:"none"}}>
+          <span style={{position:"absolute",zIndex:9999,bottom:"calc(100% + 8px)",left:"-10px",width:240,padding:"10px 12px",background:"rgba(6, 13, 31, 0.95)",backdropFilter:"blur(4px)",color:"#ffffff",fontSize:11,borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.6)",border:"1px solid rgba(255,255,255,0.15)",lineHeight:1.5,display:"block",whiteSpace:"normal",pointerEvents:"none",textAlign:"left"}}>
             {text}
-            <span style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",borderWidth:6,borderStyle:"solid",borderColor:"#1e293b transparent transparent transparent"}}/>
+            <span style={{position:"absolute",top:"100%",left:"14px",borderWidth:6,borderStyle:"solid",borderColor:"rgba(6, 13, 31, 0.95) transparent transparent transparent"}}/>
           </span>
         )}
       </span>
@@ -1587,7 +1587,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
         .cpf-header-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
         .mobile-menu-btn { display: none; }
         .desktop-only { display: flex; }
-        .cpf-tabs { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+        .cpf-tabs { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; touch-action: pan-x; }
         .cpf-tabs::-webkit-scrollbar { display: none; }
 
         .rg-6 { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
@@ -2810,7 +2810,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                             <RechartsPie data={slices} cx="50%" cy="50%" innerRadius={55} outerRadius={105} paddingAngle={3} dataKey="value" labelLine={false} label={renderLabel}>
                               {slices.map((entry,i)=><RechartsCell key={i} fill={entry.color} stroke="transparent"/>)}
                             </RechartsPie>
-                            <Tooltip formatter={(v,n)=>[formatCurrency(v),n]} contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"4px 8px",color:"#fff"}} itemStyle={{padding:0}} wrapperStyle={{pointerEvents:"none"}}/>
+                            <Tooltip formatter={(v,n)=>[formatCurrency(v),n]} contentStyle={{background:"rgba(6, 13, 31, 0.85)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:11,padding:"6px 10px"}} itemStyle={{padding:0, color:"#ffffff"}} wrapperStyle={{pointerEvents:"none"}}/>
                           </RechartsPieChart>
                         </ResponsiveContainer>
                       </div>
