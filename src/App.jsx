@@ -1507,13 +1507,12 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
       }
     } catch(e) { alert("Report failed: "+e.message); } finally { setIsGeneratingPdf(false); }
   };
-
   return (
+    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{minHeight:"100vh", width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflowX:"hidden"}}>
         <style>{`
         /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
-        #root { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; text-align: left !important; }
-        body { margin: 0 !important; background-color: var(--bg-base) !important; }
-
+        html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow-x: hidden !important; }
+        #root { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; display: flex; min-height: 100vh; }
         .theme-dark {
           --bg-base: #060d1f;
           --bg-panel: #0d1b2e;
@@ -3135,7 +3134,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 ))}
               </div>
               {scenarioA&&scenarioB?(<div style={{height:350}}>
-                <ResponsiveContainer width="%" height="100%">
+                <ResponsiveContainer width="99%" height="100%">
                   <LineChart data={comparisonData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                     <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
