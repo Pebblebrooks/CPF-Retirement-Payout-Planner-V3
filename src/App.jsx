@@ -1553,20 +1553,18 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           from { opacity:0; transform:translateY(-6px); }
           to   { opacity:1; transform:translateY(0);    }
         }
-
         /* ─── BASE LAYOUT (desktop default) ─────────────────────────── */
         .cpf-layout {
           display: grid;
           grid-template-columns: 340px 1fr;
           gap: 24px;
-          max-width: 1920px;
+          width: 100%;
           margin: 0 auto;
           padding: 24px 20px;
           align-items: start;
           box-sizing: border-box;
-          width: 100%;
+          transition: max-width 0.3s ease, grid-template-columns 0.3s ease, padding 0.3s ease;
         }
-
         /* ─── DESKTOP VIEWPORT MODES ─────────────────────────────────── */
         /* FHD: forced 1920 max */
         .cpf-layout[data-mode="fhd"] {
@@ -1823,7 +1821,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
         /* ─── GLOBAL OVERFLOW GUARD ──────────────────────────────────── */
         @media (max-width: 1024px) {
           * { max-width: 100%; box-sizing: border-box; }
-          img, svg { max-width: 100%; height: auto; }
+          img { max-width: 100%; height: auto; }/* REMOVED 'svg' FROM THIS LINE */
           pre, code { white-space: pre-wrap; word-break: break-word; }
           input, select, textarea { max-width: 100%; }
           table { table-layout: auto; }
@@ -2292,8 +2290,16 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           <AlertTriangle style={{width:14,height:14,color:"#fb923c"}}/>VC Exceeds Available Limit ({formatCurrency(maxAllowableVC)})
         </div>
       )}
-
-      <div className="cpf-layout" data-mode={desktopMode}>
+      <div 
+        className="cpf-layout" 
+        data-mode={desktopMode}
+        style={{ 
+          maxWidth: desktopMode === 'fhd' ? '1920px' : desktopMode === 'hd' ? '1440px' : '100%',
+          minHeight: '100vh',
+          background: 'var(--bg-base)'
+        }}
+      >
+      </div>
         {/* SIDEBAR — desktop: left column | tablet/mobile: collapsible strip */}
         <aside className="cpf-sidebar-wrap" style={{background:"var(--bg-base)"}}>
           {/* Toggle bar — only visible on tablet/mobile via CSS .sidebar-toggle-btn */}
