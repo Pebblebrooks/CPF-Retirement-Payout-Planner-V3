@@ -4,9 +4,9 @@ Welcome to the main application repository for CPF Planner Pro. This is a privac
 
 🔗 Live Links
 
-Marketing & Promo Site (Start Here): https://cpfplannerhome.netlify.app/
+Marketing & Promo Site (Start Here): https://cpfplanner.ehtan2022.workers.dev/
 
-Main Web Application: https://cpfplannerv3.netlify.app/
+Main Web Application: https://cpfplannerappv3.ehtan2022.workers.dev/
 
 📖 Project Overview
 
