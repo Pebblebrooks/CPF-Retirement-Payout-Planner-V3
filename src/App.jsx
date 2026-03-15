@@ -6,17 +6,17 @@ import {
 } from "recharts";
 import {
   Calculator, TrendingUp, User, Info, ShieldCheck, PieChart,
-  AlignJustify, HelpCircle, MinusCircle, Heart, Printer,
+  AlignJustify, HelpCircle, MinusCircle, Printer,
   Briefcase, Gift, Download, Loader2, FileText, BarChart2,
   AlertTriangle, Clock, CheckCircle2, Split, BookOpen, Scale,
   LayoutDashboard, RotateCcw, Activity, Bell, X,
-  SlidersHorizontal, Percent, Link, Target, TrendingDown, DollarSign,
-  Moon, Sun, Monitor, Lightbulb, Keyboard, Copy, ChevronDown, ChevronUp
+  SlidersHorizontal, Percent, Link, Target,
+  Moon, Sun, Monitor, Lightbulb, Copy, ChevronDown, ChevronUp,
+  ArrowRightLeft, LogOut, Users
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
 const BarChart3 = BarChart2;
-const FileJson = FileText;
 const ArrowDownToLine = Download;
 
 const CPF_RATES = { OA: 0.025, SA: 0.04, MA: 0.04, RA: 0.04, EXTRA_1: 0.01, EXTRA_2: 0.01 };
@@ -28,11 +28,30 @@ const LEGAL_DISCLAIMER = "DISCLAIMER: This application is a prototype simulation
 const DEFAULT_INPUTS = {
   name: "Member", currentAge: 35, currentYear: 2026, payoutAge: 65,
   contributionStopAge: 65, housingStopAge: 55,
-  isSelfEmployed: false,
+  isSelfEmployed: false, isMale: true,
   oaBalance: 50000, saBalance: 40000, maBalance: 30000,
   showSalaryCalc: false, salaryGross: 6000, salaryBonus: 12000, salaryGrowthRate: 0,
   empOaCont: 12000, empSaCont: 4000, empMaCont: 4000,
-  vcVhr: 0, vcOaTopup: 0, vcSaTopup: 0, vcMaTopup: 0, annualGovGrant: 500,
+  // VC3A: single cash lump-sum, auto-split by age-band allocation rates
+  vc3aCash: 0,
+  // RSTU: cash top-up to SA (pre-55) or RA (post-55)
+  vcSaTopup: 0,
+  // Housing refund: credited to OA (VHR)
+  vcVhr: 0,
+  // Gov grants / MRSS / MMSS / WIS
+  annualGovGrant: 500,
+  mrssGrant: 0,               // MRSS: govt matches RA top-up, up to $600/yr, age 55-70
+  mmssGrant: 0,               // MMSS: govt matches MA top-up, up to $1,000/yr, age 55-70
+  wisAmount: 0,               // WIS: Workfare Income Supplement — 60% CPF (age-band), 40% cash (employees); 90% MA (SEP)
+  // CPF Transfers
+  oaToSaTransfer: 0,          // annual OA→SA transfer before 55
+  oaToMaTransfer: 0,          // annual OA→MA transfer
+  // Age 55 options
+  oaWithdrawalAt55: 0,
+  usePropertyPledge: false,
+  // CPFIS
+  cpfisAmount: 0,
+  // Outflows
   housingOutflow: 12000, medicalUsage: 500, medishieldIP: 900, elderCareShield: 500,
   medicalInflationRate: 5,
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
@@ -42,16 +61,331 @@ const DEFAULT_INPUTS = {
 const SCENARIO_LABELS = {
   name: "Name", currentAge: "Current Age", currentYear: "Current Year", payoutAge: "Payout Age",
   contributionStopAge: "Contrib Stop Age", housingStopAge: "Housing Stop Age",
-  oaBalance: "OA Balance", saBalance: "SA Balance", maBalance: "MA Balance",
+  isMale: "Gender (Male)", oaBalance: "OA Balance", saBalance: "SA Balance", maBalance: "MA Balance",
   salaryGross: "Gross Salary", salaryBonus: "Annual Bonus", salaryGrowthRate: "Salary Growth %",
   empOaCont: "Emp OA Contrib", empSaCont: "Emp SA Contrib", empMaCont: "Emp MA Contrib",
-  vcVhr: "Vol Housing Refund", vcOaTopup: "Vol OA Top-up", vcSaTopup: "Vol SA/RA Top-up", vcMaTopup: "Vol MA Top-up",
-  annualGovGrant: "Annual Gov Grant", housingOutflow: "Housing Outflow", medicalUsage: "Medical Usage",
+  vc3aCash: "VC3A Cash (Annual)", vcSaTopup: "RSTU SA/RA Top-up", vcVhr: "Housing Refund (VHR)",
+  annualGovGrant: "Annual Gov Grant", mrssGrant: "MRSS Grant", mmssGrant: "MMSS Grant",
+  wisAmount: "WIS (Workfare)", oaToSaTransfer: "OA→SA Transfer",
+  oaToMaTransfer: "OA→MA Transfer", oaWithdrawalAt55: "OA Withdrawal at 55",
+  usePropertyPledge: "Property Pledge", cpfisAmount: "CPFIS (OA/SA)",
+  housingOutflow: "Housing Outflow", medicalUsage: "Medical Usage",
   medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
   propertyLeasehold: "Is Leasehold", propertyLeaseYears: "Lease Years",
   inflationRate: "Inflation Rate %", includeProperty: "Include Property"
 };
+
+// ─── SHARED PROJECTION ENGINE ───────────────────────────────────────────────
+// Single source of truth for year-by-year CPF accumulation logic.
+// Used by main projection, Monte Carlo, What-If, and sensitivity table
+// to eliminate code duplication and ensure policy changes apply everywhere.
+function runProjectionEngine(inputs, {
+  overrideContribStop,
+  overrideVcSA,
+  overrideHousingOutflow,
+  overrideSalaryBump,
+  maxAge = 95,
+  randomiseRates = false,          // Monte Carlo mode: ±1% rate variance
+} = {}) {
+  const startAge     = Math.max(0, Number(inputs.currentAge) || 0);
+  const baseYear     = Number(inputs.currentYear) || 2026;
+  const contribStop  = overrideContribStop !== undefined ? overrideContribStop : (Number(inputs.contributionStopAge) || 95);
+  const housingStop  = Number(inputs.housingStopAge) || 95;
+  const salaryGrowth = (Number(inputs.salaryGrowthRate) || 0) / 100;
+  const salaryBump   = (overrideSalaryBump || 0) / 100;
+
+  const baseOA_Emp   = Number(inputs.empOaCont) || 0;
+  const baseSA_Emp   = Number(inputs.empSaCont) || 0;
+  const baseMA_Emp   = Number(inputs.empMaCont) || 0;
+  // VC3A: single cash lump-sum, auto-split by age-band rates (same as mandatory).
+  // Replaces separate vcOaTopup/vcSaTopup/vcMaTopup — all go through age-band proportional split.
+  const vc3aCash     = Number(inputs.vc3aCash) || 0;
+  // VHR (housing refund) goes to OA separately
+  const vcVhrAmt     = Number(inputs.vcVhr) || 0;
+  // RSTU: cash top-up to SA (pre-55) or RA (post-55) — not split across accounts
+  const vcSA_RSTU    = overrideVcSA !== undefined ? overrideVcSA + (Number(inputs.annualGovGrant) || 0)
+                                                  : (Number(inputs.vcSaTopup) || 0) + (Number(inputs.annualGovGrant) || 0);
+  const annualOaToSa = Number(inputs.oaToSaTransfer) || 0;
+  const annualOaToMa = Number(inputs.oaToMaTransfer) || 0;
+  const mrssGrant    = Number(inputs.mrssGrant) || 0;
+  // MMSS: Matched MediSave Scheme — govt matches MA top-ups up to $1,000/yr for eligible members 55–70
+  const mmssGrant    = Number(inputs.mmssGrant) || 0;
+  // WIS: Workfare Income Supplement
+  //   Employees:  60% allocated to CPF accounts via age-band rates, 40% cash (not modelled in CPF)
+  //   SEP:        90% to MA (subject to BHS), 10% cash (not modelled in CPF)
+  const wisAmount    = Number(inputs.wisAmount) || 0;
+  const cpfisAmount  = Number(inputs.cpfisAmount) || 0;
+  const baseHousing  = overrideHousingOutflow !== undefined ? overrideHousingOutflow : (Number(inputs.housingOutflow) || 0);
+  const baseMedical  = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0) + (Number(inputs.elderCareShield) || 0);
+  const medInfl      = (Number(inputs.medicalInflationRate) || 0) / 100;
+  const isSEP        = inputs.isSelfEmployed === true;
+  const isLeasehold  = inputs.propertyLeasehold === true;
+  const totalLease   = Math.max(30, Number(inputs.propertyLeaseYears) || 99);
+  const propGrowth   = (Number(inputs.propertyGrowthRate) || 0) / 100;
+  const usePropertyPledge = inputs.usePropertyPledge === true;
+
+  // Cohort FRS at age 55
+  const yearsTo55   = Math.max(0, 55 - startAge);
+  const projFRS55   = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + yearsTo55) - 2026)));
+  const past55FRS   = Math.round(RETIREMENT_SUMS_2026.FRS / Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, startAge - 55)));
+  // Property pledge allows keeping only BRS in RA (rest can be withdrawn / kept in OA)
+  const cohortRetSum = usePropertyPledge
+    ? (startAge >= 55 ? Math.round(RETIREMENT_SUMS_2026.BRS / Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, startAge - 55)))
+                      : Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + yearsTo55) - 2026))))
+    : (startAge >= 55 ? past55FRS : projFRS55);
+
+  let oa = Number(inputs.oaBalance) || 0;
+  let sa = Number(inputs.saBalance) || 0;
+  let ma = Number(inputs.maBalance) || 0;
+  let ra = startAge >= 55 ? sa : 0;
+  if (startAge >= 55) sa = 0;
+
+  let totalInjected = 0, totalInterest = 0, totalOutSpent = 0;
+  // Track SA/RA cash top-ups (vcSa + govGrant + mrss) and interest earned on RA
+  // separately — needed to compute the correct 20% RA-to-OA transfer base.
+  // Policy: transfer base = RA at payout − (cumulative SA/RA cash top-ups + cumulative RA interest)
+  let cumRaCashTopUps = 0;  // vcSaTopup + annualGovGrant + mrssGrant credited to SA/RA
+  let cumRaInterest   = 0;  // interest accruing to SA (pre-55) and RA (post-55) accounts
+  let currentPropValue = Number(inputs.propertyValue) || 0;
+  let leaseRemaining = totalLease;
+  // OA withdrawal at 55: applied once when age 55 is reached
+  const oaWithdrawalAt55 = Number(inputs.oaWithdrawalAt55) || 0;
+  let withdrawalApplied = startAge >= 55; // already past 55 → already happened
+
+  // AW ceiling: $102,000 − total OW CPF contributions this year
+  // OW CPF this year = baseOA_Emp + baseSA_Emp + baseMA_Emp (before growth factor)
+  // AW ceiling = max(0, $102,000 − OW CPF)
+  const baseOW_total = baseOA_Emp + baseSA_Emp + baseMA_Emp;
+  const awCeiling = Math.max(0, 102000 - baseOW_total);
+
+  const data = [];
+
+  for (let age = startAge; age <= maxAge; age++) {
+    let yearInflow = 0;
+
+    // SA closure at 55
+    if (age === 55 && startAge < 55) {
+      let req = Math.max(0, cohortRetSum - ra);
+      const fromSA = Math.min(sa, req); ra += fromSA; req -= fromSA;
+      oa += (sa - fromSA); sa = 0;
+      const fromOA = Math.min(oa, req); ra += fromOA; oa -= fromOA;
+    } else if (age === startAge && startAge >= 55 && sa > 0) {
+      let req = Math.max(0, cohortRetSum - ra);
+      const fromSA = Math.min(sa, req); ra += fromSA; req -= fromSA;
+      oa += (sa - fromSA); sa = 0;
+    }
+
+    // OA withdrawal at 55 (one-time lump sum after SA closure)
+    if (age === 55 && !withdrawalApplied) {
+      oa = Math.max(0, oa - oaWithdrawalAt55);
+      withdrawalApplied = true;
+    }
+
+    // OA→SA transfer (annual, before 55 only; capped so OA stays ≥ 0)
+    if (age < 55 && annualOaToSa > 0) {
+      const actualTransfer = Math.min(annualOaToSa, oa);
+      oa -= actualTransfer;
+      sa += actualTransfer;
+    }
+
+    // OA→MA transfer (annual, any age; capped at OA balance and BHS headroom)
+    if (annualOaToMa > 0) {
+      const projBHS_tr = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+      const maRoom_tr  = Math.max(0, projBHS_tr - ma);
+      const actualOaToMa = Math.min(annualOaToMa, oa, maRoom_tr);
+      oa -= actualOaToMa;
+      ma += actualOaToMa;
+    }
+
+    // MMSS/Workfare grant → credited to MA (subject to BHS cap; excess lost, not spilled)
+    if (mmssGrant > 0) {
+      const projBHS_mm = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+      const maRoom_mm  = Math.max(0, projBHS_mm - ma);
+      ma += Math.min(mmssGrant, maRoom_mm);
+    }
+
+    // CPFIS: annual OA reduction for investments (treated as OA outflow; no return modelled)
+    if (cpfisAmount > 0) {
+      oa = Math.max(0, oa - cpfisAmount);
+    }
+
+    if (age < contribStop) {
+      const gf  = Math.pow(1 + salaryGrowth, Math.max(0, age - startAge)) * (1 + salaryBump);
+      const mandatorySA = Math.round(baseSA_Emp * gf);
+
+      if (isSEP) {
+        // SEP VC3A: single cash lump-sum auto-split by age-band rates + VHR to OA
+        const vc3aTotal = Math.min(vc3aCash + vcVhrAmt, ANNUAL_LIMIT);
+        let vc3aOaRatio, vc3aSaRatio, vc3aMaRatio;
+        if      (age <= 35) { vc3aOaRatio=0.23; vc3aSaRatio=0.06; vc3aMaRatio=0.08; }
+        else if (age <= 45) { vc3aOaRatio=0.21; vc3aSaRatio=0.07; vc3aMaRatio=0.09; }
+        else if (age <= 50) { vc3aOaRatio=0.19; vc3aSaRatio=0.08; vc3aMaRatio=0.10; }
+        else if (age <= 55) { vc3aOaRatio=0.15; vc3aSaRatio=0.115; vc3aMaRatio=0.105; }
+        else if (age <= 60) { vc3aOaRatio=0.12; vc3aSaRatio=0.115; vc3aMaRatio=0.105; }
+        else if (age <= 65) { vc3aOaRatio=0.035; vc3aSaRatio=0.11; vc3aMaRatio=0.105; }
+        else if (age <= 70) { vc3aOaRatio=0.01; vc3aSaRatio=0.05; vc3aMaRatio=0.105; }
+        else                { vc3aOaRatio=0.01; vc3aSaRatio=0.01; vc3aMaRatio=0.105; }
+        const ratioSum = vc3aOaRatio + vc3aSaRatio + vc3aMaRatio;
+        const toOA_vc3a = Math.round(vc3aCash * (vc3aOaRatio / ratioSum)) + vcVhrAmt;
+        const toMA_vc3a = Math.round(vc3aCash * (vc3aMaRatio / ratioSum));
+        const toSA_vc3a = vc3aCash - Math.round(vc3aCash * (vc3aOaRatio / ratioSum)) - toMA_vc3a;
+        // WIS for SEP: 90% goes to MA (subject to BHS), 10% is cash (not modelled here)
+        const wisToMA_sep = wisAmount > 0 ? Math.round(wisAmount * 0.9) : 0;
+        const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        const maRoom    = Math.max(0, projBHS_i - ma);
+        const actualToMA = Math.min(toMA_vc3a + wisToMA_sep, maRoom);
+        const maSpill    = Math.max(0, toMA_vc3a - Math.min(toMA_vc3a, maRoom)); // only vc3a spills; WIS excess lost
+        ma += actualToMA;
+        if (age >= 55) {
+          const projERS_sep = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+          const raRoom_sep  = Math.max(0, projERS_sep - ra);
+          const toRA_sep    = Math.min(toSA_vc3a + maSpill, raRoom_sep);
+          ra += toRA_sep;
+          oa += (toSA_vc3a + maSpill - toRA_sep);
+        } else {
+          sa += toSA_vc3a + maSpill;
+        }
+        oa += toOA_vc3a;
+        if (age >= 55) { ra += (Number(inputs.annualGovGrant) || 0) + mrssGrant; }
+        else           { sa += (Number(inputs.annualGovGrant) || 0) + mrssGrant; }
+        yearInflow = vc3aCash + vcVhrAmt + (Number(inputs.annualGovGrant) || 0) + mrssGrant;
+        totalInjected += yearInflow;
+        cumRaCashTopUps += toSA_vc3a + maSpill + (Number(inputs.annualGovGrant) || 0) + mrssGrant;
+      } else {
+        const mandatoryOA_i = Math.round(baseOA_Emp * gf);
+        let   mandatoryMA_i = Math.round(baseMA_Emp * gf);
+        // VC3A: single lump-sum auto-split by age-band rates + VHR to OA
+        // WIS employees: 60% goes to CPF via age-band rates
+        let vc3aOaRatio, vc3aSaRatio, vc3aMaRatio;
+        if      (age <= 35) { vc3aOaRatio=0.23; vc3aSaRatio=0.06; vc3aMaRatio=0.08; }
+        else if (age <= 45) { vc3aOaRatio=0.21; vc3aSaRatio=0.07; vc3aMaRatio=0.09; }
+        else if (age <= 50) { vc3aOaRatio=0.19; vc3aSaRatio=0.08; vc3aMaRatio=0.10; }
+        else if (age <= 55) { vc3aOaRatio=0.15; vc3aSaRatio=0.115; vc3aMaRatio=0.105; }
+        else if (age <= 60) { vc3aOaRatio=0.12; vc3aSaRatio=0.115; vc3aMaRatio=0.105; }
+        else if (age <= 65) { vc3aOaRatio=0.035; vc3aSaRatio=0.11; vc3aMaRatio=0.105; }
+        else if (age <= 70) { vc3aOaRatio=0.01; vc3aSaRatio=0.05; vc3aMaRatio=0.105; }
+        else                { vc3aOaRatio=0.01; vc3aSaRatio=0.01; vc3aMaRatio=0.105; }
+        const ratioSum_emp = vc3aOaRatio + vc3aSaRatio + vc3aMaRatio;
+        // WIS: 60% of annual WIS amount goes to CPF via age-band split
+        const wisCpf    = wisAmount > 0 ? Math.round(wisAmount * 0.6) : 0;
+        const wisOA     = Math.round(wisCpf * (vc3aOaRatio / ratioSum_emp));
+        const wisMA     = Math.round(wisCpf * (vc3aMaRatio / ratioSum_emp));
+        const wisSA     = wisCpf - wisOA - wisMA;
+        // VC3A (cash only) split
+        const vc3aOA = Math.round(vc3aCash * (vc3aOaRatio / ratioSum_emp));
+        const vc3aMA = Math.round(vc3aCash * (vc3aMaRatio / ratioSum_emp));
+        const vc3aSA = vc3aCash - vc3aOA - vc3aMA;
+        // Annual Limit: applies to mandatory + VC3A (WIS is govt, not counted in limit)
+        const totalMandatory = mandatoryOA_i + mandatorySA + mandatoryMA_i;
+        const vcRoomThisYear = Math.max(0, ANNUAL_LIMIT - totalMandatory);
+        // Scale VC3A if it exceeds the room (VHR + RSTU handled separately outside limit)
+        const vc3aScale  = vc3aCash > 0 && vc3aCash > vcRoomThisYear ? vcRoomThisYear / vc3aCash : 1;
+        const cappedVcOA = Math.round(vc3aOA * vc3aScale) + vcVhrAmt;
+        const cappedVcSA = overrideVcSA !== undefined
+          ? Math.round(overrideVcSA * vc3aScale) + (Number(inputs.annualGovGrant) || 0)
+          : Math.round(vc3aSA * vc3aScale) + (Number(inputs.vcSaTopup) || 0) + (Number(inputs.annualGovGrant) || 0);
+        const cappedVcMA = Math.round(vc3aMA * vc3aScale);
+
+        const totalOA = mandatoryOA_i + cappedVcOA + wisOA;
+        // BHS cap on MA
+        const projBHS_emp = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        const maRoomEmp   = Math.max(0, projBHS_emp - ma);
+        const rawMA       = mandatoryMA_i + cappedVcMA + wisMA;
+        const actualMA    = Math.min(rawMA, maRoomEmp);
+        const maSpillEmp  = rawMA - actualMA;
+
+        oa += totalOA;
+        ma += actualMA;
+        yearInflow = totalOA + mandatorySA + cappedVcSA + actualMA + wisSA;
+        totalInjected += yearInflow;
+
+        if (age >= 55) {
+          let roomInRA_Mand = Math.max(0, cohortRetSum - ra);
+          let mandToRA      = Math.min(mandatorySA, roomInRA_Mand);
+          ra += mandToRA;
+          oa += (mandatorySA - mandToRA);
+          const projERS_i = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+          const vcRoomInRA = Math.max(0, projERS_i - ra);
+          const vcToRA     = Math.min(cappedVcSA + maSpillEmp + wisSA, vcRoomInRA);
+          ra += vcToRA;
+          oa += (cappedVcSA + maSpillEmp + wisSA - vcToRA);
+          ra += mrssGrant;
+          cumRaCashTopUps += vcToRA + mrssGrant;
+        } else {
+          sa += mandatorySA + cappedVcSA + maSpillEmp + wisSA;
+          sa += mrssGrant;
+          cumRaCashTopUps += cappedVcSA + maSpillEmp + wisSA + mrssGrant;
+        }
+      }
+    }
+
+    // Interest (annual rates, randomised ±1% in Monte Carlo mode)
+    const rOA = CPF_RATES.OA + (randomiseRates ? (Math.random() * 0.02 - 0.01) : 0);
+    const rSA = CPF_RATES.SA + (randomiseRates ? (Math.random() * 0.02 - 0.01) : 0);
+    const rMA = CPF_RATES.MA + (randomiseRates ? (Math.random() * 0.02 - 0.01) : 0);
+    const rRA = CPF_RATES.RA + (randomiseRates ? (Math.random() * 0.02 - 0.01) : 0);
+
+    const oaB = oa, saB = sa, maB = ma, raB = ra;
+    const nonOa = saB + maB + raB;
+    const e1    = Math.min(60000, nonOa);
+    const e1oa  = Math.min(Math.max(0, 60000 - e1), Math.min(oaB, 20000));
+    const b1    = (e1 + e1oa) * CPF_RATES.EXTRA_1;
+    let b2 = 0;
+    if (age >= 55) {
+      const e2ra  = Math.min(30000, raB);
+      const e2noa = Math.min(Math.max(0, 30000 - e2ra), saB + maB);
+      const e2oa  = Math.min(Math.max(0, 30000 - e2ra - e2noa), Math.min(oaB, 20000));
+      b2 = (e2ra + e2noa + e2oa) * CPF_RATES.EXTRA_2;
+    }
+    const yearTotalInterest = (oaB * rOA) + (saB * rSA) + (maB * rMA) + (raB * rRA) + b1 + b2;
+    totalInterest += yearTotalInterest;
+    // Track interest accruing to SA (pre-55) and RA (post-55) for 20% transfer base
+    const yearRaInterest = age >= 55
+      ? (raB * rRA) + b1 + b2          // post-55: RA base + all extra interest → RA
+      : (saB * rSA) + b1;              // pre-55:  SA base + extra tier 1 → SA
+    cumRaInterest += yearRaInterest;
+
+    oa += oaB * rOA;
+    sa += saB * rSA;
+    ra += raB * rRA;
+    if (age >= 55) ra += (b1 + b2); else sa += (b1 + b2);
+    ma += maB * rMA;
+
+    // Outflows
+    const activeHousing = age < housingStop ? baseHousing : 0;
+    oa = Math.max(0, oa - activeHousing);
+    const yrSince     = Math.max(0, age - startAge);
+    const totalMaOut  = Math.round(baseMedical * Math.pow(1 + medInfl, yrSince));
+    ma = Math.max(0, ma - totalMaOut);
+    const yearTotalOut = activeHousing + totalMaOut;
+    totalOutSpent += yearTotalOut;
+
+    // Property
+    leaseRemaining = Math.max(0, totalLease - yrSince);
+    let effPropGrowth = propGrowth;
+    if (isLeasehold && leaseRemaining < 60) effPropGrowth = propGrowth + Math.max(-0.05, -0.002 * (60 - leaseRemaining) / 10);
+    currentPropValue = Math.max(0, currentPropValue * (1 + effPropGrowth));
+
+    data.push({
+      age,
+      oa:  Math.round(oa),  sa:  Math.round(sa),
+      ma:  Math.round(ma),  ra:  Math.round(ra),
+      total: Math.round(oa + sa + ma + ra),
+      propertyValue: Math.round(currentPropValue),
+      interest:  Math.round(yearTotalInterest),
+      injected:  Math.round(yearInflow),
+      outflow:   yearTotalOut,
+      cumulativeInjected:  Math.round(totalInjected),
+      cumulativeInterest:  Math.round(totalInterest),
+      cumulativeOutflow:   Math.round(totalOutSpent),
+      cumRaCashTopUps: Math.round(cumRaCashTopUps),  // for 20% RA transfer calculation
+      cumRaInterest:   Math.round(cumRaInterest),    // interest on SA/RA over the period
+    });
+  }
+  return data;
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
@@ -88,7 +422,7 @@ export default function App() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const expandAllSections = () => setOpenSections(new Set(["profile","contribs","topups","outflows","advanced"]));
+  const expandAllSections = () => setOpenSections(new Set(["profile","contribs","topups","outflows","transfers","advanced"]));
   const collapseAllSections = () => setOpenSections(new Set());
 
   // Welcome Modal, Share Modal & Toast State
@@ -105,6 +439,34 @@ export default function App() {
   // Theme Management
   const [themeMode, setThemeMode] = useState("dark");
   const [isDark, setIsDark] = useState(true);
+
+  // ── Debounced inputs for expensive computations ──────────────────────────
+  // UI inputs update immediately; heavy projections use the debounced copy
+  const [debouncedInputs, setDebouncedInputs] = useState({ ...DEFAULT_INPUTS });
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedInputs(inputs), 180);
+    return () => clearTimeout(t);
+  }, [inputs]);
+
+  // ── Input validation helpers ─────────────────────────────────────────────
+  const [inputErrors, setInputErrors] = useState({});
+  const validateInputs = (inp) => {
+    const errs = {};
+    const ca = Number(inp.currentAge) || 0;
+    const pa = Number(inp.payoutAge)  || 65;
+    const cs = Number(inp.contributionStopAge) || 65;
+    const hs = Number(inp.housingStopAge) || 55;
+    if (ca < 15 || ca > 80)  errs.currentAge = "Age must be 15–80";
+    if (pa < 65 || pa > 70)  errs.payoutAge  = "Payout age must be 65–70";
+    if (cs < ca)             errs.contributionStopAge = "Must be ≥ current age";
+    if (hs < ca)             errs.housingStopAge = "Must be ≥ current age";
+    const infl = Number(inp.inflationRate) || 0;
+    if (infl < 0 || infl > 20) errs.inflationRate = "0–20%";
+    const mInfl = Number(inp.medicalInflationRate) || 0;
+    if (mInfl < 0 || mInfl > 30) errs.medicalInflationRate = "0–30%";
+    setInputErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -200,8 +562,10 @@ export default function App() {
   // SEP has no mandatory contributions → full $37,740 VC3A available
   const totalMandatory = isSelfEmployed ? 0 : ((Number(inputs.empOaCont)||0) + (Number(inputs.empSaCont)||0) + (Number(inputs.empMaCont)||0));
   const maxAllowableVC = Math.max(0, ANNUAL_LIMIT - totalMandatory);
-  const totalVC = (Number(inputs.vcOaTopup)||0) + (Number(inputs.vcSaTopup)||0) + (Number(inputs.vcMaTopup)||0) + (Number(inputs.vcVhr)||0);
+  // VC3A lump-sum + VHR counted toward Annual Limit; RSTU is separate (no Annual Limit)
+  const totalVC = (Number(inputs.vc3aCash)||0) + (Number(inputs.vcVhr)||0);
   const isVcOverLimit = totalVC > maxAllowableVC;
+
   const annualGross = ((Number(inputs.salaryGross)||0)*12) + (Number(inputs.salaryBonus)||0);
   const estimatedTaxRate = annualGross>320000?0.22:annualGross>240000?0.19:annualGross>160000?0.17:annualGross>120000?0.15:annualGross>80000?0.115:annualGross>40000?0.07:0.035;
 
@@ -229,7 +593,11 @@ export default function App() {
 
   const handleInputChange = (e) => {
     let { name, value } = e.target;
-    setInputs(prev => ({ ...prev, [name]: value }));
+    setInputs(prev => {
+      const next = { ...prev, [name]: value };
+      validateInputs(next);
+      return next;
+    });
   };
 
   const handleBlur = (e) => {
@@ -259,10 +627,10 @@ export default function App() {
     const gross = Number(inputs.salaryGross)||0;
     const bonus = Number(inputs.salaryBonus)||0;
     const cappedGross = Math.min(gross, 8000);
-    const totalIncome = (cappedGross*12)+bonus;
+    // Apply AW ceiling: bonus CPF capped at $102k - OW CPF
     const age = Number(inputs.currentAge)||35;
     let oaRate, saRate, maRate;
-    
+
     if (age<=35){oaRate=0.23;saRate=0.06;maRate=0.08;}
     else if (age<=45){oaRate=0.21;saRate=0.07;maRate=0.09;}
     else if (age<=50){oaRate=0.19;saRate=0.08;maRate=0.10;}
@@ -271,8 +639,24 @@ export default function App() {
     else if (age<=65){oaRate=0.035;saRate=0.11;maRate=0.105;}
     else if (age<=70){oaRate=0.01;saRate=0.05;maRate=0.105;}
     else{oaRate=0.01;saRate=0.01;maRate=0.105;}
-    
-    setInputs(prev => ({...prev, empOaCont:Math.round(totalIncome*oaRate), empSaCont:Math.round(totalIncome*saRate), empMaCont:Math.round(totalIncome*maRate), showSalaryCalc:false}));
+
+    const owIncome    = cappedGross * 12;
+    const owOA = Math.round(owIncome * oaRate);
+    const owSA = Math.round(owIncome * saRate);
+    const owMA = Math.round(owIncome * maRate);
+    // AW ceiling: bonus CPF = bonus * combined rate, capped so total ≤ AW ceiling of $102k
+    const awCap       = Math.max(0, 102000 - (owOA + owSA + owMA));
+    const bonusCpf    = Math.min(bonus, awCap);
+    const annualOA    = owOA + Math.round(bonusCpf * oaRate);
+    const annualSA    = owSA + Math.round(bonusCpf * saRate);
+    const annualMA    = owMA + Math.round(bonusCpf * maRate);
+
+    setInputs(prev => ({...prev,
+      empOaCont: annualOA,
+      empSaCont: annualSA,
+      empMaCont: annualMA,
+      showSalaryCalc: false
+    }));
   };
 
   const handleReset = () => {
@@ -342,7 +726,7 @@ export default function App() {
       pdfOrientation,
       // Meta
       savedAt: new Date().toISOString(),
-      appVersion: "V3-2026"
+      appVersion: "V4-2026"
     };
     const json = JSON.stringify(fullState, null, 2);
     // Download directly — no modal
@@ -593,252 +977,59 @@ export default function App() {
     setExportModal({ type: "milestone", content });
   };
 
-  const projection = useMemo(() => {
-    let data = [];
-    const startAge = Number(inputs.currentAge)||0;
-    const currentBaseYear = Number(inputs.currentYear)||2026;
-    const contribStop = Number(inputs.contributionStopAge)||95;
-    const housingStop = Number(inputs.housingStopAge)||95;
-    
-    // Project FRS to age 55 cohort
-    const yearsTo55 = Math.max(0,55-startAge);
-    const projectedFRSAt55 = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,(currentBaseYear+yearsTo55)-2026)));
-    // Estimate current cohort FRS if they are already past 55
-    const past55FRS = Math.round(RETIREMENT_SUMS_2026.FRS / Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0, startAge - 55)));
-    const cohortFRS = startAge >= 55 ? past55FRS : projectedFRSAt55;
-
-    let oa = Number(inputs.oaBalance)||0;
-    let sa = Number(inputs.saBalance)||0;
-    let ma = Number(inputs.maBalance)||0;
-    const baseOA_Emp = Number(inputs.empOaCont)||0;
-    const baseSA_Emp = Number(inputs.empSaCont)||0;
-    const baseMA_Emp = Number(inputs.empMaCont)||0;
-    const vcOA = (Number(inputs.vcOaTopup)||0)+(Number(inputs.vcVhr)||0);
-    const vcSA = (Number(inputs.vcSaTopup)||0)+(Number(inputs.annualGovGrant)||0);
-    const vcMA = Number(inputs.vcMaTopup)||0;
-    const salaryGrowth = (Number(inputs.salaryGrowthRate)||0)/100;
-    const baseHousingOutflow = Number(inputs.housingOutflow)||0;
-    const baseMedicalOutflow = (Number(inputs.medicalUsage)||0)+(Number(inputs.medishieldIP)||0)+(Number(inputs.elderCareShield)||0);
-    const medicalInflation = (Number(inputs.medicalInflationRate)||0)/100;
-    const isLeasehold = inputs.propertyLeasehold===true;
-    const totalLeaseYears = Math.max(30,Number(inputs.propertyLeaseYears)||99);
-    
-    let ra = startAge>=55?sa:0;
-    if (startAge>=55) sa=0;
-    
-    const isSEP = inputs.isSelfEmployed === true;
-    let totalInjected=0, totalInterest=0, totalOutSpent=0;
-    let currentPropValue = Number(inputs.propertyValue)||0;
-    const propGrowth = (Number(inputs.propertyGrowthRate)||0)/100;
-    let leaseRemaining = totalLeaseYears;
-
-    for (let i=startAge; i<=95; i++) {
-      let yearInflow=0;
-      
-      // Handle SA Closure at 55 logic
-      if (i === 55 && startAge < 55) {
-        let req = Math.max(0, cohortFRS - ra);
-        const fromSA = Math.min(sa, req); ra += fromSA; req -= fromSA;
-        oa += (sa - fromSA); sa = 0; // Spill remaining to OA
-        const fromOA = Math.min(oa, req); ra += fromOA; oa -= fromOA;
-      } else if (i === startAge && startAge >= 55 && sa > 0) {
-        // Fallback for those starting already > 55 who inputted SA balances instead of RA
-        let req = Math.max(0, cohortFRS - ra);
-        const fromSA = Math.min(sa, req); ra += fromSA; req -= fromSA;
-        oa += (sa - fromSA); sa = 0;
-      }
-
-      if (i<contribStop) {
-        const gf = Math.pow(1+salaryGrowth, Math.max(0,i-startAge));
-        const mandatorySA = Math.round(baseSA_Emp*gf);
-
-        if (isSEP) {
-          // --- SELF-EMPLOYED VC3A LOGIC (CPF Board Policy) ---
-          // Per CPF Board: "The allocation of VC to the three CPF accounts will follow the
-          // allocation rates for mandatory CPF contributions" (age-based proportional split).
-          // SEP has no mandatory OA/SA contributions; mandatory MA applies if NTI > $6k.
-          // VC3A max = $37,740/yr for SEP (no mandatory contributions to deduct).
-          const vc3aTotal = Math.min(vcOA + vcSA + vcMA, ANNUAL_LIMIT);
-
-          // Determine age-based allocation ratios (same as mandatory contribution rates)
-          let vc3aOaRatio, vc3aSaRatio, vc3aMaRatio;
-          if (i <= 35)      { vc3aOaRatio=0.23; vc3aSaRatio=0.06; vc3aMaRatio=0.08; }
-          else if (i <= 45) { vc3aOaRatio=0.21; vc3aSaRatio=0.07; vc3aMaRatio=0.09; }
-          else if (i <= 50) { vc3aOaRatio=0.19; vc3aSaRatio=0.08; vc3aMaRatio=0.10; }
-          else if (i <= 55) { vc3aOaRatio=0.15; vc3aSaRatio=0.115; vc3aMaRatio=0.105; }
-          else if (i <= 60) { vc3aOaRatio=0.12; vc3aSaRatio=0.115; vc3aMaRatio=0.105; }
-          else if (i <= 65) { vc3aOaRatio=0.035; vc3aSaRatio=0.11; vc3aMaRatio=0.105; }
-          else if (i <= 70) { vc3aOaRatio=0.01; vc3aSaRatio=0.05; vc3aMaRatio=0.105; }
-          else              { vc3aOaRatio=0.01; vc3aSaRatio=0.01; vc3aMaRatio=0.105; }
-          const ratioSum = vc3aOaRatio + vc3aSaRatio + vc3aMaRatio;
-
-          // Proportional split across OA/SA/MA
-          const toOA_vc3a = Math.round(vc3aTotal * (vc3aOaRatio / ratioSum));
-          const toMA_vc3a = Math.round(vc3aTotal * (vc3aMaRatio / ratioSum));
-          const toSA_vc3a = vc3aTotal - toOA_vc3a - toMA_vc3a; // remainder to SA/RA
-
-          // Apply BHS cap on MA: excess spills to SA (if <55) or RA (if >=55)
-          const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,(currentBaseYear+(i-startAge))-2026)));
-          const maRoom = Math.max(0, projBHS_i - ma);
-          const actualToMA = Math.min(toMA_vc3a, maRoom);
-          const maSpill = toMA_vc3a - actualToMA;
-          ma += actualToMA;
-
-          if (i >= 55) {
-            // ERS cap: SA/RA top-ups cannot push RA above current-year ERS
-            const projERS_sep = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,(currentBaseYear+(i-startAge))-2026)));
-            const raRoom_sep = Math.max(0, projERS_sep - ra);
-            const toRA_sep = Math.min(toSA_vc3a + maSpill, raRoom_sep);
-            ra += toRA_sep;
-            oa += (toSA_vc3a + maSpill - toRA_sep); // ERS overflow to OA
-          } else {
-            sa += toSA_vc3a + maSpill;
-          }
-          oa += toOA_vc3a;
-
-          // Gov grants still go to SA/RA
-          if (i >= 55) { ra += (Number(inputs.annualGovGrant)||0); }
-          else { sa += (Number(inputs.annualGovGrant)||0); }
-
-          yearInflow = vc3aTotal + (Number(inputs.annualGovGrant)||0);
-          totalInjected += yearInflow;
-        } else {
-          // --- EMPLOYED MEMBER LOGIC ---
-          const mandatoryOA_i = Math.round(baseOA_Emp*gf);
-          const mandatoryMA_i = Math.round(baseMA_Emp*gf);
-          const mandatoryThisYear = mandatoryOA_i + mandatorySA + mandatoryMA_i;
-          // Enforce CPF Annual Limit: VC room = max(0, $37,740 - mandatory this year)
-          const vcRoomThisYear = Math.max(0, ANNUAL_LIMIT - mandatoryThisYear);
-          const totalRawVC = vcOA + vcSA + vcMA;
-          // Scale down VCs proportionally if they exceed available VC room
-          const vcScale = totalRawVC > 0 && totalRawVC > vcRoomThisYear ? vcRoomThisYear / totalRawVC : 1;
-          const cappedVcOA = Math.round(vcOA * vcScale);
-          const cappedVcSA = Math.round(vcSA * vcScale);
-          const cappedVcMA = Math.round(vcMA * vcScale);
-
-          const totalOA = mandatoryOA_i + cappedVcOA;
-          const totalMA = mandatoryMA_i + cappedVcMA;
-          
-          oa += totalOA;
-          ma += totalMA;
-          yearInflow = totalOA + mandatorySA + cappedVcSA + totalMA;
-          totalInjected += yearInflow;
-
-          if (i >= 55) {
-            // SA is closed. Mandatory contributions go to RA up to FRS, then OA.
-            let roomInRA_Mandatory = Math.max(0, cohortFRS - ra);
-            let mandToRA = Math.min(mandatorySA, roomInRA_Mandatory);
-            let mandToOA = mandatorySA - mandToRA;
-            ra += mandToRA;
-            oa += mandToOA;
-            // Voluntary RSTU top-ups are capped at current ERS — excess spills to OA.
-            const projERS_i = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,(currentBaseYear+(i-startAge))-2026)));
-            const vcRoomInRA = Math.max(0, projERS_i - ra);
-            const vcToRA = Math.min(cappedVcSA, vcRoomInRA);
-            ra += vcToRA;
-            oa += (cappedVcSA - vcToRA); // ERS overflow goes to OA
-          } else {
-            sa += mandatorySA + cappedVcSA;
-          }
-        }
-      }
-
-      const oaB=oa,saB=sa,maB=ma,raB=ra;
-      const nonOa = saB+maB+raB;
-      // Extra 1% interest on first $60k (SA+MA+RA fills first, then up to $20k OA)
-      const e1 = Math.min(60000,nonOa);
-      const e1oa = Math.min(Math.max(0,60000-e1), Math.min(oaB,20000));
-      const b1 = (e1+e1oa)*CPF_RATES.EXTRA_1;
-      // Additional 1% for age 55+: on first $30k (RA fills first, then SA/MA, then up to $20k OA)
-      let b2=0;
-      if (i>=55) {
-        const e2ra = Math.min(30000, raB);
-        const e2nonOa = Math.min(Math.max(0,30000-e2ra), saB+maB);
-        const e2oa = Math.min(Math.max(0,30000-e2ra-e2nonOa), Math.min(oaB,20000));
-        b2 = (e2ra+e2nonOa+e2oa)*CPF_RATES.EXTRA_2;
-      }
-      
-      const yearTotalInterest = (oaB*CPF_RATES.OA)+(saB*CPF_RATES.SA)+(maB*CPF_RATES.MA)+(raB*CPF_RATES.RA)+b1+b2;
-      totalInterest+=yearTotalInterest;
-      
-      oa+=(oaB*CPF_RATES.OA); sa+=(saB*CPF_RATES.SA); ra+=(raB*CPF_RATES.RA);
-      // Extra interest credited: for >=55 credit to RA (retirement account), else to SA
-      if (i>=55) ra+=(b1+b2); else sa+=(b1+b2);
-      ma+=(maB*CPF_RATES.MA);
-
-      const activeHousing = i<housingStop?baseHousingOutflow:0;
-      oa=Math.max(0,oa-activeHousing);
-      
-      const yrSince=Math.max(0,i-startAge);
-      const totalMaOut = Math.round(baseMedicalOutflow*Math.pow(1+medicalInflation,yrSince));
-      ma=Math.max(0,ma-totalMaOut);
-      
-      const yearTotalOut=activeHousing+totalMaOut; totalOutSpent+=yearTotalOut;
-      
-      leaseRemaining=Math.max(0,totalLeaseYears-yrSince);
-      let effPropGrowth=propGrowth;
-      if (isLeasehold&&leaseRemaining<60) effPropGrowth=propGrowth+Math.max(-0.05,-0.002*(60-leaseRemaining)/10);
-      currentPropValue=Math.max(0,currentPropValue*(1+effPropGrowth));
-
-      data.push({ age:i, oa:Math.round(oa), sa:Math.round(sa), ma:Math.round(ma), ra:Math.round(ra),
-        total:Math.round(oa+sa+ma+ra), propertyValue:Math.round(currentPropValue),
-        interest:Math.round(yearTotalInterest), injected:Math.round(yearInflow), outflow:yearTotalOut,
-        cumulativeInjected:Math.round(totalInjected), cumulativeInterest:Math.round(totalInterest),
-        cumulativeOutflow:Math.round(totalOutSpent) });
-    }
-    return data;
-  }, [inputs]);
+  const projection = useMemo(() => runProjectionEngine(debouncedInputs), [debouncedInputs]);
 
   const raAtPayout = projection.find(d=>d.age===(Number(inputs.payoutAge)||65))?.ra||0;
 
   // 20% RA-to-OA transfer at payout age (CPF policy):
-  // At payout age, 20% of RA (less cash top-ups and grants) is transferred to OA.
-  // Cash top-ups = cumulative vcSaTopup + annualGovGrant contributions up to payout age.
-  // We approximate: cashTopUpsTotal = (vcSaTopup + annualGovGrant) * yearsOfContrib
-  const payoutAge65 = Number(inputs.payoutAge)||65;
-  const startAge65 = Number(inputs.currentAge)||35;
-  const yearsOfContrib65 = Math.max(0, Math.min(payoutAge65, Number(inputs.contributionStopAge)||65) - startAge65);
-  const annualCashTopUps = (Number(inputs.vcSaTopup)||0) + (Number(inputs.annualGovGrant)||0);
-  const cumulativeCashTopUps = annualCashTopUps * yearsOfContrib65;
-  const raTransferBase = Math.max(0, raAtPayout - cumulativeCashTopUps);
-  const raOaTransfer = Math.round(raTransferBase * 0.20);
-  // RA after 20% transfer (before premium deduction)
+  // Transfer base = RA at payout − (cumulative cash top-ups to SA/RA + interest earned on SA/RA)
+  // Cash top-ups: voluntary SA top-ups, gov grants, MRSS grants credited to SA/RA
+  // Interest: interest accruing to SA (pre-55) and RA (post-55) accounts over the full period
+  // These deductions are sourced directly from the projection engine's per-row tracking.
+  const payoutAge65  = Number(inputs.payoutAge) || 65;
+  const startAge65   = Number(inputs.currentAge) || 35;
+  const payoutRow65  = projection.find(d => d.age === payoutAge65);
+  const cumulativeCashTopUps = payoutRow65?.cumRaCashTopUps ?? 0;
+  const cumulativeRaInterest = payoutRow65?.cumRaInterest   ?? 0;
+  const raTransferBase = Math.max(0, raAtPayout - cumulativeCashTopUps - cumulativeRaInterest);
+  const raOaTransfer   = Math.round(raTransferBase * 0.20);
+  // RA after 20% transfer (before CPF LIFE premium deduction)
   const raAfterTransfer = raAtPayout - raOaTransfer;
   
   const lifePlans = useMemo(() => {
-    const pAge = Number(inputs.payoutAge)||65;
-    // CPF LIFE payout is calculated on FULL RA at payout age.
-    // The 20% OA transfer is a separate transaction that does NOT reduce the payout.
-    // Calibrated from CPF case study: RA=529064 at 63 -> 572236 at 65 -> Std 3070/mo
-    // Implied ratio: 3070/572236*100000 = 536.5/100k ~= 540/100k (current value is correct)
-    const ratioM = 540 + ((Math.max(0, pAge - 65)) * 12);
-    const ratioF = 500 + ((Math.max(0, pAge - 65)) * 11.5);
-    const startM = (raAtPayout / 100000) * ratioM;
-    const startF = (raAtPayout / 100000) * ratioF;
+    const pAge  = Number(inputs.payoutAge) || 65;
+    const male  = inputs.isMale !== false;
+    // CPF LIFE payout is calculated on RA AFTER the 20% OA transfer.
+    // The transfer reduces the RA entering the LIFE pool — payouts are correspondingly lower.
+    const raBase = raAfterTransfer;
+    const ratioM = 540 + (Math.max(0, pAge - 65) * 12);
+    const ratioF = 500 + (Math.max(0, pAge - 65) * 11.5);
+    const startM = (raBase / 100000) * ratioM;
+    const startF = (raBase / 100000) * ratioF;
+    const startActive = male ? startM : startF;
 
-    // Basic Plan: payout = PMT from annuity formula on retained RA (1-bPct).
-    // This unifies the displayed monthly figure with the RA depletion rate — no mismatch.
-    const bPctLP = (basicPremiumPct || 10) / 100;
-    const basicPV_LP = raAtPayout * (1 - bPctLP);
-    const basicN_LP = Math.max(1, 90 - pAge);
-    const basicR_LP = 0.04;
+    // Basic Plan PMT based on raAfterTransfer (post-transfer RA)
+    const bPctLP    = (basicPremiumPct || 10) / 100;
+    const basicPV_LP  = raBase * (1 - bPctLP);
+    const basicN_LP   = Math.max(1, 90 - pAge);
+    const basicR_LP   = 0.04;
     const basicPMT_LP = basicN_LP > 0 ? (basicR_LP * basicPV_LP) / (1 - Math.pow(1 + basicR_LP, -basicN_LP)) : 0;
     const basicStartM = basicPMT_LP / 12;
-    const basicStartF = basicStartM * (500 / 540); // apply same gender ratio as Standard
-    
-    return { 
-      standard: { name: "Standard", start: startM, startM: startM, startF: startF }, 
-      escalating: { name: "Escalating", start: startM * 0.8, startM: startM * 0.8, startF: startF * 0.8 }, 
-      basic: { name: "Basic", start: basicStartM, startM: basicStartM, startF: basicStartF }
+    const basicStartF = basicStartM * (500 / 540);
+    const basicStart  = male ? basicStartM : basicStartF;
+
+    return {
+      standard:  { name: "Standard",  start: startActive,       startM, startF },
+      escalating:{ name: "Escalating",start: startActive * 0.8, startM: startM * 0.8, startF: startF * 0.8 },
+      basic:     { name: "Basic",     start: basicStart,        startM: basicStartM,  startF: basicStartF }
     };
-  }, [raAtPayout, inputs.payoutAge, basicPremiumPct]);
+  }, [raAfterTransfer, inputs.payoutAge, inputs.isMale, basicPremiumPct]);
 
   const payoutProjection = useMemo(() => {
     let data=[];
     const pAge=Number(inputs.payoutAge)||65;
-    // initialRA is the FULL RA at payout age.
-    // CPF LIFE payout is calculated on full RA; 20% OA transfer is a separate transaction.
-    const initialRA=raAtPayout;
+    // initialRA = RA after 20% transfer — this is what enters the CPF LIFE pool
+    const initialRA=raAfterTransfer;
     const includeProp=inputs.includeProperty??true;
     let cumPayoutStandard=0,cumPayoutEscalating=0,cumPayoutBasic=0;
     
@@ -897,7 +1088,7 @@ export default function App() {
         standardNetWorth:Math.round(p.oa+p.sa+p.ma+stdBeq+propVal), escalatingNetWorth:Math.round(p.oa+p.sa+p.ma+escBeq+propVal), basicNetWorth:Math.round(p.oa+p.sa+p.ma+basBeq+propVal) });
     }
     return data;
-  }, [projection, lifePlans, inputs.payoutAge, raAtPayout, inputs.includeProperty, basicPremiumPct]);
+  }, [projection, lifePlans, inputs.payoutAge, raAtPayout, raAfterTransfer, inputs.includeProperty, basicPremiumPct]);
 
   const applyInflation = (val, age) => {
     if (!isRealDollars||isNaN(val)) return val;
@@ -918,123 +1109,46 @@ export default function App() {
 
   const monteCarloData = useMemo(() => {
     if (!showMonteCarlo) return null;
-    const RUNS=500; const startAge=Number(inputs.currentAge)||35; const payoutAge=Number(inputs.payoutAge)||65;
-    const contribStop=Number(inputs.contributionStopAge)||65;
-    const baseOA=Number(inputs.empOaCont)||0,baseSA=Number(inputs.empSaCont)||0,baseMA=Number(inputs.empMaCont)||0;
-    const vcOA=(Number(inputs.vcOaTopup)||0)+(Number(inputs.vcVhr)||0);
-    const vcSA=(Number(inputs.vcSaTopup)||0)+(Number(inputs.annualGovGrant)||0);
-    const vcMA=Number(inputs.vcMaTopup)||0;
-    const salaryGrowth=(Number(inputs.salaryGrowthRate)||0)/100;
-    const baseH=Number(inputs.housingOutflow)||0; const housingStop=Number(inputs.housingStopAge)||95;
-    const baseMed=(Number(inputs.medicalUsage)||0)+(Number(inputs.medishieldIP)||0)+(Number(inputs.elderCareShield)||0);
-    const medInfl=(Number(inputs.medicalInflationRate)||0)/100;
-    const yearsTo55=Math.max(0,55-startAge);
-    const projFRS55=Math.round(RETIREMENT_SUMS_2026.FRS*Math.pow(1+ASSUMED_TARGET_GROWTH,Math.max(0,(Number(inputs.currentYear)||2026)+yearsTo55-2026)));
-    const past55FRS=Math.round(RETIREMENT_SUMS_2026.FRS / Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0, startAge - 55)));
-    const cohortFRS=startAge >= 55 ? past55FRS : projFRS55;
-
-    const ageTotals={};
-    for (let age=startAge;age<=payoutAge;age++) ageTotals[age]=[];
-    
-    for (let run=0;run<RUNS;run++) {
-      let oa=Number(inputs.oaBalance)||0,sa=Number(inputs.saBalance)||0,ma=Number(inputs.maBalance)||0;
-      let ra=startAge>=55?sa:0; if(startAge>=55) sa=0;
-      for (let i=startAge;i<=payoutAge;i++) {
-        const rOA=CPF_RATES.OA+(Math.random()*0.02-0.01),rSA=CPF_RATES.SA+(Math.random()*0.02-0.01),rMA=CPF_RATES.MA+(Math.random()*0.02-0.01),rRA=CPF_RATES.RA+(Math.random()*0.02-0.01);
-        
-        if (i === 55 && startAge < 55) { let req = Math.max(0, cohortFRS - ra); const fromSA = Math.min(sa, req); ra += fromSA; req -= fromSA; oa += (sa - fromSA); sa = 0; const fromOA = Math.min(oa, req); ra += fromOA; oa -= fromOA; } 
-        else if (i === startAge && startAge >= 55 && sa > 0) { let req = Math.max(0, cohortFRS - ra); const fromSA = Math.min(sa, req); ra += fromSA; req -= fromSA; oa += (sa - fromSA); sa = 0; }
-
-        if (i<contribStop) { 
-          const gf=Math.pow(1+salaryGrowth,Math.max(0,i-startAge)); 
-          const mandSA = Math.round(baseSA*gf);
-          oa+=Math.round(baseOA*gf)+vcOA; 
-          if(i>=55) {
-            let roomInRA = Math.max(0, cohortFRS - ra);
-            let toRA = Math.min(mandSA, roomInRA);
-            ra += toRA; oa += (mandSA - toRA);
-            // ERS cap on RA voluntary top-ups
-            const projERS_mc = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,((Number(inputs.currentYear)||2026)+(i-startAge))-2026)));
-            const vcRoomMC = Math.max(0, projERS_mc - ra);
-            const vcToRA_mc = Math.min(vcSA, vcRoomMC);
-            ra += vcToRA_mc; oa += (vcSA - vcToRA_mc);
-          } else { sa += mandSA+vcSA; }
-          ma+=Math.round(baseMA*gf)+vcMA; 
-        }
-        
-        const oaB=oa,saB=sa,maB=ma,raB=ra; const nonOa=saB+maB+raB;
-        const e1=Math.min(60000,nonOa); const e1oa=Math.min(60000-e1,Math.min(oaB,20000)); const b1=(e1+e1oa)*CPF_RATES.EXTRA_1;
-        let b2=0; if(i>=55){const e2=Math.min(30000,nonOa);const e2oa=Math.min(30000-e2,Math.min(oaB,20000));b2=(e2+e2oa)*CPF_RATES.EXTRA_2;}
-        oa+=oaB*rOA; sa+=saB*rSA; ra+=raB*rRA; if(i>=55) ra+=(b1+b2); else sa+=(b1+b2); ma+=maB*rMA;
-        const hOut=i<housingStop?baseH:0; oa=Math.max(0,oa-hOut);
-        const mOut=Math.round(baseMed*Math.pow(1+medInfl,Math.max(0,i-startAge))); ma=Math.max(0,ma-mOut);
-        if(ageTotals[i]) ageTotals[i].push(Math.round(oa+sa+ma+ra));
+    const RUNS = 200; // reduced from 500 — still robust for P10/P50/P90
+    const pa = Number(debouncedInputs.payoutAge) || 65;
+    const ca = Number(debouncedInputs.currentAge) || 35;
+    const ageTotals = {};
+    for (let age = ca; age <= pa; age++) ageTotals[age] = [];
+    for (let run = 0; run < RUNS; run++) {
+      const rows = runProjectionEngine(debouncedInputs, { maxAge: pa, randomiseRates: true });
+      for (const row of rows) {
+        if (ageTotals[row.age] !== undefined) ageTotals[row.age].push(row.total);
       }
     }
-    const rows=Object.entries(ageTotals).map(([age,vals])=>{vals.sort((a,b)=>a-b);const p=pct=>vals[Math.floor(pct*vals.length)]||0;return{age:Number(age),p10:p(0.10),p50:p(0.50),p90:p(0.90),allVals:vals};});
-    const payoutRow=rows.find(r=>r.age===Number(inputs.payoutAge));
-    const yrsToPFRS=Math.max(0,Number(inputs.payoutAge)-(Number(inputs.currentAge)||35));
-    const frsAtPayout=Math.round(RETIREMENT_SUMS_2026.FRS*Math.pow(1+ASSUMED_TARGET_GROWTH,Math.max(0,(Number(inputs.currentYear)||2026)+yrsToPFRS-2026)));
-    const probSufficiency=payoutRow?Math.round((payoutRow.allVals.filter(v=>v>=frsAtPayout).length/payoutRow.allVals.length)*100):null;
-    return {rows:rows.map(({allVals:_,...r})=>r),probSufficiency,frsAtPayout};
-  }, [showMonteCarlo,inputs]);
+    const rows = Object.entries(ageTotals).map(([age, vals]) => {
+      vals.sort((a, b) => a - b);
+      const p = pct => vals[Math.floor(pct * vals.length)] || 0;
+      return { age: Number(age), p10: p(0.10), p50: p(0.50), p90: p(0.90), allVals: vals };
+    });
+    const payoutRow = rows.find(r => r.age === pa);
+    const yrsToPFRS = Math.max(0, pa - ca);
+    const frsAtPayout = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH,
+      Math.max(0, (Number(debouncedInputs.currentYear) || 2026) + yrsToPFRS - 2026)));
+    const probSufficiency = payoutRow
+      ? Math.round((payoutRow.allVals.filter(v => v >= frsAtPayout).length / payoutRow.allVals.length) * 100)
+      : null;
+    return { rows: rows.map(({ allVals: _, ...r }) => r), probSufficiency, frsAtPayout };
+  }, [showMonteCarlo, debouncedInputs]);
 
   const whatIfProjection = useMemo(() => {
     if (!showWhatIf) return null;
-    const effPA=whatIfPayoutAge!==null?whatIfPayoutAge:Number(inputs.payoutAge);
-    const effST=whatIfSaTopup!==null?whatIfSaTopup:(Number(inputs.vcSaTopup)||0);
-    const effH=whatIfHousing!==null?whatIfHousing:(Number(inputs.housingOutflow)||0);
-    const effSB=whatIfSalaryBump!==null?whatIfSalaryBump:0;
-    const startAge=Number(inputs.currentAge)||35;
-    const contribStop=Number(inputs.contributionStopAge)||65;
-    const sg=(Number(inputs.salaryGrowthRate)||0)/100;
-    const bOA=Number(inputs.empOaCont)||0,bSA=Number(inputs.empSaCont)||0,bMA=Number(inputs.empMaCont)||0;
-    const vcOA=(Number(inputs.vcOaTopup)||0)+(Number(inputs.vcVhr)||0);
-    const vcSA=effST+(Number(inputs.annualGovGrant)||0);
-    const vcMA=Number(inputs.vcMaTopup)||0;
-    const hs=Number(inputs.housingStopAge)||95;
-    const bMed=(Number(inputs.medicalUsage)||0)+(Number(inputs.medishieldIP)||0)+(Number(inputs.elderCareShield)||0);
-    const mi=(Number(inputs.medicalInflationRate)||0)/100;
-    const cy=Number(inputs.currentYear)||2026;
-    const yt55=Math.max(0,55-startAge);
-    const projFRS55=Math.round(RETIREMENT_SUMS_2026.FRS*Math.pow(1+ASSUMED_TARGET_GROWTH,Math.max(0,cy+yt55-2026)));
-    const past55FRS=Math.round(RETIREMENT_SUMS_2026.FRS / Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0, startAge - 55)));
-    const cohortFRS=startAge >= 55 ? past55FRS : projFRS55;
-
-    let oa=Number(inputs.oaBalance)||0,sa=Number(inputs.saBalance)||0,ma=Number(inputs.maBalance)||0;
-    let ra=startAge>=55?sa:0; if(startAge>=55) sa=0;
-    const rows=[];
-    for (let age=startAge;age<=effPA;age++) {
-      if (age === 55 && startAge < 55) { let req = Math.max(0, cohortFRS - ra); const fSA = Math.min(sa, req); ra += fSA; req -= fSA; oa += (sa - fSA); sa = 0; const fOA = Math.min(oa, req); ra += fOA; oa -= fOA; }
-      else if (age === startAge && startAge >= 55 && sa > 0) { let req = Math.max(0, cohortFRS - ra); const fSA = Math.min(sa, req); ra += fSA; req -= fSA; oa += (sa - fSA); sa = 0; }
-      
-      if (age<contribStop) { 
-        const gf=Math.pow(1+sg,Math.max(0,age-startAge))*(1+effSB/100); 
-        const mandSA = Math.round(bSA*gf);
-        oa+=Math.round(bOA*gf)+vcOA; 
-        if(age>=55) {
-          let roomInRA = Math.max(0, cohortFRS - ra);
-          let toRA = Math.min(mandSA, roomInRA);
-          ra += toRA; oa += (mandSA - toRA);
-          // ERS cap on voluntary top-ups
-          const projERS_wi = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,(cy+(age-startAge))-2026)));
-          const vcRoomWI = Math.max(0, projERS_wi - ra);
-          const vcToRA_wi = Math.min(vcSA, vcRoomWI);
-          ra += vcToRA_wi; oa += (vcSA - vcToRA_wi);
-        } else { sa += mandSA+vcSA; }
-        ma+=Math.round(bMA*gf)+vcMA; 
-      }
-      
-      const oaB=oa,saB=sa,maB=ma,raB=ra; const nonOa=saB+maB+raB;
-      const e1=Math.min(60000,nonOa); const e1oa=Math.min(60000-e1,Math.min(oaB,20000)); const b1=(e1+e1oa)*CPF_RATES.EXTRA_1;
-      let b2=0; if(age>=55){const e2=Math.min(30000,nonOa);const e2oa=Math.min(30000-e2,Math.min(oaB,20000));b2=(e2+e2oa)*CPF_RATES.EXTRA_2;}
-      oa+=oaB*CPF_RATES.OA; sa+=saB*CPF_RATES.SA; ra+=raB*CPF_RATES.RA; if(age>=55) ra+=(b1+b2); else sa+=(b1+b2); ma+=maB*CPF_RATES.MA;
-      const hOut=age<hs?effH:0; oa=Math.max(0,oa-hOut);
-      const mOut=Math.round(bMed*Math.pow(1+mi,Math.max(0,age-startAge))); ma=Math.max(0,ma-mOut);
-      rows.push({age,oa:Math.round(oa),sa:Math.round(sa),ma:Math.round(ma),ra:Math.round(ra),total:Math.round(oa+sa+ma+ra)});
-    }
-    return {rows,effPA,effST,effH,effSB};
-  }, [showWhatIf,whatIfPayoutAge,whatIfSaTopup,whatIfHousing,whatIfSalaryBump,inputs]);
+    const effPA  = whatIfPayoutAge !== null ? whatIfPayoutAge : (Number(inputs.payoutAge) || 65);
+    const effST  = whatIfSaTopup   !== null ? whatIfSaTopup  : (Number(inputs.vcSaTopup) || 0);
+    const effH   = whatIfHousing   !== null ? whatIfHousing  : (Number(inputs.housingOutflow) || 0);
+    const effSB  = whatIfSalaryBump !== null ? whatIfSalaryBump : 0;
+    const rows = runProjectionEngine(inputs, {
+      maxAge:               effPA,
+      overrideVcSA:         effST,
+      overrideHousingOutflow: effH,
+      overrideSalaryBump:   effSB,
+    });
+    return { rows, effPA, effST, effH, effSB };
+  }, [showWhatIf, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, inputs]);
 
   const comparisonData = useMemo(() => {
     // Helper: compute net worth series from a scenario object
@@ -1162,26 +1276,30 @@ export default function App() {
     const pa = Number(inputs.payoutAge) || 65;
     const ca = Number(inputs.currentAge) || 35;
     const result = { standard: {}, escalating: {}, basic: {} };
-    // Build contribution cash flows (outflows = negative)
+    // Pre-build contribution outflows once
     const contribFlows = projection
       .filter(r => r.injected > 0)
       .map(r => ({ t: r.age - ca, v: -(r.injected) }));
+    // Pre-index payout rows for O(1) lookup
+    const ppByAge = {};
+    for (const d of payoutProjection) ppByAge[d.age] = d;
+    // Pre-slice payout rows from pa — avoids O(n) filter per age
+    const payoutRows = payoutProjection.filter(d => d.age >= pa);
+    const cumFlows = { standard: [], escalating: [], basic: [] };
+    for (const d of payoutRows) {
+      for (const plan of ['standard', 'escalating', 'basic']) {
+        cumFlows[plan].push({ t: d.age - ca, v: d[`${plan}Annual`] || 0 });
+      }
+    }
     for (const row of projection) {
       if (row.age < pa) continue;
-      const pp = payoutProjection.find(d => d.age === row.age);
+      const pp = ppByAge[row.age];
       if (!pp) continue;
-      const yearsElapsed = row.age - pa;
+      const idx = row.age - pa;
       for (const plan of ['standard', 'escalating', 'basic']) {
-        // Build payout inflows from pa to current age
-        const payoutFlows = payoutProjection
-          .filter(d => d.age >= pa && d.age <= row.age)
-          .map(d => ({ t: d.age - ca, v: d[`${plan}Annual`] || 0 }));
-        // Terminal value = bequest at current age
+        const payoutFlows  = cumFlows[plan].slice(0, idx + 1);
         const terminalFlow = { t: row.age - ca, v: pp[`${plan}Bequest`] || 0 };
-        const allFlows = [...contribFlows, ...payoutFlows, terminalFlow];
-        const xirr = computeXIRR(allFlows);
-        // Clamp to realistic range: -10% to +10% to avoid display artefacts from
-        // Newton-Raphson divergence, while still showing accurate real-world IRR.
+        const xirr = computeXIRR([...contribFlows, ...payoutFlows, terminalFlow]);
         result[plan][row.age] = xirr !== null ? Math.max(-0.10, Math.min(0.10, xirr)) * 100 : null;
       }
     }
@@ -1233,6 +1351,7 @@ export default function App() {
       const escMonthly=Math.round(lifePlans.escalating.start);
       const basMonthly=Math.round(lifePlans.basic.start);
       const memberType=isSelfEmployed?"Self-Employed":"Employed";
+      const genderLabel=inputs.isMale!==false?"Male":"Female";
       const dollarMode=isRealDollars?"Real Dollars":"Nominal Dollars";
 
       // Year-by-year rows (every 5 years + payout age)
@@ -1257,33 +1376,14 @@ export default function App() {
       const hRows=[Math.max(0,baseH-6000),Math.max(0,baseH-3000),baseH,baseH+3000,baseH+6000];
       const saTopupCols=[Math.max(0,baseSATopup-4000),Math.max(0,baseSATopup-2000),baseSATopup,baseSATopup+2000,baseSATopup+4000];
       const calcTotalAtPA=(hOut,saTop)=>{
-        let oa2=Number(inputs.oaBalance)||0,sa2=Number(inputs.saBalance)||0,ma2=Number(inputs.maBalance)||0;
-        let ra2=ca>=55?sa2:0; if(ca>=55) sa2=0;
-        const sg=(Number(inputs.salaryGrowthRate)||0)/100;
-        const bOA=Number(inputs.empOaCont)||0,bSA=Number(inputs.empSaCont)||0,bMA=Number(inputs.empMaCont)||0;
-        const vOA=(Number(inputs.vcOaTopup)||0)+(Number(inputs.vcVhr)||0);
-        const vSA=saTop+(Number(inputs.annualGovGrant)||0);
-        const vMA=Number(inputs.vcMaTopup)||0;
-        const hs=Number(inputs.housingStopAge)||95;
-        const bMed=(Number(inputs.medicalUsage)||0)+(Number(inputs.medishieldIP)||0)+(Number(inputs.elderCareShield)||0);
-        const mi=(Number(inputs.medicalInflationRate)||0)/100;
-        const cs=Number(inputs.contributionStopAge)||65;
-        const yt55=Math.max(0,55-ca);
-        const pFRS55=Math.round(RETIREMENT_SUMS_2026.FRS*Math.pow(1+ASSUMED_TARGET_GROWTH,Math.max(0,(cy+yt55)-2026)));
-        const p55FRS=Math.round(RETIREMENT_SUMS_2026.FRS/Math.pow(1+ASSUMED_TARGET_GROWTH,Math.max(0,ca-55)));
-        const cFRS=ca>=55?p55FRS:pFRS55;
-        for(let age=ca;age<=pa;age++){
-          if(age===55&&ca<55){let req=Math.max(0,cFRS-ra2);const fSA=Math.min(sa2,req);ra2+=fSA;req-=fSA;oa2+=(sa2-fSA);sa2=0;const fOA=Math.min(oa2,req);ra2+=fOA;oa2-=fOA;}
-          else if(age===ca&&ca>=55&&sa2>0){let req=Math.max(0,cFRS-ra2);const fSA=Math.min(sa2,req);ra2+=fSA;req-=fSA;oa2+=(sa2-fSA);sa2=0;}
-          if(age<cs){const gf=Math.pow(1+sg,Math.max(0,age-ca));const mSA=Math.round(bSA*gf);oa2+=Math.round(bOA*gf)+vOA;if(age>=55){let rr=Math.max(0,cFRS-ra2);let tr=Math.min(mSA,rr);ra2+=tr;oa2+=(mSA-tr);ra2+=vSA;}else{sa2+=mSA+vSA;}ma2+=Math.round(bMA*gf)+vMA;}
-          const oaB2=oa2,saB2=sa2,maB2=ma2,raB2=ra2;const nOa=saB2+maB2+raB2;
-          const e1=Math.min(60000,nOa);const e1oa=Math.min(60000-e1,Math.min(oaB2,20000));const b1=(e1+e1oa)*0.01;
-          let b2=0;if(age>=55){const e2=Math.min(30000,nOa);const e2oa=Math.min(30000-e2,Math.min(oaB2,20000));b2=(e2+e2oa)*0.01;}
-          oa2+=oaB2*0.025;sa2+=saB2*0.04;ra2+=raB2*0.04;if(age>=55)ra2+=(b1+b2);else sa2+=(b1+b2);ma2+=maB2*0.04;
-          const hO=age<hs?hOut:0;oa2=Math.max(0,oa2-hO);
-          const mO=Math.round(bMed*Math.pow(1+mi,Math.max(0,age-ca)));ma2=Math.max(0,ma2-mO);
-        }
-        return Math.round(oa2+sa2+ma2+ra2);
+        const rows = runProjectionEngine(inputs, {
+          overrideVcSA: saTop,
+          overrideHousingOutflow: hOut,
+          overrideContribStop: Number(inputs.contributionStopAge)||65,
+          maxAge: pa,
+        });
+        const last = rows.find(r=>r.age===pa) || rows[rows.length-1];
+        return last ? last.total : 0;
       };
       const baseTotal=calcTotalAtPA(baseH,baseSATopup);
       const sensRows=hRows.map(h=>{
@@ -1345,6 +1445,11 @@ export default function App() {
     <h3>Profile</h3>
     <div class="row-kv"><span>Name</span><strong>${inputs.name}</strong></div>
     <div class="row-kv"><span>Member Type</span><strong>${memberType}</strong></div>
+    <div class="row-kv"><span>Gender</span><strong>${genderLabel}</strong></div>
+    ${inputs.oaWithdrawalAt55>0?`<div class="row-kv"><span>OA Withdrawal at 55</span><strong>${fc(inputs.oaWithdrawalAt55)}</strong></div>`:''}
+    ${inputs.usePropertyPledge?`<div class="row-kv"><span>Property Pledge</span><strong>Yes (BRS target)</strong></div>`:''}
+    ${inputs.oaToSaTransfer>0?`<div class="row-kv"><span>OA→SA Transfer/yr</span><strong>${fc(inputs.oaToSaTransfer)}</strong></div>`:''}
+    ${inputs.mrssGrant>0?`<div class="row-kv"><span>MRSS Grant/yr</span><strong>${fc(inputs.mrssGrant)}</strong></div>`:''}
     <div class="row-kv"><span>Current Age</span><strong>${ca}</strong></div>
     <div class="row-kv"><span>Current Year</span><strong>${cy}</strong></div>
     <div class="row-kv"><span>Payout Age</span><strong>${pa}</strong></div>
@@ -1358,7 +1463,7 @@ export default function App() {
     <div class="row-kv"><span>MA Balance</span><strong>${fc(inputs.maBalance)}</strong></div>
     <div class="row-kv"><span>Annual Inflow (OA+SA+MA)</span><strong>${fc((Number(inputs.empOaCont)||0)+(Number(inputs.empSaCont)||0)+(Number(inputs.empMaCont)||0))}</strong></div>
     <div class="row-kv"><span>Annual Housing Outflow</span><strong>${fc(inputs.housingOutflow)}</strong></div>
-    <div class="row-kv"><span>Annual VC Top-ups</span><strong>${fc((Number(inputs.vcOaTopup)||0)+(Number(inputs.vcSaTopup)||0)+(Number(inputs.vcMaTopup)||0))}</strong></div>
+    <div class="row-kv"><span>Annual VC Top-ups</span><strong>${fc((Number(inputs.vc3aCash)||0)+(Number(inputs.vcSaTopup)||0)+(Number(inputs.vcVhr)||0))}</strong></div>
   </div>
 </div>
 <h2>Retirement Summary at Payout Age ${pa}</h2>
@@ -1493,8 +1598,8 @@ ${(() => {
 <tbody>${projRowsData}</tbody></table>
 
 <h2 style="margin-top:16px">Sensitivity Analysis — Total CPF at Payout Age ${pa}</h2>
-<p style="font-size:9px;color:#64748b;margin-bottom:6px">Rows = Housing Outflow / Year &nbsp;|&nbsp; Columns = SA Top-up / Year &nbsp;|&nbsp; <span style="background:#dcfce7;padding:1px 6px;border-radius:3px;color:#166534;font-weight:800">Green = Base Case</span></p>
-<table><thead><tr><th>Housing \ SA Top-up</th>${saTopupCols.map(s=>`<th style="text-align:right">${fc(s)}</th>`).join("")}</tr></thead>
+<p style="font-size:9px;color:#64748b;margin-bottom:6px">Rows = Housing Outflow / Year &nbsp;|&nbsp; Columns = SA/RA Top-up / Year &nbsp;|&nbsp; <span style="background:#dcfce7;padding:1px 6px;border-radius:3px;color:#166534;font-weight:800">Green = Base Case</span></p>
+<table><thead><tr><th>Housing \ SA/RA Top-up</th>${saTopupCols.map(s=>`<th style="text-align:right">${fc(s)}</th>`).join("")}</tr></thead>
 <tbody>${sensRows}</tbody></table>
 </div>
 
@@ -1964,8 +2069,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
                     {[
                       ["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck],
-                      ["Monte Carlo stress testing", Activity], ["Milestone alerts", Bell],
-                      ["Side-by-side scenario diff", Split], ["What-If Explorer sliders", SlidersHorizontal]
+                      ["Monte Carlo stress testing (200 runs)", Activity], ["Milestone alerts", Bell],
+                      ["Gender-accurate payout ratios", Users], ["OA→SA transfer & OA withdrawal", ArrowRightLeft],
+                      ["Property pledge (BRS mode)", Target], ["What-If Explorer sliders", SlidersHorizontal]
                     ].map(([text, Icon], i) => (
                       <div key={i} style={{background:"var(--bg-muted)",padding:"12px 16px",borderRadius:12,display:"flex",alignItems:"center",gap:12,border:"1px solid var(--border-subtle)"}}>
                         <Icon style={{width:16,height:16,color:"#10b981"}}/>
@@ -1974,16 +2080,16 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     ))}
                   </div>
                   <div style={{background:"var(--bg-base)",padding:16,borderRadius:12,border:"1px solid var(--border-subtle)"}}>
-                    <p style={{fontSize:12,color:"var(--text-muted)"}}><strong style={{color:"var(--text-bright)"}}>Data stays on your device.</strong> All inputs auto-save to your browser's localStorage. Use Export/Import to back up your profile as JSON, or Share to generate a URL-encoded snapshot.</p>
+                    <p style={{fontSize:12,color:"var(--text-muted)"}}><strong style={{color:"var(--text-bright)"}}>Data stays on your device.</strong> Use Save Profile to back up your inputs as a JSON file, or Share to generate an encoded profile code you can send to others.</p>
                   </div>
                 </>
               )}
               {welcomeStep === 1 && (
                 <div style={{display:"flex",flexDirection:"column",gap:20}}>
                   {[
-                    ["1","Enter your CPF balances","Type your current OA, SA, and MA balances. The progress bars instantly compare them against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.","#3b82f6"],
-                    ["2","Use Auto-Calc for contributions","Toggle the Salary Estimator under Mandatory Contribs. Enter your gross monthly salary — the tool applies the correct 2026 allocation rates (OW ceiling: $8,000/month) and fills in your OA/SA/MA contributions automatically.","#10b981"],
-                    ["3","Add voluntary top-ups","The Voluntary Top-ups panel tracks the $37,740 CPF Annual Limit. It turns orange if your combined contributions exceed your remaining allowance, preventing over-contribution errors.","#a855f7"],
+                    ["1","Enter your CPF balances & select gender","Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio. The progress bars compare against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.","#3b82f6"],
+                    ["2","Use Auto-Calc for contributions","Toggle the Salary Estimator. Enter your gross monthly salary — the tool applies the 2026 OW ceiling ($8,000/month) and AW ceiling ($102,000/yr) to split contributions accurately across OA/SA/MA.","#10b981"],
+                    ["3","Inflows, Outflows & CPF Transfers","The Inflows panel has: VC3A (single cash lump-sum, auto-split by age-band), RSTU (SA/RA cash top-up, tax-relievable), VHR, gov grants, MRSS (RA top-up, up to $600/yr), MMSS (MA match, up to $1,000/yr), and WIS/Workfare (60% CPF for employees, 90% MA for SEPs). Outflows: Housing Loan (OA), medical, CPFIS. CPF Transfers: OA→MA and OA→SA.","#a855f7"],
                     ["4","Set your life-phase timelines","Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model real-world cash flow transitions accurately.","#fbbf24"]
                   ].map(([num, title, desc, color]) => (
                     <div key={num} style={{display:"flex",gap:16}}>
@@ -1999,11 +2105,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               {welcomeStep === 2 && (
                 <div style={{display:"flex",flexDirection:"column",gap:20}}>
                   {[
-                    ["Summary", PieChart, "#10b981", "Key metrics at a glance: total CPF at payout age, net worth breakdown doughnut chart, milestone alerts, and the What-If Explorer sliders for instant impact analysis."],
-                    ["Accumulation", BarChart3, "#3b82f6", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 500 simulations with ±1% rate variance."],
-                    ["LIFE Comparison", ShieldCheck, "#a855f7", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views."],
+                    ["Summary", PieChart, "#10b981", "Key metrics at a glance: total CPF at payout age, 20% RA-to-OA transfer notice, net worth breakdown, milestone alerts, and the What-If Explorer sliders."],
+                    ["Accumulation", BarChart3, "#3b82f6", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations with ±1% rate variance."],
+                    ["LIFE Comparison", ShieldCheck, "#a855f7", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Basic payout = PMT formula; bequest in Phase 1 includes full premium refund. Vertical lines mark exact break-even ages."],
                     ["Compare", Split, "#fb923c", "Save two scenarios (e.g. retire at 65 vs 70) and view a colour-coded diff table showing every metric that changes between them."],
-                    ["Data Table", TableIcon, "#fbbf24", "Full year-by-year projection table with sticky Age column. Download as CSV for your own analysis."]
+                    ["Data Table", TableIcon, "#fbbf24", "Full year-by-year projection table with sticky Age column, Yield (B/S/E), and IRR %. Download as CSV."]
                   ].map(([title, Icon, color, desc]) => (
                     <div key={title}>
                       <div style={{display:"inline-flex",alignItems:"center",gap:6,background:`${color}15`,border:`1px solid ${color}33`,padding:"4px 10px",borderRadius:8,marginBottom:8}}>
@@ -2019,12 +2125,16 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 <div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
                     {[
-                      ["Share Link", Link, "Encode only changed inputs into a compact URL. Send to a financial advisor or save as a bookmark."],
-                      ["PDF Report", Download, "Generates a print-ready 5-page report with member profile, projections, CPF LIFE comparison, milestones, and sensitivity analysis."],
-                      ["SEP Mode", Briefcase, "Self-Employed Person mode: no mandatory contributions. VC3A up to $37,740/yr flows MA→BHS, RA→FRS/ERS, remainder to OA."],
-                      ["Monte Carlo", Activity, "500 simulations with ±1% rate variance. Shows probability of meeting FRS at payout age."],
-                      ["What-If Explorer", SlidersHorizontal, "Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome."],
-                      ["CSV Download", TableIcon, "Download full year-by-year projection as CSV with all account balances, contributions, payouts, and bequest values."]
+                      ["Share Link", Link, "Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."],
+                      ["PDF Report", Download, "Print-ready report with gender, property pledge, OA withdrawal, OA→SA transfer, projections, CPF LIFE comparison, milestones, and sensitivity analysis."],
+                      ["SEP Mode", Briefcase, "Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr proportionally allocated. BHS, ERS, and AW ceiling enforced."],
+                      ["Monte Carlo", Activity, "200 simulations with ±1% rate variance. Shows probability of meeting FRS at payout age."],
+                      ["Gender Toggle", Users, "Male/Female selection (Profile section). Affects CPF LIFE payout ratio — female ~7% lower per $100k RA due to longer life expectancy."],
+                      ["OA→SA Transfer", ArrowRightLeft, "Pre-55 annual transfer from OA to SA — earns 4% instead of 2.5%. Irreversible. Input in CPF Transfers panel."],
+                      ["OA Withdrawal at 55", LogOut, "Lump-sum cash withdrawal from OA above BRS at age 55. Applied once. Input in Advanced panel."],
+                      ["Property Pledge", Target, "Only BRS needed in RA at 55 (not FRS). Reduces locked-in RA but also reduces monthly CPF LIFE payouts. Toggle in Advanced panel."],
+                      ["MRSS Grant", Gift, "Matched Retirement Savings Scheme — govt tops up RA up to $600/yr for eligible members 55–70 with RA below FRS."],
+                      ["What-If Explorer", SlidersHorizontal, "Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome."]
                     ].map(([title, Icon, desc]) => (
                       <div key={title} style={{background:"var(--bg-muted)",padding:"16px",borderRadius:12,border:"1px solid var(--border-subtle)"}}>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -2233,29 +2343,55 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             {openSections.has("profile") && <div style={{padding:"0 16px 16px"}}>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <div><label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>Name</label>
-                <input type="text" name="name" value={inputs.name} onChange={handleInputChange} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
+                <input type="text" name="name" value={inputs.name} onChange={handleInputChange} aria-label="Member name" style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                 {[["currentYear","Curr Year"],["currentAge","Curr Age"]].map(([n,l])=>(
-                  <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                    <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
+                  <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:inputErrors[n]?"#f87171":"#34d399",textTransform:"uppercase",marginBottom:4}}>{l}{inputErrors[n]&&<span style={{marginLeft:4,fontSize:9,color:"#f87171"}}>⚠ {inputErrors[n]}</span>}</label>
+                    <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
                 ))}
                 <div><label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>Payout At</label>
-                  <select name="payoutAge" value={inputs.payoutAge} onChange={handleInputChange} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}>
+                  <select name="payoutAge" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}>
                     {[65,66,67,68,69,70].map(a=><option key={a} value={a}>{a}</option>)}
                   </select>
                 </div>
               </div>
+              {/* Gender toggle — affects CPF LIFE monthly payout ratio */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",borderRadius:10,background:"var(--bg-muted)",border:"1px solid var(--border-subtle)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <Users style={{width:13,height:13,color:"#34d399"}}/>
+                  <span style={{fontSize:10,fontWeight:700,color:"var(--text-highlight)",textTransform:"uppercase"}}>Gender</span>
+                  <TooltipBox id="t-gender" text="Affects CPF LIFE payout ratio. Male ~$540/mo per $100k RA; Female ~$500/mo due to longer life expectancy."/>
+                </div>
+                <div style={{display:"flex",background:"var(--bg-panel)",padding:3,borderRadius:7,gap:2}}>
+                  <button onClick={()=>setInputs(p=>({...p,isMale:true}))} aria-pressed={inputs.isMale!==false} style={{padding:"4px 12px",borderRadius:5,fontSize:10,fontWeight:700,border:"none",cursor:"pointer",background:inputs.isMale!==false?"#34d399":"transparent",color:inputs.isMale!==false?"#020617":"var(--text-muted)"}}>Male</button>
+                  <button onClick={()=>setInputs(p=>({...p,isMale:false}))} aria-pressed={inputs.isMale===false} style={{padding:"4px 12px",borderRadius:5,fontSize:10,fontWeight:700,border:"none",cursor:"pointer",background:inputs.isMale===false?"#60a5fa":"transparent",color:inputs.isMale===false?"#020617":"var(--text-muted)"}}>Female</button>
+                </div>
+              </div>
               {[["oaBalance","Ordinary (OA)"],["saBalance",is55Plus?"Retirement (RA)":"Special (SA)"],["maBalance","MediSave (MA)"]].map(([n,l])=>(
                 <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l+' balance'} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
               ))}
             </div>
             {/* Goal Trackers */}
             <div style={{marginTop:20,paddingTop:16,borderTop:"1px solid var(--border-subtle)"}}>
+
+              {/* SA/RA Goal */}
               <div style={{marginBottom:16}}>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700,color:"var(--text-highlight)",marginBottom:6}}>
-                  <span>SA/RA Goal <TooltipBox id="t-ers" text={`ERS: ${formatCurrency(currentERS)}`}/></span>
-                  <span style={{color:"#34d399"}}>{ersPercentText}% of ERS</span>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,fontWeight:700,color:"var(--text-highlight)",marginBottom:6}}>
+                  <span>SA/RA Goal <TooltipBox id="t-ers" text={`BRS: ${formatCurrency(currentBRS)} · FRS: ${formatCurrency(currentFRS)} · ERS: ${formatCurrency(currentERS)}`}/></span>
+                  {/* Show % of FRS as primary metric (key retirement target) */}
+                  <span style={{color:currentSaRa>=currentFRS?"#34d399":"#fbbf24",fontSize:11,fontWeight:700,fontFamily:"monospace"}}>
+                    {Math.round((currentSaRa/currentFRS)*100)}% of FRS{currentSaRa>=currentFRS?" ✓":""}
+                  </span>
+                </div>
+                {/* Only show FRS% label above the FRS tick when SA/RA hasn't yet reached FRS.
+                    Once met/exceeded, the bar is full and no label is needed to avoid confusion. */}
+                <div style={{position:"relative",height:14,marginBottom:2}}>
+                  {currentSaRa < currentFRS && (
+                    <span style={{position:"absolute",left:"50%",transform:"translateX(-50%)",fontSize:11,fontWeight:700,color:"#fbbf24",fontFamily:"monospace",whiteSpace:"nowrap"}}>
+                      {Math.round((currentSaRa/currentFRS)*100)}%
+                    </span>
+                  )}
                 </div>
                 <div style={{width:"100%",background:"var(--bg-input)",borderRadius:999,height:10,overflow:"hidden",position:"relative"}}>
                   {[25,50].map(p=><div key={p} style={{position:"absolute",top:0,bottom:0,left:`${p}%`,width:1,background:"var(--bg-base)",zIndex:1}}/>)}
@@ -2265,10 +2401,18 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   <span>0</span><span>BRS</span><span>FRS</span><span>ERS</span>
                 </div>
               </div>
+
+              {/* MA Goal */}
               <div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700,color:"var(--text-highlight)",marginBottom:6}}>
-                  <span>MediSave BHS <TooltipBox id="t-bhs" text={`Basic Healthcare Sum (BHS): ${formatCurrency(currentBHS)}. MA cap — excess flows to SA (before 55) or RA (after 55).`}/></span>
-                  <span style={{color:"#60a5fa"}}>{bhsPercentText}%</span>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,fontWeight:700,color:"var(--text-highlight)",marginBottom:6}}>
+                  <span>MA Goal <TooltipBox id="t-bhs" text={`Basic Healthcare Sum (BHS): ${formatCurrency(currentBHS)}. MA cap — excess flows to SA (before 55) or RA (after 55).`}/></span>
+                  <span style={{color:"#60a5fa",fontSize:11,fontWeight:700,fontFamily:"monospace"}}>{Math.round(Number(bhsPercentText))}%</span>
+                </div>
+                {/* BHS% label positioned above the MAX tick (right edge) */}
+                <div style={{position:"relative",height:14,marginBottom:2}}>
+                  <span style={{position:"absolute",right:0,fontSize:11,fontWeight:700,color:currentMa>=currentBHS?"#34d399":"#60a5fa",fontFamily:"monospace",whiteSpace:"nowrap"}}>
+                    {Math.round(Math.min(100,(currentMa/currentBHS)*100))}%{currentMa>=currentBHS?" ✓":""}
+                  </span>
                 </div>
                 <div style={{width:"100%",background:"var(--bg-input)",borderRadius:999,height:10,overflow:"hidden",position:"relative"}}>
                   {[25,50,75].map(p=><div key={p} style={{position:"absolute",top:0,bottom:0,left:`${p}%`,width:1,background:"var(--bg-base)",zIndex:1}}/>)}
@@ -2285,7 +2429,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           <div style={{background:"var(--bg-panel)",border:`1px solid ${isSelfEmployed?"rgba(251,146,60,0.3)":"var(--border-subtle)"}`,borderRadius:16,overflow:"hidden"}}>
             <div onClick={()=>toggleSection("contribs")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("contribs")?"rgba(52,211,153,0.06)":"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,color:"#34d399"}}>
-                <Briefcase style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>Mandatory Contribs{isSelfEmployed?" (SEP)":""}</span>
+                <Briefcase style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>Mandatory Contributions{isSelfEmployed?" (SEP)":""}</span>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 {isSelfEmployed && <span style={{fontSize:9,background:"rgba(251,146,60,0.15)",color:"#fb923c",padding:"2px 6px",borderRadius:4,fontWeight:700}}>SEP</span>}
@@ -2303,20 +2447,30 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
             {isSelfEmployed && (
               <div style={{background:"rgba(251,146,60,0.08)",border:"1px solid rgba(251,146,60,0.25)",borderRadius:10,padding:10,marginBottom:12,fontSize:10,color:"#fdba74",lineHeight:1.5}}>
-                <strong style={{color:"#fb923c"}}>Self-Employed Member (SEP):</strong> No mandatory OA/SA contributions. Use the Voluntary Top-ups panel below to enter your VC3A (up to $37,740/yr). Funds are <strong style={{color:"#fdba74"}}>proportionally allocated</strong> across OA/SA/MA using your age-based CPF rates — the same ratios as mandatory contributions. MA excess above BHS spills to SA/RA. MA contributions required if net trade income &gt; $6,000.
+                <strong style={{color:"#fb923c"}}>Self-Employed Member (SEP):</strong> No mandatory OA/SA contributions. Use the Inflows panel below to enter your VC3A (up to $37,740/yr). Funds are <strong style={{color:"#fdba74"}}>proportionally allocated</strong> across OA/SA/MA using your age-based CPF rates. MA excess above BHS spills to SA/RA. MA contributions required if net trade income &gt; $6,000.
               </div>
             )}
-            {inputs.showSalaryCalc && (
-              <div style={{background:"var(--bg-input)",padding:14,borderRadius:12,marginBottom:14,border:"1px solid var(--border-strong)"}}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                  {[["salaryGross","Monthly Gross"],["salaryBonus","Annual Bonus"]].map(([n,l])=>(
+            {/* Salary fields — always visible for employed members */}
+            {!isSelfEmployed && (
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12,padding:10,borderRadius:10,background:"var(--bg-muted)",border:"1px solid var(--border-strong)"}}>
+                <div style={{fontSize:9,fontWeight:800,color:"#34d399",textTransform:"uppercase",marginBottom:2}}>Salary Inputs</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {[["salaryGross","OW / Monthly Gross ($)"],["salaryBonus","AW / Annual Bonus ($)"]].map(([n,l])=>(
                     <div key={n}><label style={{display:"block",fontSize:9,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:3}}>{l}</label>
-                      <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} style={{width:"100%",padding:"6px 10px",background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:6,color:"var(--text-bright)",fontSize:11,outline:"none",boxSizing:"border-box"}}/></div>
+                      <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{width:"100%",padding:"6px 10px",background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:6,color:"var(--text-bright)",fontSize:11,outline:"none",boxSizing:"border-box"}}/></div>
                   ))}
                 </div>
-                <button onClick={handleAutoCalc} style={{width:"100%",background:"#10b981",color:"#020617",fontWeight:700,padding:"8px",borderRadius:8,fontSize:12,border:"none",cursor:"pointer"}}>Apply CPF Rates</button>
-                {/* Rates table */}
-                <div style={{marginTop:10,borderRadius:8,overflow:"hidden",border:"1px solid var(--border-strong)"}}>
+                <div><label style={{display:"block",fontSize:9,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:3}}>Salary Growth Rate (% /yr)</label>
+                  <input type="number" name="salaryGrowthRate" value={inputs.salaryGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual salary growth rate" step="0.5" style={{width:"100%",padding:"6px 10px",background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:6,color:"var(--text-bright)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <p style={{fontSize:9,color:"var(--text-muted)",marginTop:2}}>OW ceiling: $8,000/mo · AW ceiling: $102,000/yr</p>
+                </div>
+                <button onClick={handleAutoCalc} style={{width:"100%",background:"#10b981",color:"#020617",fontWeight:700,padding:"7px",borderRadius:8,fontSize:11,border:"none",cursor:"pointer"}}>⚡ Auto-Calc CPF Contributions</button>
+              </div>
+            )}
+            {inputs.showSalaryCalc && !isSelfEmployed && (
+              <div style={{background:"var(--bg-input)",padding:14,borderRadius:12,marginBottom:14,border:"1px solid var(--border-strong)"}}>
+                {/* Rates reference table */}
+                <div style={{marginTop:4,borderRadius:8,overflow:"hidden",border:"1px solid var(--border-strong)"}}>
                   <div style={{background:"var(--bg-panel)",padding:"6px 10px",fontSize:9,fontWeight:800,textTransform:"uppercase",color:"var(--text-muted)"}}>CPF Contribution Rates by Age</div>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:9}}>
                     <thead><tr style={{background:"var(--bg-muted)"}}>
@@ -2344,18 +2498,18 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
             )}
             {!isSelfEmployed && <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {[["empOaCont","OA Contribution"],["empSaCont",is55Plus?"RA Contribution":"SA Contribution"],["empMaCont","MA Contribution"]].map(([n,l])=>(
+              {[["empOaCont","OA"],["empSaCont",is55Plus?"RA":"SA/RA"],["empMaCont","MA"]].map(([n,l])=>(
                 <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
               ))}
             </div>}
           </div>}
           </div>
-          {/* Voluntary Top-ups */}
+          {/* Inflows */}
           <div style={{background:"var(--bg-panel)",border:`1px solid ${isVcOverLimit?"#f97316":isSelfEmployed?"rgba(251,146,60,0.3)":"var(--border-subtle)"}`,borderRadius:16,overflow:"hidden"}}>
             <div onClick={()=>toggleSection("topups")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("topups")?(isVcOverLimit?"rgba(249,115,22,0.06)":"rgba(52,211,153,0.06)"):"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,color:isVcOverLimit?"#fb923c":"#34d399"}}>
-                <Gift style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>{isSelfEmployed?"VC3A ($)":"Voluntary Top-ups ($)"}</span>
+                <Gift style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>Inflows ($/yr)</span>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:9,fontWeight:700,color:"var(--text-subtle)"}}>Limit: {formatCurrency(maxAllowableVC)}/yr</span>
@@ -2366,42 +2520,199 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             {openSections.has("topups") && <div style={{padding:"0 16px 16px"}}>
             {isSelfEmployed && (
               <div style={{background:"rgba(251,146,60,0.08)",border:"1px solid rgba(251,146,60,0.2)",borderRadius:8,padding:"8px 10px",marginBottom:10,fontSize:10,color:"#fdba74",lineHeight:1.5}}>
-                <strong style={{color:"#fb923c"}}>SEP VC3A Flow:</strong> Funds are proportionally split across OA/SA/MA using your age-based CPF rates (same as mandatory contributions). MA excess above BHS spills to SA/RA. Max $37,740/yr.
+                <strong style={{color:"#fb923c"}}>SEP VC3A Flow:</strong> Proportionally split across OA/SA/MA using age-based CPF rates. MA excess above BHS spills to SA/RA. Max $37,740/yr.
               </div>
             )}
             {isVcOverLimit && <div style={{background:"rgba(249,115,22,0.15)",color:"#fdba74",fontSize:10,fontWeight:700,padding:10,borderRadius:8,marginBottom:10,display:"flex",gap:6}}>
-              <AlertTriangle style={{width:12,height:12,flexShrink:0,marginTop:1}}/>Inputs exceed annual limit ({formatCurrency(maxAllowableVC)}). Projections may be inaccurate.
+              <AlertTriangle style={{width:12,height:12,flexShrink:0,marginTop:1}}/>VC3A exceeds available limit ({formatCurrency(maxAllowableVC)}/yr). Contributions will be scaled down.
             </div>}
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {(isSelfEmployed
-                ? [["vcMaTopup","MA Contribution (required if NTI > $6k)"],["vcSaTopup",is55Plus?"RA Top up (RSTU)":"SA Top up (RSTU)"],["vcOaTopup","OA Top up (VC3A remainder)"],["annualGovGrant","Gov Grants"]]
-                : [["vcVhr","Housing Refund (VHR)"],["vcOaTopup","OA Top up"],["vcSaTopup",is55Plus?"RA Top up":"SA Top up"],["vcMaTopup","MA Top up"],["annualGovGrant","Gov Grants"]]
-              ).map(([n,l])=>(
-                <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:isVcOverLimit?"#fb923c":isSelfEmployed?"#fb923c":"#34d399",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
-              ))}
+
+              {/* VC3A — single cash lump-sum + read-only breakdown */}
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:isVcOverLimit?"#fb923c":"#34d399",textTransform:"uppercase",marginBottom:4}}>
+                  VC3A – Cash Lump Sum
+                  <TooltipBox id="t-vc3a" text="Voluntary Contribution to 3 Accounts — cash only. Auto-split across OA/SA/MA using your age-band allocation rates. Counts toward the $37,740 Annual Limit. No tax relief for employees."/>
+                </label>
+                <input type="number" name="vc3aCash" value={inputs.vc3aCash} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="VC3A annual cash contribution" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${isVcOverLimit?"#f97316":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Auto-split by age-band rates · max {formatCurrency(Math.max(0,maxAllowableVC))}/yr remaining · no tax relief</p>
+                {/* Read-only breakdown of how lump-sum is auto-split */}
+                {(Number(inputs.vc3aCash)||0) > 0 && (() => {
+                  const age = Number(inputs.currentAge)||35;
+                  let oaR,saR,maR;
+                  if(age<=35){oaR=0.23;saR=0.06;maR=0.08;}
+                  else if(age<=45){oaR=0.21;saR=0.07;maR=0.09;}
+                  else if(age<=50){oaR=0.19;saR=0.08;maR=0.10;}
+                  else if(age<=55){oaR=0.15;saR=0.115;maR=0.105;}
+                  else if(age<=60){oaR=0.12;saR=0.115;maR=0.105;}
+                  else if(age<=65){oaR=0.035;saR=0.11;maR=0.105;}
+                  else if(age<=70){oaR=0.01;saR=0.05;maR=0.105;}
+                  else{oaR=0.01;saR=0.01;maR=0.105;}
+                  const total=oaR+saR+maR;
+                  const v=Number(inputs.vc3aCash)||0;
+                  const oaAmt=Math.round(v*(oaR/total));
+                  const maAmt=Math.round(v*(maR/total));
+                  const saAmt=v-oaAmt-maAmt;
+                  return (
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginTop:8,padding:"8px 10px",background:"var(--bg-base)",borderRadius:8,border:"1px solid var(--border-subtle)"}}>
+                      {[["OA",oaAmt,"#60a5fa"],["MA",maAmt,"#a78bfa"],["SA/RA",saAmt,"#34d399"]].map(([acct,amt,col])=>(
+                        <div key={acct} style={{textAlign:"center"}}>
+                          <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",marginBottom:2}}>{acct}</div>
+                          <div style={{fontSize:11,fontWeight:700,color:"var(--text-bright)",fontFamily:"monospace"}}>{formatCurrency(amt)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* RSTU */}
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>
+                  RSTU – {is55Plus?"RA":"SA/RA"} Cash Top-up
+                  <TooltipBox id="t-rstu" text={`Retirement Sum Topping-Up Scheme — cash top-up to your ${is55Plus?"RA":"SA/RA"} directly (not split across accounts). Eligible for up to $8,000/yr tax relief (own account) + $8,000 for loved ones. Capped at FRS (SA) or ERS (RA). NOT counted in Annual Limit.`}/>
+                </label>
+                <input type="number" name="vcSaTopup" value={inputs.vcSaTopup} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="RSTU annual cash top-up" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Tax relief up to $8,000/yr · not in Annual Limit · capped at {is55Plus?"ERS":"FRS"}</p>
+              </div>
+
+              {/* Housing Refund (VHR) */}
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>
+                  Housing Refund – VHR (to OA)
+                  <TooltipBox id="t-vhr" text="Voluntary Housing Refund: cash returned to OA to offset CPF used for housing. Credited to OA. Counts toward Annual Limit."/>
+                </label>
+                <input type="number" name="vcVhr" value={inputs.vcVhr} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Voluntary housing refund" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+              </div>
+
+              {/* Gov grants */}
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>
+                  Gov Grants (to {is55Plus?"RA":"SA/RA"})
+                  <TooltipBox id="t-govgrant" text="Government grants credited to SA (pre-55) or RA (post-55). Tracked separately for the 20% RA transfer base calculation."/>
+                </label>
+                <input type="number" name="annualGovGrant" value={inputs.annualGovGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual government grant" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+              </div>
+
+              {/* MRSS */}
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>
+                  MRSS Grant (to RA)
+                  <TooltipBox id="t-mrss" text="Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $600/yr for Singapore Citizens aged 55–70 with RA below the current FRS. Credited to RA."/>
+                </label>
+                <input type="number" name="mrssGrant" value={inputs.mrssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MRSS annual grant" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Max $600/yr · age 55–70 · RA below FRS</p>
+              </div>
+
+              {/* MMSS */}
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>
+                  MMSS Grant (to MA)
+                  <TooltipBox id="t-mmss" text="Matched MediSave Scheme (from Jan 2026): Govt matches voluntary MA cash top-ups dollar-for-dollar up to $1,000/yr for Singapore Citizens aged 55–70 with MA below half of BHS (~$39,500 in 2026) and monthly income ≤ $4,000. No tax relief on top-ups attracting MMSS match."/>
+                </label>
+                <input type="number" name="mmssGrant" value={inputs.mmssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MMSS annual grant to MA" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Max $1,000/yr · age 55–70 · MA below ½ BHS · income ≤ $4,000/mo</p>
+              </div>
+
+              {/* WIS */}
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>
+                  WIS – Workfare Supplement
+                  <TooltipBox id="t-wis" text="Workfare Income Supplement: Employees — 60% to CPF (OA/SA/MA age-band split) + 40% cash. SEPs — 90% to MA (BHS-capped) + 10% cash. Only the CPF portion is modelled."/>
+                </label>
+                <input type="number" name="wisAmount" value={inputs.wisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual WIS workfare supplement" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>{isSelfEmployed?"SEP: 90% → MA (BHS-capped), 10% cash (not modelled)":"Employee: 60% → CPF (age-band split), 40% cash (not modelled)"}</p>
+              </div>
+
             </div>
           </div>}
           </div>
+
           {/* Outflows */}
           <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:16,overflow:"hidden"}}>
             <div onClick={()=>toggleSection("outflows")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("outflows")?"rgba(244,63,94,0.06)":"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,color:"#f472b6"}}>
-                <MinusCircle style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>Cash Outflows ($)</span>
+                <MinusCircle style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>Outflows ($/yr)</span>
               </div>
               <span style={{fontSize:11,color:"var(--text-muted)",fontWeight:700}}>{openSections.has("outflows")?"▲":"▼"}</span>
             </div>
             {openSections.has("outflows") && <div style={{padding:"0 16px 16px"}}>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {[["housingOutflow","Housing (OA)"],["medicalUsage","Medical Usage (MA)"],["medishieldIP","MediShield Life/IP (MA)"],["elderCareShield","ElderShield/CareShield (MA)"]].map(([n,l])=>(
+              {[["housingOutflow","Housing Loan (OA)"],["medicalUsage","Medical Usage (MA)"],["medishieldIP","MediShield Life / IP (MA)"],["elderCareShield","ElderShield / CareShield (MA)"]].map(([n,l])=>(
                 <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
               ))}
+              {/* CPFIS */}
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>
+                  CPFIS – OA/SA Invested
+                  <TooltipBox id="t-cpfis" text="CPF Investment Scheme: Annual amount moved from OA/SA into investments. Reduces OA balance in the projection. Investment returns are NOT modelled."/>
+                </label>
+                <input type="number" name="cpfisAmount" value={inputs.cpfisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual CPFIS investment amount" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Reduces OA balance · investment returns not modelled</p>
+              </div>
+              {/* OA Withdrawal (from age 55) */}
+              <div style={{paddingTop:8,borderTop:"1px solid rgba(244,63,94,0.15)"}}>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>
+                  OA Lump-Sum Withdrawal (from age 55)
+                  <TooltipBox id="t-oawithdraw" text="From age 55, after SA closes, you may withdraw OA savings above the BRS ($110,200). Withdrawn amount is removed from OA permanently and does not earn CPF interest thereafter."/>
+                </label>
+                <input type="number" name="oaWithdrawalAt55" value={inputs.oaWithdrawalAt55} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="OA lump sum withdrawal from age 55" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Applied once at age 55 · OA must remain ≥ $0</p>
+              </div>
               <div><label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>Medical Inflation Rate (%)</label>
-                <input type="number" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.3)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                <input type="number" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" aria-label="Medical inflation rate" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.3)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
             </div>
           </div>}
           </div>
+
+          {/* CPF Transfers */}
+          <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:16,overflow:"hidden"}}>
+            <div onClick={()=>toggleSection("transfers")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("transfers")?"rgba(251,191,36,0.06)":"transparent"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,color:"#fbbf24"}}>
+                <ArrowRightLeft style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>CPF Transfers ($/yr)</span>
+              </div>
+              <span style={{fontSize:11,color:"var(--text-muted)",fontWeight:700}}>{openSections.has("transfers")?"▲":"▼"}</span>
+            </div>
+            {openSections.has("transfers") && <div style={{padding:"0 16px 16px"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {/* OA → MA */}
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#fbbf24",textTransform:"uppercase",marginBottom:4}}>
+                  OA → MA Transfer
+                  <TooltipBox id="t-oatoma" text="Transfer from OA to MA to earn 4% instead of 2.5%, or to top up MA towards BHS. Capped at BHS headroom. Irreversible."/>
+                </label>
+                <input type="number" name="oaToMaTransfer" value={inputs.oaToMaTransfer} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual OA to MA transfer" style={{width:"100%",padding:"8px 12px",background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Capped at BHS headroom · irreversible</p>
+              </div>
+              {/* OA → SA (pre-55 only) */}
+              {!is55Plus && (
+                <div>
+                  <label style={{display:"block",fontSize:10,fontWeight:700,color:"#fbbf24",textTransform:"uppercase",marginBottom:4}}>
+                    OA → SA/RA Transfer
+                    <TooltipBox id="t-oatosa" text="Transfer from OA to SA to earn 4% instead of 2.5%. Only allowed before age 55 and irreversible. Funds count toward the FRS cap in SA."/>
+                  </label>
+                  <input type="number" name="oaToSaTransfer" value={inputs.oaToSaTransfer} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual OA to SA transfer" style={{width:"100%",padding:"8px 12px",background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                  <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Pre-55 only · capped at OA balance · irreversible · not in Annual Limit</p>
+                </div>
+              )}
+              {/* Property Pledge → RA to OA transfer at 55 */}
+              <div style={{paddingTop:8,borderTop:"1px solid rgba(251,191,36,0.15)"}}>
+                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+                  <div style={{flex:1}}>
+                    <label style={{display:"block",fontSize:10,fontWeight:700,color:"#fbbf24",textTransform:"uppercase",marginBottom:4}}>
+                      Property Pledge – RA → OA (from age 55)
+                      <TooltipBox id="t-pledge" text="A CPF Property Pledge lets you use your property as security so only BRS ($110,200) needs to remain in RA at 55. The excess SA/RA above BRS moves to OA — it stays inside CPF and earns 2.5% interest. To withdraw as cash, use the OA Lump-Sum Withdrawal field in the Outflows panel. Monthly CPF LIFE payouts will be significantly lower (~$730–$790/mo vs ~$1,350–$1,450/mo at FRS). Property must have a lease lasting to age 95. HDB 2-room Flexi and Lease Buyback Scheme properties are ineligible."/>
+                    </label>
+                    <p style={{fontSize:9,color:"var(--text-muted)",marginTop:2}}>RA above BRS stays in OA (inside CPF, earns 2.5%) · withdraw via OA Withdrawal field · lower payout</p>
+                  </div>
+                  <button onClick={()=>setInputs(p=>({...p,usePropertyPledge:!p.usePropertyPledge}))} aria-pressed={!!inputs.usePropertyPledge} style={{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:700,border:"none",cursor:"pointer",background:inputs.usePropertyPledge?"#10b981":"var(--border-strong)",color:inputs.usePropertyPledge?"#020617":"var(--text-muted)",flexShrink:0,marginTop:2}}>{inputs.usePropertyPledge?"ON":"OFF"}</button>
+                </div>
+              </div>
+            </div>
+          </div>}
+          </div>
+
           {/* Advanced */}
           <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:16,overflow:"hidden"}}>
             <div onClick={()=>toggleSection("advanced")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("advanced")?"rgba(96,165,250,0.06)":"transparent"}}>
@@ -2414,21 +2725,26 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 {[["contributionStopAge","Contrib Stop"],["housingStopAge","Housing Stop"]].map(([n,l])=>(
-                  <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                    <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
+                  <div key={n}>
+                    <label style={{display:"block",fontSize:10,fontWeight:700,color:inputErrors[n]?"#f87171":"#60a5fa",textTransform:"uppercase",marginBottom:4}}>
+                      {l}{inputErrors[n]&&<span style={{marginLeft:4,fontSize:9,color:"#f87171"}}>⚠</span>}
+                    </label>
+                    <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l+' age'} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
                 ))}
               </div>
+
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:8,borderTop:"1px solid var(--border-subtle)"}}>
                 <label style={{fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase"}}>Include Prop in Net Worth</label>
-                <button onClick={()=>setInputs(p=>({...p,includeProperty:!p.includeProperty}))} style={{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:700,border:"none",cursor:"pointer",background:inputs.includeProperty?"#10b981":"var(--border-strong)",color:inputs.includeProperty?"#020617":"var(--text-muted)"}}>{inputs.includeProperty?"ON":"OFF"}</button>
+                <button onClick={()=>setInputs(p=>({...p,includeProperty:!p.includeProperty}))} aria-pressed={!!inputs.includeProperty} style={{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:700,border:"none",cursor:"pointer",background:inputs.includeProperty?"#10b981":"var(--border-strong)",color:inputs.includeProperty?"#020617":"var(--text-muted)"}}>{inputs.includeProperty?"ON":"OFF"}</button>
               </div>
               <div style={{opacity:inputs.includeProperty?1:0.3,pointerEvents:inputs.includeProperty?"auto":"none",display:"flex",flexDirection:"column",gap:8}}>
                 <div><label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:4}}>Property Value ($)</label>
-                  <input type="number" name="propertyValue" value={inputs.propertyValue} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                  <input type="number" name="propertyValue" value={inputs.propertyValue} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Property value" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   {[["propertyGrowthRate","Prop Growth (%)"],["inflationRate","Inflation (%)"]].map(([n,l])=>(
-                    <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                      <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
+                    <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:inputErrors[n]?"#f87171":"#60a5fa",textTransform:"uppercase",marginBottom:4}}>{l}</label>
+                      <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
                   ))}
                 </div>
               </div>
@@ -2437,53 +2753,65 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           </div>
           {/* Gap Alert */}
           {(() => {
-            const ca=Number(inputs.currentAge)||35;
-            const cy=Number(inputs.currentYear)||2026;
+            const ca  = Number(inputs.currentAge) || 35;
+            const cy  = Number(inputs.currentYear) || 2026;
             let raForAlert, projFRS55, projERS55;
 
             if (ca >= 55) {
-              // Member is already past 55: read RA directly from current inputs
-              // Back-project the cohort FRS to their age-55 vintage
-              const past55FRS = Math.round(RETIREMENT_SUMS_2026.FRS / Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0, ca - 55)));
+              const past55FRS = Math.round(RETIREMENT_SUMS_2026.FRS / Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, ca - 55)));
               projFRS55 = past55FRS;
               projERS55 = past55FRS * 2;
-              raForAlert = Number(inputs.saBalance)||0; // saBalance field holds RA when >= 55
+              raForAlert = Number(inputs.saBalance) || 0;
             } else {
-              const yt55=Math.max(0,(cy+Math.max(0,55-ca))-2026);
-              projFRS55=Math.round(RETIREMENT_SUMS_2026.FRS*Math.pow(1+ASSUMED_TARGET_GROWTH,yt55));
-              projERS55=projFRS55*2;
-              const frsRow55=projection.find(r=>r.age===55);
-              raForAlert=frsRow55?(frsRow55.ra||0):0;
+              const yt55 = Math.max(0, (cy + Math.max(0, 55 - ca)) - 2026);
+              projFRS55 = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, yt55));
+              projERS55 = projFRS55 * 2;
+              const frsRow55 = projection.find(r => r.age === 55);
+              raForAlert = frsRow55 ? (frsRow55.ra || 0) : 0;
             }
 
-            // Suppress alert entirely if member has already met or exceeded FRS
-            if (raForAlert>=projFRS55) return null;
-            const frsGap=Math.max(0,projFRS55-raForAlert);
-            if (frsGap<=0) return null;
-            const yearsToGo=ca >= 55 ? 1 : Math.max(1,55-ca);
-            const monthlyTopUp=Math.round(frsGap/(yearsToGo*12));
-            const annualTopUp=Math.round(frsGap/yearsToGo);
-            const isUrgent=yearsToGo<=5;
+            if (raForAlert >= projFRS55) return null;
+            const frsGap = Math.max(0, projFRS55 - raForAlert);
+            if (frsGap <= 0) return null;
+
+            const yearsToGo = ca >= 55 ? 1 : Math.max(1, 55 - ca);
+            // Use future-value-of-annuity formula: PMT = FV * r / ((1+r)^n - 1)
+            // where FV = gap needed, r = CPF SA rate 4%, n = years remaining
+            // This gives the level annual top-up that, compounded at 4%, closes the gap
+            const r = 0.04;
+            const fvAnnuityFactor = (Math.pow(1 + r, yearsToGo) - 1) / r;
+            const annualTopUp = fvAnnuityFactor > 0 ? Math.round(frsGap / fvAnnuityFactor) : Math.round(frsGap / yearsToGo);
+            const monthlyTopUp = Math.round(annualTopUp / 12);
+            const isUrgent = yearsToGo <= 5;
+            // Show what the projection currently has vs what's needed
+            const currentVcSa = Number(inputs.vcSaTopup) || 0;
+            const additionalNeeded = Math.max(0, annualTopUp - currentVcSa);
             return (
               <div style={{borderRadius:16,padding:16,border:`1px solid ${isUrgent?"rgba(239,68,68,0.3)":"rgba(245,158,11,0.3)"}`,background:isUrgent?"rgba(239,68,68,0.08)":"rgba(245,158,11,0.08)"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                   <AlertTriangle style={{width:14,height:14,color:isUrgent?"#f87171":"#fbbf24"}}/>
                   <span style={{fontSize:10,fontWeight:800,textTransform:"uppercase",color:isUrgent?"#f87171":"#fbbf24"}}>Contribution Gap Alert</span>
                 </div>
-                <p style={{fontSize:10,color:isUrgent?"#fca5a5":"#fcd34d",marginBottom:8}}>Projected RA at 55 is <strong>{formatCurrency(raForAlert)}</strong> — <strong>{formatCurrency(frsGap)}</strong> short of FRS target.</p>
+                <p style={{fontSize:10,color:isUrgent?"#fca5a5":"#fcd34d",marginBottom:8}}>
+                  Projected RA at 55 is <strong>{formatCurrency(raForAlert)}</strong> — <strong>{formatCurrency(frsGap)}</strong> short of FRS ({formatCurrency(projFRS55)}).
+                </p>
                 <div style={{background:isUrgent?"rgba(239,68,68,0.1)":"rgba(245,158,11,0.1)",borderRadius:8,padding:10,fontSize:10,fontFamily:"monospace"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"var(--text-muted)"}}>Monthly top-up needed:</span><span style={{fontWeight:900,color:isUrgent?"#f87171":"#fcd34d"}}>{formatCurrency(monthlyTopUp)}/mo</span></div>
-                  <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:"var(--text-muted)"}}>Annual top-up needed:</span><span style={{fontWeight:900,color:isUrgent?"#f87171":"#fcd34d"}}>{formatCurrency(annualTopUp)}/yr</span></div>
-                  <div style={{display:"flex",justifyContent:"space-between",marginTop:6,paddingTop:6,borderTop:"1px solid rgba(100,116,139,0.3)"}}><span style={{color:"var(--text-muted)"}}>Years remaining:</span><span style={{fontWeight:900,color:"var(--text-highlight)"}}>{yearsToGo} yrs</span></div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"var(--text-muted)"}}>Annual top-up needed*:</span><span style={{fontWeight:900,color:isUrgent?"#f87171":"#fcd34d"}}>{formatCurrency(annualTopUp)}/yr</span></div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"var(--text-muted)"}}>Monthly equivalent:</span><span style={{fontWeight:900,color:isUrgent?"#f87171":"#fcd34d"}}>{formatCurrency(monthlyTopUp)}/mo</span></div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,paddingBottom:6,borderBottom:"1px solid rgba(100,116,139,0.3)"}}><span style={{color:"var(--text-muted)"}}>Years remaining:</span><span style={{fontWeight:900,color:"var(--text-highlight)"}}>{yearsToGo} yrs</span></div>
+                  {currentVcSa > 0 && <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:"var(--text-muted)"}}>Additional top-up needed:</span><span style={{fontWeight:900,color:isUrgent?"#f87171":"#fcd34d"}}>{formatCurrency(additionalNeeded)}/yr</span></div>}
+                  <p style={{fontSize:8,color:"var(--text-muted)",marginTop:6,lineHeight:1.4}}>*Assumes 4% p.a. SA/RA growth on top-ups. Includes existing contributions in projection.</p>
                 </div>
-                <button
-                  onClick={()=>{
-                    setInputs(prev=>({...prev,vcSaTopup:annualTopUp}));
-                    showToast(`SA Top-up pre-filled: ${formatCurrency(annualTopUp)}/yr`);
-                  }}
-                  style={{width:"100%",marginTop:10,padding:"8px 0",borderRadius:8,fontSize:10,fontWeight:800,border:`1px solid ${isUrgent?"rgba(239,68,68,0.4)":"rgba(245,158,11,0.4)"}`,background:isUrgent?"rgba(239,68,68,0.12)":"rgba(245,158,11,0.12)",color:isUrgent?"#f87171":"#fbbf24",cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.05em"}}>
-                  ⚡ Apply Suggested Top-up ({formatCurrency(annualTopUp)}/yr)
-                </button>
+                {additionalNeeded > 0 && (
+                  <button
+                    onClick={()=>{
+                      setInputs(prev=>({...prev,vcSaTopup:Math.round(currentVcSa + additionalNeeded)}));
+                      showToast(`SA/RA Top-up increased to ${formatCurrency(Math.round(currentVcSa + additionalNeeded))}/yr`);
+                    }}
+                    style={{width:"100%",marginTop:10,padding:"8px 0",borderRadius:8,fontSize:10,fontWeight:800,border:`1px solid ${isUrgent?"rgba(239,68,68,0.4)":"rgba(245,158,11,0.4)"}`,background:isUrgent?"rgba(239,68,68,0.12)":"rgba(245,158,11,0.12)",color:isUrgent?"#f87171":"#fbbf24",cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.05em"}}>
+                    ⚡ Apply Additional Top-up ({formatCurrency(additionalNeeded)}/yr)
+                  </button>
+                )}
               </div>
             );
           })()}
@@ -2494,9 +2822,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           {/* Tabs + Persistent KPI Strip */}
           <div style={{display:"flex",flexDirection:"column",gap:0,background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:16,overflow:"hidden"}}>
             {/* Tab navigation */}
-            <div className="cpf-tabs" style={{display:"flex",flexWrap:"nowrap",padding:"6px 6px 0",gap:2,borderBottom:"1px solid var(--border-subtle)",overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
+            <div className="cpf-tabs" role="tablist" aria-label="Dashboard sections" style={{display:"flex",flexWrap:"nowrap",padding:"6px 6px 0",gap:2,borderBottom:"1px solid var(--border-subtle)",overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
               {[["welcome","Welcome",Lightbulb,"#64748b"],["summary","Summary",PieChart,"#10b981"],["accumulation","Growth",BarChart3,"#3b82f6"],["life","LIFE",ShieldCheck,"#a855f7"],["compare","Compare",Split,"#f59e0b"],["table","Data Table",TableIcon,"#94a3b8"],["notes","Docs",BookOpen,"#60a5fa"]].map(([id,label,Icon,accent])=>(
-                <button key={id} onClick={()=>setActiveTab(id)} style={{display:"flex",alignItems:"center",gap:5,padding:"9px 14px",borderRadius:"10px 10px 0 0",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:activeTab===id?"var(--bg-base)":"transparent",color:activeTab===id?accent:"var(--text-muted)",borderBottom:activeTab===id?`2px solid ${accent}`:"2px solid transparent",transition:"all 0.15s",whiteSpace:"nowrap",marginBottom:-1}}>
+                <button key={id} role="tab" aria-selected={activeTab===id} aria-controls={`panel-${id}`} onClick={()=>setActiveTab(id)} style={{display:"flex",alignItems:"center",gap:5,padding:"9px 14px",borderRadius:"10px 10px 0 0",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:activeTab===id?"var(--bg-base)":"transparent",color:activeTab===id?accent:"var(--text-muted)",borderBottom:activeTab===id?`2px solid ${accent}`:"2px solid transparent",transition:"all 0.15s",whiteSpace:"nowrap",marginBottom:-1}}>
                   <Icon style={{width:12,height:12}}/>{label}
                 </button>
               ))}
@@ -2552,7 +2880,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       ))}
                     </div>
                     <div style={{background:"var(--bg-base)",padding:14,borderRadius:10,border:"1px solid var(--border-subtle)",marginTop:16}}>
-                      <p style={{fontSize:12,color:"var(--text-muted)"}}><strong style={{color:"var(--text-bright)"}}>Data stays on your device.</strong> All inputs auto-save to localStorage. Use Export/Import to back up your profile as JSON, or Share to generate a URL-encoded snapshot.</p>
+                      <p style={{fontSize:12,color:"var(--text-muted)"}}><strong style={{color:"var(--text-bright)"}}>Data stays on your device.</strong> Use Save Profile (💾) to back up your inputs as a JSON file, or Share to generate an encoded profile code. No server storage — everything runs locally in your browser.</p>
                     </div>
                   </div>
                 </div>
@@ -2563,7 +2891,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <div><h4 style={{fontSize:18,fontWeight:900,color:"#eff6ff",marginBottom:2}}>Setting Up Your Profile</h4><p style={{fontSize:12,color:"#93c5fd"}}>Step 1 — The Input Engine (left panel)</p></div>
                   </div>
                   <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:16}}>
-                    {[["1","Enter your CPF balances","Type your current OA, SA, and MA balances. The progress bars instantly compare them against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.","#3b82f6"],["2","Use Auto-Calc for contributions","Toggle the Salary Estimator under Mandatory Contribs. Enter your gross monthly salary — the tool applies the correct 2026 allocation rates (OW ceiling: $8,000/month) and fills in your OA/SA/MA contributions automatically.","#10b981"],["3","Self-Employed (SEP) Mode","Click the SEP? toggle to switch to Self-Employed mode. Mandatory contributions are zeroed out. VC3A up to $37,740/yr is split proportionally across OA/SA/MA using the same age-based allocation rates as mandatory contributions.","#a855f7"],["4","Add voluntary top-ups","The Voluntary Top-ups panel tracks the $37,740 CPF Annual Limit. It turns orange if your combined contributions exceed your remaining allowance, preventing over-contribution errors.","#fbbf24"],["5","Set your life-phase timelines","Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model real-world cash flow transitions accurately.","#fb923c"]].map(([num,title,desc,color])=>(
+                    {[["1","Enter your CPF balances & gender","Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). The progress bars compare balances against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.","#3b82f6"],["2","Use Auto-Calc for contributions","OW, AW, and Salary Growth % are always visible in the Mandatory Contribs panel. Click ⚡ Auto-Calc to fill in annual OA/SA/MA contributions using the correct age-band rates (OW ceiling $8,000/mo, AW ceiling $102,000/yr). SEP members use the Inflows (VC3A) panel instead.","#10b981"],["3","Add voluntary top-ups & new strategies","Use the top-ups panel for RSTU top-ups, gov grants, MRSS grants (up to $600/yr for eligible members 55–70), and the annual OA→SA transfer (pre-55 only, earns 4% vs 2.5%). The Advanced panel adds OA lump-sum withdrawal at 55 and property pledge (BRS-only RA target).","#a855f7"],["4","Review the Inflows panel limit","The Inflows panel tracks the $37,740 CPF Annual Limit for VC contributions. It turns orange if your combined VC3A/RSTU inputs exceed your remaining allowance.","#fbbf24"],["5","Set your life-phase timelines","Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model real-world cash flow transitions accurately.","#fb923c"]].map(([num,title,desc,color])=>(
                       <div key={num} style={{display:"flex",gap:14}}>
                         <div style={{width:24,height:24,borderRadius:"50%",background:`${color}22`,color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{num}</div>
                         <div><h5 style={{fontSize:13,fontWeight:700,color:"var(--text-bright)",marginBottom:4}}>{title}</h5><p style={{fontSize:12,color:"var(--text-muted)",lineHeight:1.5}}>{desc}</p></div>
@@ -2578,7 +2906,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <div><h4 style={{fontSize:18,fontWeight:900,color:"#faf5ff",marginBottom:2}}>Exploring the Dashboard</h4><p style={{fontSize:12,color:"#d8b4fe"}}>Step 2 — The right panel tabs</p></div>
                   </div>
                   <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
-                    {[["Summary",PieChart,"#10b981","Key metrics at a glance: total CPF at payout age, net worth breakdown doughnut chart, milestone alerts, and the What-If Explorer sliders for instant impact analysis."],["Accumulation",BarChart3,"#3b82f6","Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 500 simulations with ±1% rate variance."],["LIFE Comparison",ShieldCheck,"#a855f7","Side-by-side payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views."],["Compare",Split,"#fb923c","Save two scenarios (e.g. retire at 65 vs 70) and view a colour-coded diff table showing every metric that changes between them."],["Data Table",TableIcon,"#fbbf24","Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Download as CSV."]].map(([title,Icon,color,desc])=>(
+                    {[["Summary",PieChart,"#10b981","Key metrics at a glance: total CPF at payout age, net worth breakdown doughnut chart, milestone alerts, 20% RA-to-OA transfer notice, and the What-If Explorer sliders for instant impact analysis."],["Accumulation",BarChart3,"#3b82f6","Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations with ±1% rate variance. Real vs Nominal dollar toggle adjusts for inflation."],["LIFE Comparison",ShieldCheck,"#a855f7","Side-by-side payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."],["Compare",Split,"#fb923c","Save two scenarios (e.g. retire at 65 vs 70) and view a colour-coded diff table showing every metric that changes between them."],["Data Table",TableIcon,"#fbbf24","Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Download as CSV."]].map(([title,Icon,color,desc])=>(
                       <div key={title}>
                         <div style={{display:"inline-flex",alignItems:"center",gap:6,background:`${color}15`,border:`1px solid ${color}33`,padding:"4px 10px",borderRadius:8,marginBottom:6}}>
                           <Icon style={{width:12,height:12,color}}/>
@@ -2597,7 +2925,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   </div>
                   <div style={{padding:"20px 24px"}}>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10,marginBottom:20}}>
-                      {[["Share Link",Link,"Encode only changed inputs into a compact URL. Send to a financial advisor or save as a bookmark."],["PDF Report",Download,"Generates a print-ready report with member profile, projections, CPF LIFE comparison, milestones, and sensitivity analysis — with portrait/landscape orientation toggle."],["SEP Mode",Briefcase,"Self-Employed Person mode: no mandatory contributions. VC3A up to $37,740/yr split proportionally across OA/SA/MA using age-based allocation rates."],["Monte Carlo",Activity,"500 simulations with ±1% rate variance. Shows probability of meeting FRS at payout age."],["What-If Explorer",SlidersHorizontal,"Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome."],["CSV Download",TableIcon,"Download full year-by-year projection as CSV with all account balances, contributions, payouts, bequest values, Yield (B/S/E), and Yield IRR %."]].map(([title,Icon,desc])=>(
+                      {[["Share Link",Link,"Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."],["PDF Report",Download,"Print-ready report with member profile (gender, property pledge, OA withdrawal, OA→SA transfer), projections, CPF LIFE comparison, milestones, and sensitivity analysis."],["SEP Mode",Briefcase,"Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr split proportionally across OA/SA/MA. BHS and ERS caps enforced."],["Monte Carlo",Activity,"200 simulations with ±1% rate variance. Shows probability of meeting FRS at payout age."],["Gender Toggle",Users,"Male/Female selection affects CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). Both values shown side-by-side in LIFE plan cards."],["OA→SA Transfer",ArrowRightLeft,"Annual transfer from OA (2.5%) to SA (4%) before age 55. Irreversible but powerful — compounding at the higher rate for decades."],["OA Withdrawal at 55",LogOut,"Lump-sum withdrawal from OA above BRS at age 55, after SA closure. Applied once in the projection."],["Property Pledge",Target,"Pledge property — only BRS needed in RA at 55 instead of FRS. Lower RA target means less locked up, but also lower monthly payouts."],["MRSS Grant",Gift,"Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $600/yr for Singapore Citizens 55–70 with RA below FRS."],["What-If Explorer",SlidersHorizontal,"Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome."]].map(([title,Icon,desc])=>(
                         <div key={title} style={{background:"var(--bg-base)",padding:"14px",borderRadius:10,border:"1px solid var(--border-subtle)"}}>
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                             <Icon style={{width:14,height:14,color:"#3b82f6"}}/>
@@ -2623,12 +2951,32 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               ) : (
                 <div style={{background:"var(--bg-muted)",border:"1px solid var(--border-strong)",padding:10,textAlign:"center",fontSize:12,fontWeight:700,color:"var(--text-muted)",borderRadius:10}}>Displaying Nominal Dollars</div>
               )}
+              {/* Property Pledge Active Notice */}
+              {inputs.usePropertyPledge && (() => {
+                const age55Row = projection.find(r => r.age === 55);
+                const age55OA  = age55Row?.oa ?? 0;
+                const age55RA  = age55Row?.ra ?? 0;
+                // Without pledge, RA would be ≈ cohortFRS. With pledge it's ≈ BRS.
+                // The OA difference is the pledge benefit — show it clearly.
+                const ca = Number(inputs.currentAge) || 35;
+                const yearsTo55 = Math.max(0, 55 - ca);
+                const baseYear  = Number(inputs.currentYear) || 2026;
+                const pledgeBRS = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + yearsTo55) - 2026)));
+                return (
+                  <div style={{background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
+                    <Target style={{width:16,height:16,color:"#fbbf24",flexShrink:0,marginTop:2}}/>
+                    <p style={{fontSize:11,color:"#fbbf24",lineHeight:1.5,margin:0}}>
+                      <strong>Property Pledge Active:</strong> At age 55, only BRS (~{formatCurrency(pledgeBRS)}) is retained in RA. Excess SA/RA above BRS moves to OA — still inside CPF, earning 2.5% interest. To withdraw as cash, use the OA Lump-Sum Withdrawal field in the Outflows panel. This lowers monthly CPF LIFE payouts but keeps more funds liquid in OA. See the Accumulation chart for the OA spike at age 55.
+                    </p>
+                  </div>
+                );
+              })()}
               {/* 20% RA-to-OA Transfer Notice */}
               {raOaTransfer > 0 && (
                 <div style={{background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
                   <ShieldCheck style={{width:16,height:16,color:"#34d399",flexShrink:0}}/>
                   <p style={{fontSize:11,color:"#34d399",lineHeight:1.5,margin:0}}>
-                    <strong>CPF Policy — 20% RA-to-OA Transfer at Age {inputs.payoutAge}:</strong> Approx. {formatCurrency(raOaTransfer)} (20% of RA less cash top-ups of {formatCurrency(cumulativeCashTopUps)}) is transferred from RA to OA. This is a <em>separate</em> transaction — CPF LIFE payouts are calculated on the <strong>full RA of {formatCurrency(raAtPayout)}</strong> before this transfer. The 20% transfer increases your OA balance and bequest, but does not reduce your monthly payout.
+                    <strong>CPF Policy — 20% RA-to-OA Transfer at Age {inputs.payoutAge}:</strong> Approx. {formatCurrency(raOaTransfer)} is transferred from RA to OA. Transfer base = RA ({formatCurrency(raAtPayout)}) − govt grants, housing grants, MRSS, MMSS &amp; all voluntary SA/RA top-ups ({formatCurrency(cumulativeCashTopUps)}) − SA/RA interest accumulated ({formatCurrency(cumulativeRaInterest)}) = {formatCurrency(raTransferBase)}, × 20%. CPF LIFE payouts are calculated on <strong>RA after transfer ({formatCurrency(raAfterTransfer)})</strong> — the 20% deducted to OA reduces the RA balance and correspondingly lowers your monthly payout.
                   </p>
                 </div>
               )}
@@ -2659,20 +3007,25 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
               {/* LIFE Plans */}
               <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:20,padding:24}}>
-                <p style={{fontSize:11,fontWeight:800,textTransform:"uppercase",color:"var(--text-muted)",marginBottom:16}}>CPF LIFE Starting Payouts (Monthly)</p>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                  <p style={{fontSize:11,fontWeight:800,textTransform:"uppercase",color:"var(--text-muted)",margin:0}}>CPF LIFE Starting Payouts (Monthly)</p>
+                  <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:999,background:inputs.isMale!==false?"rgba(52,211,153,0.15)":"rgba(96,165,250,0.15)",color:inputs.isMale!==false?"#34d399":"#60a5fa",border:`1px solid ${inputs.isMale!==false?"rgba(52,211,153,0.3)":"rgba(96,165,250,0.3)"}`}}>
+                    {inputs.isMale!==false?"Male selected":"Female selected"}
+                  </span>
+                </div>
                 <div className="life-plans-grid rg-3" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
                   {Object.entries(lifePlans).map(([key,plan])=>(
                     <div key={key} style={{background:"var(--bg-muted)",padding:16,borderRadius:12,border:"1px solid var(--border-strong)",display:"flex",flexDirection:"column",gap:12}}>
                       <span style={{fontSize:13,fontWeight:700,color:"var(--text-highlight)",textTransform:"capitalize"}}>{key} Plan</span>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <div>
-                          <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",fontWeight:800,marginBottom:2}}>Male</div>
-                          <div style={{fontSize:20,fontWeight:900,color:"#34d399"}}>{formatCurrency(applyInflation(plan.startM,inputs.payoutAge))}</div>
+                          <div style={{fontSize:9,color:inputs.isMale!==false?"#34d399":"var(--text-muted)",textTransform:"uppercase",fontWeight:800,marginBottom:2}}>{inputs.isMale!==false?"Male ✓":"Male"}</div>
+                          <div style={{fontSize:inputs.isMale!==false?20:15,fontWeight:900,color:inputs.isMale!==false?"#34d399":"var(--text-muted)"}}>{formatCurrency(applyInflation(plan.startM,inputs.payoutAge))}</div>
                         </div>
                         <div style={{width:1,height:24,background:"var(--border-strong)"}}></div>
                         <div style={{textAlign:"right"}}>
-                          <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",fontWeight:800,marginBottom:2}}>Female</div>
-                          <div style={{fontSize:20,fontWeight:900,color:"#60a5fa"}}>{formatCurrency(applyInflation(plan.startF,inputs.payoutAge))}</div>
+                          <div style={{fontSize:9,color:inputs.isMale===false?"#60a5fa":"var(--text-muted)",textTransform:"uppercase",fontWeight:800,marginBottom:2}}>{inputs.isMale===false?"Female ✓":"Female"}</div>
+                          <div style={{fontSize:inputs.isMale===false?20:15,fontWeight:900,color:inputs.isMale===false?"#60a5fa":"var(--text-muted)"}}>{formatCurrency(applyInflation(plan.startF,inputs.payoutAge))}</div>
                         </div>
                       </div>
                     </div>
@@ -2930,7 +3283,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   return (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-                        {[["Payout Age",effPA,65,70,1,setWhatIfPayoutAge,"#34d399",`${effPA}`],["Annual SA Top-up",effST,0,40000,500,setWhatIfSaTopup,"#34d399",formatCurrency(effST)],["Annual Housing Outflow",effH,0,Math.max(60000,(Number(inputs.housingOutflow)||0)*2),500,setWhatIfHousing,"#fb923c",formatCurrency(effH)],["Salary Increase (%)",effSB,0,50,5,setWhatIfSalaryBump,"#60a5fa",`${effSB}%`]].map(([label,val,min,max,step,setter,color,display])=>(
+                        {[["Payout Age",effPA,65,70,1,setWhatIfPayoutAge,"#34d399",`${effPA}`],["Annual SA/RA Top-up",effST,0,40000,500,setWhatIfSaTopup,"#34d399",formatCurrency(effST)],["Annual Housing Outflow",effH,0,Math.max(60000,(Number(inputs.housingOutflow)||0)*2),500,setWhatIfHousing,"#fb923c",formatCurrency(effH)],["Salary Increase (%)",effSB,0,50,5,setWhatIfSalaryBump,"#60a5fa",`${effSB}%`]].map(([label,val,min,max,step,setter,color,display])=>(
                           <div key={label}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                               <label style={{fontSize:11,fontWeight:700,color:"var(--text-highlight)"}}>{label}</label>
@@ -2979,7 +3332,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
                 <h3 style={{fontSize:18,fontWeight:800}}>Accumulation Phase (To Age {inputs.payoutAge})</h3>
                 <button onClick={()=>setShowMonteCarlo(v=>!v)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",borderRadius:12,fontSize:11,fontWeight:700,border:`1px solid ${showMonteCarlo?"rgba(139,92,246,0.5)":"var(--border-strong)"}`,background:showMonteCarlo?"rgba(139,92,246,0.15)":"var(--bg-input)",color:showMonteCarlo?"#a78bfa":"var(--text-muted)",cursor:"pointer"}}>
-                  <Activity style={{width:13,height:13}}/>{showMonteCarlo?"Hide":"Show"} Monte Carlo (500 runs)
+                  <Activity style={{width:13,height:13}}/>{showMonteCarlo?"Hide":"Show"} Monte Carlo (200 runs)
                 </button>
               </div>
               {showMonteCarlo && monteCarloData?.probSufficiency!=null && (() => {
@@ -2987,7 +3340,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 const c=prob>=80?"#34d399":prob>=50?"#fbbf24":"#f87171";
                 return (<div style={{marginBottom:16,padding:16,borderRadius:14,border:`1px solid ${c}33`,background:`${c}11`,display:"flex",alignItems:"center",gap:16}}>
                   <Percent style={{width:20,height:20,color:c,flexShrink:0}}/>
-                  <div style={{flex:1}}><p style={{fontSize:11,color:"var(--text-muted)",marginBottom:2}}>Probability of Sufficiency</p><p style={{fontSize:10,color:"var(--text-muted)"}}>% of 500 runs where CPF at age {inputs.payoutAge} ≥ projected FRS ({formatCurrency(monteCarloData.frsAtPayout)})</p></div>
+                  <div style={{flex:1}}><p style={{fontSize:11,color:"var(--text-muted)",marginBottom:2}}>Probability of Sufficiency</p><p style={{fontSize:10,color:"var(--text-muted)"}}>% of 200 runs where CPF at age {inputs.payoutAge} ≥ projected FRS ({formatCurrency(monteCarloData.frsAtPayout)})</p></div>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
                     <div style={{width:100,height:6,background:"var(--bg-input)",borderRadius:999,overflow:"hidden"}}><div style={{height:"100%",borderRadius:999,background:c,width:`${prob}%`}}/></div>
                     <span style={{fontSize:28,fontWeight:900,color:c,fontFamily:"monospace"}}>{prob}%</span>
@@ -3012,7 +3365,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       return <ReferenceLine key={idx} x={m.age} stroke={sc} strokeWidth={1.5} strokeDasharray="3 3" label={{position:"insideTopRight",value:`Age ${m.age}`,fill:sc,fontSize:8,fontWeight:"bold"}}/>;
                     })}
                     <Area type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" fill="#1d4ed8" fillOpacity={0.85} name="OA"/>
-                    <Area type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="SA"/>
+                    <Area type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="SA/RA"/>
                     <Area type="monotone" dataKey="ma" stackId="1" stroke="#059669" fill="#059669" fillOpacity={0.85} name="MA"/>
                     <Area type="monotone" dataKey="ra" stackId="1" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.85} name="RA"/>
                   </AreaChart>
@@ -3317,8 +3670,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   <h4 style={{fontSize:16,fontWeight:800,color:"#60a5fa",marginBottom:16,display:"flex",alignItems:"center",gap:8}}><LayoutDashboard style={{width:18,height:18}}/>Step-by-Step User Guide</h4>
                   {[
                     ["1","Setup Your Profile","#60a5fa","rgba(59,130,246,0.08)","rgba(59,130,246,0.2)","Enter your current OA, SA, and MA balances. The progress bars will instantly compare them against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones."],
-                    ["2","Auto-Calc Contributions (Employed)","#10b981","rgba(16,185,129,0.08)","rgba(16,185,129,0.2)","Toggle the Salary Estimator under Mandatory Contribs. Enter your gross monthly salary — the tool automatically applies the correct 2026 allocation rates (OW ceiling: $8,000/month). If you are self-employed, click the SEP? button to switch to SEP mode — mandatory contributions are zeroed out and the VC3A panel takes over."],
-                    ["3","Analyze Projections & Payouts","#a855f7","rgba(168,85,247,0.08)","rgba(168,85,247,0.2)","Navigate to the Summary tab to see total CPF at payout age. Toggle the Monte Carlo stress tester in the Accumulation tab to run 500 simulations with ±1% interest variance. Switch between Nominal and Real dollars to account for inflation."],
+                    ["2","Auto-Calc Contributions (Employed)","#10b981","rgba(16,185,129,0.08)","rgba(16,185,129,0.2)","OW (Monthly Gross), AW (Annual Bonus), and Salary Growth % are always visible in the Mandatory Contribs panel. Click ⚡ Auto-Calc to compute OA/SA/MA contributions using the 2026 OW ceiling ($8,000/mo) and AW ceiling ($102,000/yr). Toggle the rates table with Auto-Calc for the full breakdown by age band."],
+                    ["3","Analyze Projections & Payouts","#a855f7","rgba(168,85,247,0.08)","rgba(168,85,247,0.2)","Navigate to the Summary tab to see total CPF at payout age, the 20% RA-to-OA transfer breakdown, and the net worth doughnut. Toggle the Monte Carlo stress tester in the Accumulation tab to run 200 simulations with ±1% interest variance. Switch between Nominal and Real dollars to account for inflation."],
                     ["4","Compare CPF LIFE Plans","#fbbf24","rgba(245,158,11,0.08)","rgba(245,158,11,0.2)","Open the LIFE Comparison tab to evaluate Standard, Escalating, and Basic plans. Vertical lines explicitly mark age intersections for total yield and payouts."],
                     ["5","Save Scenarios & Compare","#fb923c","rgba(249,115,22,0.08)","rgba(249,115,22,0.2)","Go to the Compare tab. Save your current inputs as Scenario A, adjust your parameters (e.g., delay payout age to 70), then save as Scenario B for a side-by-side analysis."],
                     ["6","Share & Export","#f43f5e","rgba(244,63,94,0.08)","rgba(244,63,94,0.2)","Use the Share button to encode your entire profile into a URL, or download a fully rendered PDF report. Use Keyboard Shortcuts (Ctrl+S to Share, Ctrl+Shift+R to Reset) to speed up workflow."]
@@ -3398,6 +3751,71 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   </div>
                 </section>
                 
+                {/* New Planning Tools Policy Reference */}
+                <section>
+                  <h4 style={{fontSize:16,fontWeight:800,color:"#60a5fa",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><Target style={{width:18,height:18}}/>Planning Tools — Policy Reference</h4>
+                  <div style={{background:"var(--bg-muted)",padding:18,borderRadius:14,border:"1px solid var(--border-strong)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7}}>
+                    <ul style={{listStyle:"none",padding:0,margin:0}}>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#34d399",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>Gender &amp; CPF LIFE Payout Ratio:</strong> Male members receive ~$540/mo per $100k RA at 65; female members ~$500/mo, reflecting longer female life expectancy. The deferral credit adds ~$12/mo (male) or ~$11.50/mo (female) per year past 65. Select gender in the Profile section — the LIFE comparison cards highlight the selected gender and show both for reference.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#60a5fa",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>20% RA-to-OA Transfer — Correct Formula:</strong> At payout age, CPF transfers 20% of the <em>eligible</em> RA to OA. Eligible RA = RA at payout − cumulative SA/RA cash top-ups (RSTU, gov grants, MRSS, MMSS, housing grants, all voluntary SA/RA top-ups) − cumulative interest earned on SA/RA. <strong>CPF LIFE payouts are calculated on the RA remaining after this transfer</strong> — the deducted 20% reduces the RA balance and lowers monthly payouts accordingly. The Summary tab shows all components.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#a855f7",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>OA → SA Transfer (Before Age 55):</strong> Transfer OA savings to SA to earn 4% instead of 2.5%. Irreversible. Subject to FRS cap in SA. Not counted toward the Annual Limit. Qualifies for RSTU tax relief on the portion that brings SA up to FRS. Available in the <strong>CPF Transfers panel</strong> (hidden post-55).</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#fbbf24",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>OA → MA Transfer:</strong> Transfer OA savings to MA to earn 4% instead of 2.5%, or to top up MA towards BHS. Subject to BHS cap. Irreversible. Available in the CPF Transfers panel.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#f472b6",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>CPFIS — CPF Investment Scheme:</strong> Annual amount moved from OA into investments. Reduces your OA balance in the projection. Investment returns are <strong>not</strong> modelled — only the cash outflow from OA is applied. Available in the Outflows panel.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>VC3A — Cash Only, Auto-Split:</strong> Voluntary Contribution to 3 Accounts is cash-only — you cannot split existing CPF balances across accounts via VC3A. Enter a single annual lump-sum in the Inflows panel; the engine automatically allocates it across OA/SA/MA using your age-band rates. Counts toward the $37,740 Annual Limit. <strong>No tax relief</strong> for employees. SEPs can use VC3A up to the full $37,740/yr.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#34d399",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>RSTU — Cash Top-ups and CPF Transfers:</strong> The Retirement Sum Topping-Up Scheme allows both (1) cash top-ups to SA/RA (tax-relievable up to $8,000/yr own + $8,000 for loved ones; capped at FRS for SA or ERS for RA) and (2) CPF OA→SA/RA transfers (no tax relief — CPF-to-CPF transfers do not qualify). Enter cash top-ups in the Inflows panel (RSTU field); enter CPF transfers in the CPF Transfers panel.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>MMSS — Matched MediSave Scheme (from Jan 2026):</strong> A five-year pilot where the government matches voluntary cash MA top-ups dollar-for-dollar up to <strong>$1,000/year</strong>. Eligibility: Singapore Citizens aged 55–70, MA balance below half of BHS (~$39,500 in 2026), average monthly income ≤ $4,000, own no more than one property with AV ≤ $21,000. Matching grant credited to MA at the start of the following year. Cash top-ups attracting MMSS match are <strong>not eligible</strong> for income tax relief.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#60a5fa",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>WIS — Workfare Income Supplement:</strong> For employees: 60% of the WIS award goes to CPF accounts allocated via age-band rates (OA/SA/MA), and 40% is paid as cash (not modelled). For SEPs: 90% goes to MA (subject to BHS cap) and 10% cash. Enter your annual WIS award amount in the Inflows panel — only the CPF portion is applied.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#f472b6",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>CPFIS — CPF Investment Scheme:</strong> Annual amount moved from OA into investments. Reduces your OA balance in the projection. Investment returns are <strong>not</strong> modelled — only the cash outflow from OA is applied. Available in the Outflows panel.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#fbbf24",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>OA Lump-Sum Withdrawal at Age 55:</strong> After SA closure and RA funding, members may withdraw OA savings above the required retirement sum (BRS if pledged, FRS otherwise) as cash. Applied once in the projection. Input in the <strong>Outflows panel</strong>.</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#fb923c",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>Property Pledge (BRS Mode):</strong> Use your property as security so only BRS ($110,200) needs to remain in RA at age 55 — freeing the FRS–BRS difference (~$110,200) — which moves to OA (stays in CPF at 2.5%) and can be withdrawn as cash using the OA Withdrawal field in the Outflows panel. Property must be a completed Singapore property (HDB or private) with lease lasting to at least age 95. HDB 2-room Flexi flats and Lease Buyback Scheme properties are ineligible. You must refund pledged amounts if the property is sold. Monthly payouts will be significantly lower (~$730–$790/mo vs ~$1,350–$1,450/mo at FRS).</div>
+                      </li>
+                      <li style={{marginBottom:12,display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>MRSS — Matched Retirement Savings Scheme:</strong> Government matches RSTU cash top-ups to RA dollar-for-dollar up to $600/year for Singapore Citizens aged 55–70 with RA below the current FRS. Automatically assessed — no application needed. Enter the expected matched amount in the Inflows panel.</div>
+                      </li>
+                      <li style={{display:"flex",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:"#38bdf8",marginTop:6,flexShrink:0}}/>
+                        <div><strong style={{color:"var(--text-highlight)"}}>AW Ceiling ($102,000/Year):</strong> CPF on Additional Wages (bonuses) is capped at $102,000 − total OW CPF contributions. The Auto-Calc applies this correctly, preventing over-stated contributions for high-bonus earners.</div>
+                      </li>
+                    </ul>
+                  </div>
+                </section>
+
                 {/* Self-Employed Policy */}
                 <section>
                   <h4 style={{fontSize:16,fontWeight:800,color:"#fb923c",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><Briefcase style={{width:18,height:18}}/>Self-Employed Person (SEP) — VC3A Rules</h4>
