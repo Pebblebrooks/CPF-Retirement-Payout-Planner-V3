@@ -204,18 +204,23 @@ export default function App() {
   const isVcOverLimit = totalVC > maxAllowableVC;
   const annualGross = ((Number(inputs.salaryGross)||0)*12) + (Number(inputs.salaryBonus)||0);
   const estimatedTaxRate = annualGross>320000?0.22:annualGross>240000?0.19:annualGross>160000?0.17:annualGross>120000?0.15:annualGross>80000?0.115:annualGross>40000?0.07:0.035;
-  const eligibleRSTU = Math.min(Number(inputs.vcSaTopup)||0, 8000);
-  const estimatedTaxSavings = Math.round(eligibleRSTU * estimatedTaxRate);
-  
+
   const baseYear = Number(inputs.currentYear)||2026;
   const yearsFrom2026 = Math.max(0, baseYear-2026);
   const currentBRS = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1+ASSUMED_TARGET_GROWTH, yearsFrom2026));
   const currentFRS = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1+ASSUMED_TARGET_GROWTH, yearsFrom2026));
   const currentERS = currentFRS * 2;
   const currentBHS = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1+ASSUMED_TARGET_GROWTH, yearsFrom2026));
-  
+
   const currentSaRa = Number(inputs.saBalance)||0;
   const currentMa = Number(inputs.maBalance)||0;
+
+  // Tax relief only applies to top-ups that bring SA/RA up to FRS (not beyond).
+  // If currentSaRa >= currentFRS, eligible amount is $0. Hard cap $8,000/yr.
+  const frsHeadroomForRelief = Math.max(0, currentFRS - currentSaRa);
+  const topupEligibleForRelief = Math.min(Number(inputs.vcSaTopup)||0, frsHeadroomForRelief);
+  const eligibleRSTU = Math.min(topupEligibleForRelief, 8000);
+  const estimatedTaxSavings = Math.round(eligibleRSTU * estimatedTaxRate);
   
   const ersPercentText = ((currentSaRa/currentERS)*100).toFixed(1);
   const bhsPercentText = Math.min(100,(currentMa/currentBHS)*100).toFixed(1);
@@ -680,7 +685,12 @@ export default function App() {
           ma += actualToMA;
 
           if (i >= 55) {
-            ra += toSA_vc3a + maSpill;
+            // ERS cap: SA/RA top-ups cannot push RA above current-year ERS
+            const projERS_sep = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,(currentBaseYear+(i-startAge))-2026)));
+            const raRoom_sep = Math.max(0, projERS_sep - ra);
+            const toRA_sep = Math.min(toSA_vc3a + maSpill, raRoom_sep);
+            ra += toRA_sep;
+            oa += (toSA_vc3a + maSpill - toRA_sep); // ERS overflow to OA
           } else {
             sa += toSA_vc3a + maSpill;
           }
@@ -721,7 +731,12 @@ export default function App() {
             let mandToOA = mandatorySA - mandToRA;
             ra += mandToRA;
             oa += mandToOA;
-            ra += cappedVcSA; // Voluntary top-ups go straight to RA
+            // Voluntary RSTU top-ups are capped at current ERS — excess spills to OA.
+            const projERS_i = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,(currentBaseYear+(i-startAge))-2026)));
+            const vcRoomInRA = Math.max(0, projERS_i - ra);
+            const vcToRA = Math.min(cappedVcSA, vcRoomInRA);
+            ra += vcToRA;
+            oa += (cappedVcSA - vcToRA); // ERS overflow goes to OA
           } else {
             sa += mandatorySA + cappedVcSA;
           }
@@ -800,13 +815,23 @@ export default function App() {
     const ratioF = 500 + ((Math.max(0, pAge - 65)) * 11.5);
     const startM = (raAtPayout / 100000) * ratioM;
     const startF = (raAtPayout / 100000) * ratioF;
+
+    // Basic Plan: payout = PMT from annuity formula on retained RA (1-bPct).
+    // This unifies the displayed monthly figure with the RA depletion rate — no mismatch.
+    const bPctLP = (basicPremiumPct || 10) / 100;
+    const basicPV_LP = raAtPayout * (1 - bPctLP);
+    const basicN_LP = Math.max(1, 90 - pAge);
+    const basicR_LP = 0.04;
+    const basicPMT_LP = basicN_LP > 0 ? (basicR_LP * basicPV_LP) / (1 - Math.pow(1 + basicR_LP, -basicN_LP)) : 0;
+    const basicStartM = basicPMT_LP / 12;
+    const basicStartF = basicStartM * (500 / 540); // apply same gender ratio as Standard
     
     return { 
       standard: { name: "Standard", start: startM, startM: startM, startF: startF }, 
       escalating: { name: "Escalating", start: startM * 0.8, startM: startM * 0.8, startF: startF * 0.8 }, 
-      basic: { name: "Basic", start: startM * 0.9, startM: startM * 0.9, startF: startF * 0.9 } 
+      basic: { name: "Basic", start: basicStartM, startM: basicStartM, startF: basicStartF }
     };
-  }, [raAtPayout, inputs.payoutAge]);
+  }, [raAtPayout, inputs.payoutAge, basicPremiumPct]);
 
   const payoutProjection = useMemo(() => {
     let data=[];
@@ -818,12 +843,17 @@ export default function App() {
     let cumPayoutStandard=0,cumPayoutEscalating=0,cumPayoutBasic=0;
     
     // BASIC PLAN MATH (premium pct is user-configurable 10-20%)
+    // Phase 1 (pAge to ~90): member retains basicPV in personal RA, depleted via PMT amortisation.
+    // Phase 2 (90+): pool funds continuing payouts for life.
+    // The monthly payout IS the PMT — unified so displayed payout and RA depletion rate match.
     const bPct=(basicPremiumPct||10)/100;
     const basicPremium=initialRA*bPct;
     const basicPV=initialRA*(1-bPct);
     const basicN=Math.max(1,90-pAge);
     const basicR=0.04;
+    // PMT is the single source of truth for the Basic payout amount (annual)
     const basicPMT=basicN>0?(basicR*basicPV)/(1-Math.pow(1+basicR,-basicN)):0;
+    const basicMonthlyPMT = basicPMT / 12; // used for display too
     let basicRaRemaining=basicPV;
     let cumPayoutBasicPool=0;
 
@@ -840,23 +870,22 @@ export default function App() {
         escPayY=(lifePlans.escalating.start*Math.pow(1.02,yearsElapsed))*12; cumPayoutEscalating+=escPayY;
         escBeq=Math.max(0,initialRA-cumPayoutEscalating);
         
-        let curBasMonthly=lifePlans.basic.start;
-        if (age>=90) curBasMonthly*=0.92; else if (age>=88) curBasMonthly*=0.96;
-        basPayY=curBasMonthly*12; cumPayoutBasic+=basPayY;
+        // Basic Plan: payout is the PMT (unified with RA depletion rate — no ad-hoc reductions)
+        basPayY=basicPMT; cumPayoutBasic+=basPayY;
         
-        // Basic Plan Bequest Logic: 
-        // Before 90: member retains basicPV portion in personal RA, self-funding payouts via PMT amortisation.
-        // Bequest before 90 = remaining personal RA balance only (premium is paid to CPF pool and not returned until pool is exhausted)
-        // After 90: RA is 0. Payouts come from the pool. Bequest = max(0, basicPremium - cumulative pool payouts so far)
+        // Basic Plan Bequest:
+        // Phase 1 (age < 90): RA still has funds. Bequest = remaining RA balance PLUS full
+        //   premium refund (CPF policy: premium is fully returned if death before pool phase).
+        // Phase 2 (age >= 90): RA is 0. Bequest = max(0, premium - pool payouts drawn so far).
         if (age<90) {
           basicRaRemaining=Math.max(0,(basicRaRemaining*(1+basicR))-basicPMT);
           basRA=Math.max(0,basicRaRemaining);
-          basBeq = basRA; // Bequest is personal RA portion only; premium is in CPF pool (not accessible until 90+)
+          basBeq = basRA + basicPremium; // CPF policy: RA balance + full premium refund
         } else {
           basicRaRemaining=0;
           basRA=0;
           cumPayoutBasicPool += basPayY;
-          basBeq = Math.max(0, basicPremium - cumPayoutBasicPool); // Pool bequest: unused premium after all pool payouts
+          basBeq = Math.max(0, basicPremium - cumPayoutBasicPool);
         }
       }
       const propVal=includeProp?p.propertyValue:0;
@@ -923,7 +952,12 @@ export default function App() {
           if(i>=55) {
             let roomInRA = Math.max(0, cohortFRS - ra);
             let toRA = Math.min(mandSA, roomInRA);
-            ra += toRA; oa += (mandSA - toRA); ra += vcSA;
+            ra += toRA; oa += (mandSA - toRA);
+            // ERS cap on RA voluntary top-ups
+            const projERS_mc = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,((Number(inputs.currentYear)||2026)+(i-startAge))-2026)));
+            const vcRoomMC = Math.max(0, projERS_mc - ra);
+            const vcToRA_mc = Math.min(vcSA, vcRoomMC);
+            ra += vcToRA_mc; oa += (vcSA - vcToRA_mc);
           } else { sa += mandSA+vcSA; }
           ma+=Math.round(baseMA*gf)+vcMA; 
         }
@@ -981,7 +1015,12 @@ export default function App() {
         if(age>=55) {
           let roomInRA = Math.max(0, cohortFRS - ra);
           let toRA = Math.min(mandSA, roomInRA);
-          ra += toRA; oa += (mandSA - toRA); ra += vcSA;
+          ra += toRA; oa += (mandSA - toRA);
+          // ERS cap on voluntary top-ups
+          const projERS_wi = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,(cy+(age-startAge))-2026)));
+          const vcRoomWI = Math.max(0, projERS_wi - ra);
+          const vcToRA_wi = Math.min(vcSA, vcRoomWI);
+          ra += vcToRA_wi; oa += (vcSA - vcToRA_wi);
         } else { sa += mandSA+vcSA; }
         ma+=Math.round(bMA*gf)+vcMA; 
       }
@@ -1058,17 +1097,19 @@ export default function App() {
       
       for(let age=pAge;age<=95;age++){
         const yr=age-pAge; const stdPay=stdStart*12; const escPay=(escStart*Math.pow(1.02,yr))*12;
-        let basM=basStart; if(age>=90) basM*=0.92; else if(age>=88) basM*=0.96; const basPay=basM*12;
+        // Basic payout = PMT (no invented reductions at 88/90)
+        const basPay=basicPMT;
         cumStd+=stdPay;cumEsc+=escPay;cumBas+=basPay;
         
         let basBeq = 0;
         if(age<90){
           basicRaRem=Math.max(0,(basicRaRem*(1+basicR))-basicPMT);
-          basBeq = Math.max(0, basicRaRem); // personal RA portion only; premium is in pool
+          // Phase 1 bequest: remaining RA + full premium refund (CPF policy)
+          basBeq = Math.max(0, basicRaRem) + basicPrem;
         } else {
           basicRaRem=0;
           cumBasicPool += basPay;
-          basBeq = Math.max(0, basicPrem - cumBasicPool); // unused pool premium after payouts
+          basBeq = Math.max(0, basicPrem - cumBasicPool);
         }
 
         const stdBeq=Math.max(0,raVal-cumStd),escBeq=Math.max(0,raVal-cumEsc);
@@ -1077,7 +1118,7 @@ export default function App() {
         if(!stdVsBasic&&age>pAge&&stdT>basT) stdVsBasic=age;
         if(!escVsBasic&&age>pAge&&escT>basT) escVsBasic=age;
       }
-      return{pAge,stdMonthly:Math.round(stdStart),escMonthly:Math.round(escStart),basMonthly:Math.round(basStart),escVsStd,stdVsBasic,escVsBasic};
+      return{pAge,stdMonthly:Math.round(stdStart),escMonthly:Math.round(escStart),basMonthly:Math.round(basicPMT/12),escVsStd,stdVsBasic,escVsBasic};
     });
   }, [projection, basicPremiumPct]);
 
@@ -1340,7 +1381,7 @@ export default function App() {
 <table><thead><tr><th>Plan</th><th>Monthly Payout</th><th>Annual Payout</th><th>Payout Type</th><th>Net Worth @ Age 95</th></tr></thead><tbody>
   <tr><td><strong>Standard Plan</strong></td><td>${fc(stdMonthly)}/mo</td><td>${fc(stdMonthly*12)}/yr</td><td>Level payouts for life</td><td>${fc(payoutProjection.find(d=>d.age===95)?.standardNetWorth||0)}</td></tr>
   <tr><td><strong>Escalating Plan</strong></td><td>${fc(escMonthly)}/mo</td><td>${fc(escMonthly*12)}/yr</td><td>+2% per year escalation</td><td>${fc(payoutProjection.find(d=>d.age===95)?.escalatingNetWorth||0)}</td></tr>
-  <tr><td><strong>Basic Plan</strong></td><td>${fc(basMonthly)}/mo</td><td>${fc(basMonthly*12)}/yr</td><td>Until age 90, bequest-focused</td><td>${fc(payoutProjection.find(d=>d.age===95)?.basicNetWorth||0)}</td></tr>
+  <tr><td><strong>Basic Plan</strong></td><td>${fc(basMonthly)}/mo</td><td>${fc(basMonthly*12)}/yr</td><td>RA drawdown to ~90, pool thereafter</td><td>${fc(payoutProjection.find(d=>d.age===95)?.basicNetWorth||0)}</td></tr>
 </tbody></table>
 </div>
 
@@ -2649,6 +2690,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 <div style={{padding:16,borderRadius:16,background:"rgba(245,158,11,0.05)",border:"1px solid rgba(245,158,11,0.2)"}}>
                   <p style={{fontSize:9,fontWeight:800,textTransform:"uppercase",color:"#d97706",marginBottom:6}}>Est. Tax Savings (RSTU)</p>
                   <p style={{fontSize:14,fontWeight:900,color:"#fbbf24",fontFamily:"monospace"}}>{formatCurrency(estimatedTaxSavings)}<span style={{fontSize:9,color:"#92400e",marginLeft:4}}>/ yr</span></p>
+                  {currentSaRa >= currentFRS && <p style={{fontSize:9,color:"#d97706",marginTop:4}}>SA/RA ≥ FRS — top-ups earn no tax relief (ERS top-ups permitted but unrelieved)</p>}
+                  {currentSaRa < currentFRS && eligibleRSTU < (Number(inputs.vcSaTopup)||0) && <p style={{fontSize:9,color:"#d97706",marginTop:4}}>Relief capped at FRS headroom ({formatCurrency(Math.max(0,currentFRS-currentSaRa))})</p>}
                 </div>
               </div>
               {/* ── Contribution Timeline Gantt ── */}
@@ -3048,7 +3091,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 ))}
                 {/* Basic plan card with embedded slider */}
                 <div style={{padding:14,borderRadius:12,background:"rgba(245,158,11,0.06)",border:"2px solid rgba(245,158,11,0.3)",fontSize:11,color:"var(--text-muted)",lineHeight:1.5}}>
-                  <strong style={{color:"#f59e0b"}}>Basic Bequest: </strong>Before age 90: your remaining personal RA balance (premium is held in CPF pool, not counted). After 90: unused pool premium minus payouts funded from the pool. Higher % → larger pool, lower pre-90 bequest, later crossover age.
+                  <strong style={{color:"#f59e0b"}}>Basic Bequest: </strong>Before age 90 (Phase 1): remaining personal RA balance <em>plus</em> a full refund of the premium paid — CPF policy returns the full premium if death occurs before the pool phase. After 90 (Phase 2): unused pool premium minus any payouts already drawn from the pool. Higher % → larger pool premium, smaller retained RA, lower Phase 1 payout.
                   <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(245,158,11,0.2)"}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                       <span style={{fontSize:10,fontWeight:700,color:"#f59e0b",display:"flex",alignItems:"center",gap:4}}><SlidersHorizontal style={{width:11,height:11}}/>Basic Premium</span>
@@ -3378,7 +3421,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       </li>
                       <li style={{display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#a855f7",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>How to Use in This Tool:</strong> Toggle <strong>SEP?</strong> in the Mandatory Contribs panel. Mandatory OA/SA inputs are hidden. Enter your desired annual VC3A amount in the Voluntary Top-ups panel under "OA Top Up" — the engine will automatically route funds to MA first, then RA, then OA based on the current year's BHS/FRS/ERS limits.</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>How to Use in This Tool:</strong> Toggle <strong>SEP?</strong> in the Mandatory Contribs panel. Mandatory OA/SA inputs are hidden. Enter your desired annual VC3A amount in the Voluntary Top-ups panel — the engine splits funds proportionally across OA/SA/MA using your age-band allocation rates (same ratios as mandatory contributions). MA excess above BHS spills to SA/RA. For members aged 55+, RA top-ups are capped at the current-year ERS; excess flows to OA.</div>
                       </li>
                     </ul>
                   </div>
@@ -3399,7 +3442,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#f59e0b",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"#fb923c"}}>Basic Plan (The Slow-Draw):</strong> The configurable premium % (default 10%, max 20%) is deducted from RA and paid into CPF's insurance pool. You retain the remainder in your personal RA earning 4% interest. PMT amortisation ensures your personal RA depletes to exactly $0 at age 90. <strong>Bequest before age 90</strong> = your remaining personal RA balance only (the premium paid into the pool is not included as it is held by CPF). <strong>Bequest after age 90</strong> = unused pool premium after deducting all payouts funded from the pool since age 90. Higher premium % means larger insurance pool (payouts funded longer past 90) but lower personal bequest before 90 — the crossover age vs Standard/Escalating shifts accordingly.</div>
+                        <div><strong style={{color:"#fb923c"}}>Basic Plan (The Slow-Draw):</strong> The configurable premium % (default 10%, max 20%) is deducted from RA and paid into CPF's insurance pool. You retain the remainder in your personal RA earning 4% interest. The monthly payout equals the PMT from the standard annuity formula — this is also the rate at which your personal RA depletes to $0 around age 90. <strong>Bequest Phase 1 (before age 90)</strong> = remaining personal RA balance <em>plus</em> a full refund of the CPF LIFE premium (CPF policy: the premium is fully returned to beneficiaries if the member dies before the pool phase begins). <strong>Bequest Phase 2 (age 90+)</strong> = unused pool premium after deducting all payouts funded from the pool since age 90. Higher premium % → larger pool, smaller retained RA, lower Phase 1 payout.</div>
                       </li>
                       <li style={{display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#a855f7",marginTop:6,flexShrink:0}}/>
