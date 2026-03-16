@@ -2,7 +2,8 @@ CPF Planner Pro — Web Application
 A privacy-first, client-side React application built with Vite. Designed to help Singaporeans calculate, project, and optimise their Central Provident Fund (CPF) retirement strategies using a fully compliant 2026 policy engine.
 
 🔗 Live Links
-Marketing Sitehttps://cpfplanner.ehtan2022.workers.dev/Main Applicationhttps://cpfplannerappv3.ehtan2022.workers.dev/
+Marketing Sitehttps://cpfplanner.ehtan2022.workers.dev/
+Main Applicationhttps://cpfplannerappv3.ehtan2022.workers.dev/
 
 📖 Project Overview
 CPF policies are complex — varying interest rates, contribution ceilings, milestone rules (SA closure at 55, BHS cap, FRS/ERS tiers), and life-phase transitions all interact in ways that are difficult to reason about manually.
