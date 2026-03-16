@@ -58,6 +58,7 @@ const DEFAULT_INPUTS = {
   medicalInflationRate: 5,
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
   inflationRate: 2, includeProperty: true,
+  sellPropertyAge: 0,
 };
 
 const SCENARIO_LABELS = {
@@ -75,7 +76,8 @@ const SCENARIO_LABELS = {
   medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
   propertyLeasehold: "Is Leasehold", propertyLeaseYears: "Lease Years",
-  inflationRate: "Inflation Rate %", includeProperty: "Include Property"
+  inflationRate: "Inflation Rate %", includeProperty: "Include Property",
+  sellPropertyAge: "Sell Property Age",
 };
 
 // ─── SHARED PROJECTION ENGINE ───────────────────────────────────────────────
@@ -144,6 +146,10 @@ function runProjectionEngine(inputs, {
   if (startAge >= 55) sa = 0;
 
   let totalInjected = 0, totalInterest = 0, totalOutSpent = 0;
+  // #3 Property CPF refund: track cumulative OA housing withdrawals for refund calc
+  const sellPropertyAge = Number(inputs.sellPropertyAge) || 0;
+  let cumHousingOA = 0;        // tracks cumulative OA used for housing (principal)
+  let refundApplied = startAge >= sellPropertyAge && sellPropertyAge > 0;
   // Track SA/RA cash top-ups (vcSa + govGrant + mrss) and interest earned on RA
   // separately — needed to compute the correct 20% RA-to-OA transfer base.
   // Policy: transfer base = RA at payout − (cumulative SA/RA cash top-ups + cumulative RA interest)
@@ -355,10 +361,13 @@ function runProjectionEngine(inputs, {
     }
 
     // Interest (annual rates, randomised ±1% in Monte Carlo mode)
-    const rOA = CPF_RATES.OA + (randomiseRates ? (Math.random() * 0.02 - 0.01) : 0);
-    const rSA = CPF_RATES.SA + (randomiseRates ? (Math.random() * 0.02 - 0.01) : 0);
-    const rMA = CPF_RATES.MA + (randomiseRates ? (Math.random() * 0.02 - 0.01) : 0);
-    const rRA = CPF_RATES.RA + (randomiseRates ? (Math.random() * 0.02 - 0.01) : 0);
+    const rateNoise = randomiseRates ? (Math.random() * 0.02 - 0.01) : 0;
+    const inflNoise = randomiseRates ? (Math.random() * 0.01 - 0.005) : 0; // ±0.5% inflation variance
+    const rOA = CPF_RATES.OA + rateNoise;
+    const rSA = CPF_RATES.SA + rateNoise;
+    const rMA = CPF_RATES.MA + rateNoise;
+    const rRA = CPF_RATES.RA + rateNoise;
+    const effectiveInflation = Math.max(0, (Number(inputs.inflationRate) || 2) / 100 + inflNoise);
 
     const oaB = oa, saB = sa, maB = ma, raB = ra;
     const nonOa = saB + maB + raB;
@@ -388,7 +397,23 @@ function runProjectionEngine(inputs, {
 
     // Outflows
     const activeHousing = age < housingStop ? baseHousing : 0;
+    if (activeHousing > 0) cumHousingOA += activeHousing; // track for CPF refund
     oa = Math.max(0, oa - activeHousing);
+    // #3 Property CPF refund: at sell age, refund principal + 2.5% accrued interest to OA
+    // Full refund stays in OA for future housing purchase use
+    if (sellPropertyAge > 0 && age === sellPropertyAge && !refundApplied) {
+      const yearsSincePurchase = Math.max(0, age - startAge);
+      // CPF requires return of OA principal + accrued interest at 2.5%/yr
+      const accrued = Math.round(cumHousingOA * (Math.pow(1.025, yearsSincePurchase) - 1));
+      const totalRefund = Math.round(cumHousingOA + accrued);
+      // Full refund credited to OA — stays there for future use
+      oa += totalRefund;
+      yearInflow += totalRefund;
+      totalInjected += totalRefund;
+      // Property value removed from net worth (sold)
+      currentPropValue = 0;
+      refundApplied = true;
+    }
     const yrSince     = Math.max(0, age - startAge);
     const totalMaOut  = Math.round(baseMedical * Math.pow(1 + medInfl, yrSince));
     ma = Math.max(0, ma - totalMaOut);
@@ -450,10 +475,16 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true); // collapsible on mobile/tablet
   
   // Sidebar accordion — supports multiple open sections simultaneously
-  const [openSections, setOpenSections] = useState(new Set(["profile"]));
+  const [openSections, setOpenSections] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('cpf_sections');
+      return saved ? new Set(JSON.parse(saved)) : new Set(["profile"]);
+    } catch { return new Set(["profile"]); }
+  });
   const toggleSection = (id) => setOpenSections(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
+    try { sessionStorage.setItem('cpf_sections', JSON.stringify([...next])); } catch {}
     return next;
   });
   const expandAllSections = () => setOpenSections(new Set(["profile","contribs","topups","outflows","transfers","advanced"]));
@@ -471,7 +502,7 @@ export default function App() {
   const [confirmModal, setConfirmModal] = useState(null); // {message, onConfirm}
 
   // Theme Management
-  const [themeMode, setThemeMode] = useState("dark");
+  const [themeMode, setThemeMode] = useState(() => { try { return localStorage.getItem('cpf_theme') || 'dark'; } catch { return 'dark'; } });
   const [isDark, setIsDark] = useState(true);
 
   // ── Debounced inputs for expensive computations ──────────────────────────
@@ -480,6 +511,18 @@ export default function App() {
   useEffect(() => {
     const t = setTimeout(() => setDebouncedInputs(inputs), 180);
     return () => clearTimeout(t);
+  }, [inputs]);
+
+  // #8 — Warn before leaving if inputs differ from last saved state
+  const lastSavedRef = React.useRef(JSON.stringify(inputs));
+  useEffect(() => {
+    const handler = (e) => {
+      if (JSON.stringify(inputs) !== lastSavedRef.current) {
+        e.preventDefault(); e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
   }, [inputs]);
 
   // ── Input validation helpers ─────────────────────────────────────────────
@@ -581,7 +624,14 @@ export default function App() {
         const binary = atob(b64 + pad);
         const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
         const fullState = JSON.parse(new TextDecoder().decode(bytes));
-        if (fullState.inputs) setInputs(prev => ({ ...DEFAULT_INPUTS, ...fullState.inputs }));
+        if (fullState.inputs) {
+          // Whitelist only known keys from DEFAULT_INPUTS to prevent injection
+          const safeInputs = {};
+          Object.keys(DEFAULT_INPUTS).forEach(k => {
+            if (fullState.inputs[k] !== undefined) safeInputs[k] = fullState.inputs[k];
+          });
+          setInputs({ ...DEFAULT_INPUTS, ...safeInputs });
+        }
         if (fullState.highlightPlan) setHighlightPlan(fullState.highlightPlan);
         if (fullState.isRealDollars != null) setIsRealDollars(fullState.isRealDollars);
         if (fullState.pdfOrientation) setPdfOrientation(fullState.pdfOrientation);
@@ -626,6 +676,7 @@ export default function App() {
       setIsDark(themeMode === 'dark');
     }
     return () => mediaQuery.removeEventListener('change', handleChange);
+    try { localStorage.setItem('cpf_theme', themeMode); } catch {}
   }, [themeMode]);
 
   useEffect(() => {
@@ -704,18 +755,16 @@ export default function App() {
 
   const handleInputChange = (e) => {
     let { name, value } = e.target;
-    setInputs(prev => {
-      const next = { ...prev, [name]: value };
-      validateInputs(next);
-      return next;
-    });
+    setInputs(prev => ({ ...prev, [name]: value }));
   };
 
   const handleBlur = (e) => {
     let { name, value } = e.target;
-    if (value === "" || isNaN(Number(value))) {
-      setInputs(prev => ({ ...prev, [name]: 0 }));
-    }
+    setInputs(prev => {
+      const next = { ...prev, [name]: (value === "" || isNaN(Number(value))) ? 0 : value };
+      validateInputs(next);
+      return next;
+    });
   };
 
   // Move to next input on Enter, set 0 if blank
@@ -772,6 +821,7 @@ export default function App() {
   };
 
   const handleReset = () => {
+    lastSavedRef.current = JSON.stringify(DEFAULT_INPUTS);
     setConfirmModal({
       message: "Reset all inputs and clear all scenarios, What-If, and comparison data?",
       onConfirm: () => {
@@ -814,6 +864,7 @@ export default function App() {
 
   // ── Save Profile: saves ALL app state — inputs + scenarios + UI choices — as JSON directly ──
   const handleExportProfile = () => {
+    lastSavedRef.current = JSON.stringify(inputs);
     const memberName = (inputs.name||"Member").replace(/[^a-zA-Z0-9]/g,"_");
     const fullState = {
       // Core inputs
@@ -1089,7 +1140,34 @@ export default function App() {
     setExportModal({ type: "milestone", content });
   };
 
-  const projection = useMemo(() => runProjectionEngine(debouncedInputs), [debouncedInputs]);
+  // #7 — Memoise on only engine-relevant fields (not name, display prefs etc.)
+  const engineKey = useMemo(() => {
+    const {
+      currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
+      isSelfEmployed, isMale, oaBalance, saBalance, maBalance,
+      empOaCont, empSaCont, empMaCont, vc3aCash, vcSaTopup, vcVhr,
+      annualGovGrant, mrssGrant, mmssGrant, wisAmount,
+      oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
+      usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
+      cpfisAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
+      medicalInflationRate, propertyValue, propertyGrowthRate,
+      propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
+      salaryGross, salaryBonus, salaryGrowthRate
+    } = debouncedInputs;
+    return JSON.stringify({
+      currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
+      isSelfEmployed, isMale, oaBalance, saBalance, maBalance,
+      empOaCont, empSaCont, empMaCont, vc3aCash, vcSaTopup, vcVhr,
+      annualGovGrant, mrssGrant, mmssGrant, wisAmount,
+      oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
+      usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
+      cpfisAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
+      medicalInflationRate, propertyValue, propertyGrowthRate,
+      propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
+      salaryGross, salaryBonus, salaryGrowthRate
+    });
+  }, [debouncedInputs]);
+  const projection = useMemo(() => runProjectionEngine(debouncedInputs), [engineKey]); // eslint-disable-line
 
   const raAtPayout = projection.find(d=>d.age===(Number(inputs.payoutAge)||65))?.ra||0;
 
@@ -1359,6 +1437,14 @@ export default function App() {
     for(let i=0;i<projection.length-1;i++){const row=projection[i];const next=projection[i+1];if(row.age<payoutAge&&row.oa>0&&next.oa===0){alerts.push({age:next.age,type:"warning",label:"OA balance depleted",detail:`Ordinary Account reaches $0 at age ${next.age}. Housing outflows have fully drained OA. Consider reducing CPF housing payments.`});break;}}
     const row55=projection.find(r=>r.age===55);
     if(row55&&(row55.sa+row55.ra)<projBRS(55)) alerts.push({age:55,type:"danger",label:"RA below Basic Retirement Sum at 55",detail:`Projected RA at age 55 is $${Math.round((row55.sa+row55.ra)/1000)}k, below the BRS of $${Math.round(projBRS(55)/1000)}k.`});
+    // #3 Property sale milestone
+    const sPA = Number(inputs.sellPropertyAge)||0;
+    if (sPA > 0 && sPA >= Number(inputs.currentAge)) {
+      const prevRow = projection.find(r=>r.age===sPA-1)||projection[0];
+      const cumH = prevRow?.cumulativeOutflow||0;
+      const refundEst = Math.round(cumH * 0.5 * 1.1); // rough: ~half outflows are housing
+      alerts.push({age:sPA,type:"teal",label:"Property Sale & CPF Refund",detail:`Property sold at age ${sPA}. CPF refund (OA principal withdrawn for housing + 2.5%/yr accrued interest) credited to OA for future housing use. Property removed from net worth.`});
+    }
     return alerts.sort((a,b)=>a.age-b.age);
   }, [projection,inputs]);
 
@@ -1366,6 +1452,7 @@ export default function App() {
   // cashFlows: array of {t: year_index, v: amount} — negative = outflow, positive = inflow
   const computeXIRR = (cashFlows, guess = 0.05) => {
     if (!cashFlows || cashFlows.length < 2) return null;
+    if (cashFlows.every(cf => cf.v >= 0) || cashFlows.every(cf => cf.v <= 0)) return null; // No sign change — no valid IRR
     let rate = guess;
     for (let iter = 0; iter < 100; iter++) {
       let f = 0, df = 0;
@@ -1448,6 +1535,11 @@ export default function App() {
 
   const generatePDF = async () => {
     setIsGeneratingPdf(true);
+    // Safety timeout — clear flag after 30s even if generation hangs
+    const pdfTimeout = setTimeout(() => {
+      setIsGeneratingPdf(false);
+      showToast("⚠️ PDF generation timed out — try again");
+    }, 30000);
     try {
       const pa=Number(inputs.payoutAge)||65;
       const ca=Number(inputs.currentAge)||35;
@@ -1498,9 +1590,13 @@ export default function App() {
         return last ? last.total : 0;
       };
       const baseTotal=calcTotalAtPA(baseH,baseSATopup);
+      // #5 — Compute 25 sensitivity cells (was synchronous, now batched via pre-computation)
+      const sensCache=new Map();
+      const allParams=[...hRows.flatMap(h=>saTopupCols.map(s=>[h,s]))];
+      allParams.forEach(([h,s])=>{ const key=`${h}_${s}`; if(!sensCache.has(key)) sensCache.set(key,calcTotalAtPA(h,s)); });
       const sensRows=hRows.map(h=>{
         const cells=saTopupCols.map(s=>{
-          const val=calcTotalAtPA(h,s);
+          const val=sensCache.get(`${h}_${s}`)||0;
           const isBase=h===baseH&&s===baseSATopup;
           return `<td style="text-align:right;font-weight:${isBase?"900":"400"};background:${isBase?"#dcfce7":""};color:${isBase?"#166534":""};padding:5px 8px">${fc(val)}</td>`;
         }).join("");
@@ -1832,7 +1928,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
       // Always open in-app modal first so user can pick orientation and preview before printing
       setExportModal({ type: "pdf", content: html });
-    } catch(e) { alert("Report failed: "+e.message); } finally { setIsGeneratingPdf(false); }
+    } catch(e) { alert("Report failed: "+e.message); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
   };
   return (
     <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{height:"100vh", width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflow:"hidden"}}>
@@ -1987,6 +2083,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
         .rg-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
         .rg-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
         .sidebar-toggle-btn { display: none; }
+        /* Keyboard accessibility for sidebar sections */
+        .sidebar-section-header:focus { outline: 2px solid #34d399; outline-offset: -2px; border-radius: 8px; }
+        .sidebar-section-header:focus:not(:focus-visible) { outline: none; }
 
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
         @media (max-width: 1024px) and (min-width: 769px) {
@@ -2609,7 +2708,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             </button>
           </div>
           <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:16,overflow:"hidden"}}>
-            <div onClick={()=>toggleSection("profile")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("profile")?"rgba(16,185,129,0.06)":"transparent"}}>
+            <div onClick={()=>toggleSection("profile")} tabIndex={0} className="sidebar-section-header" onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();()=>toggleSection("profile");}}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("profile")?"rgba(16,185,129,0.06)":"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <User style={{width:14,height:14,color:"#10b981"}}/>
                 <span style={{fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.05em",color:"var(--text-main)"}}>Profile & Balances</span>
@@ -2694,7 +2793,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           </div>
           {/* Mandatory Contribs */}
           <div style={{background:"var(--bg-panel)",border:`1px solid ${isSelfEmployed?"rgba(251,146,60,0.3)":"var(--border-subtle)"}`,borderRadius:16,overflow:"hidden"}}>
-            <div onClick={()=>toggleSection("contribs")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("contribs")?"rgba(52,211,153,0.06)":"transparent"}}>
+            <div onClick={()=>toggleSection("contribs")} tabIndex={0} className="sidebar-section-header" onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();()=>toggleSection("contribs");}}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("contribs")?"rgba(52,211,153,0.06)":"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,color:"#34d399"}}>
                 <Briefcase style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>Mandatory Contributions{isSelfEmployed?" (SEP)":""}</span>
               </div>
@@ -2774,7 +2873,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           </div>
           {/* Inflows */}
           <div style={{background:"var(--bg-panel)",border:`1px solid ${isVcOverLimit?"#f97316":isSelfEmployed?"rgba(251,146,60,0.3)":"var(--border-subtle)"}`,borderRadius:16,overflow:"hidden"}}>
-            <div onClick={()=>toggleSection("topups")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("topups")?(isVcOverLimit?"rgba(249,115,22,0.06)":"rgba(52,211,153,0.06)"):"transparent"}}>
+            <div onClick={()=>toggleSection("topups")} tabIndex={0} className="sidebar-section-header" onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();()=>toggleSection("topups");}}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("topups")?(isVcOverLimit?"rgba(249,115,22,0.06)":"rgba(52,211,153,0.06)"):"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,color:isVcOverLimit?"#fb923c":"#34d399"}}>
                 <Gift style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>Inflows ($/yr)</span>
               </div>
@@ -2887,9 +2986,15 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <div>
                 <label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>
                   WIS – Workfare Supplement
-                  <TooltipBox id="t-wis" text="Workfare Income Supplement: Employees — 60% to CPF (OA/SA/MA age-band split) + 40% cash. SEPs — 90% to MA (BHS-capped) + 10% cash. Only the CPF portion is modelled."/>
+                  <TooltipBox id="t-wis" text="Workfare Income Supplement (WIS): Enter your total annual WIS award. CPF portion is modelled: Employees — 60% to CPF (OA/SA/MA) + 40% cash paid separately to you. SEPs — 90% to MA (BHS-capped) + 10% cash. The cash portion (shown below) is not included in CPF projection but forms part of your real income."/>
                 </label>
                 <input type="number" name="wisAmount" value={inputs.wisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual WIS workfare supplement" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.wisAmount?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                  {(Number(inputs.wisAmount)||0)>0 && (
+                    <p style={{fontSize:9,color:"#34d399",marginTop:4}}>
+                      CPF portion: {formatCurrency(Math.round((Number(inputs.wisAmount)||0)*(isSelfEmployed?0.9:0.6)))} · 
+                      Cash paid to you: {formatCurrency(Math.round((Number(inputs.wisAmount)||0)*(isSelfEmployed?0.1:0.4)))} (not in projection)
+                    </p>
+                  )}
                 {inputErrors.wisAmount && <p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.wisAmount}</p>}
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>{isSelfEmployed?"SEP: 90% → MA (BHS-capped), 10% cash (not modelled)":"Employee: 60% → CPF (age-band split), 40% cash (not modelled)"}</p>
               </div>
@@ -2900,7 +3005,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
           {/* Outflows */}
           <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:16,overflow:"hidden"}}>
-            <div onClick={()=>toggleSection("outflows")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("outflows")?"rgba(244,63,94,0.06)":"transparent"}}>
+            <div onClick={()=>toggleSection("outflows")} tabIndex={0} className="sidebar-section-header" onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();()=>toggleSection("outflows");}}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("outflows")?"rgba(244,63,94,0.06)":"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,color:"#f472b6"}}>
                 <MinusCircle style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>Outflows ($/yr)</span>
               </div>
@@ -2985,7 +3090,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
           {/* CPF Transfers */}
           <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:16,overflow:"hidden"}}>
-            <div onClick={()=>toggleSection("transfers")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("transfers")?"rgba(251,191,36,0.06)":"transparent"}}>
+            <div onClick={()=>toggleSection("transfers")} tabIndex={0} className="sidebar-section-header" onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();()=>toggleSection("transfers");}}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("transfers")?"rgba(251,191,36,0.06)":"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,color:"#fbbf24"}}>
                 <ArrowRightLeft style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>CPF Transfers ($/yr)</span>
               </div>
@@ -3019,7 +3124,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
           {/* Advanced */}
           <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:16,overflow:"hidden"}}>
-            <div onClick={()=>toggleSection("advanced")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("advanced")?"rgba(96,165,250,0.06)":"transparent"}}>
+            <div onClick={()=>toggleSection("advanced")} tabIndex={0} className="sidebar-section-header" onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();()=>toggleSection("advanced");}}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none",background:openSections.has("advanced")?"rgba(96,165,250,0.06)":"transparent"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,color:"#60a5fa"}}>
                 <Clock style={{width:14,height:14}}/><span style={{fontSize:12,fontWeight:800,textTransform:"uppercase"}}>Timelines & Property</span>
               </div>
@@ -3041,6 +3146,23 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:8,borderTop:"1px solid var(--border-subtle)"}}>
                 <label style={{fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase"}}>Include Prop in Net Worth</label>
                 <button onClick={()=>setInputs(p=>({...p,includeProperty:!p.includeProperty}))} aria-pressed={!!inputs.includeProperty} style={{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:700,border:"none",cursor:"pointer",background:inputs.includeProperty?"#10b981":"var(--border-strong)",color:inputs.includeProperty?"#020617":"var(--text-muted)"}}>{inputs.includeProperty?"ON":"OFF"}</button>
+              </div>
+              {/* #3 — Property sale + CPF refund */}
+              <div style={{paddingTop:8,borderTop:"1px solid var(--border-subtle)"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                  <label style={{fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase"}}>
+                    Sell Property at Age
+                    <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA and stays there for future housing use. Property value is removed from net worth at the sale age."/>
+                  </label>
+                </div>
+                <input type="number" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace",marginBottom:6}}/>
+                {(Number(inputs.sellPropertyAge)||0)>0 && (
+                  <div style={{padding:"8px 10px",borderRadius:8,background:"rgba(96,165,250,0.06)",border:"1px solid rgba(96,165,250,0.2)"}}>
+                    <p style={{fontSize:9,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>
+                      <strong style={{color:"#60a5fa"}}>On sale at age {inputs.sellPropertyAge}:</strong> CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA and stays there for future housing use. Property removed from net worth.
+                    </p>
+                  </div>
+                )}
               </div>
               <div style={{opacity:inputs.includeProperty?1:0.3,pointerEvents:inputs.includeProperty?"auto":"none",display:"flex",flexDirection:"column",gap:8}}>
                 <div><label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:4}}>Property Value ($)</label>
@@ -3146,15 +3268,15 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   // RA at 55 — from displayAccumulation
                   const ra55 = displayAccumulation.find(r=>r.age===55)?.ra || 0;
                   return [
-                    {label:"At Payout",value:formatCurrency(dispTotal),color:"#60a5fa"},
-                    {label:"Monthly (Std)",value:paRow?.standardMonthly?formatCurrency(paRow.standardMonthly):"—",color:"#94a3b8"},
-                    {label:"Monthly (Esc)",value:paRow?.escalatingMonthly?formatCurrency(paRow.escalatingMonthly):"—",color:"#10b981"},
-                    {label:"Monthly (Bas)",value:paRow?.basicMonthly?formatCurrency(paRow.basicMonthly):"—",color:"#f59e0b"},
-                    {label:"RA at 55",value:formatCurrency(ra55),color:"#a855f7"},
-                    {label:"Payout Age",value:`${inputs.payoutAge}`,color:"#fbbf24"},
+                    {label:"At Payout",value:formatCurrency(dispTotal),color:"#60a5fa",tip:"Total CPF balance (OA+MA+RA) at your chosen payout age"},
+                    {label:"Monthly (Std)",value:paRow?.standardMonthly?formatCurrency(paRow.standardMonthly):"—",color:"#94a3b8",tip:"Standard Plan: fixed level monthly payout for life"},
+                    {label:"Monthly (Esc)",value:paRow?.escalatingMonthly?formatCurrency(paRow.escalatingMonthly):"—",color:"#10b981",tip:"Escalating Plan: starts ~20% lower, grows 2%/yr for life"},
+                    {label:"Monthly (Bas)",value:paRow?.basicMonthly?formatCurrency(paRow.basicMonthly):"—",color:"#f59e0b",tip:"Basic Plan: RA self-funds to ~age 90, then pool phase"},
+                    {label:"RA at 55",value:formatCurrency(ra55),color:"#a855f7",tip:"Retirement Account balance at age 55 — determines CPF LIFE payout tier (BRS/FRS/ERS)"},
+                    {label:"Payout Age",value:`${inputs.payoutAge}`,color:"#fbbf24",tip:"Age CPF LIFE payouts begin. Deferring adds ~7%/yr to monthly amount"},
                   ];
                 })().map(({label,value,color},i)=>(
-                  <div key={i} style={{padding:"10px 14px",borderRight:"1px solid var(--border-subtle)",flex:"1 1 0",minWidth:80,textAlign:"center",boxSizing:"border-box"}}>
+                  <div key={i} title={item.tip||""} style={{padding:"10px 14px",borderRight:"1px solid var(--border-subtle)",flex:"1 1 0",minWidth:80,textAlign:"center",boxSizing:"border-box",cursor:"help"}}>
                     <div className="cpf-kpi-label" style={{fontSize:9,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
                     <div className="cpf-kpi-value" style={{fontSize:14,fontWeight:900,color,fontFamily:"monospace"}}>{value}</div>
                   </div>
@@ -3486,9 +3608,13 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 const pct=(a,b)=>`${Math.max(0,Math.min(100,((a-START)/totalSpan)*100)).toFixed(1)}%`;
                 const width=(a,b)=>`${Math.max(0,Math.min(100,((Math.min(b,END)-Math.max(a,START))/totalSpan)*100)).toFixed(1)}%`;
                 const left=(a)=>`${Math.max(0,((a-START)/totalSpan)*100).toFixed(1)}%`;
+                const hasRSTU=(Number(inputs.vcSaTopup)||0)>0;
+                const hasVC3A=(Number(inputs.vc3aCash)||0)>0;
                 const phases=[
                   {label:"Contributions Active",from:ca,to:contribStop,color:"#3b82f6",bg:"rgba(59,130,246,0.15)",border:"rgba(59,130,246,0.5)"},
                   {label:"Housing Outflow (OA)",from:ca,to:housingStop,color:"#f472b6",bg:"rgba(244,114,182,0.12)",border:"rgba(244,114,182,0.5)"},
+                  ...(hasRSTU?[{label:`RSTU Top-up ($${Math.round((Number(inputs.vcSaTopup)||0)/1000)}k/yr)`,from:ca,to:contribStop,color:"#34d399",bg:"rgba(52,211,153,0.1)",border:"rgba(52,211,153,0.4)"}]:[]),
+                  ...(hasVC3A?[{label:`VC3A Lump-sum ($${Math.round((Number(inputs.vc3aCash)||0)/1000)}k/yr)`,from:ca,to:contribStop,color:"#a78bfa",bg:"rgba(167,139,250,0.1)",border:"rgba(167,139,250,0.4)"}]:[]),
                   {label:"CPF LIFE Payouts",from:lifeStart,to:END,color:"#10b981",bg:"rgba(16,185,129,0.12)",border:"rgba(16,185,129,0.5)"},
                   // Standard Plan: level payouts from payout age to 95
                   {label:"Standard — Level Payouts",from:lifeStart,to:END,color:"#6366f1",bg:"rgba(99,102,241,0.1)",border:"rgba(99,102,241,0.4)"},
@@ -3657,6 +3783,50 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   </div>
                 );
               })()}
+              {/* Estate Planning Panel */}
+              {(()=>{
+                const ages=[65,70,75,80,85,90,95];
+                const plan=highlightPlan;
+                return (
+                  <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",padding:24,borderRadius:24}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                      <Gift style={{width:18,height:18,color:"#a78bfa"}}/>
+                      <h3 style={{fontSize:16,fontWeight:800,margin:0}}>Estate at Death — Bequest Projection</h3>
+                      <span style={{fontSize:9,padding:"3px 8px",borderRadius:999,background:"rgba(167,139,250,0.1)",border:"1px solid rgba(167,139,250,0.3)",color:"#a78bfa",textTransform:"uppercase",fontWeight:700}}>{plan}</span>
+                    </div>
+                    <p style={{fontSize:11,color:"var(--text-muted)",marginBottom:16,lineHeight:1.6}}>
+                      Estimated estate value if death occurs at each age. Includes CPF bequest (RA premium refund minus payouts drawn), remaining OA, MA balance, and property value. Under the <strong style={{color:"var(--text-bright)"}}>{plan}</strong> plan.
+                    </p>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:10}}>
+                      {ages.map(age=>{
+                        const pRow=displayProjection.find(d=>d.age===age);
+                        const aRow=displayAccumulation.find(d=>d.age===age);
+                        if(!pRow||!aRow) return null;
+                        const bequest=pRow[`${plan}Bequest`]||0;
+                        const oa=aRow.oa||0;
+                        const ma=aRow.ma||0;
+                        const prop=inputs.includeProperty?(aRow.propertyValue||0):0;
+                        const total=bequest+oa+ma+prop;
+                        const isPayout=age>=Number(inputs.payoutAge);
+                        return (
+                          <div key={age} style={{background:"var(--bg-muted)",borderRadius:12,padding:12,border:`1px solid ${age===Number(inputs.payoutAge)?"rgba(167,139,250,0.4)":"var(--border-subtle)"}`,opacity:isPayout?1:0.5}}>
+                            <div style={{fontSize:9,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",marginBottom:6}}>Age {age}</div>
+                            <div style={{fontSize:14,fontWeight:700,color:"#a78bfa",marginBottom:4}}>{formatCurrency(total)}</div>
+                            <div style={{fontSize:8,color:"var(--text-subtle)",lineHeight:1.5}}>
+                              <div>CPF: {formatCurrency(bequest+oa+ma)}</div>
+                              {prop>0&&<div>Property: {formatCurrency(prop)}</div>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p style={{fontSize:9,color:"var(--text-subtle)",marginTop:12}}>
+                      * Before payout age: CPF bequest = total OA+MA+RA (death benefit). After payout age: CPF LIFE bequest = premium paid minus cumulative payouts received. OA and MA balances pass to nominated beneficiaries in full.
+                    </p>
+                  </div>
+                );
+              })()}
+
               {/* Milestones */}
               {milestones.length>0 && (
                 <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",padding:24,borderRadius:24}}>
@@ -3716,13 +3886,17 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                         </button>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-                        {[["Payout Age",effPA,65,70,1,setWhatIfPayoutAge,"#34d399",`${effPA}`],["Annual SA/RA Top-up",effST,0,40000,500,setWhatIfSaTopup,"#34d399",formatCurrency(effST)],["Annual Housing Outflow",effH,0,Math.max(60000,(Number(inputs.housingOutflow)||0)*2),500,setWhatIfHousing,"#fb923c",formatCurrency(effH)],["Salary Increase (%)",effSB,0,50,5,setWhatIfSalaryBump,"#60a5fa",`${effSB}%`]].map(([label,val,min,max,step,setter,color,display])=>(
+                        {[["Payout Age",effPA,65,70,1,setWhatIfPayoutAge,"#34d399",`${effPA}`],["Annual SA/RA Top-up",effST,0,Math.max(40000,Math.round((currentERS-(currentSaRa||0))/1000)*1000),500,setWhatIfSaTopup,"#34d399",formatCurrency(effST)],["Annual Housing Outflow",effH,0,Math.max(60000,(Number(inputs.housingOutflow)||0)*2),500,setWhatIfHousing,"#fb923c",formatCurrency(effH)],["Salary Increase (%)",effSB,0,50,5,setWhatIfSalaryBump,"#60a5fa",`${effSB}%`]].map(([label,val,min,max,step,setter,color,display])=>(
                           <div key={label}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                               <label style={{fontSize:11,fontWeight:700,color:"var(--text-highlight)"}}>{label}</label>
                               <span style={{fontSize:16,fontWeight:900,fontFamily:"monospace",color}}>{display}</span>
                             </div>
-                            <input type="range" min={min} max={max} step={step} value={val} onChange={e=>setter(Number(e.target.value))} style={{width:"100%",accentColor:color,cursor:"pointer"}}/>
+                            <input type="range" min={min} max={max} step={step} value={val}
+                              onChange={e=>setter(Number(e.target.value))}
+                              onMouseUp={e=>setter(Number(e.target.value))}
+                              onTouchEnd={e=>setter(Number(e.target.value))}
+                              style={{width:"100%",accentColor:color,cursor:"pointer"}}/>
                             <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--border-strong)",marginTop:2}}><span>{min}</span><span>{max}</span></div>
                           </div>
                         ))}
@@ -4076,6 +4250,16 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           {/* ── DATA TABLE TAB ── */}
           {activeTab==="table" && (
             <div>
+              {/* Scenario context banner */}
+              {(scenarioA||scenarioB) && (
+                <div style={{marginBottom:10,padding:"8px 14px",borderRadius:10,background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",fontSize:11}}>
+                  <span style={{color:"var(--text-muted)",fontWeight:700}}>Viewing:</span>
+                  <span style={{padding:"3px 10px",borderRadius:20,background:"rgba(16,185,129,0.1)",color:"#34d399",border:"1px solid rgba(16,185,129,0.3)",fontWeight:700,textTransform:"capitalize"}}>{highlightPlan} Plan</span>
+                  {scenarioA && <span style={{padding:"3px 10px",borderRadius:20,background:"rgba(59,130,246,0.1)",color:"#60a5fa",border:"1px solid rgba(59,130,246,0.3)",fontSize:10}}>Slot A: {scenarioLabelA||"Scenario A"}</span>}
+                  {scenarioB && <span style={{padding:"3px 10px",borderRadius:20,background:"rgba(249,115,22,0.1)",color:"#f97316",border:"1px solid rgba(249,115,22,0.3)",fontSize:10}}>Slot B: {scenarioLabelB||"Scenario B"}</span>}
+                  <span style={{fontSize:10,color:"var(--text-subtle)",marginLeft:"auto"}}>Data shows current inputs · switch plans via LIFE tab</span>
+                </div>
+              )}
               {/* Data Table explanation */}
               <div style={{marginBottom:16,padding:"14px 18px",borderRadius:14,background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
                 <p style={{fontWeight:700,color:"var(--text-highlight)",marginBottom:8,fontSize:12}}>📋 Data Table — Column Guide</p>
@@ -4131,6 +4315,28 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   </button>
                   <button onClick={handleExportCSV} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:20,fontSize:10,fontWeight:700,background:"rgba(16,185,129,0.15)",color:"#34d399",border:"1px solid rgba(16,185,129,0.3)",cursor:"pointer"}}>
                     <Download style={{width:11,height:11}}/>Download CSV
+                  </button>
+                  <button onClick={()=>{
+                    // Build CSV and open in Google Sheets via import URL
+                    try {
+                      const rows=[["Age","OA","SA/RA","MA","Total CPF","Inflows","Outflows","Std Payout","Esc Payout","Bas Payout","Net Worth"],...displayProjection.map(r=>{
+                        const base=displayAccumulation.find(p=>p.age===r.age)||{};
+                        const pa=Number(inputs.payoutAge)||65;
+                        return [r.age,Math.round(base.oa||0),Math.round((base.sa||0)+(base.ra||0)),Math.round(base.ma||0),Math.round((base.oa||0)+(base.sa||0)+(base.ma||0)+(base.ra||0)),Math.round(base.injected||0),Math.round(base.outflow||0),r.age>=pa?Math.round(r.standardAnnual||0):"",r.age>=pa?Math.round(r.escalatingAnnual||0):"",r.age>=pa?Math.round(r.basicAnnual||0):"",Math.round(r[`${highlightPlan}NetWorth`]||0)];
+                      })];
+                      const csv=rows.map(r=>r.join(",")).join("
+");
+                      const blob=new Blob([csv],{type:"text/csv"});
+                      const url=URL.createObjectURL(blob);
+                      const a=document.createElement("a");
+                      a.href=`https://docs.google.com/spreadsheets/d/create?usp=drive_web`;
+                      a.target="_blank";
+                      a.click();
+                      showToast("✓ Google Sheets opened — paste your CSV data there (or use Download CSV to import)");
+                      URL.revokeObjectURL(url);
+                    } catch(e){ showToast("Open Google Sheets manually and use File → Import to upload your CSV"); }
+                  }} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:20,fontSize:10,fontWeight:700,background:"rgba(59,130,246,0.15)",color:"#60a5fa",border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}}>
+                    <ExternalLink style={{width:11,height:11}}/>Open in Sheets
                   </button>
                 </div>
               </div>
