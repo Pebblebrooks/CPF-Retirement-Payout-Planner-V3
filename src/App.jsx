@@ -49,6 +49,8 @@ const DEFAULT_INPUTS = {
   // Age 55 options
   oaWithdrawalAt55: 0,
   usePropertyPledge: false,
+  pledgeWithdrawalAmount: 0,    // amount to withdraw from RA (pledged sum) as cash
+  pledgeWithdrawalAge: 55,      // age at which member applies to withdraw pledged RA funds
   // CPFIS
   cpfisAmount: 0,
   // Outflows
@@ -152,12 +154,17 @@ function runProjectionEngine(inputs, {
   // OA withdrawal at 55: applied once when age 55 is reached
   const oaWithdrawalAt55 = Number(inputs.oaWithdrawalAt55) || 0;
   let withdrawalApplied = startAge >= 55; // already past 55 → already happened
+  // Pledge RA withdrawal: only applies when pledge is ON; withdrawn directly from RA at pledgeWithdrawalAge
+  const pledgeWithdrawalAmount = (usePropertyPledge && Number(inputs.pledgeWithdrawalAmount)) ? Number(inputs.pledgeWithdrawalAmount) : 0;
+  const pledgeWithdrawalAge    = Math.max(55, Number(inputs.pledgeWithdrawalAge) || 55);
+  let pledgeWithdrawalApplied  = startAge >= pledgeWithdrawalAge;
 
-  // AW ceiling: $102,000 − total OW CPF contributions this year
-  // OW CPF this year = baseOA_Emp + baseSA_Emp + baseMA_Emp (before growth factor)
-  // AW ceiling = max(0, $102,000 − OW CPF)
-  const baseOW_total = baseOA_Emp + baseSA_Emp + baseMA_Emp;
-  const awCeiling = Math.max(0, 102000 - baseOW_total);
+  // AW ceiling: $102,000 − Total Ordinary Wages subject to CPF for the year
+  // (NOT the CPF contributions themselves — the OW wages, capped at $8,000/mo × 12 = $96,000)
+  // E.g. if OW = $8,000/mo → OW subject to CPF = $96,000 → AW ceiling = $102,000 − $96,000 = $6,000
+  const owMonthly = Math.min(Number(inputs.salaryGross) || 0, 8000);
+  const owAnnualSubjectToCPF = owMonthly * 12;
+  const awCeiling = Math.max(0, 102000 - owAnnualSubjectToCPF);
 
   const data = [];
 
@@ -180,6 +187,17 @@ function runProjectionEngine(inputs, {
     if (age === 55 && !withdrawalApplied) {
       oa = Math.max(0, oa - oaWithdrawalAt55);
       withdrawalApplied = true;
+    }
+
+    // Pledge RA withdrawal: member applies to withdraw pledged RA funds (above BRS) as cash at pledgeWithdrawalAge
+    // Funds leave CPF entirely (go to bank account). Only deducted if pledge is ON and age matches.
+    if (usePropertyPledge && pledgeWithdrawalAmount > 0 && age === pledgeWithdrawalAge && !pledgeWithdrawalApplied) {
+      // Can only withdraw RA above BRS
+      const projBRS_pw = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+      const maxWithdrawable = Math.max(0, ra - projBRS_pw);
+      const actualPledgeWithdraw = Math.min(pledgeWithdrawalAmount, maxWithdrawable);
+      ra = Math.max(0, ra - actualPledgeWithdraw);
+      pledgeWithdrawalApplied = true;
     }
 
     // OA→SA transfer (annual, before 55 only; capped so OA stays ≥ 0)
@@ -216,7 +234,8 @@ function runProjectionEngine(inputs, {
 
       if (isSEP) {
         // SEP VC3A: single cash lump-sum auto-split by age-band rates + VHR to OA
-        const vc3aTotal = Math.min(vc3aCash + vcVhrAmt, ANNUAL_LIMIT);
+        // VHR is NOT subject to the Annual Limit — apply it straight to OA
+        const vc3aTotal = Math.min(vc3aCash, ANNUAL_LIMIT);
         let vc3aOaRatio, vc3aSaRatio, vc3aMaRatio;
         if      (age <= 35) { vc3aOaRatio=0.23; vc3aSaRatio=0.06; vc3aMaRatio=0.08; }
         else if (age <= 45) { vc3aOaRatio=0.21; vc3aSaRatio=0.07; vc3aMaRatio=0.09; }
@@ -238,13 +257,20 @@ function runProjectionEngine(inputs, {
         const maSpill    = Math.max(0, toMA_vc3a - Math.min(toMA_vc3a, maRoom)); // only vc3a spills; WIS excess lost
         ma += actualToMA;
         if (age >= 55) {
-          const projERS_sep = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-          const raRoom_sep  = Math.max(0, projERS_sep - ra);
+          // VC3A: RA cap is FRS (not ERS — ERS applies only to RSTU cash top-ups)
+          const projFRS_vc3a_sep = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+          const raRoom_sep  = Math.max(0, projFRS_vc3a_sep - ra);
           const toRA_sep    = Math.min(toSA_vc3a + maSpill, raRoom_sep);
           ra += toRA_sep;
           oa += (toSA_vc3a + maSpill - toRA_sep);
         } else {
-          sa += toSA_vc3a + maSpill;
+          // MA spill to SA is capped at FRS — excess above FRS overflows to OA
+          const projFRS_sep_sa = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+          const saRoomSep = Math.max(0, projFRS_sep_sa - sa);
+          const toSA_total = toSA_vc3a + maSpill;
+          const actualToSA_sep = Math.min(toSA_total, saRoomSep);
+          sa += actualToSA_sep;
+          oa += (toSA_total - actualToSA_sep); // FRS overflow to OA
         }
         oa += toOA_vc3a;
         if (age >= 55) { ra += (Number(inputs.annualGovGrant) || 0) + mrssGrant; }
@@ -305,16 +331,24 @@ function runProjectionEngine(inputs, {
           let mandToRA      = Math.min(mandatorySA, roomInRA_Mand);
           ra += mandToRA;
           oa += (mandatorySA - mandToRA);
-          const projERS_i = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-          const vcRoomInRA = Math.max(0, projERS_i - ra);
+          // VC3A: RA cap is FRS (not ERS — ERS applies only to RSTU cash top-ups)
+          const projFRS_vc3a_emp = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+          const vcRoomInRA = Math.max(0, projFRS_vc3a_emp - ra);
           const vcToRA     = Math.min(cappedVcSA + maSpillEmp + wisSA, vcRoomInRA);
           ra += vcToRA;
           oa += (cappedVcSA + maSpillEmp + wisSA - vcToRA);
           ra += mrssGrant;
           cumRaCashTopUps += vcToRA + mrssGrant;
         } else {
-          sa += mandatorySA + cappedVcSA + maSpillEmp + wisSA;
-          sa += mrssGrant;
+          // MA spill to SA is capped at FRS — excess above FRS overflows to OA
+          const projFRS_sa = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+          const saBeforeAdd = sa;
+          const totalToSA = mandatorySA + cappedVcSA + maSpillEmp + wisSA + mrssGrant;
+          const saRoom = Math.max(0, projFRS_sa - sa);
+          const actualToSA = Math.min(totalToSA, saRoom);
+          const saOverflow = totalToSA - actualToSA;
+          sa += actualToSA;
+          oa += saOverflow; // FRS overflow goes to OA
           cumRaCashTopUps += cappedVcSA + maSpillEmp + wisSA + mrssGrant;
         }
       }
@@ -456,7 +490,7 @@ export default function App() {
     const pa = Number(inp.payoutAge)  || 65;
     const cs = Number(inp.contributionStopAge) || 65;
     const hs = Number(inp.housingStopAge) || 55;
-    if (ca < 15 || ca > 80)  errs.currentAge = "Age must be 15–80";
+    if (ca < 1 || ca > 120)  errs.currentAge = "Age must be 1–120";
     if (pa < 65 || pa > 70)  errs.payoutAge  = "Payout age must be 65–70";
     if (cs < ca)             errs.contributionStopAge = "Must be ≥ current age";
     if (hs < ca)             errs.housingStopAge = "Must be ≥ current age";
@@ -464,6 +498,66 @@ export default function App() {
     if (infl < 0 || infl > 20) errs.inflationRate = "0–20%";
     const mInfl = Number(inp.medicalInflationRate) || 0;
     if (mInfl < 0 || mInfl > 30) errs.medicalInflationRate = "0–30%";
+    // MRSS: max $2,000/yr
+    const mrss = Number(inp.mrssGrant) || 0;
+    if (mrss < 0 || mrss > 2000) errs.mrssGrant = "Max $2,000/yr";
+    // MMSS: max $1,000/yr
+    const mmss = Number(inp.mmssGrant) || 0;
+    if (mmss < 0 || mmss > 1000) errs.mmssGrant = "Max $1,000/yr";
+    // WIS: max $4,000/yr (approx upper bound for full WIS award)
+    const wis = Number(inp.wisAmount) || 0;
+    if (wis < 0 || wis > 4000) errs.wisAmount = "Max ~$4,000/yr";
+    // Pledge withdrawal age must be ≥ 55
+    if (inp.usePropertyPledge) {
+      const pwa = Number(inp.pledgeWithdrawalAge) || 55;
+      if (pwa < 55) errs.pledgeWithdrawalAge = "Min age 55";
+      if (pwa > 95) errs.pledgeWithdrawalAge = "Max age 95";
+    }
+    // CPF balances: 0 – $5,000,000
+    ["oaBalance","saBalance","maBalance"].forEach(k=>{
+      const v = Number(inp[k]) || 0;
+      if (v < 0 || v > 5000000) errs[k] = "0 – $5,000,000";
+    });
+    // Annual contributions: 0 – $100,000
+    ["empOaCont","empSaCont","empMaCont"].forEach(k=>{
+      const v = Number(inp[k]) || 0;
+      if (v < 0 || v > 100000) errs[k] = "0 – $100,000/yr";
+    });
+    // Salary: 0 – $50,000/mo
+    const sg = Number(inp.salaryGross) || 0;
+    if (sg < 0 || sg > 50000) errs.salaryGross = "0 – $50,000/mo";
+    const sb = Number(inp.salaryBonus) || 0;
+    if (sb < 0 || sb > 2000000) errs.salaryBonus = "0 – $2,000,000";
+    // Growth rates: -50% to 50%
+    const sgr = Number(inp.salaryGrowthRate) || 0;
+    if (sgr < -50 || sgr > 50) errs.salaryGrowthRate = "-50% to 50%";
+    // Property value: 0 – $50,000,000
+    const pv = Number(inp.propertyValue) || 0;
+    if (pv < 0 || pv > 50000000) errs.propertyValue = "0 – $50M";
+    const pgr = Number(inp.propertyGrowthRate) || 0;
+    if (pgr < -20 || pgr > 30) errs.propertyGrowthRate = "-20% to 30%";
+    // Housing outflow: 0 – $200,000/yr
+    const ho = Number(inp.housingOutflow) || 0;
+    if (ho < 0 || ho > 200000) errs.housingOutflow = "0 – $200,000/yr";
+    // Medical: 0 – $100,000/yr
+    ["medicalUsage","medishieldIP","elderCareShield"].forEach(k=>{
+      const v = Number(inp[k]) || 0;
+      if (v < 0 || v > 100000) errs[k] = "0 – $100,000/yr";
+    });
+    // VC3A: 0 – Annual Limit
+    const vc3a = Number(inp.vc3aCash) || 0;
+    if (vc3a < 0 || vc3a > 37740) errs.vc3aCash = "0 – $37,740 (Annual Limit)";
+    // RSTU SA top-up: 0 – ERS
+    const rstu = Number(inp.vcSaTopup) || 0;
+    if (rstu < 0 || rstu > 500000) errs.vcSaTopup = "0 – $500,000";
+    // OA transfers: negative not allowed
+    const oaToSa = Number(inp.oaToSaTransfer) || 0;
+    if (oaToSa < 0) errs.oaToSaTransfer = "Must be ≥ 0";
+    const oaToMa = Number(inp.oaToMaTransfer) || 0;
+    if (oaToMa < 0) errs.oaToMaTransfer = "Must be ≥ 0";
+    // Contrib stop and housing stop age bounds
+    if (cs > 95) errs.contributionStopAge = "Must be ≤ 95";
+    if (hs > 95) errs.housingStopAge = "Must be ≤ 95";
     setInputErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -563,7 +657,9 @@ export default function App() {
   const totalMandatory = isSelfEmployed ? 0 : ((Number(inputs.empOaCont)||0) + (Number(inputs.empSaCont)||0) + (Number(inputs.empMaCont)||0));
   const maxAllowableVC = Math.max(0, ANNUAL_LIMIT - totalMandatory);
   // VC3A lump-sum + VHR counted toward Annual Limit; RSTU is separate (no Annual Limit)
-  const totalVC = (Number(inputs.vc3aCash)||0) + (Number(inputs.vcVhr)||0);
+  // VHR (Housing Refund) is NOT subject to the Annual Limit — it refunds CPF used for housing
+  // Only VC3A counts toward the Annual Limit
+  const totalVC = (Number(inputs.vc3aCash)||0);
   const isVcOverLimit = totalVC > maxAllowableVC;
 
   const annualGross = ((Number(inputs.salaryGross)||0)*12) + (Number(inputs.salaryBonus)||0);
@@ -644,8 +740,9 @@ export default function App() {
     const owOA = Math.round(owIncome * oaRate);
     const owSA = Math.round(owIncome * saRate);
     const owMA = Math.round(owIncome * maRate);
-    // AW ceiling: bonus CPF = bonus * combined rate, capped so total ≤ AW ceiling of $102k
-    const awCap       = Math.max(0, 102000 - (owOA + owSA + owMA));
+    // AW ceiling = $102,000 − Total OW subject to CPF (the wages, not the contributions)
+    // cappedGross × 12 is the OW subject to CPF
+    const awCap       = Math.max(0, 102000 - owIncome);
     const bonusCpf    = Math.min(bonus, awCap);
     const annualOA    = owOA + Math.round(bonusCpf * oaRate);
     const annualSA    = owSA + Math.round(bonusCpf * saRate);
@@ -1002,8 +1099,8 @@ export default function App() {
     // CPF LIFE payout is calculated on RA AFTER the 20% OA transfer.
     // The transfer reduces the RA entering the LIFE pool — payouts are correspondingly lower.
     const raBase = raAfterTransfer;
-    const ratioM = 540 + (Math.max(0, pAge - 65) * 12);
-    const ratioF = 500 + (Math.max(0, pAge - 65) * 11.5);
+    const ratioM = Math.round(540 * Math.pow(1.07, Math.max(0, pAge - 65)));  // 7% compound per year of deferral
+    const ratioF = Math.round(500 * Math.pow(1.07, Math.max(0, pAge - 65)));  // 7% compound per year of deferral
     const startM = (raBase / 100000) * ratioM;
     const startF = (raBase / 100000) * ratioF;
     const startActive = male ? startM : startF;
@@ -1201,7 +1298,7 @@ export default function App() {
     const pAs=[60,62,65,67,70];
     return pAs.map(pAge=>{
       const raRow=projection.find(d=>d.age===pAge); if(!raRow) return{pAge,stdMonthly:0,escMonthly:0,basMonthly:0,escVsStd:null,stdVsBasic:null,escVsBasic:null};
-      const raVal=raRow.ra||0; const ratio=540+((Math.max(0,pAge-65))*12);
+      const raVal=raRow.ra||0; const ratio=Math.round(540*Math.pow(1.07,Math.max(0,pAge-65)));
       const basePayout=(raVal/100000)*ratio; const stdStart=basePayout,escStart=basePayout*0.8,basStart=basePayout*0.9;
       
       const bPct2=(basicPremiumPct||10)/100;
@@ -1654,7 +1751,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
     } catch(e) { alert("Report failed: "+e.message); } finally { setIsGeneratingPdf(false); }
   };
   return (
-    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{minHeight:"100vh", width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflowX:"hidden"}}>
+    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{height:"100vh", width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflow:"hidden"}}>
         <style>{`
         /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
         html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow-x: hidden !important; }
@@ -1713,7 +1810,44 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           align-items: start;
           box-sizing: border-box;
           transition: max-width 0.3s ease, grid-template-columns 0.3s ease, padding 0.3s ease;
+          /* Fill all available height between header and footer */
+          height: 100%;
+          overflow: hidden;
         }
+        /* Sidebar scrolls independently */
+        .cpf-sidebar-wrap {
+          height: 100%;
+          overflow-y: auto;
+          overflow-x: hidden;
+          scrollbar-width: thin;
+          scrollbar-color: var(--border-strong) transparent;
+          align-self: stretch;
+        }
+        .cpf-sidebar-wrap::-webkit-scrollbar { width: 4px; }
+        .cpf-sidebar-wrap::-webkit-scrollbar-track { background: transparent; }
+        .cpf-sidebar-wrap::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+        /* Main content panel: grid with sticky header row + scrollable content row */
+        .cpf-main-wrap {
+          height: 100%;
+          display: grid !important;
+          grid-template-rows: auto 1fr;
+          overflow: hidden;
+          min-width: 0;
+        }
+        /* The scrollable content area inside the main wrap */
+        .cpf-tab-content {
+          overflow-y: auto;
+          overflow-x: hidden;
+          scrollbar-width: thin;
+          scrollbar-color: var(--border-strong) transparent;
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+        .cpf-tab-content::-webkit-scrollbar { width: 5px; }
+        .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
+        .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
         /* ─── DESKTOP VIEWPORT MODES ─────────────────────────────────── */
         .cpf-layout[data-mode="fhd"] { grid-template-columns: 380px 1fr; max-width: 1920px; gap: 28px; padding: 28px 32px; }
         .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 28px; }
@@ -1745,8 +1879,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
         @media (max-width: 1024px) and (min-width: 769px) {
-          .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; }
-          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static; background: var(--bg-base); }
+          .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; }
+          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static; background: var(--bg-base); height: auto !important; overflow-y: visible !important; }
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; flex-direction: column !important; } .cpf-tab-content { overflow-y: visible !important; padding: 10px 14px !important; }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           .cpf-main-wrap { padding: 16px 14px; }
@@ -1762,10 +1897,10 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
         @media (max-width: 768px) {
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; }
           .cpf-header-actions .hide-mobile { display: none; }
-          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static; background: var(--bg-base); }
+          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static; background: var(--bg-base); height: auto !important; overflow-y: visible !important; }
           .cpf-sidebar-inner { display: flex; flex-direction: column; gap: 12px; padding: 10px 12px 14px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
-          .cpf-main-wrap { padding: 10px 10px; }
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; flex-direction: column !important; } .cpf-tab-content { overflow-y: visible !important; padding: 10px 10px !important; }
           .sidebar-toggle-btn { display: flex !important; }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
@@ -2089,7 +2224,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   {[
                     ["1","Enter your CPF balances & select gender","Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio. The progress bars compare against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.","#3b82f6"],
                     ["2","Use Auto-Calc for contributions","Toggle the Salary Estimator. Enter your gross monthly salary — the tool applies the 2026 OW ceiling ($8,000/month) and AW ceiling ($102,000/yr) to split contributions accurately across OA/SA/MA.","#10b981"],
-                    ["3","Inflows, Outflows & CPF Transfers","The Inflows panel has: VC3A (single cash lump-sum, auto-split by age-band), RSTU (SA/RA cash top-up, tax-relievable), VHR, gov grants, MRSS (RA top-up, up to $600/yr), MMSS (MA match, up to $1,000/yr), and WIS/Workfare (60% CPF for employees, 90% MA for SEPs). Outflows: Housing Loan (OA), medical, CPFIS. CPF Transfers: OA→MA and OA→SA.","#a855f7"],
+                    ["3","Inflows, Outflows & CPF Transfers","The Inflows panel has: VC3A (single cash lump-sum, auto-split by age-band), RSTU (SA/RA cash top-up, tax-relievable), VHR, gov grants, MRSS (RA top-up, up to $2,000/yr · RA below BRS), MMSS (MA match, up to $1,000/yr), and WIS/Workfare (60% CPF for employees, 90% MA for SEPs). Outflows: Housing Loan (OA), medical, CPFIS. CPF Transfers: OA→MA and OA→SA.","#a855f7"],
                     ["4","Set your life-phase timelines","Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model real-world cash flow transitions accurately.","#fbbf24"]
                   ].map(([num, title, desc, color]) => (
                     <div key={num} style={{display:"flex",gap:16}}>
@@ -2174,7 +2309,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
       )}
 
       {/* HEADER */}
-      <header style={{background:"var(--header-bg)",borderBottom:"1px solid var(--border-subtle)",position:"sticky",top:0,zIndex:50,backdropFilter:"blur(8px)"}}>
+      <header style={{background:"var(--header-bg)",borderBottom:"1px solid var(--border-subtle)",flexShrink:0,zIndex:50,backdropFilter:"blur(8px)"}}>
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
             <div style={{background:"#10b981",padding:8,borderRadius:12}}>
@@ -2303,7 +2438,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
         data-mode={desktopMode}
         style={{ 
           maxWidth: desktopMode === 'fhd' ? '1920px' : desktopMode === 'hd' ? '1440px' : '100%',
-          minHeight: '100vh',
+          flex: '1 1 0',
+          overflow: 'hidden',
           background: 'var(--bg-base)'
         }}
       >
@@ -2377,21 +2513,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
               {/* SA/RA Goal */}
               <div style={{marginBottom:16}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,fontWeight:700,color:"var(--text-highlight)",marginBottom:6}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,fontWeight:700,color:"var(--text-highlight)",marginBottom:8}}>
                   <span>SA/RA Goal <TooltipBox id="t-ers" text={`BRS: ${formatCurrency(currentBRS)} · FRS: ${formatCurrency(currentFRS)} · ERS: ${formatCurrency(currentERS)}`}/></span>
-                  {/* Show % of FRS as primary metric (key retirement target) */}
                   <span style={{color:currentSaRa>=currentFRS?"#34d399":"#fbbf24",fontSize:11,fontWeight:700,fontFamily:"monospace"}}>
-                    {Math.round((currentSaRa/currentFRS)*100)}% of FRS{currentSaRa>=currentFRS?" ✓":""}
+                    {Math.round((currentSaRa/currentFRS)*100)}%{currentSaRa>=currentFRS?" ✓":""}
                   </span>
-                </div>
-                {/* Only show FRS% label above the FRS tick when SA/RA hasn't yet reached FRS.
-                    Once met/exceeded, the bar is full and no label is needed to avoid confusion. */}
-                <div style={{position:"relative",height:14,marginBottom:2}}>
-                  {currentSaRa < currentFRS && (
-                    <span style={{position:"absolute",left:"50%",transform:"translateX(-50%)",fontSize:11,fontWeight:700,color:"#fbbf24",fontFamily:"monospace",whiteSpace:"nowrap"}}>
-                      {Math.round((currentSaRa/currentFRS)*100)}%
-                    </span>
-                  )}
                 </div>
                 <div style={{width:"100%",background:"var(--bg-input)",borderRadius:999,height:10,overflow:"hidden",position:"relative"}}>
                   {[25,50].map(p=><div key={p} style={{position:"absolute",top:0,bottom:0,left:`${p}%`,width:1,background:"var(--bg-base)",zIndex:1}}/>)}
@@ -2404,14 +2530,10 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
               {/* MA Goal */}
               <div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,fontWeight:700,color:"var(--text-highlight)",marginBottom:6}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,fontWeight:700,color:"var(--text-highlight)",marginBottom:8}}>
                   <span>MA Goal <TooltipBox id="t-bhs" text={`Basic Healthcare Sum (BHS): ${formatCurrency(currentBHS)}. MA cap — excess flows to SA (before 55) or RA (after 55).`}/></span>
-                  <span style={{color:"#60a5fa",fontSize:11,fontWeight:700,fontFamily:"monospace"}}>{Math.round(Number(bhsPercentText))}%</span>
-                </div>
-                {/* BHS% label positioned above the MAX tick (right edge) */}
-                <div style={{position:"relative",height:14,marginBottom:2}}>
-                  <span style={{position:"absolute",right:0,fontSize:11,fontWeight:700,color:currentMa>=currentBHS?"#34d399":"#60a5fa",fontFamily:"monospace",whiteSpace:"nowrap"}}>
-                    {Math.round(Math.min(100,(currentMa/currentBHS)*100))}%{currentMa>=currentBHS?" ✓":""}
+                  <span style={{color:currentMa>=currentBHS?"#34d399":"#60a5fa",fontSize:11,fontWeight:700,fontFamily:"monospace"}}>
+                    {Math.round(Number(bhsPercentText))}%{currentMa>=currentBHS?" ✓":""}
                   </span>
                 </div>
                 <div style={{width:"100%",background:"var(--bg-input)",borderRadius:999,height:10,overflow:"hidden",position:"relative"}}>
@@ -2447,7 +2569,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
             {isSelfEmployed && (
               <div style={{background:"rgba(251,146,60,0.08)",border:"1px solid rgba(251,146,60,0.25)",borderRadius:10,padding:10,marginBottom:12,fontSize:10,color:"#fdba74",lineHeight:1.5}}>
-                <strong style={{color:"#fb923c"}}>Self-Employed Member (SEP):</strong> No mandatory OA/SA contributions. Use the Inflows panel below to enter your VC3A (up to $37,740/yr). Funds are <strong style={{color:"#fdba74"}}>proportionally allocated</strong> across OA/SA/MA using your age-based CPF rates. MA excess above BHS spills to SA/RA. MA contributions required if net trade income &gt; $6,000.
+                <strong style={{color:"#fb923c"}}>Self-Employed Member (SEP):</strong> No mandatory OA/SA contributions. Use the Inflows panel below to enter your VC3A (up to $37,740/yr). Funds are <strong style={{color:"#fdba74"}}>proportionally allocated</strong> across OA/SA/MA using your age-based CPF rates. MA excess above BHS spills to SA/RA (capped at FRS); further excess flows to OA. MA contributions required if net trade income &gt; $6,000.
               </div>
             )}
             {/* Salary fields — always visible for employed members */}
@@ -2520,7 +2642,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             {openSections.has("topups") && <div style={{padding:"0 16px 16px"}}>
             {isSelfEmployed && (
               <div style={{background:"rgba(251,146,60,0.08)",border:"1px solid rgba(251,146,60,0.2)",borderRadius:8,padding:"8px 10px",marginBottom:10,fontSize:10,color:"#fdba74",lineHeight:1.5}}>
-                <strong style={{color:"#fb923c"}}>SEP VC3A Flow:</strong> Proportionally split across OA/SA/MA using age-based CPF rates. MA excess above BHS spills to SA/RA. Max $37,740/yr.
+                <strong style={{color:"#fb923c"}}>SEP VC3A Flow:</strong> Proportionally split across OA/SA/MA using age-based CPF rates. MA excess above BHS spills to SA/RA up to FRS; further excess flows to OA. Max $37,740/yr.
               </div>
             )}
             {isVcOverLimit && <div style={{background:"rgba(249,115,22,0.15)",color:"#fdba74",fontSize:10,fontWeight:700,padding:10,borderRadius:8,marginBottom:10,display:"flex",gap:6}}>
@@ -2598,10 +2720,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <div>
                 <label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>
                   MRSS Grant (to RA)
-                  <TooltipBox id="t-mrss" text="Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $600/yr for Singapore Citizens aged 55–70 with RA below the current FRS. Credited to RA."/>
+                  <TooltipBox id="t-mrss" text="Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $2,000/yr (lifetime cap $20,000) for Singapore Citizens aged 55 and above with RA below the Basic Retirement Sum (BRS). No age cap of 70. Credited to RA."/>
                 </label>
-                <input type="number" name="mrssGrant" value={inputs.mrssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MRSS annual grant" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
-                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Max $600/yr · age 55–70 · RA below FRS</p>
+                <input type="number" name="mrssGrant" value={inputs.mrssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MRSS annual grant" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.mrssGrant?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                {inputErrors.mrssGrant && <p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.mrssGrant}</p>}
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Max $2,000/yr · $20,000 lifetime cap · age 55+ · RA below BRS</p>
               </div>
 
               {/* MMSS */}
@@ -2610,7 +2733,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   MMSS Grant (to MA)
                   <TooltipBox id="t-mmss" text="Matched MediSave Scheme (from Jan 2026): Govt matches voluntary MA cash top-ups dollar-for-dollar up to $1,000/yr for Singapore Citizens aged 55–70 with MA below half of BHS (~$39,500 in 2026) and monthly income ≤ $4,000. No tax relief on top-ups attracting MMSS match."/>
                 </label>
-                <input type="number" name="mmssGrant" value={inputs.mmssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MMSS annual grant to MA" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="number" name="mmssGrant" value={inputs.mmssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MMSS annual grant to MA" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.mmssGrant?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                {inputErrors.mmssGrant && <p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.mmssGrant}</p>}
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Max $1,000/yr · age 55–70 · MA below ½ BHS · income ≤ $4,000/mo</p>
               </div>
 
@@ -2620,7 +2744,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   WIS – Workfare Supplement
                   <TooltipBox id="t-wis" text="Workfare Income Supplement: Employees — 60% to CPF (OA/SA/MA age-band split) + 40% cash. SEPs — 90% to MA (BHS-capped) + 10% cash. Only the CPF portion is modelled."/>
                 </label>
-                <input type="number" name="wisAmount" value={inputs.wisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual WIS workfare supplement" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="number" name="wisAmount" value={inputs.wisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual WIS workfare supplement" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.wisAmount?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                {inputErrors.wisAmount && <p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.wisAmount}</p>}
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>{isSelfEmployed?"SEP: 90% → MA (BHS-capped), 10% cash (not modelled)":"Employee: 60% → CPF (age-band split), 40% cash (not modelled)"}</p>
               </div>
 
@@ -2655,10 +2780,57 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <div style={{paddingTop:8,borderTop:"1px solid rgba(244,63,94,0.15)"}}>
                 <label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>
                   OA Lump-Sum Withdrawal (from age 55)
-                  <TooltipBox id="t-oawithdraw" text="From age 55, after SA closes, you may withdraw OA savings above the BRS ($110,200). Withdrawn amount is removed from OA permanently and does not earn CPF interest thereafter."/>
+                  <TooltipBox id="t-oawithdraw" text="From age 55, after SA closes, you may withdraw OA savings above the BRS ($110,200). Withdrawn from OA permanently. This is for general OA cash-out — for Property Pledge withdrawals use the separate Pledge Withdrawal field below."/>
                 </label>
                 <input type="number" name="oaWithdrawalAt55" value={inputs.oaWithdrawalAt55} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="OA lump sum withdrawal from age 55" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
-                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Applied once at age 55 · OA must remain ≥ $0</p>
+                <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>From age 55 · partial or full withdrawal · OA balance reduces accordingly</p>
+              </div>
+
+              {/* Property Pledge toggle + Pledge RA Withdrawal — in Outflows */}
+              <div style={{paddingTop:8,borderTop:"1px solid rgba(244,63,94,0.15)"}}>
+                {/* Toggle row */}
+                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:8}}>
+                  <div style={{flex:1}}>
+                    <label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>
+                      Property Pledge (BRS only)
+                      <TooltipBox id="t-pledge" text="A CPF Property Pledge lets you use your property as security so only BRS ($110,200) needs to remain in RA at 55. The pledged sum (RA above BRS) stays in RA earning 4% until you apply to CPF to withdraw it as cash directly to your bank account — it does NOT move to OA. Enter the amount and age below to model the withdrawal. Payouts will be significantly lower (~$730–$790/mo vs ~$1,350–$1,450/mo at FRS). Property must have lease to age 95. HDB 2-room Flexi and Lease Buyback Scheme properties ineligible."/>
+                    </label>
+                    <p style={{fontSize:9,color:"var(--text-muted)",marginTop:2}}>Only BRS needed in RA at 55 · pledged sum stays in RA at 4% · withdraw as cash via CPF application · lower payout</p>
+                  </div>
+                  <button onClick={()=>setInputs(p=>({...p,usePropertyPledge:!p.usePropertyPledge}))} aria-pressed={!!inputs.usePropertyPledge} style={{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:700,border:"none",cursor:"pointer",background:inputs.usePropertyPledge?"#10b981":"var(--border-strong)",color:inputs.usePropertyPledge?"#020617":"var(--text-muted)",flexShrink:0,marginTop:2}}>{inputs.usePropertyPledge?"ON":"OFF"}</button>
+                </div>
+
+                {/* Pledge RA Withdrawal fields — only shown when pledge is ON */}
+                {inputs.usePropertyPledge && (() => {
+                  // Estimate available pledged amount at current age (RA − BRS)
+                  const ca = Number(inputs.currentAge) || 35;
+                  const cy = Number(inputs.currentYear) || 2026;
+                  const yearsTo55 = Math.max(0, 55 - ca);
+                  const projBRS55 = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (cy + yearsTo55) - 2026)));
+                  const projFRS55 = projBRS55 * 2;
+                  const approxPledgedAmount = Math.max(0, projFRS55 - projBRS55);
+                  return (
+                    <div style={{background:"rgba(244,63,94,0.04)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:10,padding:"10px 12px"}}>
+                      <p style={{fontSize:9,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4,letterSpacing:"0.05em"}}>🏠 Pledge RA Withdrawal</p>
+                      <p style={{fontSize:9,color:"var(--text-muted)",marginBottom:8,lineHeight:1.5}}>
+                        Pledged funds sit in RA (4%) until you apply to CPF to withdraw. Only RA above BRS can be withdrawn as cash. Estimated pledgeable amount at age 55: <strong style={{color:"var(--text-bright)"}}>{formatCurrency(approxPledgedAmount)}</strong> (FRS − BRS at age 55 in {cy + yearsTo55}).
+                      </p>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        <div>
+                          <label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>Withdrawal Amount ($)</label>
+                          <input type="number" name="pledgeWithdrawalAmount" value={inputs.pledgeWithdrawalAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Pledge RA withdrawal amount" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.2)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                          <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Max = RA − BRS at withdrawal age</p>
+                        </div>
+                        <div>
+                          <label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>Withdrawal Age</label>
+                          <input type="number" name="pledgeWithdrawalAge" value={inputs.pledgeWithdrawalAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Pledge RA withdrawal age" min="55" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:`1px solid ${inputErrors.pledgeWithdrawalAge?"#f87171":"rgba(244,63,94,0.2)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                          {inputErrors.pledgeWithdrawalAge && <p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.pledgeWithdrawalAge}</p>}
+                          <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Min age 55 · applied once</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               <div><label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>Medical Inflation Rate (%)</label>
                 <input type="number" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" aria-label="Medical inflation rate" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.3)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
@@ -2696,19 +2868,6 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Pre-55 only · capped at OA balance · irreversible · not in Annual Limit</p>
                 </div>
               )}
-              {/* Property Pledge → RA to OA transfer at 55 */}
-              <div style={{paddingTop:8,borderTop:"1px solid rgba(251,191,36,0.15)"}}>
-                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
-                  <div style={{flex:1}}>
-                    <label style={{display:"block",fontSize:10,fontWeight:700,color:"#fbbf24",textTransform:"uppercase",marginBottom:4}}>
-                      Property Pledge – RA → OA (from age 55)
-                      <TooltipBox id="t-pledge" text="A CPF Property Pledge lets you use your property as security so only BRS ($110,200) needs to remain in RA at 55. The excess SA/RA above BRS moves to OA — it stays inside CPF and earns 2.5% interest. To withdraw as cash, use the OA Lump-Sum Withdrawal field in the Outflows panel. Monthly CPF LIFE payouts will be significantly lower (~$730–$790/mo vs ~$1,350–$1,450/mo at FRS). Property must have a lease lasting to age 95. HDB 2-room Flexi and Lease Buyback Scheme properties are ineligible."/>
-                    </label>
-                    <p style={{fontSize:9,color:"var(--text-muted)",marginTop:2}}>RA above BRS stays in OA (inside CPF, earns 2.5%) · withdraw via OA Withdrawal field · lower payout</p>
-                  </div>
-                  <button onClick={()=>setInputs(p=>({...p,usePropertyPledge:!p.usePropertyPledge}))} aria-pressed={!!inputs.usePropertyPledge} style={{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:700,border:"none",cursor:"pointer",background:inputs.usePropertyPledge?"#10b981":"var(--border-strong)",color:inputs.usePropertyPledge?"#020617":"var(--text-muted)",flexShrink:0,marginTop:2}}>{inputs.usePropertyPledge?"ON":"OFF"}</button>
-                </div>
-              </div>
             </div>
           </div>}
           </div>
@@ -2818,11 +2977,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           </div>{/* /cpf-sidebar-inner */}
         </aside>
         {/* MAIN CONTENT */}
-        <section className="cpf-main-wrap" style={{display:"flex",flexDirection:"column",gap:20,minWidth:0,boxSizing:"border-box",overflowX:"hidden",width:"100%"}}>
-          {/* Tabs + Persistent KPI Strip */}
-          <div style={{display:"flex",flexDirection:"column",gap:0,background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:16,overflow:"hidden"}}>
+        <section className="cpf-main-wrap" style={{minWidth:0,boxSizing:"border-box",width:"100%"}}>
+          {/* Tabs + Persistent KPI Strip — sticky within the main scroll panel */}
+          <div style={{display:"flex",flexDirection:"column",gap:0,background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",borderRadius:"16px 16px 0 0",zIndex:30,boxShadow:"0 4px 4px rgba(0,0,0,0.3)"}}>
             {/* Tab navigation */}
-            <div className="cpf-tabs" role="tablist" aria-label="Dashboard sections" style={{display:"flex",flexWrap:"nowrap",padding:"6px 6px 0",gap:2,borderBottom:"1px solid var(--border-subtle)",overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
+            <div className="cpf-tabs" role="tablist" aria-label="Dashboard sections" style={{display:"flex",flexWrap:"nowrap",justifyContent:"center",padding:"6px 6px 0",gap:2,borderBottom:"1px solid var(--border-subtle)",overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
               {[["welcome","Welcome",Lightbulb,"#64748b"],["summary","Summary",PieChart,"#10b981"],["accumulation","Growth",BarChart3,"#3b82f6"],["life","LIFE",ShieldCheck,"#a855f7"],["compare","Compare",Split,"#f59e0b"],["table","Data Table",TableIcon,"#94a3b8"],["notes","Docs",BookOpen,"#60a5fa"]].map(([id,label,Icon,accent])=>(
                 <button key={id} role="tab" aria-selected={activeTab===id} aria-controls={`panel-${id}`} onClick={()=>setActiveTab(id)} style={{display:"flex",alignItems:"center",gap:5,padding:"9px 14px",borderRadius:"10px 10px 0 0",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:activeTab===id?"var(--bg-base)":"transparent",color:activeTab===id?accent:"var(--text-muted)",borderBottom:activeTab===id?`2px solid ${accent}`:"2px solid transparent",transition:"all 0.15s",whiteSpace:"nowrap",marginBottom:-1}}>
                   <Icon style={{width:12,height:12}}/>{label}
@@ -2831,7 +2990,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             </div>
             {/* Persistent KPI strip */}
             {activeTab!=="welcome" && activeTab!=="notes" && (
-              <div className="kpi-strip" style={{display:"flex",flexWrap:"nowrap",gap:0,background:"var(--bg-muted)",borderBottom:"1px solid var(--border-subtle)",overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
+              <div className="kpi-strip" style={{display:"flex",flexWrap:"nowrap",justifyContent:"center",gap:0,background:"var(--bg-muted)",borderBottom:"1px solid var(--border-subtle)",overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
                 {(()=>{
                   const pa = Number(inputs.payoutAge)||65;
                   // Use displayProjection (already inflation-adjusted when isRealDollars=true)
@@ -2858,6 +3017,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
             )}
           </div>
+          {/* Tab content panels — scrollable row 2 of main wrap grid */}
+          <div className="cpf-tab-content">
           {/* ── WELCOME TAB ── */}
           {activeTab==="welcome" && (
             <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",padding:28,borderRadius:24}}>
@@ -2891,7 +3052,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <div><h4 style={{fontSize:18,fontWeight:900,color:"#eff6ff",marginBottom:2}}>Setting Up Your Profile</h4><p style={{fontSize:12,color:"#93c5fd"}}>Step 1 — The Input Engine (left panel)</p></div>
                   </div>
                   <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:16}}>
-                    {[["1","Enter your CPF balances & gender","Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). The progress bars compare balances against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.","#3b82f6"],["2","Use Auto-Calc for contributions","OW, AW, and Salary Growth % are always visible in the Mandatory Contribs panel. Click ⚡ Auto-Calc to fill in annual OA/SA/MA contributions using the correct age-band rates (OW ceiling $8,000/mo, AW ceiling $102,000/yr). SEP members use the Inflows (VC3A) panel instead.","#10b981"],["3","Add voluntary top-ups & new strategies","Use the top-ups panel for RSTU top-ups, gov grants, MRSS grants (up to $600/yr for eligible members 55–70), and the annual OA→SA transfer (pre-55 only, earns 4% vs 2.5%). The Advanced panel adds OA lump-sum withdrawal at 55 and property pledge (BRS-only RA target).","#a855f7"],["4","Review the Inflows panel limit","The Inflows panel tracks the $37,740 CPF Annual Limit for VC contributions. It turns orange if your combined VC3A/RSTU inputs exceed your remaining allowance.","#fbbf24"],["5","Set your life-phase timelines","Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model real-world cash flow transitions accurately.","#fb923c"]].map(([num,title,desc,color])=>(
+                    {[["1","Enter your CPF balances & gender","Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). The progress bars compare balances against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.","#3b82f6"],["2","Use Auto-Calc for contributions","OW, AW, and Salary Growth % are always visible in the Mandatory Contribs panel. Click ⚡ Auto-Calc to fill in annual OA/SA/MA contributions using the correct age-band rates (OW ceiling $8,000/mo, AW ceiling $102,000/yr). SEP members use the Inflows (VC3A) panel instead.","#10b981"],["3","Add voluntary top-ups & new strategies","Use the top-ups panel for RSTU top-ups, gov grants, MRSS grants (up to $2,000/yr · RA below BRS), and the annual OA→SA transfer (pre-55 only, earns 4% vs 2.5%). The Advanced panel adds OA lump-sum withdrawal at 55 and property pledge (BRS-only RA target).","#a855f7"],["4","Review the Inflows panel limit","The Inflows panel tracks the $37,740 CPF Annual Limit for VC contributions. It turns orange if your combined VC3A/RSTU inputs exceed your remaining allowance.","#fbbf24"],["5","Set your life-phase timelines","Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model real-world cash flow transitions accurately.","#fb923c"]].map(([num,title,desc,color])=>(
                       <div key={num} style={{display:"flex",gap:14}}>
                         <div style={{width:24,height:24,borderRadius:"50%",background:`${color}22`,color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{num}</div>
                         <div><h5 style={{fontSize:13,fontWeight:700,color:"var(--text-bright)",marginBottom:4}}>{title}</h5><p style={{fontSize:12,color:"var(--text-muted)",lineHeight:1.5}}>{desc}</p></div>
@@ -2925,7 +3086,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   </div>
                   <div style={{padding:"20px 24px"}}>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10,marginBottom:20}}>
-                      {[["Share Link",Link,"Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."],["PDF Report",Download,"Print-ready report with member profile (gender, property pledge, OA withdrawal, OA→SA transfer), projections, CPF LIFE comparison, milestones, and sensitivity analysis."],["SEP Mode",Briefcase,"Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr split proportionally across OA/SA/MA. BHS and ERS caps enforced."],["Monte Carlo",Activity,"200 simulations with ±1% rate variance. Shows probability of meeting FRS at payout age."],["Gender Toggle",Users,"Male/Female selection affects CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). Both values shown side-by-side in LIFE plan cards."],["OA→SA Transfer",ArrowRightLeft,"Annual transfer from OA (2.5%) to SA (4%) before age 55. Irreversible but powerful — compounding at the higher rate for decades."],["OA Withdrawal at 55",LogOut,"Lump-sum withdrawal from OA above BRS at age 55, after SA closure. Applied once in the projection."],["Property Pledge",Target,"Pledge property — only BRS needed in RA at 55 instead of FRS. Lower RA target means less locked up, but also lower monthly payouts."],["MRSS Grant",Gift,"Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $600/yr for Singapore Citizens 55–70 with RA below FRS."],["What-If Explorer",SlidersHorizontal,"Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome."]].map(([title,Icon,desc])=>(
+                      {[["Share Link",Link,"Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."],["PDF Report",Download,"Print-ready report with member profile (gender, property pledge, OA withdrawal, OA→SA transfer), projections, CPF LIFE comparison, milestones, and sensitivity analysis."],["SEP Mode",Briefcase,"Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr split proportionally across OA/SA/MA. BHS and ERS caps enforced."],["Monte Carlo",Activity,"200 simulations with ±1% rate variance. Shows probability of meeting FRS at payout age."],["Gender Toggle",Users,"Male/Female selection affects CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). Both values shown side-by-side in LIFE plan cards."],["OA→SA Transfer",ArrowRightLeft,"Annual transfer from OA (2.5%) to SA (4%) before age 55. Irreversible but powerful — compounding at the higher rate for decades."],["OA Withdrawal at 55",LogOut,"Cash withdrawal from OA above BRS, available from age 55. Can be partial. Enter the amount you plan to withdraw — OA balance reduces accordingly."],["Property Pledge",Target,"Pledge property — only BRS needed in RA at 55 instead of FRS. Lower RA target means less locked up, but also lower monthly payouts."],["MRSS Grant",Gift,"Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $2,000/yr ($20,000 lifetime cap) for Singapore Citizens aged 55+ with RA below BRS. No age cap of 70."],["What-If Explorer",SlidersHorizontal,"Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome."]].map(([title,Icon,desc])=>(
                         <div key={title} style={{background:"var(--bg-base)",padding:"14px",borderRadius:10,border:"1px solid var(--border-subtle)"}}>
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                             <Icon style={{width:14,height:14,color:"#3b82f6"}}/>
@@ -2946,6 +3107,28 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           {/* ── SUMMARY TAB ── */}
           {activeTab==="summary" && (
             <div style={{display:"flex",flexDirection:"column",gap:20}}>
+              {/* Summary tab intro */}
+              <div style={{padding:"14px 18px",borderRadius:14,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
+                <p style={{fontWeight:700,color:"var(--text-highlight)",marginBottom:8,fontSize:12}}>📋 Summary Tab — What You're Looking At</p>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
+                  {[
+                    ["💰 Projected Total CPF","Your total OA + MA + RA balance at your chosen payout age. This is the nest egg that funds CPF LIFE payouts."],
+                    ["📊 Account Balances","Breakdown of OA, MA, SA, and RA at payout age. SA shows 'Merged into RA' for members aged 55+."],
+                    ["💵 CPF LIFE Starting Payouts","Estimated monthly payout under each LIFE plan (Standard, Escalating, Basic) based on your RA at payout age."],
+                    ["📈 Key Statistics Row","Five KPIs: total contributions made, total outflows, net worth at 65, net worth at 95, and estimated annual RSTU tax savings."],
+                    ["📅 Contribution Timeline","Gantt chart showing when contributions, housing outflows, LIFE payouts, and each plan phase are active across your lifetime."],
+                    ["🎯 FRS Tracker","Projected RA at age 55 vs BRS/FRS/ERS targets. Shows if you're on track and how much more is needed."],
+                    ["🥧 Net Worth Breakdown","Doughnut chart of OA + MA + RA + Property at payout age. Shows how your wealth is distributed across buckets."],
+                    ["🔔 Milestone Alerts","Automatic alerts for key events like BRS/FRS/ERS achievement, SA closure, BHS reached, and payout start."],
+                    ["🔧 What-If Explorer","Drag sliders to test how changing payout age, RSTU top-ups, housing outflow, or salary affects your total CPF — without saving changes."],
+                  ].map(([title,desc])=>(
+                    <div key={title} style={{padding:"8px 10px",borderRadius:8,background:"var(--bg-muted)",border:"1px solid var(--border-subtle)"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"var(--text-highlight)",marginBottom:3}}>{title}</div>
+                      <div style={{fontSize:9,color:"var(--text-muted)",lineHeight:1.5}}>{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
               {isRealDollars ? (
                 <div style={{background:"rgba(59,130,246,0.15)",border:"1px solid rgba(59,130,246,0.3)",padding:10,textAlign:"center",fontSize:12,fontWeight:700,color:"#93c5fd",borderRadius:10}}>Displaying Real Dollars (Adjusted for {inputs.inflationRate}% Inflation)</div>
               ) : (
@@ -2966,7 +3149,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   <div style={{background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
                     <Target style={{width:16,height:16,color:"#fbbf24",flexShrink:0,marginTop:2}}/>
                     <p style={{fontSize:11,color:"#fbbf24",lineHeight:1.5,margin:0}}>
-                      <strong>Property Pledge Active:</strong> At age 55, only BRS (~{formatCurrency(pledgeBRS)}) is retained in RA. Excess SA/RA above BRS moves to OA — still inside CPF, earning 2.5% interest. To withdraw as cash, use the OA Lump-Sum Withdrawal field in the Outflows panel. This lowers monthly CPF LIFE payouts but keeps more funds liquid in OA. See the Accumulation chart for the OA spike at age 55.
+                      <strong>Property Pledge Active:</strong> At age 55, only BRS (~{formatCurrency(pledgeBRS)}) is retained in RA. RA savings above BRS remain in RA (still earning 4%) until you apply to CPF to withdraw them as cash. Use the <strong>Pledge RA Withdrawal</strong> fields in the Outflows panel to enter the amount and age at which you plan to withdraw pledged funds as cash. These funds leave the RA directly — not via OA. See the Accumulation chart for the OA spike at age 55.
                     </p>
                   </div>
                 );
@@ -3047,6 +3230,14 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   {currentSaRa < currentFRS && eligibleRSTU < (Number(inputs.vcSaTopup)||0) && <p style={{fontSize:9,color:"#d97706",marginTop:4}}>Relief capped at FRS headroom ({formatCurrency(Math.max(0,currentFRS-currentSaRa))})</p>}
                 </div>
               </div>
+              {/* Stats Row explanation */}
+              <div style={{padding:"10px 14px",borderRadius:10,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",fontSize:10,color:"var(--text-muted)",lineHeight:1.6}}>
+                <strong style={{color:"var(--text-highlight)"}}>Key Statistics explained: </strong>
+                <strong style={{color:"#34d399"}}>Cumulative Top-ups</strong> = all contributions + inflows made from your current age to payout age. &nbsp;
+                <strong style={{color:"#f472b6"}}>Cumulative Outflow</strong> = all housing and medical deductions over the same period. &nbsp;
+                <strong style={{color:"#60a5fa"}}>Net Worth @ 65 / 95</strong> = OA + MA + RA + Property at that age under the highlighted LIFE plan. &nbsp;
+                <strong style={{color:"#fbbf24"}}>Est. Tax Savings (RSTU)</strong> = annual tax relief estimate from your RSTU cash top-up, capped at $8,000 and FRS headroom.
+              </div>
               {/* ── Contribution Timeline Gantt ── */}
               {(()=>{
                 const ca=Number(inputs.currentAge)||35;
@@ -3065,8 +3256,13 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   {label:"Contributions Active",from:ca,to:contribStop,color:"#3b82f6",bg:"rgba(59,130,246,0.15)",border:"rgba(59,130,246,0.5)"},
                   {label:"Housing Outflow (OA)",from:ca,to:housingStop,color:"#f472b6",bg:"rgba(244,114,182,0.12)",border:"rgba(244,114,182,0.5)"},
                   {label:"CPF LIFE Payouts",from:lifeStart,to:END,color:"#10b981",bg:"rgba(16,185,129,0.12)",border:"rgba(16,185,129,0.5)"},
-                  {label:"Basic Plan — RA self-funds",from:lifeStart,to:Math.min(pool90,END),color:"#f59e0b",bg:"rgba(245,158,11,0.12)",border:"rgba(245,158,11,0.5)"},
-                  {label:"Basic Plan — Pool Phase (90+)",from:pool90,to:END,color:"#fb923c",bg:"rgba(251,146,60,0.15)",border:"rgba(251,146,60,0.5)"},
+                  // Standard Plan: level payouts from payout age to 95
+                  {label:"Standard — Level Payouts",from:lifeStart,to:END,color:"#6366f1",bg:"rgba(99,102,241,0.1)",border:"rgba(99,102,241,0.4)"},
+                  // Escalating Plan: payouts grow 2% p.a. from payout age to 95
+                  {label:"Escalating — Growing Payouts",from:lifeStart,to:END,color:"#22d3ee",bg:"rgba(34,211,238,0.08)",border:"rgba(34,211,238,0.4)"},
+                  // Basic Plan: RA self-funds until 90, then pool phase
+                  {label:"Basic — RA Self-Funds (to 90)",from:lifeStart,to:Math.min(pool90,END),color:"#f59e0b",bg:"rgba(245,158,11,0.12)",border:"rgba(245,158,11,0.5)"},
+                  {label:"Basic — Pool Phase (90+)",from:pool90,to:END,color:"#fb923c",bg:"rgba(251,146,60,0.15)",border:"rgba(251,146,60,0.5)"},
                 ];
                 const markers=[ca,contribStop,housingStop,lifeStart,pool90,END].filter((v,i,a)=>v>=ca&&v<=END&&a.indexOf(v)===i).sort((a,b)=>a-b);
                 return (
@@ -3338,14 +3534,35 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               {showMonteCarlo && monteCarloData?.probSufficiency!=null && (() => {
                 const prob=monteCarloData.probSufficiency;
                 const c=prob>=80?"#34d399":prob>=50?"#fbbf24":"#f87171";
-                return (<div style={{marginBottom:16,padding:16,borderRadius:14,border:`1px solid ${c}33`,background:`${c}11`,display:"flex",alignItems:"center",gap:16}}>
-                  <Percent style={{width:20,height:20,color:c,flexShrink:0}}/>
-                  <div style={{flex:1}}><p style={{fontSize:11,color:"var(--text-muted)",marginBottom:2}}>Probability of Sufficiency</p><p style={{fontSize:10,color:"var(--text-muted)"}}>% of 200 runs where CPF at age {inputs.payoutAge} ≥ projected FRS ({formatCurrency(monteCarloData.frsAtPayout)})</p></div>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:100,height:6,background:"var(--bg-input)",borderRadius:999,overflow:"hidden"}}><div style={{height:"100%",borderRadius:999,background:c,width:`${prob}%`}}/></div>
-                    <span style={{fontSize:28,fontWeight:900,color:c,fontFamily:"monospace"}}>{prob}%</span>
+                return (<>
+                  <div style={{marginBottom:12,padding:16,borderRadius:14,border:`1px solid ${c}33`,background:`${c}11`,display:"flex",alignItems:"center",gap:16}}>
+                    <Percent style={{width:20,height:20,color:c,flexShrink:0}}/>
+                    <div style={{flex:1}}><p style={{fontSize:11,color:"var(--text-muted)",marginBottom:2}}>Probability of Sufficiency</p><p style={{fontSize:10,color:"var(--text-muted)"}}>% of 200 runs where CPF at age {inputs.payoutAge} ≥ projected FRS ({formatCurrency(monteCarloData.frsAtPayout)})</p></div>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:100,height:6,background:"var(--bg-input)",borderRadius:999,overflow:"hidden"}}><div style={{height:"100%",borderRadius:999,background:c,width:`${prob}%`}}/></div>
+                      <span style={{fontSize:28,fontWeight:900,color:c,fontFamily:"monospace"}}>{prob}%</span>
+                    </div>
                   </div>
-                </div>);
+                  {/* Plain-English Monte Carlo explanation */}
+                  <div style={{marginBottom:16,padding:14,borderRadius:12,background:"rgba(139,92,246,0.06)",border:"1px solid rgba(139,92,246,0.2)",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
+                    <p style={{fontWeight:700,color:"#a78bfa",marginBottom:8,fontSize:12}}>🎲 What is Monte Carlo simulation?</p>
+                    <p style={{marginBottom:8}}>A Monte Carlo simulation runs your retirement projection <strong style={{color:"var(--text-bright)"}}>200 times</strong>, each time with slightly different CPF interest rates (varied by ±1% randomly). This mimics real-world uncertainty — interest rates can go up or down. The result is a <strong style={{color:"var(--text-bright)"}}>range of possible outcomes</strong>, not just one single prediction.</p>
+                    <p style={{fontWeight:700,color:"#a78bfa",marginBottom:6}}>How to read the chart bands:</p>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                      {[
+                        ["Purple band (shaded)","The full range between the worst 10% of outcomes (P10) and best 10% of outcomes (P90). Wider = more uncertainty.","rgba(124,58,237,0.15)"],
+                        ["Dashed purple line (P50)","The median outcome — half the simulations finished above this line, half below. Think of it as the most likely single scenario.","rgba(167,139,250,0.15)"],
+                        ["Probability of Sufficiency","The % of all 200 runs where your CPF at payout age was enough to meet the FRS target. 80%+ is strong; below 50% suggests risk.","rgba(52,211,153,0.1)"],
+                      ].map(([title,desc,bg])=>(
+                        <div key={title} style={{padding:"8px 10px",borderRadius:8,background:bg,border:"1px solid rgba(139,92,246,0.2)"}}>
+                          <div style={{fontSize:9,fontWeight:800,color:"#a78bfa",marginBottom:3}}>{title}</div>
+                          <div style={{fontSize:9,color:"var(--text-muted)",lineHeight:1.5}}>{desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <p style={{fontSize:10,color:"var(--text-subtle)"}}>💡 <strong>What to do with this:</strong> If the probability is low, consider increasing your RSTU top-ups or deferring your payout age. The What-If Explorer (Summary tab) lets you test these adjustments instantly.</p>
+                  </div>
+                </>);
               })()}
               <div style={{height:380}}>
                 <ResponsiveContainer width="99%" height="100%">
@@ -3355,8 +3572,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     return base.map(row=>{const mc=monteCarloData.rows.find(m=>m.age===row.age);return mc?{...row,mcP10:mc.p10,mcP90:mc.p90,mcP50:mc.p50}:row;});
                   })()}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
-                    <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
-                    <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
+                    <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}} label={{value:"Age",position:"insideBottomRight",offset:-5,fill:"var(--chart-text)",fontSize:9}}/>
+                    <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}} label={{value:"CPF Balance ($)",angle:-90,position:"insideLeft",offset:14,fill:"var(--chart-text)",fontSize:9,style:{textAnchor:"middle"}}}/>
                     <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={(v,n)=>{if(n==="MC Band") return null; return [formatCurrency(v),n];}} wrapperStyle={{pointerEvents:"none"}}/>
                     <Legend verticalAlign="top" height={28} iconSize={8} wrapperStyle={{fontSize:10,fontWeight:600}}/>
                     {showMonteCarlo&&monteCarloData&&<><Area type="monotone" dataKey="mcP90" stroke="none" fill="#7c3aed" fillOpacity={0.12} name="MC Band" legendType="none"/><Area type="monotone" dataKey="mcP10" stroke="none" fill="var(--bg-base)" fillOpacity={1} name="" legendType="none"/><Line type="monotone" dataKey="mcP50" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="MC Median (P50)"/></>}
@@ -3365,14 +3582,34 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       return <ReferenceLine key={idx} x={m.age} stroke={sc} strokeWidth={1.5} strokeDasharray="3 3" label={{position:"insideTopRight",value:`Age ${m.age}`,fill:sc,fontSize:8,fontWeight:"bold"}}/>;
                     })}
                     <Area type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" fill="#1d4ed8" fillOpacity={0.85} name="OA"/>
-                    <Area type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="SA/RA"/>
+                    <Area type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="SA (closed at 55)"/>
                     <Area type="monotone" dataKey="ma" stackId="1" stroke="#059669" fill="#059669" fillOpacity={0.85} name="MA"/>
                     <Area type="monotone" dataKey="ra" stackId="1" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.85} name="RA"/>
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-              <div style={{marginTop:16,padding:14,borderRadius:12,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",fontSize:11,color:"var(--text-muted)",lineHeight:1.6}}>
-                <Info style={{width:12,height:12,display:"inline",marginRight:8,color:"#34d399"}}/> Visualizes CPF bucket growth prior to the LIFE pool transition at age {inputs.payoutAge}. Notice how OA may drain if Housing Outflows exceed inflows.
+              <div style={{marginTop:16,padding:16,borderRadius:12,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
+                <p style={{fontWeight:700,color:"var(--text-highlight)",marginBottom:8,fontSize:12}}>📊 How to read this chart (Age {inputs.currentAge} → {inputs.payoutAge})</p>
+                <p style={{marginBottom:8}}>This stacked area chart shows how your CPF savings accumulate year by year from your current age ({inputs.currentAge}) until your chosen payout age ({inputs.payoutAge}). Each coloured band represents one account:</p>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8,marginBottom:10}}>
+                  {[
+                    ["OA (Ordinary Account)","#1d4ed8","2.5% p.a. Used for housing, investments. Contributions stop at Contrib Stop Age."],
+                    ["SA (Special Account)","#b45309","4.0% p.a. Locked for retirement — cannot be used for housing. Closed permanently at age 55 and merged into RA."],
+                    ["MA (MediSave)","#059669","4.0% p.a. Used for healthcare. Capped at BHS ($79,000). Excess above BHS flows to SA/RA."],
+                    ["RA (Retirement Account)","#7c3aed","4.0% p.a. Created at age 55 from SA. Funds the CPF LIFE pool at payout age."],
+                  ].map(([name,col,desc])=>(
+                    <div key={name} style={{padding:"8px 10px",borderRadius:8,background:"var(--bg-muted)",border:`1px solid ${col}44`}}>
+                      <div style={{fontSize:9,fontWeight:800,color:col,marginBottom:3}}>{name}</div>
+                      <div style={{fontSize:9,color:"var(--text-muted)",lineHeight:1.5}}>{desc}</div>
+                    </div>
+                  ))}
+                </div>
+                <p style={{marginBottom:6}}><strong style={{color:"var(--text-bright)"}}>Key transitions to watch for:</strong></p>
+                <ul style={{margin:0,paddingLeft:16,fontSize:10}}>
+                  <li><strong style={{color:"#b45309"}}>Age 55 — SA Closure:</strong> SA balance merges into RA. Only FRS (~${Math.round((RETIREMENT_SUMS_2026.FRS * Math.pow(1+ASSUMED_TARGET_GROWTH, Math.max(0,(Number(inputs.currentYear)||2026)+Math.max(0,55-(Number(inputs.currentAge)||35))-2026)))/1000)}k at age 55) goes to RA; any excess stays in OA.</li>
+                  <li><strong style={{color:"#1d4ed8"}}>Housing outflow:</strong> OA may shrink if Housing Loan deductions exceed contributions. This stops at Housing Stop Age ({inputs.housingStopAge}).</li>
+                  <li><strong style={{color:"#7c3aed"}}>Age {inputs.payoutAge} — LIFE pool:</strong> RA transfers into the CPF LIFE pool. Monthly payouts begin. The chart stops here; the LIFE tab shows payouts from age {inputs.payoutAge} to 95.</li>
+                </ul>
               </div>
             </div>
           )}
@@ -3381,6 +3618,26 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",padding:24,borderRadius:24,display:"flex",flexDirection:"column",gap:20}}>
               <div className="life-chart-header" style={{display:"flex",flexDirection:"column",gap:10}}>
                 <h3 style={{fontSize:18,fontWeight:800}}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
+                {/* LIFE tab intro */}
+                <div style={{padding:"12px 16px",borderRadius:12,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
+                  <p style={{fontWeight:700,color:"var(--text-highlight)",marginBottom:8,fontSize:12}}>📊 LIFE Tab — How to Read This Tab</p>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,marginBottom:8}}>
+                    {[
+                      ["📈 The Line Chart","Shows monthly payout, annual payout, bequest, or cumulative total yield from age "+inputs.payoutAge+" to 95 for all three LIFE plans simultaneously. Toggle view modes using the buttons above the chart."],
+                      ["Standard Plan (grey)","Level flat monthly payout for life. 100% of RA transferred as premium. Predictable income but no inflation protection."],
+                      ["Escalating Plan (green)","Monthly payout starts ~20% lower than Standard but grows at 2%/yr. Surpasses Standard eventually — see the crossover age below."],
+                      ["Basic Plan (amber)","RA is split: a % is premium (pool), the rest stays in your personal RA earning 4% and funds your own payouts until ~age 90. After 90, the pool takes over."],
+                      ["📐 Breakeven / Crossover","The age where one plan's cumulative total yield overtakes another. Switch to 'Total Yield' view to see the dotted reference lines on the chart."],
+                      ["📋 Sensitivity Table","Shows starting monthly payouts and all crossover ages for every payout age from 65 to 70. Green row = your current selection."],
+                    ].map(([title,desc])=>(
+                      <div key={title} style={{padding:"8px 10px",borderRadius:8,background:"var(--bg-muted)",border:"1px solid var(--border-subtle)"}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"var(--text-highlight)",marginBottom:3}}>{title}</div>
+                        <div style={{fontSize:9,color:"var(--text-muted)",lineHeight:1.5}}>{desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <p style={{fontSize:10,color:"var(--text-subtle)"}}>💡 <strong>Tip:</strong> Use the plan selector (Standard / Escalating / Basic) to highlight one plan's line. The other two are dimmed for clarity. Hover over the chart to see exact values at any age.</p>
+                </div>
                 <div style={{display:"flex",background:"var(--bg-input)",padding:4,borderRadius:10,gap:2,alignSelf:"flex-start"}}>
                   {["standard","escalating","basic"].map(plan=>(
                     <button key={plan} onClick={()=>setHighlightPlan(plan)} style={{padding:"6px 12px",borderRadius:8,fontSize:10,fontWeight:800,textTransform:"uppercase",border:"none",cursor:"pointer",background:highlightPlan===plan?"#10b981":"transparent",color:highlightPlan===plan?"#020617":"var(--text-muted)"}}>
@@ -3422,8 +3679,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 <ResponsiveContainer width="99%" height="100%">
                   <LineChart data={displayProjection.filter(d=>d.age>=inputs.payoutAge)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
-                    <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
-                    <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
+                    <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}} label={{value:"Age",position:"insideBottomRight",offset:-5,fill:"var(--chart-text)",fontSize:9}}/>
+                    <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}} label={{value:"Amount ($)",angle:-90,position:"insideLeft",offset:14,fill:"var(--chart-text)",fontSize:9,style:{textAnchor:"middle"}}}/>
                     <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={v=>formatCurrency(v)} wrapperStyle={{pointerEvents:"none"}}/>
                     <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{fontSize:9,fontWeight:600}}/>
                     {viewMode==="total"&&intersectionEscVsStd&&<ReferenceLine x={intersectionEscVsStd} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 4" label={{position:"insideTopLeft",value:`Break-Even Age ${intersectionEscVsStd}`,fill:"#f59e0b",fontSize:9,fontWeight:"bold"}}/>}
@@ -3477,7 +3734,12 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
               {/* Sensitivity Table */}
               <div style={{background:"var(--bg-base)",border:"1px solid var(--border-strong)",borderRadius:16,padding:20}}>
-                <h4 style={{fontSize:14,fontWeight:900,marginBottom:8,display:"flex",alignItems:"center",gap:8}}><Scale style={{width:14,height:14,color:"#60a5fa"}}/>Payout Age Sensitivity Table</h4>
+                <h4 style={{fontSize:14,fontWeight:900,marginBottom:4,display:"flex",alignItems:"center",gap:8}}><Scale style={{width:14,height:14,color:"#60a5fa"}}/>Payout Age Sensitivity Table</h4>
+                <p style={{fontSize:10,color:"var(--text-muted)",marginBottom:12,lineHeight:1.6}}>
+                  Each row shows what your starting monthly payout would be if you defer to that age, and the crossover ages between plans. Deferring by one year increases payouts by approximately 7% (compound). The green-highlighted row is your current payout age selection.
+                  <br/><strong style={{color:"var(--text-bright)"}}>Column guide: </strong>
+                  <span style={{color:"#94a3b8"}}>Std</span> = Standard monthly · <span style={{color:"#34d399"}}>Esc</span> = Escalating monthly · <span style={{color:"#fb923c"}}>Bas</span> = Basic monthly · <span style={{color:"#fbbf24"}}>Esc&gt;Std</span> = age when Escalating cumulative total overtakes Standard · <span style={{color:"#60a5fa"}}>Std&gt;Bas</span> = age when Standard overtakes Basic · <span style={{color:"#c084fc"}}>Esc&gt;Bas</span> = age when Escalating overtakes Basic.
+                </p>
                 <div style={{overflowX:"auto"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,fontFamily:"monospace"}}>
                     <thead><tr style={{borderBottom:"1px solid var(--border-strong)"}}>
@@ -3510,7 +3772,18 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           {activeTab==="compare" && (
             <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",padding:24,borderRadius:24}}>
               <h3 style={{fontSize:18,fontWeight:800,marginBottom:6,display:"flex",alignItems:"center",gap:8}}><Scale style={{width:18,height:18,color:"#34d399"}}/>Compare Scenarios</h3>
-              <p style={{fontSize:12,color:"var(--text-muted)",marginBottom:20}}>Change your inputs, then save to Slot A or B. Both scenarios persist for comparison.</p>
+              <p style={{fontSize:12,color:"var(--text-muted)",marginBottom:12}}>Change your inputs, then save to Slot A or B. Both scenarios persist for comparison.</p>
+              {/* Compare tab explanation */}
+              <div style={{padding:"12px 16px",borderRadius:12,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",fontSize:11,color:"var(--text-muted)",lineHeight:1.7,marginBottom:20}}>
+                <p style={{fontWeight:700,color:"var(--text-highlight)",marginBottom:6,fontSize:12}}>🔀 How to use this tab</p>
+                <ol style={{paddingLeft:18,margin:0,fontSize:10,lineHeight:1.8}}>
+                  <li><strong style={{color:"var(--text-bright)"}}>Set up Scenario A:</strong> Configure your inputs in the sidebar for your first scenario (e.g. retire at 65), then click <em>Save Current as A</em>.</li>
+                  <li><strong style={{color:"var(--text-bright)"}}>Change inputs for Scenario B:</strong> Adjust your inputs (e.g. change payout age to 70, increase RSTU top-up), then click <em>Save Current as B</em>.</li>
+                  <li><strong style={{color:"var(--text-bright)"}}>View the chart:</strong> The line chart shows total CPF balance year-by-year for both scenarios from your current age to 95. Blue = Scenario A, Orange = Scenario B.</li>
+                  <li><strong style={{color:"var(--text-bright)"}}>Scenario configuration:</strong> Each saved slot shows all inputs that differ from the default — so you can quickly see what changed between the two scenarios.</li>
+                </ol>
+                <p style={{fontSize:10,color:"var(--text-subtle)",marginTop:6}}>💡 <strong>Tip:</strong> Give each scenario a descriptive label (e.g. "Retire at 65" vs "Defer to 70") using the label field to make the chart legend readable.</p>
+              </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
                 {[["A","#3b82f6","rgba(59,130,246,0.08)","rgba(59,130,246,0.2)",scenarioA,scenarioLabelA,setScenarioLabelA,setScenarioA,"blue"],["B","#f97316","rgba(249,115,22,0.08)","rgba(249,115,22,0.2)",scenarioB,scenarioLabelB,setScenarioLabelB,setScenarioB,"orange"]].map(([letter,color,bg,border,scenario,label,setLabel,setScenario])=>(
                   <div key={letter} style={{padding:16,borderRadius:14,background:bg,border:`1px solid ${border}`,display:"flex",flexDirection:"column"}}>
@@ -3543,24 +3816,57 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   </div>
                 ))}
               </div>
-              {scenarioA&&scenarioB?(<div style={{height:350}}>
+              {scenarioA&&scenarioB?(<div>
+                <p style={{fontSize:10,color:"var(--text-muted)",marginBottom:6,lineHeight:1.6}}>
+                  <strong style={{color:"var(--text-bright)"}}>Y-axis: Cumulative Total Yield ($)</strong> — the sum of all CPF LIFE payouts received to date plus the remaining bequest (death benefit) value at each age, under the <strong style={{color:"#34d399"}}>{highlightPlan}</strong> plan. A higher line means more total financial value returned from CPF over your lifetime. The lines diverge where payout age, contribution amount, or RA size creates a lasting difference in returns.
+                </p>
+                <div style={{height:350}}>
                 <ResponsiveContainer width="99%" height="100%">
                   <LineChart data={comparisonData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
-                    <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
-                    <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}}/>
-                    <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={v=>formatCurrency(v)} wrapperStyle={{pointerEvents:"none"}}/>
+                    <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}} label={{value:"Age",position:"insideBottomRight",offset:-5,fill:"var(--chart-text)",fontSize:10}}/>
+                    <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={11} tick={{fill:"var(--chart-text)",fontWeight:600}} label={{value:"Cumulative Total Yield",angle:-90,position:"insideLeft",offset:10,fill:"var(--chart-text)",fontSize:9,style:{textAnchor:"middle"}}}/>
+                    <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={(v,n)=>[formatCurrency(v),n]} labelFormatter={v=>`Age ${v}`} wrapperStyle={{pointerEvents:"none"}}/>
                     <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{fontSize:10,fontWeight:600}}/>
                     <Line type="monotone" dataKey="yieldA" stroke="#3b82f6" strokeWidth={3} dot={false} name={`Slot A${scenarioLabelA?`: ${scenarioLabelA}`:""}`}/>
                     <Line type="monotone" dataKey="yieldB" stroke="#f97316" strokeWidth={3} dot={false} name={`Slot B${scenarioLabelB?`: ${scenarioLabelB}`:""}`}/>
                   </LineChart>
                 </ResponsiveContainer>
+                </div>
               </div>):<div style={{height:280,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"var(--text-muted)",fontStyle:"italic",border:"2px dashed var(--border-strong)",borderRadius:16}}>Save both scenarios to view comparison chart</div>}
             </div>
           )}
           {/* ── DATA TABLE TAB ── */}
           {activeTab==="table" && (
             <div>
+              {/* Data Table explanation */}
+              <div style={{marginBottom:16,padding:"14px 18px",borderRadius:14,background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
+                <p style={{fontWeight:700,color:"var(--text-highlight)",marginBottom:8,fontSize:12}}>📋 Data Table — Column Guide</p>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8,marginBottom:8}}>
+                  {[
+                    ["Age","Year of life. Green row = your payout age (CPF LIFE begins).","var(--text-muted)"],
+                    ["OA","Ordinary Account balance at year end. Earns 2.5% p.a.","#93c5fd"],
+                    ["MA","MediSave Account balance. Earns 4% p.a. Capped at BHS.","#6ee7b7"],
+                    ["SA/RA","Special Account (pre-55) or Retirement Account (post-55). Earns 4% p.a.","#34d399"],
+                    ["Inflows (+)","Total annual inflows that year: contributions + voluntary top-ups + grants.","#6ee7b7"],
+                    ["Outflows (−)","Total annual outflows: housing loan and medical deductions.","#f9a8d4"],
+                    ["Bas/Std/Esc Pay","Annual payout received under each LIFE plan. Shows '−' before payout age.","#fb923c"],
+                    ["Bas/Std/Esc Beq","Bequest (death benefit) value at that age under each plan.","var(--text-muted)"],
+                    ["Yield (B/S/E)","Cumulative total yield = all payouts received + current bequest value. Measures the total financial return of each plan.","#60a5fa"],
+                    ["XIRR","Internal Rate of Return of the highlighted plan at each age. Compares total return vs all contributions made. Green = good (>4%), yellow = moderate, red = below CPF rates.","#a78bfa"],
+                  ].map(([col,desc,color])=>(
+                    <div key={col} style={{padding:"8px 10px",borderRadius:8,background:"var(--bg-muted)",border:"1px solid var(--border-subtle)"}}>
+                      <div style={{fontSize:10,fontWeight:700,color,marginBottom:3}}>{col}</div>
+                      <div style={{fontSize:9,color:"var(--text-muted)",lineHeight:1.5}}>{desc}</div>
+                    </div>
+                  ))}
+                </div>
+                <p style={{fontSize:10,color:"var(--text-subtle)"}}>
+                  💡 <strong>Before payout age</strong>: Pay, Bequest, Yield, and XIRR columns show "−" — payouts haven't started yet. &nbsp;
+                  The <strong>Lifetime Summary</strong> header above the table shows totals across your full life (age {inputs.currentAge} → 95). &nbsp;
+                  Use <strong>Download CSV</strong> to export all columns to a spreadsheet.
+                </p>
+              </div>
               {(() => {
                 const lastBase=displayAccumulation[displayAccumulation.length-1]||{};
                 const lastRow=displayProjection[displayProjection.length-1]||{};
@@ -3747,26 +4053,41 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                           <span style={{color:"#34d399",fontWeight:900,fontSize:14,flexShrink:0,marginLeft:10}}>{val}</span>
                         </div>
                       ))}
+                      {/* Timing Assumption box */}
+                      <div style={{marginTop:14,padding:"10px 12px",background:"rgba(45,212,191,0.06)",border:"1px solid rgba(45,212,191,0.2)",borderRadius:8}}>
+                        <p style={{fontSize:10,fontWeight:700,color:"#2dd4bf",marginBottom:6}}>⏱ Computation Timing Assumption</p>
+                        <p style={{fontSize:10,color:"var(--text-muted)",lineHeight:1.6,marginBottom:4}}>
+                          This model uses an <strong style={{color:"var(--text-bright)"}}>annual, beginning-of-year (BOY) convention</strong>:
+                        </p>
+                        <ul style={{fontSize:10,color:"var(--text-muted)",paddingLeft:14,lineHeight:1.7,margin:0}}>
+                          <li><strong style={{color:"var(--text-bright)"}}>Step 1 — Transitions:</strong> Age-55 SA closure, pledge withdrawal, and OA withdrawal are applied at the start of the age-55 year, before contributions or interest.</li>
+                          <li><strong style={{color:"var(--text-bright)"}}>Step 2 — Contributions & inflows:</strong> All annual contributions (mandatory, VC3A, RSTU, grants, WIS) are credited at the start of each year.</li>
+                          <li><strong style={{color:"var(--text-bright)"}}>Step 3 — Interest:</strong> Interest is calculated on the <em>opening balance after contributions</em> for each account and credited for the full year.</li>
+                          <li><strong style={{color:"var(--text-bright)"}}>Step 4 — Outflows:</strong> Housing loan deductions and medical expenses are deducted after interest is applied.</li>
+                          <li><strong style={{color:"var(--text-bright)"}}>Step 5 — Record:</strong> End-of-year balances are recorded in the Data Table and charts.</li>
+                        </ul>
+                        <p style={{fontSize:9,color:"var(--text-subtle)",marginTop:6}}>In practice CPF credits interest monthly (OA) and annually (SA/MA/RA). This model simplifies to annual compounding, which is a standard actuarial approximation. The difference from monthly compounding is less than 0.2% per year.</p>
+                      </div>
                     </div>
                   </div>
                 </section>
                 
                 {/* New Planning Tools Policy Reference */}
                 <section>
-                  <h4 style={{fontSize:16,fontWeight:800,color:"#60a5fa",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><Target style={{width:18,height:18}}/>Planning Tools — Policy Reference</h4>
+                  <h4 style={{fontSize:16,fontWeight:800,color:"#60a5fa",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><Target style={{width:18,height:18}}/>Planning Tools — Policy Reference <span style={{fontSize:11,fontWeight:400,color:"var(--text-muted)",marginLeft:8}}>(Assumptions)</span></h4>
                   <div style={{background:"var(--bg-muted)",padding:18,borderRadius:14,border:"1px solid var(--border-strong)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7}}>
                     <ul style={{listStyle:"none",padding:0,margin:0}}>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#34d399",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>Gender &amp; CPF LIFE Payout Ratio:</strong> Male members receive ~$540/mo per $100k RA at 65; female members ~$500/mo, reflecting longer female life expectancy. The deferral credit adds ~$12/mo (male) or ~$11.50/mo (female) per year past 65. Select gender in the Profile section — the LIFE comparison cards highlight the selected gender and show both for reference.</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>Gender &amp; CPF LIFE Payout Ratio:</strong> Male members receive ~$540/mo per $100k RA at 65; female members ~$500/mo, reflecting longer female life expectancy. CPF LIFE payouts increase by up to 7% compound per year of deferral past 65 — approximately $37/mo per year for a $540 base, giving ~$730/mo at age 70. Select gender in the Profile section — the LIFE comparison cards highlight the selected gender and show both for reference.</div>
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#60a5fa",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>20% RA-to-OA Transfer — Correct Formula:</strong> At payout age, CPF transfers 20% of the <em>eligible</em> RA to OA. Eligible RA = RA at payout − cumulative SA/RA cash top-ups (RSTU, gov grants, MRSS, MMSS, housing grants, all voluntary SA/RA top-ups) − cumulative interest earned on SA/RA. <strong>CPF LIFE payouts are calculated on the RA remaining after this transfer</strong> — the deducted 20% reduces the RA balance and lowers monthly payouts accordingly. The Summary tab shows all components.</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>20% RA-to-OA Transfer:</strong> At payout age, CPF transfers 20% of the <em>eligible</em> RA to OA. Eligible RA = RA at payout − cumulative SA/RA cash top-ups (RSTU, gov grants, MRSS, MMSS, housing grants, all voluntary SA/RA top-ups) − cumulative interest earned on SA/RA. <strong>CPF LIFE payouts are calculated on the RA remaining after this transfer</strong> — the deducted 20% reduces the RA balance and lowers monthly payouts accordingly. The Summary tab shows all components.</div>
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#a855f7",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>OA → SA Transfer (Before Age 55):</strong> Transfer OA savings to SA to earn 4% instead of 2.5%. Irreversible. Subject to FRS cap in SA. Not counted toward the Annual Limit. Qualifies for RSTU tax relief on the portion that brings SA up to FRS. Available in the <strong>CPF Transfers panel</strong> (hidden post-55).</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>OA → SA Transfer (Before Age 55):</strong> Transfer OA savings to SA to earn 4% instead of 2.5%. Irreversible. Subject to FRS cap in SA. Not counted toward the Annual Limit. CPF-to-CPF transfers do NOT qualify for income tax relief — only voluntary cash top-ups under RSTU are tax-relievable. Available in the <strong>CPF Transfers panel</strong> (hidden post-55).</div>
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#fbbf24",marginTop:6,flexShrink:0}}/>
@@ -3798,19 +4119,19 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#fbbf24",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>OA Lump-Sum Withdrawal at Age 55:</strong> After SA closure and RA funding, members may withdraw OA savings above the required retirement sum (BRS if pledged, FRS otherwise) as cash. Applied once in the projection. Input in the <strong>Outflows panel</strong>.</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>OA Lump-Sum Withdrawal at Age 55:</strong> After SA closure and RA funding, members may withdraw OA savings above BRS as cash. Applied once. Input in the <strong>Outflows panel</strong>. Note: this is for general OA cash-out — for Property Pledge withdrawals, use the separate <strong>Pledge RA Withdrawal</strong> fields (shown in Outflows when pledge is ON).</div>
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#fb923c",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>Property Pledge (BRS Mode):</strong> Use your property as security so only BRS ($110,200) needs to remain in RA at age 55 — freeing the FRS–BRS difference (~$110,200) — which moves to OA (stays in CPF at 2.5%) and can be withdrawn as cash using the OA Withdrawal field in the Outflows panel. Property must be a completed Singapore property (HDB or private) with lease lasting to at least age 95. HDB 2-room Flexi flats and Lease Buyback Scheme properties are ineligible. You must refund pledged amounts if the property is sold. Monthly payouts will be significantly lower (~$730–$790/mo vs ~$1,350–$1,450/mo at FRS).</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>Property Pledge (BRS Mode):</strong> Use your property as security so only BRS ($110,200) needs to remain in RA at age 55. This makes you <em>eligible</em> to apply to CPF to withdraw RA savings above BRS as cash to your bank account — the pledged funds remain in RA (earning 4%) until the actual withdrawal is made. <strong>Important:</strong> Pledging does not automatically transfer funds to OA or anywhere else. To model the cash withdrawal in this tool, use the <strong>Pledge RA Withdrawal</strong> fields (Amount and Age) in the Outflows panel — these appear automatically when the Property Pledge toggle is ON. The funds are withdrawn directly from RA, not via OA. Property must be a completed Singapore property (HDB or private) with a remaining lease lasting to at least age 95. HDB 2-room Flexi flats and properties under the Lease Buyback Scheme are ineligible. If the property is sold, the pledged amount must be refunded to CPF. Monthly CPF LIFE payouts will be significantly lower (~$730–$790/mo vs ~$1,350–$1,450/mo at FRS) because less RA enters the LIFE pool.</div>
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>MRSS — Matched Retirement Savings Scheme:</strong> Government matches RSTU cash top-ups to RA dollar-for-dollar up to $600/year for Singapore Citizens aged 55–70 with RA below the current FRS. Automatically assessed — no application needed. Enter the expected matched amount in the Inflows panel.</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>MRSS — Matched Retirement Savings Scheme:</strong> Government matches RSTU cash top-ups to RA dollar-for-dollar up to $2,000/year (lifetime cap $20,000) for Singapore Citizens aged 55 and above with RA below the Basic Retirement Sum (BRS). No upper age cap. Automatically assessed — no application needed. Enter the expected matched amount in the Inflows panel.</div>
                       </li>
                       <li style={{display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#38bdf8",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>AW Ceiling ($102,000/Year):</strong> CPF on Additional Wages (bonuses) is capped at $102,000 − total OW CPF contributions. The Auto-Calc applies this correctly, preventing over-stated contributions for high-bonus earners.</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>AW Ceiling ($102,000/Year):</strong> AW Ceiling = $102,000 − Total Ordinary Wages subject to CPF for the year (not the CPF contributions themselves). E.g. if your annual OW subject to CPF is $96,000 ($8,000/mo × 12), the AW ceiling is $6,000. The Auto-Calc applies this correctly.</div>
                       </li>
                     </ul>
                   </div>
@@ -3831,7 +4152,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#34d399",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"#34d399"}}>Proportional Allocation (CPF Board Policy):</strong> Per CPF Board: <em>"The allocation of VC to the three CPF accounts will follow the allocation rates for mandatory CPF contributions."</em> VC3A funds are split across OA/SA/MA using the same <strong>age-based ratios</strong> as mandatory contributions (e.g. age ≤35: OA 62.2%, SA 16.2%, MA 21.6% of total). MA excess above BHS spills to SA (if &lt;55) or RA (if ≥55). This is NOT a waterfall to MA first.</div>
+                        <div><strong style={{color:"#34d399"}}>Proportional Allocation (CPF Board Policy):</strong> Per CPF Board: <em>"The allocation of VC to the three CPF accounts will follow the allocation rates for mandatory CPF contributions."</em> VC3A funds are split across OA/SA/MA using the same <strong>age-based ratios</strong> as mandatory contributions (e.g. age ≤35: OA 62.2%, SA 16.2%, MA 21.6% of total). MA excess above BHS spills to SA (if &lt;55) or RA (if ≥55), but only up to the Full Retirement Sum (FRS). Once SA/RA hits the FRS, any remaining MA excess flows to OA. This is NOT a waterfall to MA first.</div>
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#60a5fa",marginTop:6,flexShrink:0}}/>
@@ -3839,7 +4160,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       </li>
                       <li style={{display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#a855f7",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>How to Use in This Tool:</strong> Toggle <strong>SEP?</strong> in the Mandatory Contribs panel. Mandatory OA/SA inputs are hidden. Enter your desired annual VC3A amount in the Voluntary Top-ups panel — the engine splits funds proportionally across OA/SA/MA using your age-band allocation rates (same ratios as mandatory contributions). MA excess above BHS spills to SA/RA. For members aged 55+, RA top-ups are capped at the current-year ERS; excess flows to OA.</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>How to Use in This Tool:</strong> Toggle <strong>SEP?</strong> in the Mandatory Contribs panel. Mandatory OA/SA inputs are hidden. Enter your desired annual VC3A amount in the Voluntary Top-ups panel — the engine splits funds proportionally across OA/SA/MA using your age-band allocation rates (same ratios as mandatory contributions). MA excess above BHS spills to SA/RA. For members aged 55+, SA is permanently closed — VC3A contributions that would go to SA are routed to RA instead, up to the Full Retirement Sum (FRS); once FRS is met, excess flows to OA.</div>
                       </li>
                     </ul>
                   </div>
@@ -3852,7 +4173,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <ul style={{listStyle:"none",padding:0,margin:0}}>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#3b82f6",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"var(--text-highlight)"}}>Age-Adjusted Actuarial Ratio:</strong> This engine uses ~$540 per $100k RA at age 65, scaling to ~$600 at age 70. Correctly applies deferral credit without double-counting standard interest.</div>
+                        <div><strong style={{color:"var(--text-highlight)"}}>Age-Adjusted Actuarial Ratio:</strong> This engine uses ~$540 per $100k RA at age 65, scaling by 7% compound per year of deferral — approximately $730/mo at age 70. Correctly applies CPF Board deferral credit. Correctly applies deferral credit without double-counting standard interest.</div>
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",marginTop:6,flexShrink:0}}/>
@@ -3860,7 +4181,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       </li>
                       <li style={{marginBottom:12,display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#f59e0b",marginTop:6,flexShrink:0}}/>
-                        <div><strong style={{color:"#fb923c"}}>Basic Plan (The Slow-Draw):</strong> The configurable premium % (default 10%, max 20%) is deducted from RA and paid into CPF's insurance pool. You retain the remainder in your personal RA earning 4% interest. The monthly payout equals the PMT from the standard annuity formula — this is also the rate at which your personal RA depletes to $0 around age 90. <strong>Bequest Phase 1 (before age 90)</strong> = remaining personal RA balance <em>plus</em> a full refund of the CPF LIFE premium (CPF policy: the premium is fully returned to beneficiaries if the member dies before the pool phase begins). <strong>Bequest Phase 2 (age 90+)</strong> = unused pool premium after deducting all payouts funded from the pool since age 90. Higher premium % → larger pool, smaller retained RA, lower Phase 1 payout.</div>
+                        <div><strong style={{color:"#fb923c"}}>Basic Plan (The Slow-Draw):</strong> A premium is deducted from RA and paid into CPF's insurance pool. <strong>Note: The Basic Plan premium % is not user-configurable</strong> — it is set by CPF Board actuaries based on your age and gender to fund the mortality pool from age 90. It typically lands between 10% and 20%. The slider in this tool is an approximation aid only. You retain the remainder in your personal RA earning 4%. The monthly payout equals the PMT from the standard annuity formula — this is also the rate at which your personal RA depletes to $0 around age 90. <strong>Bequest Phase 1 (before age 90)</strong> = remaining personal RA balance <em>plus</em> a full refund of the CPF LIFE premium. <strong>Bequest Phase 2 (age 90+)</strong> = unused pool premium after deducting all payouts funded from the pool since age 90. Higher premium % → larger pool, smaller retained RA, lower Phase 1 payout.</div>
                       </li>
                       <li style={{display:"flex",gap:8}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:"#a855f7",marginTop:6,flexShrink:0}}/>
@@ -3896,12 +4217,13 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
             </div>
           )}
+          </div>{/* /tab content panels */}
         </section>
       </div>
       
       {/* Footer */}
-      <footer style={{borderTop:"1px solid var(--border-subtle)"}}>
-        <div className="cpf-page-wrap" data-mode={desktopMode} style={{padding:"24px 20px",textAlign:"center"}}>
+      <footer style={{borderTop:"1px solid var(--border-subtle)",flexShrink:0,background:"var(--bg-panel)"}}>
+        <div className="cpf-page-wrap" data-mode={desktopMode} style={{padding:"10px 20px",textAlign:"center"}}>
         <p style={{fontSize:10,color:"var(--text-muted)",maxWidth:900,margin:"0 auto",lineHeight:1.7,textAlign:"justify"}}>{LEGAL_DISCLAIMER}</p>
         </div>
       </footer>
