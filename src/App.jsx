@@ -1830,43 +1830,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
 </body></html>`;
 
-      // Inject a hidden iframe, load the report HTML, trigger print dialog directly.
-      // This works in all environments (no popup needed, no preview page shown).
-      try {
-        // Remove any existing print iframe
-        const existing = document.getElementById("cpf-print-frame");
-        if (existing) existing.remove();
-
-        const iframe = document.createElement("iframe");
-        iframe.id = "cpf-print-frame";
-        iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;visibility:hidden;";
-        document.body.appendChild(iframe);
-
-        // Write the HTML into the iframe
-        iframe.contentDocument.open();
-        iframe.contentDocument.write(html);
-        iframe.contentDocument.close();
-
-        // Wait for resources to load then trigger print
-        iframe.onload = () => {
-          setTimeout(() => {
-            try {
-              iframe.contentWindow.focus();
-              iframe.contentWindow.print();
-              showToast("🖨️ Print dialog open — set destination to 'Save as PDF'");
-            } catch(e2) {
-              // Final fallback: new tab
-              const blob = new Blob([html], { type: "text/html" });
-              const url = URL.createObjectURL(blob);
-              const win = window.open(url, "_blank");
-              if (win) { win.onload = () => { setTimeout(()=>{ win.focus(); win.print(); URL.revokeObjectURL(url); }, 400); }; }
-              else { URL.revokeObjectURL(url); setExportModal({ type: "pdf", content: html }); }
-            }
-          }, 800);
-        };
-      } catch(e) {
-        setExportModal({ type: "pdf", content: html });
-      }
+      // Always open in-app modal first so user can pick orientation and preview before printing
+      setExportModal({ type: "pdf", content: html });
     } catch(e) { alert("Report failed: "+e.message); } finally { setIsGeneratingPdf(false); }
   };
   return (
@@ -2251,9 +2216,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   {[["portrait","Portrait"],["landscape","Landscape"]].map(([o,label])=>(
                     <button key={o} onClick={()=>{
                       setPdfOrientation(o);
-                      // Regenerate PDF with new orientation
+                      // Regenerate PDF with new orientation — modal stays open
                       setTimeout(()=>generatePDF(),50);
-                      setExportModal(null);
                     }} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",
                       background:pdfOrientation===o?"var(--border-strong)":"transparent",
                       color:pdfOrientation===o?"var(--text-bright)":"var(--text-muted)"}}>
