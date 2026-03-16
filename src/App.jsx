@@ -1772,6 +1772,18 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           --header-bg: rgba(13,27,46,0.97);
           --chart-grid: #1a2d45;
           --chart-text: #7090a8;
+          /* Hero panel */
+          --hero-left-bg: #1e3a5f;
+          --hero-right-bg: #162032;
+          --hero-border: #2d4a6e;
+          --hero-text: #ffffff;
+          --hero-label: rgba(255,255,255,0.55);
+          --hero-card-bg: rgba(255,255,255,0.08);
+          --hero-acct-bg: rgba(255,255,255,0.05);
+          --hero-acct-border: rgba(255,255,255,0.08);
+          --hero-ring-bg: rgba(255,255,255,0.1);
+          --hero-divider: rgba(255,255,255,0.15);
+          --hero-arrow: white;
         }
         .theme-light {
           --bg-base: #f0f4f9;
@@ -1789,6 +1801,18 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           --header-bg: rgba(255,255,255,0.97);
           --chart-grid: #d5dfe8;
           --chart-text: #5a7090;
+          /* Hero panel */
+          --hero-left-bg: #dbe8f5;
+          --hero-right-bg: #eef4fb;
+          --hero-border: #b8d0e8;
+          --hero-text: #0f2040;
+          --hero-label: rgba(15,32,64,0.55);
+          --hero-card-bg: rgba(15,32,64,0.06);
+          --hero-acct-bg: rgba(15,32,64,0.04);
+          --hero-acct-border: rgba(15,32,64,0.1);
+          --hero-ring-bg: rgba(15,32,64,0.12);
+          --hero-divider: rgba(15,32,64,0.15);
+          --hero-arrow: #1e3a5f;
         }
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
@@ -1928,6 +1952,17 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           .hero-split { grid-template-columns: 1fr !important; }
           .hero-split > div { overflow: hidden !important; min-width: 0 !important; }
           .hero-split svg { overflow: visible !important; }
+          /* Left panel: stack nominal/real vertically, shrink fonts */
+          .hero-nums-row { grid-template-columns: 1fr !important; gap: 8px !important; }
+          .hero-divider-v { display: none !important; }
+          .hero-nom { font-size: 24px !important; }
+          .hero-real { font-size: 18px !important; }
+          /* Stat ring cards: 1-col on mobile */
+          .hero-stats-row { grid-template-columns: 1fr !important; }
+          /* Account cards: 1-col on mobile */
+          .hero-acct-grid { grid-template-columns: 1fr !important; }
+          /* Yield breakeven cards: 1-col on mobile */
+          .yield-cards-grid { grid-template-columns: 1fr !important; }
         }
 
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
@@ -3179,9 +3214,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}} className="hero-split">
 
                 {/* LEFT: projected total + nominal/real + 3 stat rings */}
-                <div style={{background:"#1e3a5f",borderRadius:16,padding:"22px",color:"#fff",position:"relative",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{background:"var(--hero-left-bg)",borderRadius:16,padding:"22px",color:"var(--hero-text)",position:"relative",overflow:"hidden",display:"flex",flexDirection:"column"}}>
                   <svg style={{position:"absolute",right:0,top:0,opacity:0.07,pointerEvents:"none"}} width="160" height="160" viewBox="0 0 100 100">
-                    <path d="M10 90 L80 20 M55 20 L80 20 L80 45" fill="none" stroke="white" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M10 90 L80 20 M55 20 L80 20 L80 45" fill="none" stroke="var(--hero-arrow)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   {/* Top block: numbers — always use raw projection, never displayAccumulation */}
                   {(()=>{
@@ -3192,23 +3227,23 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     const realTotal=Math.round(nominalTotal/Math.pow(1+inflRate,years));
                     return (
                       <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",paddingBottom:16}}>
-                        <p style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>Projected Total CPF Balance at Age {inputs.payoutAge}</p>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:12}}>
+                        <p style={{fontSize:9,fontWeight:700,color:"var(--hero-label)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>Projected Total CPF Balance at Age {inputs.payoutAge}</p>
+                        <div className="hero-nums-row" style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:12}}>
                           <div>
-                            <p style={{fontSize:32,fontWeight:500,margin:0,letterSpacing:"-0.5px",lineHeight:1.1,color:"#ffffff"}}>{formatCurrency(nominalTotal)}</p>
-                            <p style={{fontSize:10,opacity:0.5,marginTop:4}}>Nominal (future $)</p>
+                            <p className="hero-nom" style={{fontSize:32,fontWeight:500,margin:0,letterSpacing:"-0.5px",lineHeight:1.1,color:"#ffffff"}}>{formatCurrency(nominalTotal)}</p>
+                            <p style={{fontSize:10,color:"var(--hero-label)",marginTop:4}}>Nominal (future $)</p>
                           </div>
-                          <div style={{width:1,height:48,background:"rgba(255,255,255,0.2)"}}/>
+                          <div className="hero-divider-v" style={{width:1,height:48,background:"var(--hero-divider)"}}/>
                           <div>
-                            <p style={{fontSize:24,fontWeight:500,margin:0,letterSpacing:"-0.3px",lineHeight:1.1,opacity:0.7}}>{formatCurrency(realTotal)}</p>
-                            <p style={{fontSize:10,opacity:0.5,marginTop:4}}>Real (today's $, {inputs.inflationRate||2}% infl.)</p>
+                            <p className="hero-real" style={{fontSize:24,fontWeight:500,margin:0,letterSpacing:"-0.3px",lineHeight:1.1,color:"var(--hero-text)",opacity:0.75}}>{formatCurrency(realTotal)}</p>
+                            <p style={{fontSize:10,color:"var(--hero-label)",marginTop:4}}>Real (today's $, {inputs.inflationRate||2}% infl.)</p>
                           </div>
                         </div>
                       </div>
                     );
                   })()}
                   {/* Divider */}
-                  <div style={{height:1,background:"rgba(255,255,255,0.1)",marginBottom:16}}/>
+                  <div style={{height:1,background:"var(--hero-divider)",marginBottom:16}}/>
                   {/* Bottom block: 3 stat rings */}
                   {(()=>{
                     const pa=Number(inputs.payoutAge)||65;
@@ -3223,22 +3258,22 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     const r=18,circ=2*Math.PI*r;
                     const arc=(p)=>(p/100)*circ;
                     return (
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                      <div className="hero-stats-row" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                         {[
                           {val:`$${Math.round(totalInt/1000)}k`,lbl:"Interest earned",pct:intPct,color:"#60a5fa",tc:"#93c5fd",dash:arc(intPct)},
                           {val:`$${Math.round(totalInj/1000)}k`,lbl:"Total contributed",pct:injPct,color:"#34d399",tc:"#6ee7b7",dash:arc(injPct)},
                           {val:`${ratio.toFixed(2)}×`,lbl:"Interest / contribution",pct:ratioPct,color:"#f59e0b",tc:"#fbbf24",dash:arc(ratioPct)},
                         ].map(({val,lbl,pct,color,tc,dash})=>(
-                          <div key={lbl} style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"10px",display:"flex",alignItems:"center",gap:8,overflow:"hidden"}}>
+                          <div key={lbl} style={{background:"var(--hero-card-bg)",borderRadius:10,padding:"10px",display:"flex",alignItems:"center",gap:8,overflow:"hidden"}}>
                             <svg width="48" height="48" viewBox="0 0 48 48" style={{flexShrink:0,overflow:"visible"}}>
-                              <circle cx="24" cy="24" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
+                              <circle cx="24" cy="24" r={r} fill="none" stroke="var(--hero-ring-bg)" strokeWidth="4"/>
                               <circle cx="24" cy="24" r={r} fill="none" stroke={color} strokeWidth="4"
                                 strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 24 24)"/>
                               <text x="24" y="28" textAnchor="middle" fill={tc} fontSize="8.5" fontWeight="500">{pct}%</text>
                             </svg>
                             <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:13,fontWeight:500,color:"#fff"}}>{val}</div>
-                              <div style={{fontSize:9,opacity:0.55,marginTop:2,lineHeight:1.3}}>{lbl}</div>
+                              <div style={{fontSize:13,fontWeight:500,color:"var(--hero-text)"}}>{val}</div>
+                              <div style={{fontSize:9,color:"var(--hero-label)",marginTop:2,lineHeight:1.3}}>{lbl}</div>
                             </div>
                           </div>
                         ))}
@@ -3248,8 +3283,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 </div>
 
                 {/* RIGHT: 2×2 account balance cards with rings */}
-                <div style={{background:"#162032",border:"1px solid #2d4a6e",borderRadius:16,padding:20,color:"#fff",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-                  <p style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>Account Balances at Age {inputs.payoutAge}</p>
+                <div style={{background:"var(--hero-right-bg)",border:"1px solid var(--hero-border)",borderRadius:16,padding:20,color:"var(--hero-text)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                  <p style={{fontSize:9,fontWeight:700,color:"var(--hero-label)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>Account Balances at Age {inputs.payoutAge}</p>
                   {(()=>{
                     const tot2=(payoutAgeData.oa||0)+(payoutAgeData.ma||0)+(payoutAgeData.ra||0)||1;
                     const accts=[
@@ -3260,22 +3295,22 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     ];
                     const r2=18,circ2=2*Math.PI*r2;
                     return (
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,flex:1}}>
+                      <div className="hero-acct-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,flex:1}}>
                         {accts.map(({label,val,color,tc,closed})=>{
                           const pct=closed?0:Math.round(((val||0)/tot2)*100);
                           const dash=(pct/100)*circ2;
                           return (
-                            <div key={label} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:12,display:"flex",alignItems:"center",gap:10,overflow:"hidden",opacity:closed?0.45:1}}>
+                            <div key={label} style={{background:"var(--hero-acct-bg)",border:"1px solid var(--hero-acct-border)",borderRadius:12,padding:12,display:"flex",alignItems:"center",gap:10,overflow:"hidden",opacity:closed?0.45:1}}>
                               <div style={{flex:1,minWidth:0}}>
-                                <p style={{fontSize:9,fontWeight:600,opacity:0.5,textTransform:"uppercase",letterSpacing:"0.07em",margin:"0 0 3px"}}>{label}</p>
+                                <p style={{fontSize:9,fontWeight:600,color:"var(--hero-label)",textTransform:"uppercase",letterSpacing:"0.07em",margin:"0 0 3px"}}>{label}</p>
                                 {closed
-                                  ? <p style={{fontSize:12,opacity:0.4,fontStyle:"italic",margin:0}}>Merged into RA</p>
+                                  ? <p style={{fontSize:12,color:"var(--hero-label)",fontStyle:"italic",margin:0}}>Merged into RA</p>
                                   : <><p style={{fontSize:15,fontWeight:500,color:tc,margin:0,fontFamily:"monospace"}}>{formatCurrency(val)}</p>
-                                    <p style={{fontSize:9,opacity:0.4,marginTop:3}}>{pct}% of total</p></>
+                                    <p style={{fontSize:9,color:"var(--hero-label)",marginTop:3}}>{pct}% of total</p></>
                                 }
                               </div>
                               <svg width="48" height="48" viewBox="0 0 48 48" style={{flexShrink:0,overflow:"visible"}}>
-                                <circle cx="24" cy="24" r={r2} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4"/>
+                                <circle cx="24" cy="24" r={r2} fill="none" stroke="var(--hero-ring-bg)" strokeWidth="4"/>
                                 {!closed && <circle cx="24" cy="24" r={r2} fill="none" stroke={color} strokeWidth="4"
                                   strokeDasharray={`${dash} ${circ2}`} strokeLinecap="round" transform="rotate(-90 24 24)"/>}
                                 <text x="24" y="28" textAnchor="middle" fill={closed?"rgba(255,255,255,0.25)":tc} fontSize="9" fontWeight="500">{closed?"—":`${pct}%`}</text>
@@ -4297,7 +4332,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   <div style={{background:"var(--bg-muted)",padding:18,borderRadius:14,border:"1px solid var(--border-strong)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7,marginBottom:12}}>
                     <p><strong style={{color:"var(--text-highlight)"}}>The Flatline:</strong> Total Yield = Payouts Received + Remaining Bequest. Since Bequest = Initial Premium − Payouts, the formula nets out to exactly your Initial Premium. Total Yield flatlines until your Bequest hits $0 (~late 70s), then every payout becomes "pure profit" drawn from the mortality pool.</p>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div className="yield-cards-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                     {[
                       ["Standard vs. Escalating","Escalating starts ~20% lower but grows 2%/yr. Takes decades for cumulative total yield to catch up. Break-Even Age shows when Escalating surpasses Standard.",intersectionEscVsStd,"#fbbf24","rgba(245,158,11,0.08)","rgba(245,158,11,0.3)"],
                       ["Standard vs. Basic","In early retirement, Basic yields more total value because the 90% retained RA earns compound interest into your bequest. Once Basic RA depletes at 90, Standard overtakes.",intersectionStdVsBasic,"#60a5fa","rgba(59,130,246,0.08)","rgba(59,130,246,0.3)"],
