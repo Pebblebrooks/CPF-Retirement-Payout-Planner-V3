@@ -1102,7 +1102,7 @@ export default function App() {
       </tr>`;
     }).join("");
 
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+    const html = `<!DOCTYPE html><html style="background:#ffffff"><head><meta charset="UTF-8"/>
 <title>CPF Data Table — ${memberName}</title>
 <style>
   @page { size: A4 landscape; margin: 12mm; }
@@ -1633,15 +1633,17 @@ export default function App() {
       // Milestone rows
       const msRows=milestones.map(m=>`<tr><td style="padding:5px 8px;font-weight:700">${m.age}</td><td style="padding:5px 8px">${m.label}</td><td style="padding:5px 8px;color:#475569">${m.detail}</td></tr>`).join("");
 
-      const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>CPF Retirement Report — ${inputs.name}</title>
+      const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="color-scheme" content="light only"/><style>:root{color-scheme:light only}html,body{background:#fff!important}</style><title>CPF Retirement Report — ${inputs.name}</title>
 <style>
   @page{size:A4 ${orientOverride||pdfOrientation};margin:${(orientOverride||pdfOrientation)==="landscape"?"12mm 15mm":"15mm 12mm"}}
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important;}
+  html,body{background:#ffffff !important;color:#0f172a !important;}
   @media print{
     @page{size:A4 ${orientOverride||pdfOrientation};margin:${(orientOverride||pdfOrientation)==="landscape"?"12mm 15mm":"15mm 12mm"}}
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     .page-break{page-break-before:always;break-before:page;}
   }
-  body{font-family:Arial,sans-serif;font-size:10px;color:#0f172a;margin:0;padding:${(orientOverride||pdfOrientation)==="landscape"?"6mm 12mm":"8mm 10mm"};-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  body{font-family:Arial,sans-serif;font-size:10px;color:#0f172a;background:#ffffff !important;margin:0;padding:${(orientOverride||pdfOrientation)==="landscape"?"6mm 12mm":"8mm 10mm"};-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   /* Force browser to respect orientation by setting explicit page size */
   html{width:${(orientOverride||pdfOrientation)==="landscape"?"297mm":"210mm"};max-width:${(orientOverride||pdfOrientation)==="landscape"?"297mm":"210mm"}}
   h1{font-size:18px;font-weight:900;color:#0f172a;margin:0 0 4px}
@@ -3187,22 +3189,20 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
                   ))}
                 </div>
-                {/* #3 — Property sale + CPF refund — inside property block */}
-                <div style={{paddingTop:6,borderTop:"1px solid var(--border-subtle)"}}>
-                  <label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:4}}>
-                    Sell Property at Age
-                    <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA and stays there for future housing use. Property value is removed from net worth at the sale age."/>
-                  </label>
-                  <input type="number" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.sellPropertyAge?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
-                  {inputErrors.sellPropertyAge&&<p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.sellPropertyAge}</p>}
-                  {(Number(inputs.sellPropertyAge)||0)>0 && (
-                    <div style={{marginTop:6,padding:"8px 10px",borderRadius:8,background:"rgba(96,165,250,0.06)",border:"1px solid rgba(96,165,250,0.2)"}}>
-                      <p style={{fontSize:9,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>
-                        <strong style={{color:"#60a5fa"}}>On sale at age {inputs.sellPropertyAge}:</strong> CPF refund (OA principal + 2.5%/yr interest) credited to OA for future housing use. Property removed from net worth.
-                      </p>
-                    </div>
-                  )}
-                </div>
+              </div>
+              {/* #3 — Sell Property at Age — outside opacity wrapper, always visible & clickable */}
+              <div style={{marginTop:8,padding:"10px 12px",borderRadius:8,background:"rgba(96,165,250,0.05)",border:"1px solid rgba(96,165,250,0.2)"}}>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:6}}>
+                  🏠 Sell Property at Age
+                  <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA. Property value is removed from net worth at the sale age."/>
+                </label>
+                <input type="number" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.sellPropertyAge?"#f87171":"rgba(96,165,250,0.4)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
+                {inputErrors.sellPropertyAge&&<p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.sellPropertyAge}</p>}
+                {(Number(inputs.sellPropertyAge)||0)>0 && (
+                  <p style={{fontSize:9,color:"#60a5fa",marginTop:4,lineHeight:1.5}}>
+                    Sale at age {inputs.sellPropertyAge}: OA principal + 2.5%/yr interest refunded to OA.{inputs.usePropertyPledge?" Pledge: RA restored to FRS first.":""} Property removed from net worth.
+                  </p>
+                )}
               </div>
             </div>
           </div>}
