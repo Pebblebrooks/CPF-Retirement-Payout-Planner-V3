@@ -571,10 +571,25 @@ export default function App() {
     // Parse state from URL on mount
     try {
       const params = new URLSearchParams(window.location.search);
-      const stateParam = params.get('state');
-      const sParam = params.get('s');
-      if (sParam) {
-        // New compressed base64url format
+      const pParam = params.get('p');      // New full-profile share link
+      const sParam = params.get('s');      // Legacy compressed format
+      const stateParam = params.get('state'); // Legacy plain format
+      if (pParam) {
+        // New format: full state encoded via lzCompress (base64url of JSON)
+        const b64 = pParam.replace(/-/g, '+').replace(/_/g, '/');
+        const pad = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : '';
+        const binary = atob(b64 + pad);
+        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+        const fullState = JSON.parse(new TextDecoder().decode(bytes));
+        if (fullState.inputs) setInputs(prev => ({ ...DEFAULT_INPUTS, ...fullState.inputs }));
+        if (fullState.highlightPlan) setHighlightPlan(fullState.highlightPlan);
+        if (fullState.isRealDollars != null) setIsRealDollars(fullState.isRealDollars);
+        if (fullState.pdfOrientation) setPdfOrientation(fullState.pdfOrientation);
+        showToast("✓ Profile loaded from share link");
+        // Clean URL without reloading
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (sParam) {
+        // Legacy compressed base64url format
         const b64 = sParam.replace(/-/g, '+').replace(/_/g, '/');
         const pad = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : '';
         const binary = atob(b64 + pad);
@@ -582,11 +597,11 @@ export default function App() {
         const decoded = JSON.parse(new TextDecoder().decode(bytes));
         setInputs(prev => ({ ...prev, ...decoded }));
       } else if (stateParam) {
-        // Legacy format
+        // Legacy plain format
         const decoded = JSON.parse(decodeURIComponent(stateParam));
         setInputs(prev => ({ ...prev, ...decoded }));
       } else {
-        // Always show welcome modal on fresh load (no localStorage in sandbox)
+        // Always show welcome modal on fresh load
         setShowWelcome(true);
       }
     } catch (e) {
@@ -1498,7 +1513,12 @@ export default function App() {
       const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>CPF Retirement Report — ${inputs.name}</title>
 <style>
   @page{size:A4 ${pdfOrientation};margin:${pdfOrientation==="landscape"?"12mm 15mm":"15mm 12mm"}}
-  body{font-family:Arial,sans-serif;font-size:10px;color:#0f172a;margin:0;padding:0}
+  @media print{
+    @page{size:A4 ${pdfOrientation};margin:${pdfOrientation==="landscape"?"12mm 15mm":"15mm 12mm"}}
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .page-break{page-break-before:always;break-before:page;}
+  }
+  body{font-family:Arial,sans-serif;font-size:10px;color:#0f172a;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   h1{font-size:18px;font-weight:900;color:#0f172a;margin:0 0 4px}
   h2{font-size:13px;font-weight:800;color:#1e3a5f;margin:14px 0 6px;border-bottom:2px solid #0f172a;padding-bottom:4px;text-transform:uppercase;letter-spacing:0.05em}
   h3{font-size:11px;font-weight:700;color:#334155;margin:10px 0 4px}
@@ -1700,7 +1720,106 @@ ${(() => {
 <tbody>${sensRows}</tbody></table>
 </div>
 
-<!-- PAGE 4: MILESTONE ALERTS + DISCLAIMER -->
+<!-- PAGE 4: FRS TRACKER + BREAKEVEN ANALYSIS + PAYOUT SENSITIVITY -->
+<div class="page-break">
+${(()=>{
+  // FRS Tracker
+  const yt55=Math.max(0,55-ca);
+  const projFRS55=Math.round(195000*Math.pow(1.03,yt55));
+  const projBRS55=Math.round(projFRS55/2);
+  const projERS55=projFRS55*2;
+  const raAt55=projection.find(r=>r.age===Math.max(ca,55))?.ra||0;
+  const frsShortfall=projFRS55-raAt55;
+  const frsPct=Math.min(100,Math.round((raAt55/projERS55)*100));
+  const barsW=Math.round((raAt55/projERS55)*500);
+  let frsStatus=raAt55>=projERS55?"ERS Achieved ✓":raAt55>=projFRS55?"FRS Achieved ✓":raAt55>=projBRS55?"BRS Met — FRS Gap":"Below BRS";
+  let frsColor=raAt55>=projERS55?"#0369a1":raAt55>=projFRS55?"#166534":raAt55>=projBRS55?"#92400e":"#991b1b";
+  return `
+<h2>FRS Tracker — Projected RA at Age 55</h2>
+<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="kpi"><div class="kpi-label">Projected RA @ 55</div><div class="kpi-value" style="color:${frsColor};font-size:14px">${fc(raAt55)}</div></div>
+  <div class="kpi"><div class="kpi-label">BRS Target @ 55</div><div class="kpi-value" style="font-size:14px">${fc(projBRS55)}</div></div>
+  <div class="kpi"><div class="kpi-label">FRS Target @ 55</div><div class="kpi-value" style="font-size:14px">${fc(projFRS55)}</div></div>
+  <div class="kpi"><div class="kpi-label">Status</div><div class="kpi-value" style="color:${frsColor};font-size:11px">${frsStatus}</div></div>
+</div>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin-bottom:6px">
+  <div style="background:#e2e8f0;border-radius:4px;height:12px;overflow:hidden;position:relative">
+    <div style="height:100%;border-radius:4px;background:${frsColor};width:${frsPct}%"></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;font-size:7px;color:#94a3b8;margin-top:3px">
+    <span>$0</span><span>BRS ${fc(projBRS55)}</span><span>FRS ${fc(projFRS55)}</span><span>ERS ${fc(projERS55)}</span>
+  </div>
+  ${frsShortfall>0?`<p style="font-size:8px;color:#b45309;margin-top:4px">Top up ${fc(Math.abs(frsShortfall))} more to reach FRS and unlock higher CPF LIFE payouts.</p>`:`<p style="font-size:8px;color:#166534;margin-top:4px">FRS achieved — consider topping up to ERS (${fc(projERS55)}) for maximum payouts.</p>`}
+</div>`;
+})()}
+
+${(()=>{
+  // Monte Carlo probability (if available)
+  if(!monteCarloData?.probSufficiency) return '';
+  const prob=monteCarloData.probSufficiency;
+  const probColor=prob>=80?"#166534":prob>=50?"#92400e":"#991b1b";
+  return `
+<h2>Monte Carlo — Probability of Sufficiency</h2>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:16px">
+  <div style="font-size:32px;font-weight:900;color:${probColor}">${prob}%</div>
+  <div>
+    <p style="font-size:9px;font-weight:700;color:#334155;margin:0 0 3px">Of 200 simulations (±1% rate variance), ${prob}% reached the projected FRS (${fc(monteCarloData.frsAtPayout)}) by payout age ${pa}.</p>
+    <p style="font-size:8px;color:#64748b;margin:0">${prob>=80?"Strong result — your plan is resilient to interest rate variation.":prob>=50?"Moderate — consider increasing RSTU top-ups or deferring payout age.":"Lower confidence — significant top-ups or later payout age recommended."}</p>
+  </div>
+  <div style="flex:1;background:#e2e8f0;border-radius:4px;height:10px;overflow:hidden">
+    <div style="height:100%;border-radius:4px;background:${probColor};width:${prob}%"></div>
+  </div>
+</div>`;
+})()}
+
+<h2>CPF LIFE Breakeven Analysis</h2>
+<table><thead><tr>
+  <th>Comparison</th><th>Result</th><th>What it means</th>
+</tr></thead><tbody>
+  <tr><td><strong>Escalating overtakes Standard</strong></td>
+    <td style="font-weight:900;color:#92400e">${intersectionEscVsStd?`Age ${intersectionEscVsStd}`:"Beyond Age 95"}</td>
+    <td style="font-size:8.5px;color:#475569">Escalating starts ~20% lower but grows 2%/yr. Cumulative total yield surpasses Standard at this age.</td></tr>
+  <tr><td><strong>Standard overtakes Basic</strong></td>
+    <td style="font-weight:900;color:#1d4ed8">${intersectionStdVsBasic?`Age ${intersectionStdVsBasic}`:"Beyond Age 95"}</td>
+    <td style="font-size:8.5px;color:#475569">Basic yields more early (RA earns 4%), but Standard overtakes after Basic RA depletes at ~90.</td></tr>
+  <tr><td><strong>Escalating overtakes Basic</strong></td>
+    <td style="font-weight:900;color:#7c3aed">${intersectionEscVsBasic?`Age ${intersectionEscVsBasic}`:"Beyond Age 95"}</td>
+    <td style="font-size:8.5px;color:#475569">Escalating's 2%/yr growth eventually compounds past Basic's early advantage.</td></tr>
+  <tr><td><strong>Esc monthly payout exceeds Standard</strong></td>
+    <td style="font-weight:900;color:#047857">${intersectionEscPayVsStdPay?`Age ${intersectionEscPayVsStdPay}`:"Beyond Age 95"}</td>
+    <td style="font-size:8.5px;color:#475569">The age your monthly Escalating cheque exceeds the fixed Standard amount.</td></tr>
+</tbody></table>
+
+${(()=>{
+  // Payout Age Sensitivity Table
+  const plans=['standard','escalating','basic'];
+  const pAges=[65,66,67,68,69,70];
+  const rows=pAges.map(testPA=>{
+    const testRows=runProjectionEngine(inputs,{maxAge:testPA,overrideContribStop:Number(inputs.contributionStopAge)||65});
+    const raRow=testRows.find(r=>r.age===testPA)||testRows[testRows.length-1];
+    const ra=raRow?.ra||0;
+    const deferYears=Math.max(0,testPA-65);
+    const deferMult=Math.pow(1.07,deferYears);
+    const stdM=Math.round((ra/100000)*540*deferMult*(inputs.isMale!==false?1:0.93));
+    const escM=Math.round(stdM*0.8);
+    const basM=Math.round(stdM*0.9);
+    const isCurrent=testPA===pa;
+    return `<tr style="background:${isCurrent?"#dcfce7":""}">
+      <td style="font-weight:${isCurrent?"900":"400"};color:${isCurrent?"#166534":""}">${testPA}${isCurrent?" ◀":""}</td>
+      <td style="text-align:right">${fc(stdM)}/mo</td>
+      <td style="text-align:right;color:#059669">${fc(escM)}/mo</td>
+      <td style="text-align:right;color:#b45309">${fc(basM)}/mo</td>
+    </tr>`;
+  }).join('');
+  return `
+<h2 style="margin-top:12px">Payout Age Sensitivity — Monthly Starting Payouts</h2>
+<p style="font-size:8px;color:#64748b;margin-bottom:6px">Each row shows estimated starting monthly payouts if CPF LIFE begins at that age. Deferring one year increases payouts by ~7% (compound). Green row = your selected payout age.</p>
+<table><thead><tr><th>Payout Age</th><th style="text-align:right">Standard</th><th style="text-align:right;color:#059669">Escalating</th><th style="text-align:right;color:#b45309">Basic</th></tr></thead>
+<tbody>${rows}</tbody></table>`;
+})()}
+</div>
+
+<!-- PAGE 5: MILESTONE ALERTS + DISCLAIMER -->
 <div class="page-break">
 <h2>Milestone Alerts</h2>
 ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</th></tr></thead><tbody>${msRows}</tbody></table>`:`<p style="color:#64748b;font-style:italic">No milestone alerts detected for current inputs.</p>`}
@@ -2127,15 +2246,29 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             <div style={{padding:"10px 16px",flexShrink:0,display:"flex",gap:8,flexWrap:"wrap",background:"var(--bg-muted)",borderBottom:"1px solid var(--border-subtle)",alignItems:"center"}}>
               {/* PDF actions */}
               {exportModal.type==="pdf" && (<>
+                {/* Orientation picker — regenerates PDF with correct @page size */}
+                <div style={{display:"flex",background:"var(--bg-input)",padding:3,borderRadius:8,border:"1px solid var(--border-strong)",gap:2}}>
+                  {[["portrait","Portrait"],["landscape","Landscape"]].map(([o,label])=>(
+                    <button key={o} onClick={()=>{
+                      setPdfOrientation(o);
+                      // Regenerate PDF with new orientation
+                      setTimeout(()=>generatePDF(),50);
+                      setExportModal(null);
+                    }} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",
+                      background:pdfOrientation===o?"var(--border-strong)":"transparent",
+                      color:pdfOrientation===o?"var(--text-bright)":"var(--text-muted)"}}>
+                      <span style={{fontSize:14}}>{o==="portrait"?"▯":"▭"}</span>{label}
+                    </button>
+                  ))}
+                </div>
                 <button onClick={()=>{
                   try {
                     const blob = new Blob([exportModal.content], {type:"text/html"});
                     const url = URL.createObjectURL(blob);
                     const win = window.open(url,"_blank");
-                    if(win){ win.onload=()=>{ setTimeout(()=>{ win.focus(); win.print(); URL.revokeObjectURL(url); },500); }; showToast("📄 Print dialog opening…"); }
+                    if(win){ win.onload=()=>{ setTimeout(()=>{ win.focus(); win.print(); URL.revokeObjectURL(url); },500); }; showToast("📄 Print dialog opening — destination: Save as PDF"); }
                     else {
                       URL.revokeObjectURL(url);
-                      // Fallback: print the iframe directly
                       const iframe = document.getElementById("pdf-preview-frame");
                       if(iframe?.contentWindow){ iframe.contentWindow.focus(); iframe.contentWindow.print(); }
                       else showToast("⚠️ Allow pop-ups for this site, then try again");
@@ -2147,14 +2280,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 }} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 18px",borderRadius:8,background:"#10b981",color:"#020617",fontWeight:800,border:"none",cursor:"pointer",fontSize:12}}>
                   <Printer style={{width:14,height:14}}/>Print / Save as PDF
                 </button>
-                <button onClick={()=>{
-                  const iframe = document.getElementById("pdf-preview-frame");
-                  if(iframe?.contentWindow){ try{ iframe.contentWindow.focus(); iframe.contentWindow.print(); }catch(e){ showToast("Please allow pop-ups and try Print / Save as PDF"); } }
-                }} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:8,background:"rgba(16,185,129,0.12)",color:"#34d399",fontWeight:700,border:"1px solid rgba(16,185,129,0.3)",cursor:"pointer",fontSize:12}}>
-                  <Printer style={{width:13,height:13}}/>Print Preview
-                </button>
                 <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:8,background:"rgba(96,165,250,0.08)",border:"1px solid rgba(96,165,250,0.2)",fontSize:10,color:"var(--text-muted)"}}>
-                  In print dialog → set <strong style={{color:"var(--text-main)",marginLeft:3,marginRight:3}}>"Save as PDF"</strong> as destination → choose orientation → click Save
+                  In print dialog → destination: <strong style={{color:"var(--text-main)",margin:"0 3px"}}>"Save as PDF"</strong> → click Save
                 </div>
               </>)}
 
@@ -2303,7 +2430,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 <div>
                   <div className="welcome-step3-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:20}}>
                     {[
-                      ["Share Link", Link, "Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."],
+                      ["Share Link", Link, "Generates a URL with your full profile encoded. Anyone opening the link sees your exact inputs and projection — no file needed."],
                       ["PDF Report", Download, "Print-ready report with gender, property pledge, OA withdrawal, OA→SA transfer, projections, CPF LIFE comparison, milestones, and sensitivity analysis."],
                       ["SEP Mode", Briefcase, "Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr proportionally allocated. BHS, ERS, and AW ceiling enforced."],
                       ["Monte Carlo", Activity, "200 simulations with ±1% rate variance. Shows probability of meeting FRS at payout age."],
@@ -2311,7 +2438,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       ["OA→SA Transfer", ArrowRightLeft, "Pre-55 annual transfer from OA to SA — earns 4% instead of 2.5%. Irreversible. Input in CPF Transfers panel."],
                       ["OA Withdrawal at 55", LogOut, "Lump-sum cash withdrawal from OA above BRS at age 55. Applied once. Input in Advanced panel."],
                       ["Property Pledge", Target, "Only BRS needed in RA at 55 (not FRS). Reduces locked-in RA but also reduces monthly CPF LIFE payouts. Toggle in Advanced panel."],
-                      ["MRSS Grant", Gift, "Matched Retirement Savings Scheme — govt tops up RA up to $600/yr for eligible members 55–70 with RA below FRS."],
+                      ["MRSS Grant", Gift, "Matched Retirement Savings Scheme — govt matches RSTU cash top-ups up to $2,000/yr (lifetime cap $20,000) for Singapore Citizens aged 55+ with RA below BRS."],
                       ["What-If Explorer", SlidersHorizontal, "Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome."]
                     ].map(([title, Icon, desc]) => (
                       <div key={title} style={{background:"var(--bg-muted)",padding:"12px",borderRadius:10,border:"1px solid var(--border-subtle)"}}>
@@ -2389,17 +2516,19 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <ArrowDownToLine style={{width:12,height:12}}/>Load Profile<input type="file" accept=".json" style={{display:"none"}} onChange={handleImportProfile}/>
             </label>
             <button onClick={()=>{
-              // APP_URL: update this to your Vercel/Netlify URL after deploying
-              const APP_URL = (window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1"||window.location.hostname==="")
-                ? window.location.href
-                : window.location.href.split("?")[0];
-              if(navigator?.clipboard?.writeText){
-                navigator.clipboard.writeText(APP_URL)
-                  .then(()=>showToast("✓ App link copied — share it with anyone!"))
-                  .catch(()=>{ prompt("Copy & share this link:",APP_URL); });
-              } else { prompt("Copy & share this link:",APP_URL); }
-            }} style={{display:"flex",alignItems:"center",gap:4,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"6px 12px",borderRadius:20,fontSize:10,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}} title="Copy the app URL to share with others">
-              <Link style={{width:12,height:12}}/>App Link
+              try {
+                const fullState={inputs,highlightPlan,viewMode,basicPremiumPct,isRealDollars,pdfOrientation};
+                const code=lzCompress(JSON.stringify(fullState));
+                const base=(window.location.origin+window.location.pathname).replace(/\/$/,'');
+                const shareURL=`${base}?p=${code}`;
+                if(navigator?.clipboard?.writeText){
+                  navigator.clipboard.writeText(shareURL)
+                    .then(()=>showToast("✓ Share link copied — opens app with your exact inputs!"))
+                    .catch(()=>{prompt("Copy & share this link:",shareURL);});
+                } else { prompt("Copy & share this link:",shareURL); }
+              } catch(e){ showToast("Could not generate share link: "+e.message); }
+            }} style={{display:"flex",alignItems:"center",gap:4,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"6px 12px",borderRadius:20,fontSize:10,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}} title="Copy a link that encodes your full profile — anyone opening it sees your exact inputs">
+              <Link style={{width:12,height:12}}/>Share Link
             </button>
             <button onClick={generatePDF} disabled={isGeneratingPdf} style={{display:"flex",alignItems:"center",gap:4,background:"rgba(16,185,129,0.15)",color:"#34d399",padding:"6px 16px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(16,185,129,0.4)",cursor:"pointer",opacity:isGeneratingPdf?0.5:1}} title="Generate a full PDF report with all charts and tables">
               {isGeneratingPdf?<Loader2 style={{width:12,height:12,animation:"spin 1s linear infinite"}}/>:<Printer style={{width:12,height:12}}/>}PDF Report
@@ -2455,14 +2584,23 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             <button onClick={()=>{setMobileMenuOpen(false);handleExportProfile();}} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}}>
               <Download style={{width:13,height:13}}/>Save Profile
             </button>
+            <label style={{display:"flex",alignItems:"center",gap:6,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}} onClick={()=>setMobileMenuOpen(false)}>
+              <ArrowDownToLine style={{width:13,height:13}}/>Load Profile
+              <input type="file" accept=".json" style={{display:"none"}} onChange={handleImportProfile}/>
+            </label>
             <button onClick={()=>{
               setMobileMenuOpen(false);
-              const url = window.location.href.split("?")[0];
-              if(navigator?.clipboard?.writeText){
-                navigator.clipboard.writeText(url).then(()=>showToast("✓ App link copied!")).catch(()=>{prompt("Copy this link:",url);});
-              } else { prompt("Copy this link:",url); }
+              try {
+                const fullState={inputs,highlightPlan,viewMode,basicPremiumPct,isRealDollars,pdfOrientation};
+                const code=lzCompress(JSON.stringify(fullState));
+                const base=(window.location.origin+window.location.pathname).replace(/\/$/,'');
+                const shareURL=`${base}?p=${code}`;
+                if(navigator?.clipboard?.writeText){
+                  navigator.clipboard.writeText(shareURL).then(()=>showToast("✓ Share link copied!")).catch(()=>{prompt("Copy this link:",shareURL);});
+                } else { prompt("Copy this link:",shareURL); }
+              } catch(e){ showToast("Could not generate share link"); }
             }} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}}>
-              <Link style={{width:13,height:13}}/>App Link
+              <Link style={{width:13,height:13}}/>Share Link
             </button>
             <button onClick={()=>{setMobileMenuOpen(false);generatePDF();}} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(16,185,129,0.15)",color:"#34d399",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(16,185,129,0.4)",cursor:"pointer"}}>
               <Printer style={{width:13,height:13}}/>PDF Report
