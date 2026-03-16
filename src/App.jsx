@@ -1643,6 +1643,8 @@ export default function App() {
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     .page-break{page-break-before:always;break-before:page;}
   }
+  /* Force orientation via print stylesheet — Chrome respects this form */
+  @media print{html{width:${(orientOverride||pdfOrientation)==="landscape"?"277mm":"190mm"}}}
   body{font-family:Arial,sans-serif;font-size:10px;color:#0f172a;background:#ffffff !important;margin:0;padding:${(orientOverride||pdfOrientation)==="landscape"?"6mm 12mm":"8mm 10mm"};-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   /* Force browser to respect orientation by setting explicit page size */
   html{width:${(orientOverride||pdfOrientation)==="landscape"?"297mm":"210mm"};max-width:${(orientOverride||pdfOrientation)==="landscape"?"297mm":"210mm"}}
@@ -2347,9 +2349,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   {[["portrait","Portrait"],["landscape","Landscape"]].map(([o,label])=>(
                     <button key={o} onClick={()=>{
                       setPdfOrientation(o);
-                      // Pass orientation directly — avoids stale React state
-                      setExportModal(null);
-                      setTimeout(()=>generatePDF(o),20);
+                      // Regenerate without closing modal — pass value directly to avoid stale state
+                      setTimeout(()=>generatePDF(o),30);
                     }} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",
                       background:pdfOrientation===o?"var(--border-strong)":"transparent",
                       color:pdfOrientation===o?"var(--text-bright)":"var(--text-muted)"}}>
@@ -2358,20 +2359,27 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   ))}
                 </div>
                 <button onClick={()=>{
-                  try {
+                  // Use the preview iframe directly — most reliable for @page CSS
+                  const iframe = document.getElementById("pdf-preview-frame");
+                  if(iframe?.contentDocument) {
+                    try {
+                      iframe.contentWindow.focus();
+                      iframe.contentWindow.print();
+                      showToast("🖨️ Print dialog open — set destination to Save as PDF");
+                    } catch(e){
+                      // Fallback: open blob in new tab
+                      const blob = new Blob([exportModal.content], {type:"text/html"});
+                      const url = URL.createObjectURL(blob);
+                      const win = window.open(url,"_blank");
+                      if(win){ win.onload=()=>{ setTimeout(()=>{ win.focus(); win.print(); URL.revokeObjectURL(url); },600); }; }
+                      else { URL.revokeObjectURL(url); showToast("⚠️ Allow pop-ups then try again"); }
+                    }
+                  } else {
                     const blob = new Blob([exportModal.content], {type:"text/html"});
                     const url = URL.createObjectURL(blob);
                     const win = window.open(url,"_blank");
-                    if(win){ win.onload=()=>{ setTimeout(()=>{ win.focus(); win.print(); URL.revokeObjectURL(url); },500); }; showToast("📄 Print dialog opening — destination: Save as PDF"); }
-                    else {
-                      URL.revokeObjectURL(url);
-                      const iframe = document.getElementById("pdf-preview-frame");
-                      if(iframe?.contentWindow){ iframe.contentWindow.focus(); iframe.contentWindow.print(); }
-                      else showToast("⚠️ Allow pop-ups for this site, then try again");
-                    }
-                  } catch(e){
-                    const iframe = document.getElementById("pdf-preview-frame");
-                    if(iframe?.contentWindow){ iframe.contentWindow.focus(); iframe.contentWindow.print(); }
+                    if(win){ win.onload=()=>{ setTimeout(()=>{ win.focus(); win.print(); URL.revokeObjectURL(url); },600); }; showToast("📄 Print dialog opening"); }
+                    else { URL.revokeObjectURL(url); showToast("⚠️ Allow pop-ups then try again"); }
                   }
                 }} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 18px",borderRadius:8,background:"#10b981",color:"#020617",fontWeight:800,border:"none",cursor:"pointer",fontSize:12}}>
                   <Printer style={{width:14,height:14}}/>Print / Save as PDF
@@ -3190,22 +3198,22 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   ))}
                 </div>
               </div>
-              {/* #3 — Sell Property at Age — outside opacity wrapper, always visible & clickable */}
-              <div style={{marginTop:8,padding:"10px 12px",borderRadius:8,background:"rgba(96,165,250,0.05)",border:"1px solid rgba(96,165,250,0.2)"}}>
-                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:6}}>
-                  🏠 Sell Property at Age
-                  <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA. Property value is removed from net worth at the sale age."/>
-                </label>
-                <input type="number" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.sellPropertyAge?"#f87171":"rgba(96,165,250,0.4)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
-                {inputErrors.sellPropertyAge&&<p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.sellPropertyAge}</p>}
-                {(Number(inputs.sellPropertyAge)||0)>0 && (
-                  <p style={{fontSize:9,color:"#60a5fa",marginTop:4,lineHeight:1.5}}>
-                    Sale at age {inputs.sellPropertyAge}: OA principal + 2.5%/yr interest refunded to OA.{inputs.usePropertyPledge?" Pledge: RA restored to FRS first.":""} Property removed from net worth.
-                  </p>
-                )}
-              </div>
             </div>
           </div>}
+          </div>
+          {/* Sell Property at Age — always visible, outside collapsible section */}
+          <div style={{background:"var(--bg-panel)",border:"1px solid rgba(96,165,250,0.25)",borderRadius:12,padding:"12px 16px",marginTop:4}}>
+            <label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:6}}>
+              🏠 Sell Property at Age
+              <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA. Property value is removed from net worth at the sale age."/>
+            </label>
+            <input type="number" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.sellPropertyAge?"#f87171":"rgba(96,165,250,0.4)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
+            {inputErrors.sellPropertyAge&&<p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.sellPropertyAge}</p>}
+            {(Number(inputs.sellPropertyAge)||0)>0 && (
+              <p style={{fontSize:9,color:"#60a5fa",marginTop:4,lineHeight:1.5}}>
+                Sale at age {inputs.sellPropertyAge}: OA principal + 2.5%/yr accrued interest refunded to OA.{inputs.usePropertyPledge?" Pledge active: RA restored to FRS first.":""} Property removed from net worth.
+              </p>
+            )}
           </div>
           {/* Gap Alert */}
           {(() => {
