@@ -2168,9 +2168,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
       {/* ONBOARDING MODAL */}
       {showWelcome && (
         <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(2,6,23,0.85)",backdropFilter:"blur(8px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:24,width:"100%",maxWidth:640,overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.5)",display:"flex",flexDirection:"column"}}>
+          <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:24,width:"100%",maxWidth:900,height:"min(90vh, 700px)",overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.5)",display:"flex",flexDirection:"column"}}>
             {/* Header */}
-            <div className="cpf-welcome-header" style={{padding:"24px 32px",borderBottom:"1px solid var(--border-subtle)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div className="cpf-welcome-header" style={{padding:"16px 24px",borderBottom:"1px solid var(--border-subtle)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div style={{display:"flex",gap:16,alignItems:"center"}}>
                 <div style={{background:"#10b98122",padding:16,borderRadius:16}}>
                   {welcomeStep === 0 && <Calculator style={{width:24,height:24,color:"#10b981"}}/>}
@@ -2197,20 +2197,20 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             </div>
             
             {/* Body */}
-            <div className="cpf-welcome-body" style={{padding:"32px",minHeight:320,overflowY:"auto"}}>
+            <div className="cpf-welcome-body" style={{padding:"24px 32px",flex:"1 1 0",minHeight:0,overflowY:"auto"}}>
               {welcomeStep === 0 && (
                 <>
-                  <p style={{color:"var(--text-main)",fontSize:15,lineHeight:1.6,marginBottom:24}}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
+                  <p style={{color:"var(--text-main)",fontSize:14,lineHeight:1.6,marginBottom:20}}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:20}}>
                     {[
                       ["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck],
                       ["Monte Carlo stress testing (200 runs)", Activity], ["Milestone alerts", Bell],
                       ["Gender-accurate payout ratios", Users], ["OA→SA transfer & OA withdrawal", ArrowRightLeft],
                       ["Property pledge (BRS mode)", Target], ["What-If Explorer sliders", SlidersHorizontal]
                     ].map(([text, Icon], i) => (
-                      <div key={i} style={{background:"var(--bg-muted)",padding:"12px 16px",borderRadius:12,display:"flex",alignItems:"center",gap:12,border:"1px solid var(--border-subtle)"}}>
-                        <Icon style={{width:16,height:16,color:"#10b981"}}/>
-                        <span style={{fontSize:13,fontWeight:600,color:"var(--text-highlight)"}}>{text}</span>
+                      <div key={i} style={{background:"var(--bg-muted)",padding:"10px 12px",borderRadius:10,display:"flex",alignItems:"center",gap:10,border:"1px solid var(--border-subtle)"}}>
+                        <Icon style={{width:13,height:13,color:"#10b981",flexShrink:0}}/>
+                        <span style={{fontSize:12,fontWeight:600,color:"var(--text-highlight)"}}>{text}</span>
                       </div>
                     ))}
                   </div>
@@ -2258,7 +2258,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               )}
               {welcomeStep === 3 && (
                 <div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:20}}>
                     {[
                       ["Share Link", Link, "Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."],
                       ["PDF Report", Download, "Print-ready report with gender, property pledge, OA withdrawal, OA→SA transfer, projections, CPF LIFE comparison, milestones, and sensitivity analysis."],
@@ -2271,16 +2271,16 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       ["MRSS Grant", Gift, "Matched Retirement Savings Scheme — govt tops up RA up to $600/yr for eligible members 55–70 with RA below FRS."],
                       ["What-If Explorer", SlidersHorizontal, "Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome."]
                     ].map(([title, Icon, desc]) => (
-                      <div key={title} style={{background:"var(--bg-muted)",padding:"16px",borderRadius:12,border:"1px solid var(--border-subtle)"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                          <Icon style={{width:16,height:16,color:"#3b82f6"}}/>
-                          <h4 style={{fontSize:13,fontWeight:700,color:"var(--text-bright)"}}>{title}</h4>
+                      <div key={title} style={{background:"var(--bg-muted)",padding:"12px",borderRadius:10,border:"1px solid var(--border-subtle)"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                          <Icon style={{width:14,height:14,color:"#3b82f6"}}/>
+                          <h4 style={{fontSize:12,fontWeight:700,color:"var(--text-bright)"}}>{title}</h4>
                         </div>
-                        <p style={{fontSize:12,color:"var(--text-muted)",lineHeight:1.4}}>{desc}</p>
+                        <p style={{fontSize:11,color:"var(--text-muted)",lineHeight:1.4}}>{desc}</p>
                       </div>
                     ))}
                   </div>
-                  <div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.3)",padding:"16px",borderRadius:"12px"}}>
+                  <div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.3)",padding:"12px 14px",borderRadius:"10px"}}>
                     <p style={{fontSize:10,color:"#fbbf24",lineHeight:1.6,textAlign:"justify"}}><strong style={{fontWeight:800}}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER} By using this tool, you acknowledge and accept that you are using the information provided at your own risk.</p>
                   </div>
                 </div>
@@ -3009,9 +3009,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     {label:"Payout Age",value:`${inputs.payoutAge}`,color:"#fbbf24"},
                   ];
                 })().map(({label,value,color},i)=>(
-                  <div key={i} style={{padding:"7px 14px",borderRight:"1px solid var(--border-subtle)",minWidth:90,flexShrink:0}}>
-                    <div style={{fontSize:9,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:2}}>{label}</div>
-                    <div style={{fontSize:12,fontWeight:900,color,fontFamily:"monospace"}}>{value}</div>
+                  <div key={i} style={{padding:"10px 14px",borderRight:"1px solid var(--border-subtle)",flex:"1 1 0",minWidth:80,textAlign:"center"}}>
+                    <div className="cpf-kpi-label" style={{fontSize:9,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:3}}>{label}</div>
+                    <div className="cpf-kpi-value" style={{fontSize:14,fontWeight:900,color,fontFamily:"monospace"}}>{value}</div>
                   </div>
                 ))}
               </div>
