@@ -1926,6 +1926,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           .docs-two-col { grid-template-columns: 1fr !important; }
           .life-chart-header { flex-direction: column !important; }
           .hero-split { grid-template-columns: 1fr !important; }
+          .hero-split > div { overflow: hidden !important; min-width: 0 !important; }
+          .hero-split svg { overflow: visible !important; }
         }
 
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
@@ -3186,7 +3188,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <p style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>Projected Total CPF Balance at Age {inputs.payoutAge}</p>
                     <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:12}}>
                       <div>
-                        <p style={{fontSize:32,fontWeight:500,margin:0,letterSpacing:"-0.5px",lineHeight:1.1,color:isRealDollars?"#fb923c":"#ffffff"}}>{formatCurrency(totalCpfAtPayout)}</p>
+                        <p style={{fontSize:32,fontWeight:500,margin:0,letterSpacing:"-0.5px",lineHeight:1.1,color:"#ffffff"}}>{formatCurrency(totalCpfAtPayout)}</p>
                         <p style={{fontSize:10,opacity:0.5,marginTop:4}}>Nominal (future $)</p>
                       </div>
                       <div style={{width:1,height:48,background:"rgba(255,255,255,0.2)"}}/>
@@ -3596,7 +3598,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                             <LineChart>
                               <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
                               <XAxis dataKey="age" type="number" domain={["dataMin","dataMax"]} stroke="var(--chart-text)" fontSize={10}/>
-                              <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={10}/>
+                              <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={10} label={{value:"CPF Balance ($)",angle:-90,position:"insideLeft",offset:14,fill:"var(--chart-text)",fontSize:9,style:{textAnchor:"middle"}}}/>
                               <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={(v,n)=>[formatCurrency(v),n]} wrapperStyle={{pointerEvents:"none"}}/>
                               <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={{fontSize:9,fontWeight:600}}/>
                               <Line data={displayAccumulation.filter(d=>d.age<=Number(inputs.payoutAge)).map(d=>({age:d.age,total:d.total}))} type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} dot={false} name="Base"/>
@@ -4288,16 +4290,15 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                     {[
-                      ["Standard vs. Escalating","Escalating starts ~20% lower but grows 2%/yr. Takes decades for cumulative total yield to catch up. Break-Even Age shows when Escalating surpasses Standard.",intersectionEscVsStd?`Age ${intersectionEscVsStd}`:"Beyond Age 95","#fbbf24","rgba(245,158,11,0.08)","rgba(245,158,11,0.3)"],
-                      ["Standard vs. Basic","In early retirement, Basic yields more total value because the 90% retained RA earns compound interest into your bequest. Once Basic RA depletes at 90, Standard overtakes.",intersectionStdVsBasic?`Age ${intersectionStdVsBasic}`:"Beyond Age 95","#60a5fa","rgba(59,130,246,0.08)","rgba(59,130,246,0.3)"],
-                      ["Escalating vs. Basic","Basic's high early bequest makes it lead initially, but Escalating's 2% annual growth compounds fastest over the extreme long term, eventually surpassing Basic.",intersectionEscVsBasic?`Age ${intersectionEscVsBasic}`:"Beyond Age 95","#c084fc","rgba(168,85,247,0.08)","rgba(168,85,247,0.3)"]
-                    ].map(([title,desc,metric,val,color,bg,border])=>(
-                      <div key={title} style={{background:bg,padding:16,borderRadius:14,border:`1px solid ${border}`}}>
-                        <h5 style={{fontWeight:700,color,marginBottom:8}}>{title}</h5>
-                        <p style={{fontSize:12,color:"var(--text-muted)",marginBottom:12,lineHeight:1.6}}>{desc}</p>
-                        <div style={{background:"var(--bg-panel-muted)",padding:10,borderRadius:10,border:`1px solid ${border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                          <span style={{fontSize:11,color:"var(--text-muted)"}}>{metric}</span>
-                          <span style={{fontSize:20,fontWeight:900,color}}>{val}</span>
+                      ["Standard vs. Escalating","Escalating starts ~20% lower but grows 2%/yr. Takes decades for cumulative total yield to catch up. Break-Even Age shows when Escalating surpasses Standard.",intersectionEscVsStd,"#fbbf24","rgba(245,158,11,0.08)","rgba(245,158,11,0.3)"],
+                      ["Standard vs. Basic","In early retirement, Basic yields more total value because the 90% retained RA earns compound interest into your bequest. Once Basic RA depletes at 90, Standard overtakes.",intersectionStdVsBasic,"#60a5fa","rgba(59,130,246,0.08)","rgba(59,130,246,0.3)"],
+                      ["Escalating vs. Basic","Basic's high early bequest makes it lead initially, but Escalating's 2% annual growth compounds fastest over the extreme long term, eventually surpassing Basic.",intersectionEscVsBasic,"#c084fc","rgba(168,85,247,0.08)","rgba(168,85,247,0.3)"]
+                    ].map(([title,desc,age,color,bg,border])=>(
+                      <div key={title} style={{background:bg,padding:16,borderRadius:14,border:`1px solid ${color}44`}}>
+                        <h5 style={{fontWeight:700,color,marginBottom:8,fontSize:13}}>{title}</h5>
+                        <p style={{fontSize:12,color:"var(--text-muted)",marginBottom:16,lineHeight:1.6}}>{desc}</p>
+                        <div style={{background:"var(--bg-base)",padding:"14px 16px",borderRadius:10,border:`1px solid ${color}33`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <span style={{fontSize:28,fontWeight:700,color,fontFamily:"monospace",letterSpacing:"-0.5px",textAlign:"center"}}>{age?`Age ${age}`:"Beyond Age 95"}</span>
                         </div>
                       </div>
                     ))}
