@@ -1799,7 +1799,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           --text-muted: #3a5068;
           --text-subtle: #5a7090;
           --header-bg: rgba(255,255,255,0.97);
-          --chart-grid: #d5dfe8;
+          --chart-grid: #c0cdd8;
           --chart-text: #5a7090;
           /* Hero panel */
           --hero-left-bg: #dbe8f5;
@@ -1893,6 +1893,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
         .desktop-only { display: flex; }
         .cpf-tabs { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; touch-action: pan-x; }
         .cpf-tabs::-webkit-scrollbar { display: none; }
+        /* Ensure active tab scrolls into view on mobile */
+        .cpf-tabs button[aria-selected="true"] { scroll-snap-align: center; }
+        .cpf-tabs { scroll-snap-type: x proximity; scroll-padding: 0 20px; }
 
         .rg-6 { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
         .rg-5 { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
@@ -1943,6 +1946,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           .cpf-welcome-body { max-height: 50vh !important; overflow-y: auto !important; }
           .welcome-step3-grid { grid-template-columns: 1fr !important; }
           .kpi-strip { grid-template-columns: 1fr 1fr !important; }
+          .kpi-strip > div { min-width: 0 !important; padding: 8px 8px !important; }
+          .cpf-kpi-value { font-size: 12px !important; }
+          .cpf-kpi-label { font-size: 8px !important; }
           body { overflow-x: hidden !important; }
           .pie-chart-wrap { flex-direction: column !important; align-items: stretch !important; }
           .pie-chart-wrap > div:first-child { width: 100% !important; }
@@ -1952,15 +1958,6 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           .hero-split { grid-template-columns: 1fr !important; }
           .hero-split > div { overflow: hidden !important; min-width: 0 !important; }
           .hero-split svg { overflow: visible !important; }
-          /* Left panel: stack nominal/real vertically, shrink fonts */
-          .hero-nums-row { grid-template-columns: 1fr !important; gap: 8px !important; }
-          .hero-divider-v { display: none !important; }
-          .hero-nom { font-size: 24px !important; }
-          .hero-real { font-size: 18px !important; }
-          /* Stat ring cards: 1-col on mobile */
-          .hero-stats-row { grid-template-columns: 1fr !important; }
-          /* Account cards: 1-col on mobile */
-          .hero-acct-grid { grid-template-columns: 1fr !important; }
           /* Yield breakeven cards: 1-col on mobile */
           .yield-cards-grid { grid-template-columns: 1fr !important; }
         }
@@ -3055,8 +3052,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     {label:"Payout Age",value:`${inputs.payoutAge}`,color:"#fbbf24"},
                   ];
                 })().map(({label,value,color},i)=>(
-                  <div key={i} style={{padding:"10px 14px",borderRight:"1px solid var(--border-subtle)",flex:"1 1 0",minWidth:80,textAlign:"center"}}>
-                    <div className="cpf-kpi-label" style={{fontSize:9,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:3}}>{label}</div>
+                  <div key={i} style={{padding:"10px 14px",borderRight:"1px solid var(--border-subtle)",flex:"1 1 0",minWidth:80,textAlign:"center",boxSizing:"border-box"}}>
+                    <div className="cpf-kpi-label" style={{fontSize:9,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
                     <div className="cpf-kpi-value" style={{fontSize:14,fontWeight:900,color,fontFamily:"monospace"}}>{value}</div>
                   </div>
                 ))}
@@ -3261,7 +3258,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       <div className="hero-stats-row" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                         {[
                           {val:`$${Math.round(totalInt/1000)}k`,lbl:"Interest earned",pct:intPct,color:"#60a5fa",tc:"#93c5fd",dash:arc(intPct)},
-                          {val:`$${Math.round(totalInj/1000)}k`,lbl:"Total contributed",pct:injPct,color:"#34d399",tc:"#6ee7b7",dash:arc(injPct)},
+                          {val:`$${Math.round(totalInj/1000)}k`,lbl:"Total inflows",pct:injPct,color:"#34d399",tc:"#6ee7b7",dash:arc(injPct)},
                           {val:`${ratio.toFixed(2)}×`,lbl:"Interest / contribution",pct:ratioPct,color:"#f59e0b",tc:"#fbbf24",dash:arc(ratioPct)},
                         ].map(({val,lbl,pct,color,tc,dash})=>(
                           <div key={lbl} style={{background:"var(--hero-card-bg)",borderRadius:10,padding:"10px",display:"flex",alignItems:"center",gap:8,overflow:"hidden"}}>
@@ -3471,7 +3468,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 if(raAt55Proj>=projERS55){statusLabel="ERS Achieved ✓";statusColor="#38bdf8";borderColor="rgba(56,189,248,0.3)";bgColor="rgba(56,189,248,0.08)";}
                 else if(raAt55Proj>=projFRS55){statusLabel="FRS Achieved ✓";statusColor="#34d399";borderColor="rgba(52,211,153,0.3)";bgColor="rgba(52,211,153,0.08)";}
                 else if(raAt55Proj>=projBRS55){statusLabel="BRS Met — FRS Gap";statusColor="#fbbf24";borderColor="rgba(251,191,36,0.3)";bgColor="rgba(251,191,36,0.08)";}
-                const trackerTitle = isAlreadyPast55 ? `FRS Tracker — Current RA (Age ${currentAge})` : "FRS Tracker — Projected RA at 55";
+                const trackerTitle = isAlreadyPast55 ? `Current RA vs FRS Target (Age ${currentAge})` : "FRS Tracker — Projected RA at 55";
                 return (
                   <div style={{padding:20,borderRadius:20,border:`1px solid ${borderColor}`,background:bgColor}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
@@ -3593,9 +3590,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     const target = e.currentTarget;
                     const willShow = !showWhatIf;
                     setShowWhatIf(willShow);
-                    if(!willShow){
-                      setWhatIfPayoutAge(null);setWhatIfSaTopup(null);setWhatIfHousing(null);setWhatIfSalaryBump(null);
-                    } else {
+                    if(willShow){
                       setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
                     }
                   }} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",borderRadius:12,fontSize:11,fontWeight:700,border:`1px solid ${showWhatIf?"rgba(16,185,129,0.5)":"var(--border-strong)"}`,background:showWhatIf?"rgba(16,185,129,0.15)":"var(--bg-input)",color:showWhatIf?"#34d399":"var(--text-muted)",cursor:"pointer"}}>
@@ -3613,6 +3608,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   const delta=whatIfTotal-baseTotal;
                   return (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
+                      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:-8}}>
+                        <button onClick={()=>{setWhatIfPayoutAge(null);setWhatIfSaTopup(null);setWhatIfHousing(null);setWhatIfSalaryBump(null);}} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:8,fontSize:10,fontWeight:700,background:"var(--bg-input)",color:"var(--text-muted)",border:"1px solid var(--border-strong)",cursor:"pointer"}}>
+                          ↺ Reset sliders
+                        </button>
+                      </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
                         {[["Payout Age",effPA,65,70,1,setWhatIfPayoutAge,"#34d399",`${effPA}`],["Annual SA/RA Top-up",effST,0,40000,500,setWhatIfSaTopup,"#34d399",formatCurrency(effST)],["Annual Housing Outflow",effH,0,Math.max(60000,(Number(inputs.housingOutflow)||0)*2),500,setWhatIfHousing,"#fb923c",formatCurrency(effH)],["Salary Increase (%)",effSB,0,50,5,setWhatIfSalaryBump,"#60a5fa",`${effSB}%`]].map(([label,val,min,max,step,setter,color,display])=>(
                           <div key={label}>
@@ -3683,15 +3683,15 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <p style={{fontWeight:700,color:"#a78bfa",marginBottom:8,fontSize:12}}>🎲 What is Monte Carlo simulation?</p>
                     <p style={{marginBottom:8}}>A Monte Carlo simulation runs your retirement projection <strong style={{color:"var(--text-bright)"}}>200 times</strong>, each time with slightly different CPF interest rates (varied by ±1% randomly). This mimics real-world uncertainty — interest rates can go up or down. The result is a <strong style={{color:"var(--text-bright)"}}>range of possible outcomes</strong>, not just one single prediction.</p>
                     <p style={{fontWeight:700,color:"#a78bfa",marginBottom:6}}>How to read the chart bands:</p>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8,alignItems:"stretch"}}>
                       {[
                         ["Purple band (shaded)","The full range between the worst 10% of outcomes (P10) and best 10% of outcomes (P90). Wider = more uncertainty.","rgba(124,58,237,0.15)"],
                         ["Dashed purple line (P50)","The median outcome — half the simulations finished above this line, half below. Think of it as the most likely single scenario.","rgba(167,139,250,0.15)"],
                         ["Probability of Sufficiency","The % of all 200 runs where your CPF at payout age was enough to meet the FRS target. 80%+ is strong; below 50% suggests risk.","rgba(52,211,153,0.1)"],
                       ].map(([title,desc,bg])=>(
-                        <div key={title} style={{padding:"8px 10px",borderRadius:8,background:bg,border:"1px solid rgba(139,92,246,0.2)"}}>
+                        <div key={title} style={{padding:"8px 10px",borderRadius:8,background:bg,border:"1px solid rgba(139,92,246,0.2)",display:"flex",flexDirection:"column"}}>
                           <div style={{fontSize:9,fontWeight:800,color:"#a78bfa",marginBottom:3}}>{title}</div>
-                          <div style={{fontSize:9,color:"var(--text-muted)",lineHeight:1.5}}>{desc}</div>
+                          <div style={{fontSize:9,color:"var(--text-muted)",lineHeight:1.5,flex:1}}>{desc}</div>
                         </div>
                       ))}
                     </div>
@@ -4070,6 +4070,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                           {(() => {
                             const pa=Number(inputs.payoutAge)||65;
                             if(row.age<pa) return <td style={{padding:"7px 8px",textAlign:"right",color:"var(--text-muted)",whiteSpace:"nowrap"}}>-</td>;
+                            if(row.age<pa+3) return <td style={{padding:"7px 8px",textAlign:"right",color:"var(--text-muted)",whiteSpace:"nowrap",fontSize:9}}>settling...</td>;
                             const xirr = xirrByAge[highlightPlan]?.[row.age];
                             if(xirr == null) return <td style={{padding:"7px 8px",textAlign:"right",color:"var(--text-muted)",whiteSpace:"nowrap"}}>—</td>;
                             const irrColor=xirr>4?"#34d399":xirr>2?"#fbbf24":"#f87171";
@@ -4097,7 +4098,23 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           {/* ── DOCS TAB ── */}
           {activeTab==="notes" && (
             <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",padding:28,borderRadius:24}}>
-              <h3 style={{fontSize:20,fontWeight:900,marginBottom:24,paddingBottom:16,borderBottom:"1px solid var(--border-subtle)",display:"flex",alignItems:"center",gap:10}}><BookOpen style={{width:22,height:22,color:"#34d399"}}/>User Guide & Financial Analysis</h3>
+              <h3 style={{fontSize:20,fontWeight:900,marginBottom:16,paddingBottom:16,borderBottom:"1px solid var(--border-subtle)",display:"flex",alignItems:"center",gap:10}}><BookOpen style={{width:22,height:22,color:"#34d399"}}/>User Guide & Financial Analysis</h3>
+              {/* Anchor navigation */}
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:24,paddingBottom:16,borderBottom:"1px solid var(--border-subtle)"}}>
+                {[
+                  ["#doc-guide","📖 User Guide"],
+                  ["#doc-policy","🛡 Policy Reference"],
+                  ["#doc-planning","🎯 Planning Tools"],
+                  ["#doc-yield","📈 Yield & XIRR"],
+                  ["#doc-montecarlo","🎲 Monte Carlo"],
+                  ["#doc-legal","⚖️ Legal Disclaimer"],
+                ].map(([href,label])=>(
+                  <a key={href} href={href} style={{display:"inline-flex",alignItems:"center",padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:700,background:"var(--bg-input)",color:"var(--text-highlight)",border:"1px solid var(--border-strong)",textDecoration:"none",cursor:"pointer"}}
+                    onClick={e=>{e.preventDefault();document.querySelector(href)?.scrollIntoView({behavior:"smooth",block:"start"});}}>
+                    {label}
+                  </a>
+                ))}
+              </div>
               <div style={{display:"flex",flexDirection:"column",gap:32,fontSize:13,lineHeight:1.7,color:"var(--text-muted)"}}>
                 
                 {/* Disclaimer */}
@@ -4107,7 +4124,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 </div>
                 
                 {/* User Guide */}
-                <section>
+                <section id="doc-guide">
                   <h4 style={{fontSize:16,fontWeight:800,color:"#60a5fa",marginBottom:16,display:"flex",alignItems:"center",gap:8}}><LayoutDashboard style={{width:18,height:18}}/>Step-by-Step User Guide</h4>
                   {[
                     ["1","Setup Your Profile","#60a5fa","rgba(59,130,246,0.08)","rgba(59,130,246,0.2)","Enter your current OA, SA, and MA balances. The progress bars will instantly compare them against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones."],
@@ -4128,7 +4145,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 </section>
                 
                 {/* CPF Policy Reference */}
-                <section>
+                <section id="doc-policy">
                   <h4 style={{fontSize:16,fontWeight:800,color:"#2dd4bf",marginBottom:16,display:"flex",alignItems:"center",gap:8}}><ShieldCheck style={{width:18,height:18}}/>CPF 2026 Policy Reference</h4>
                   
                   <div style={{background:"var(--bg-muted)",padding:18,borderRadius:14,border:"1px solid var(--border-strong)",marginBottom:16,overflowX:"auto"}}>
@@ -4208,7 +4225,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 </section>
                 
                 {/* New Planning Tools Policy Reference */}
-                <section>
+                <section id="doc-planning">
                   <h4 style={{fontSize:16,fontWeight:800,color:"#60a5fa",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><Target style={{width:18,height:18}}/>Planning Tools — Policy Reference <span style={{fontSize:11,fontWeight:400,color:"var(--text-muted)",marginLeft:8}}>(Assumptions)</span></h4>
                   <div style={{background:"var(--bg-muted)",padding:18,borderRadius:14,border:"1px solid var(--border-strong)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7}}>
                     <ul style={{listStyle:"none",padding:0,margin:0}}>
@@ -4273,7 +4290,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 </section>
 
                 {/* Self-Employed Policy */}
-                <section>
+                <section id="doc-yield">
                   <h4 style={{fontSize:16,fontWeight:800,color:"#fb923c",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><Briefcase style={{width:18,height:18}}/>Self-Employed Person (SEP) — VC3A Rules</h4>
                   <div style={{background:"var(--bg-muted)",padding:18,borderRadius:14,border:"1px solid var(--border-strong)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7}}>
                     <ul style={{listStyle:"none",padding:0,margin:0}}>
@@ -4302,7 +4319,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 </section>
 
                 {/* Actuarial Math */}
-                <section>
+                <section id="doc-montecarlo">
                   <h4 style={{fontSize:16,fontWeight:800,color:"#fb923c",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><PieChart style={{width:18,height:18}}/>Actuarial Math & Depletion Models</h4>
                   <div style={{background:"var(--bg-muted)",padding:18,borderRadius:14,border:"1px solid var(--border-strong)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7}}>
                     <ul style={{listStyle:"none",padding:0,margin:0}}>
@@ -4327,7 +4344,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 </section>
                 
                 {/* Yield Math */}
-                <section>
+                <section id="doc-legal">
                   <h4 style={{fontSize:16,fontWeight:800,color:"#fbbf24",marginBottom:12,display:"flex",alignItems:"center",gap:8}}><Scale style={{width:18,height:18}}/>Yield Intersections & "The Flatline"</h4>
                   <div style={{background:"var(--bg-muted)",padding:18,borderRadius:14,border:"1px solid var(--border-strong)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7,marginBottom:12}}>
                     <p><strong style={{color:"var(--text-highlight)"}}>The Flatline:</strong> Total Yield = Payouts Received + Remaining Bequest. Since Bequest = Initial Premium − Payouts, the formula nets out to exactly your Initial Premium. Total Yield flatlines until your Bequest hits $0 (~late 70s), then every payout becomes "pure profit" drawn from the mortality pool.</p>
