@@ -1879,9 +1879,12 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
         @media (max-width: 1024px) and (min-width: 769px) {
-          .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; }
-          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static; background: var(--bg-base); height: auto !important; overflow-y: visible !important; }
-          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; flex-direction: column !important; } .cpf-tab-content { overflow-y: visible !important; padding: 10px 14px !important; }
+          /* Revert to normal page flow — no sticky panels on tablet */
+          .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
+          .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
+          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; }
+          .cpf-tab-content { overflow-y: visible !important; padding: 10px 14px !important; }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           .cpf-main-wrap { padding: 16px 14px; }
@@ -1895,12 +1898,15 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
 
         /* ─── TABLET PORTRAIT + MOBILE  ≤ 768 px ────────────────────── */
         @media (max-width: 768px) {
-          .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; }
+          /* Revert to normal page flow — no sticky panels on mobile */
+          .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
+          .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           .cpf-header-actions .hide-mobile { display: none; }
-          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static; background: var(--bg-base); height: auto !important; overflow-y: visible !important; }
+          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
           .cpf-sidebar-inner { display: flex; flex-direction: column; gap: 12px; padding: 10px 12px 14px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
-          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; flex-direction: column !important; } .cpf-tab-content { overflow-y: visible !important; padding: 10px 10px !important; }
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; }
+          .cpf-tab-content { overflow-y: visible !important; padding: 10px 10px !important; }
           .sidebar-toggle-btn { display: flex !important; }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
@@ -2170,7 +2176,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
         <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(2,6,23,0.85)",backdropFilter:"blur(8px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:24,width:"100%",maxWidth:900,height:"min(90vh, 700px)",overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.5)",display:"flex",flexDirection:"column"}}>
             {/* Header */}
-            <div className="cpf-welcome-header" style={{padding:"16px 24px",borderBottom:"1px solid var(--border-subtle)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div className="cpf-welcome-header" style={{padding:"24px 32px",borderBottom:"1px solid var(--border-subtle)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div style={{display:"flex",gap:16,alignItems:"center"}}>
                 <div style={{background:"#10b98122",padding:16,borderRadius:16}}>
                   {welcomeStep === 0 && <Calculator style={{width:24,height:24,color:"#10b981"}}/>}
@@ -2197,20 +2203,20 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             </div>
             
             {/* Body */}
-            <div className="cpf-welcome-body" style={{padding:"24px 32px",flex:"1 1 0",minHeight:0,overflowY:"auto"}}>
+            <div className="cpf-welcome-body" style={{padding:"32px",flex:"1 1 0",minHeight:0,overflowY:"auto"}}>
               {welcomeStep === 0 && (
                 <>
-                  <p style={{color:"var(--text-main)",fontSize:14,lineHeight:1.6,marginBottom:20}}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:20}}>
+                  <p style={{color:"var(--text-main)",fontSize:15,lineHeight:1.6,marginBottom:24}}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
                     {[
                       ["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck],
                       ["Monte Carlo stress testing (200 runs)", Activity], ["Milestone alerts", Bell],
                       ["Gender-accurate payout ratios", Users], ["OA→SA transfer & OA withdrawal", ArrowRightLeft],
                       ["Property pledge (BRS mode)", Target], ["What-If Explorer sliders", SlidersHorizontal]
                     ].map(([text, Icon], i) => (
-                      <div key={i} style={{background:"var(--bg-muted)",padding:"10px 12px",borderRadius:10,display:"flex",alignItems:"center",gap:10,border:"1px solid var(--border-subtle)"}}>
-                        <Icon style={{width:13,height:13,color:"#10b981",flexShrink:0}}/>
-                        <span style={{fontSize:12,fontWeight:600,color:"var(--text-highlight)"}}>{text}</span>
+                      <div key={i} style={{background:"var(--bg-muted)",padding:"12px 16px",borderRadius:12,display:"flex",alignItems:"center",gap:12,border:"1px solid var(--border-subtle)"}}>
+                        <Icon style={{width:16,height:16,color:"#10b981"}}/>
+                        <span style={{fontSize:13,fontWeight:600,color:"var(--text-highlight)"}}>{text}</span>
                       </div>
                     ))}
                   </div>
