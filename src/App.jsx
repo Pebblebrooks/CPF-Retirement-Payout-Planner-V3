@@ -2344,19 +2344,9 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             <div style={{padding:"10px 16px",flexShrink:0,display:"flex",gap:8,flexWrap:"wrap",background:"var(--bg-muted)",borderBottom:"1px solid var(--border-subtle)",alignItems:"center"}}>
               {/* PDF actions */}
               {exportModal.type==="pdf" && (<>
-                {/* Orientation picker — regenerates PDF with correct @page size */}
-                <div style={{display:"flex",background:"var(--bg-input)",padding:3,borderRadius:8,border:"1px solid var(--border-strong)",gap:2}}>
-                  {[["portrait","Portrait"],["landscape","Landscape"]].map(([o,label])=>(
-                    <button key={o} onClick={()=>{
-                      setPdfOrientation(o);
-                      // Regenerate without closing modal — pass value directly to avoid stale state
-                      setTimeout(()=>generatePDF(o),30);
-                    }} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",
-                      background:pdfOrientation===o?"var(--border-strong)":"transparent",
-                      color:pdfOrientation===o?"var(--text-bright)":"var(--text-muted)"}}>
-                      <span style={{fontSize:14}}>{o==="portrait"?"▯":"▭"}</span>{label}
-                    </button>
-                  ))}
+                {/* Orientation: Chrome ignores @page size — user sets it in the print dialog */}
+                <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:8,background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.25)",fontSize:10,color:"#fbbf24"}}>
+                  <span style={{fontWeight:700}}>Landscape:</span> In print dialog → <strong style={{color:"var(--text-main)"}}>More settings → Layout → Landscape</strong>
                 </div>
                 <button onClick={()=>{
                   // Use the preview iframe directly — most reliable for @page CSS
@@ -3200,7 +3190,6 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
             </div>
           </div>}
-          </div>
           {/* Sell Property at Age — always visible, outside collapsible section */}
           <div style={{background:"var(--bg-panel)",border:"1px solid rgba(96,165,250,0.25)",borderRadius:12,padding:"12px 16px",marginTop:4}}>
             <label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:6}}>
