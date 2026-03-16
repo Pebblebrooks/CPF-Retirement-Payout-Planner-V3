@@ -3179,25 +3179,34 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}} className="hero-split">
 
                 {/* LEFT: projected total + nominal/real + 3 stat rings */}
-                <div style={{background:"#1e3a5f",borderRadius:16,padding:"22px",color:"#fff",position:"relative",overflow:"visible",display:"flex",flexDirection:"column"}}>
-                  <svg style={{position:"absolute",right:-10,top:-10,opacity:0.07,pointerEvents:"none"}} width="180" height="180" viewBox="0 0 100 100">
+                <div style={{background:"#1e3a5f",borderRadius:16,padding:"22px",color:"#fff",position:"relative",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                  <svg style={{position:"absolute",right:0,top:0,opacity:0.07,pointerEvents:"none"}} width="160" height="160" viewBox="0 0 100 100">
                     <path d="M10 90 L80 20 M55 20 L80 20 L80 45" fill="none" stroke="white" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                  {/* Top block: numbers */}
-                  <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",paddingBottom:16}}>
-                    <p style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>Projected Total CPF Balance at Age {inputs.payoutAge}</p>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:12}}>
-                      <div>
-                        <p style={{fontSize:32,fontWeight:500,margin:0,letterSpacing:"-0.5px",lineHeight:1.1,color:"#ffffff"}}>{formatCurrency(totalCpfAtPayout)}</p>
-                        <p style={{fontSize:10,opacity:0.5,marginTop:4}}>Nominal (future $)</p>
+                  {/* Top block: numbers — always use raw projection, never displayAccumulation */}
+                  {(()=>{
+                    const rawRow=projection.find(d=>d.age===Number(inputs.payoutAge))||{};
+                    const nominalTotal=(rawRow.oa||0)+(rawRow.sa||0)+(rawRow.ma||0)+(rawRow.ra||0);
+                    const years=Math.max(0,Number(inputs.payoutAge)-Number(inputs.currentAge));
+                    const inflRate=(Number(inputs.inflationRate)||2)/100;
+                    const realTotal=Math.round(nominalTotal/Math.pow(1+inflRate,years));
+                    return (
+                      <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",paddingBottom:16}}>
+                        <p style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>Projected Total CPF Balance at Age {inputs.payoutAge}</p>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:12}}>
+                          <div>
+                            <p style={{fontSize:32,fontWeight:500,margin:0,letterSpacing:"-0.5px",lineHeight:1.1,color:"#ffffff"}}>{formatCurrency(nominalTotal)}</p>
+                            <p style={{fontSize:10,opacity:0.5,marginTop:4}}>Nominal (future $)</p>
+                          </div>
+                          <div style={{width:1,height:48,background:"rgba(255,255,255,0.2)"}}/>
+                          <div>
+                            <p style={{fontSize:24,fontWeight:500,margin:0,letterSpacing:"-0.3px",lineHeight:1.1,opacity:0.7}}>{formatCurrency(realTotal)}</p>
+                            <p style={{fontSize:10,opacity:0.5,marginTop:4}}>Real (today's $, {inputs.inflationRate||2}% infl.)</p>
+                          </div>
+                        </div>
                       </div>
-                      <div style={{width:1,height:48,background:"rgba(255,255,255,0.2)"}}/>
-                      <div>
-                        <p style={{fontSize:24,fontWeight:500,margin:0,letterSpacing:"-0.3px",lineHeight:1.1,opacity:0.7}}>{formatCurrency(Math.round(totalCpfAtPayout/Math.pow(1+(Number(inputs.inflationRate)||2)/100,Math.max(0,Number(inputs.payoutAge)-Number(inputs.currentAge)))))}</p>
-                        <p style={{fontSize:10,opacity:0.5,marginTop:4}}>Real (today's $, {inputs.inflationRate||2}% infl.)</p>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
                   {/* Divider */}
                   <div style={{height:1,background:"rgba(255,255,255,0.1)",marginBottom:16}}/>
                   {/* Bottom block: 3 stat rings */}
@@ -3220,7 +3229,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                           {val:`$${Math.round(totalInj/1000)}k`,lbl:"Total contributed",pct:injPct,color:"#34d399",tc:"#6ee7b7",dash:arc(injPct)},
                           {val:`${ratio.toFixed(2)}×`,lbl:"Interest / contribution",pct:ratioPct,color:"#f59e0b",tc:"#fbbf24",dash:arc(ratioPct)},
                         ].map(({val,lbl,pct,color,tc,dash})=>(
-                          <div key={lbl} style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"10px",display:"flex",alignItems:"center",gap:8,overflow:"visible"}}>
+                          <div key={lbl} style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"10px",display:"flex",alignItems:"center",gap:8,overflow:"hidden"}}>
                             <svg width="48" height="48" viewBox="0 0 48 48" style={{flexShrink:0,overflow:"visible"}}>
                               <circle cx="24" cy="24" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
                               <circle cx="24" cy="24" r={r} fill="none" stroke={color} strokeWidth="4"
@@ -3239,7 +3248,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 </div>
 
                 {/* RIGHT: 2×2 account balance cards with rings */}
-                <div style={{background:"#162032",border:"1px solid #2d4a6e",borderRadius:16,padding:20,color:"#fff",display:"flex",flexDirection:"column"}}>
+                <div style={{background:"#162032",border:"1px solid #2d4a6e",borderRadius:16,padding:20,color:"#fff",display:"flex",flexDirection:"column",overflow:"hidden"}}>
                   <p style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>Account Balances at Age {inputs.payoutAge}</p>
                   {(()=>{
                     const tot2=(payoutAgeData.oa||0)+(payoutAgeData.ma||0)+(payoutAgeData.ra||0)||1;
@@ -3256,7 +3265,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                           const pct=closed?0:Math.round(((val||0)/tot2)*100);
                           const dash=(pct/100)*circ2;
                           return (
-                            <div key={label} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:12,display:"flex",alignItems:"center",gap:10,overflow:"visible",opacity:closed?0.45:1}}>
+                            <div key={label} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:12,display:"flex",alignItems:"center",gap:10,overflow:"hidden",opacity:closed?0.45:1}}>
                               <div style={{flex:1,minWidth:0}}>
                                 <p style={{fontSize:9,fontWeight:600,opacity:0.5,textTransform:"uppercase",letterSpacing:"0.07em",margin:"0 0 3px"}}>{label}</p>
                                 {closed
