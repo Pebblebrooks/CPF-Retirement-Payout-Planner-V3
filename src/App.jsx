@@ -1995,7 +1995,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
     } catch(e) { alert("Report failed: "+e.message); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
   };
   return (
-    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflow:"hidden"}}>
+    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif"}}>
         <style>{`
         /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
         html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow-x: hidden !important; }
@@ -2716,7 +2716,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             <button onClick={()=>{setMobileMenuOpen(false);handleExportProfile();}} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}}>
               <Download style={{width:13,height:13}}/>Save Profile
             </button>
-            <label style={{display:"flex",alignItems:"center",gap:6,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}} onClick={()=>setMobileMenuOpen(false)}>
+            <label style={{display:"flex",alignItems:"center",gap:6,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}} onClick={()=>setTimeout(()=>setMobileMenuOpen(false),300)}>
               <ArrowDownToLine style={{width:13,height:13}}/>Load Profile
               <input type="file" accept=".json" style={{display:"none"}} onChange={handleImportProfile}/>
             </label>
