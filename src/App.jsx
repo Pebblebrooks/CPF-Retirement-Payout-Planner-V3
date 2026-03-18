@@ -12,7 +12,7 @@ import {
   LayoutDashboard, RotateCcw, Activity, Bell, X,
   SlidersHorizontal, Percent, Link, Target,
   Moon, Sun, Monitor, Lightbulb, Copy, ChevronDown, ChevronUp,
-  ArrowRightLeft, LogOut, Users
+  ArrowRightLeft, LogOut, Users, ExternalLink
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
@@ -729,7 +729,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  });
+  }, []);
 
   const is55Plus = (Number(inputs.currentAge) || 0) >= 55;
   const isSelfEmployed = inputs.isSelfEmployed === true;
@@ -1166,7 +1166,8 @@ export default function App() {
       cpfisAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
-      salaryGross, salaryBonus, salaryGrowthRate
+      salaryGross, salaryBonus, salaryGrowthRate,
+      sellPropertyAge
     } = debouncedInputs;
     return JSON.stringify({
       currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
@@ -1178,7 +1179,8 @@ export default function App() {
       cpfisAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
-      salaryGross, salaryBonus, salaryGrowthRate
+      salaryGross, salaryBonus, salaryGrowthRate,
+      sellPropertyAge
     });
   }, [debouncedInputs]);
   const projection = useMemo(() => runProjectionEngine(debouncedInputs), [engineKey]); // eslint-disable-line
@@ -1445,6 +1447,8 @@ export default function App() {
     });
   }, [projection, basicPremiumPct]);
 
+  const formatCurrency = val => "$"+Math.round(Number(val)||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");
+
   const milestones = useMemo(() => {
     const alerts=[]; const payoutAge=Number(inputs.payoutAge)||65; const ca=Number(inputs.currentAge)||35; const cy=Number(inputs.currentYear)||2026;
     if(!projection||projection.length===0) return alerts;
@@ -1532,7 +1536,6 @@ export default function App() {
     return result;
   }, [projection, payoutProjection, inputs.payoutAge, inputs.currentAge]);
 
-  const formatCurrency = val => "$"+Math.round(Number(val)||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");
   
   const TooltipBox = ({ id, text }) => {
     const isOpen = showTooltipId === id;
