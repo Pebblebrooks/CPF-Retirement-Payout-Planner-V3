@@ -706,6 +706,33 @@ export default function App() {
     return () => document.removeEventListener('click', dismiss);
   }, []);
 
+  // iOS Safari keyboard dismiss fix — directly update root div height when keyboard closes
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let ticking = false;
+    const onResize = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const h = vv.height + 'px';
+        // Set CSS variable (for any CSS rules using it)
+        document.documentElement.style.setProperty('--viewport-height', h);
+        // Directly set the root div height — bypasses any inline style specificity
+        if (rootRef.current) rootRef.current.style.height = h;
+        ticking = false;
+      });
+    };
+    // Set immediately on mount
+    onResize();
+    vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
+    return () => {
+      vv.removeEventListener('resize', onResize);
+      vv.removeEventListener('scroll', onResize);
+    };
+  }, []);
+
   // Keyboard Shortcuts
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
@@ -1968,13 +1995,19 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
     } catch(e) { alert("Report failed: "+e.message); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
   };
   return (
-    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{height:"100vh", minHeight:"-webkit-fill-available", width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflow:"hidden"}}>
+    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflow:"hidden"}}>
         <style>{`
         /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
         html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow-x: hidden !important; }
         #root { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; display: flex; min-height: 100vh; min-height: 100dvh; }
-        :root { --app-height: 100vh; }
-        @supports (height: 100dvh) { :root { --app-height: 100dvh; } .theme-dark, .theme-light { height: 100dvh !important; } }
+        :root { --app-height: 100vh; --viewport-height: 100vh; }
+        @supports (height: 100dvh) { :root { --app-height: 100dvh; --viewport-height: 100dvh; } }
+        /* Base height on theme classes — controlled by JS on mobile */
+        .theme-dark, .theme-light { height: 100vh; height: 100dvh; overflow: hidden; }
+        /* iOS Safari keyboard fix — JS sets rootRef height directly via visualViewport */
+        @media (max-width: 1024px) {
+          .theme-dark, .theme-light { height: var(--viewport-height, 100dvh) !important; min-height: var(--viewport-height, 100dvh) !important; }
+        }
         .theme-dark {
           --bg-base: #060d1f;
           --bg-panel: #0d1b2e;
