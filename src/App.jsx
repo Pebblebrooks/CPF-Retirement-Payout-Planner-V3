@@ -3406,17 +3406,14 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           {/* ── SUMMARY TAB ── */}
           {activeTab==="summary" && (
             <div style={{display:"flex",flexDirection:"column",gap:20}}>
-              {/* Summary tab intro — collapsible */}
-              {(()=>{
-                const [open,setOpen]=React.useState(false);
-                return (
-                <div style={{borderRadius:14,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",overflow:"hidden"}}>
-                  <div onClick={()=>setOpen(v=>!v)} style={{padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}}>
-                    <p style={{fontWeight:700,color:"var(--text-highlight)",margin:0,fontSize:12}}>📋 Summary Tab — What You're Looking At</p>
-                    <span style={{fontSize:11,color:"var(--text-muted)"}}>{open?"▲ Hide":"▼ Show"}</span>
-                  </div>
-                  {open && <div style={{padding:"0 18px 14px",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
+              {/* Summary tab intro — collapsible via native <details> (no hooks) */}
+              <details style={{borderRadius:14,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",overflow:"hidden"}}>
+                <summary style={{padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none",listStyle:"none",outline:"none"}}>
+                  <p style={{fontWeight:700,color:"var(--text-highlight)",margin:0,fontSize:12}}>📋 Summary Tab — What You're Looking At</p>
+                  <span style={{fontSize:11,color:"var(--text-muted)"}}>▼ Show</span>
+                </summary>
+                <div style={{padding:"0 18px 14px",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
                   {[
                     ["💰 Projected Total CPF","Your total OA + MA + RA balance at your chosen payout age. This is the nest egg that funds CPF LIFE payouts."],
                     ["📊 Account Balances","Breakdown of OA, MA, SA, and RA at payout age. SA shows 'Merged into RA' for members aged 55+."],
@@ -3435,10 +3432,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     </div>
                   ))}
                 </div>
-                </div>}
                 </div>
-                );
-              })()}
+              </details>
               {isRealDollars ? (
                 <div style={{background:"rgba(59,130,246,0.15)",border:"1px solid rgba(59,130,246,0.3)",padding:10,textAlign:"center",fontSize:12,fontWeight:700,color:"#93c5fd",borderRadius:10}}>Displaying Real Dollars (Adjusted for {inputs.inflationRate}% Inflation)</div>
               ) : (
@@ -4118,17 +4113,14 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             <div style={{background:"var(--bg-panel)",border:"1px solid var(--border-subtle)",padding:24,borderRadius:24,display:"flex",flexDirection:"column",gap:20}}>
               <div className="life-chart-header" style={{display:"flex",flexDirection:"column",gap:10}}>
                 <h3 style={{fontSize:18,fontWeight:800}}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
-                {/* LIFE tab intro — collapsible */}
-                {(()=>{
-                  const [open,setOpen]=React.useState(false);
-                  return (
-                  <div style={{borderRadius:12,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",overflow:"hidden"}}>
-                    <div onClick={()=>setOpen(v=>!v)} style={{padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}}>
-                      <p style={{fontWeight:700,color:"var(--text-highlight)",margin:0,fontSize:12}}>📊 LIFE Tab — How to Read This Tab</p>
-                      <span style={{fontSize:11,color:"var(--text-muted)"}}>{open?"▲ Hide":"▼ Show"}</span>
-                    </div>
-                    {open && <div style={{padding:"0 16px 12px",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,marginBottom:8}}>
+                {/* LIFE tab intro — collapsible via native <details> (no hooks) */}
+                <details style={{borderRadius:12,background:"var(--bg-panel-muted)",border:"1px solid var(--border-subtle)",overflow:"hidden"}}>
+                  <summary style={{padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none",listStyle:"none",outline:"none"}}>
+                    <p style={{fontWeight:700,color:"var(--text-highlight)",margin:0,fontSize:12}}>📊 LIFE Tab — How to Read This Tab</p>
+                    <span style={{fontSize:11,color:"var(--text-muted)"}}>▼ Show</span>
+                  </summary>
+                  <div style={{padding:"0 16px 12px",fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,marginBottom:8}}>
                     {[
                       ["📈 The Line Chart","Shows monthly payout, annual payout, bequest, or cumulative total yield from age "+inputs.payoutAge+" to 95 for all three LIFE plans simultaneously. Toggle view modes using the buttons above the chart."],
                       ["Standard Plan (grey)","Level flat monthly payout for life. 100% of RA transferred as premium. Predictable income but no inflation protection."],
@@ -4144,10 +4136,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     ))}
                   </div>
                   <p style={{fontSize:10,color:"var(--text-subtle)"}}>💡 <strong>Tip:</strong> Use the plan selector (Standard / Escalating / Basic) to highlight one plan's line. The other two are dimmed for clarity. Hover over the chart to see exact values at any age.</p>
-                    </div>}
                   </div>
-                  );
-                })()}
+                </details>
                 <div style={{display:"flex",background:"var(--bg-input)",padding:4,borderRadius:10,gap:2,alignSelf:"flex-start"}}>
                   {["standard","escalating","basic"].map(plan=>(
                     <button key={plan} onClick={()=>setHighlightPlan(plan)} style={{padding:"6px 12px",borderRadius:8,fontSize:10,fontWeight:800,textTransform:"uppercase",border:"none",cursor:"pointer",background:highlightPlan===plan?"#10b981":"transparent",color:highlightPlan===plan?"#020617":"var(--text-muted)"}}>
