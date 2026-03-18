@@ -3273,7 +3273,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           </div>
           </div>
           </div>
-          </div>{/* /cpf-sidebar-inner */}
+          </div>
         </aside>
         {/* MAIN CONTENT */}
         <section className="cpf-main-wrap" style={{minWidth:0,boxSizing:"border-box",width:"100%"}}>
