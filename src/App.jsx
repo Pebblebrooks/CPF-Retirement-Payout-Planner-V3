@@ -1968,11 +1968,13 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
     } catch(e) { alert("Report failed: "+e.message); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
   };
   return (
-    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{height:"100vh", width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflow:"hidden"}}>
+    <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{height:"100vh", minHeight:"-webkit-fill-available", width:"100%", display:"flex", flexDirection:"column", background:"var(--bg-base)",color:"var(--text-main)",fontFamily:"system-ui,sans-serif",overflow:"hidden"}}>
         <style>{`
         /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
         html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow-x: hidden !important; }
-        #root { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; display: flex; min-height: 100vh; }
+        #root { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; display: flex; min-height: 100vh; min-height: 100dvh; }
+        :root { --app-height: 100vh; }
+        @supports (height: 100dvh) { :root { --app-height: 100dvh; } .theme-dark, .theme-light { height: 100dvh !important; } }
         .theme-dark {
           --bg-base: #060d1f;
           --bg-panel: #0d1b2e;
@@ -2202,7 +2204,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
           .mobile-menu-btn { display: flex !important; }
           .cpf-header-actions > *:not(.mobile-menu-btn):not(.sidebar-toggle-btn) { display: none !important; }
           .cpf-header-actions { gap: 4px; }
-          .cpf-mobile-menu { display: flex !important; flex-direction: column; gap: 8px; position: fixed; top: 54px; right: 0; left: 0; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); padding: 12px 14px; z-index: 49; box-shadow: 0 8px 24px rgba(0,0,0,0.3); max-height: calc(100vh - 54px); overflow-y: auto; }
+          .cpf-mobile-menu { display: flex !important; flex-direction: column; gap: 8px; position: fixed; top: 54px; right: 0; left: 0; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); padding: 12px 14px; z-index: 49; box-shadow: 0 8px 24px rgba(0,0,0,0.3); max-height: calc(100vh - 54px); max-height: calc(100dvh - 54px); overflow-y: auto; }
           .cpf-mobile-menu-row { display: flex; gap: 8px; flex-wrap: wrap; }
           .cpf-logo-text { font-size: 13px !important; }
           .cpf-logo-sub  { display: none !important; }
