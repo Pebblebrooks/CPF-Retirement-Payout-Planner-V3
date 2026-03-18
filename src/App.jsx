@@ -3190,6 +3190,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
             </div>
           </div>}
+          </div>
           {/* Sell Property at Age — always visible, outside collapsible section */}
           <div style={{background:"var(--bg-panel)",border:"1px solid rgba(96,165,250,0.25)",borderRadius:12,padding:"12px 16px",marginTop:4}}>
             <label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:6}}>
