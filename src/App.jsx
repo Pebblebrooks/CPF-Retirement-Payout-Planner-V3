@@ -3308,8 +3308,8 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     {label:ra55Label||"RA at 55",value:formatCurrency(ra55),color:"#a855f7",tip:ca2>=55?"Current Retirement Account balance — determines CPF LIFE payout tier (BRS/FRS/ERS)":"Projected RA at age 55 — determines CPF LIFE payout tier (BRS/FRS/ERS)"},
                     {label:"Payout Age",value:`${inputs.payoutAge}`,color:"#fbbf24",tip:"Age CPF LIFE payouts begin. Deferring adds ~7%/yr to monthly amount"},
                   ];
-                })().map(({label,value,color},i)=>(
-                  <div key={i} title={item.tip||""} style={{padding:"10px 14px",borderRight:"1px solid var(--border-subtle)",flex:"1 1 0",minWidth:80,textAlign:"center",boxSizing:"border-box",cursor:"help"}}>
+                })().map(({label,value,color,tip},i)=>(
+                  <div key={i} title={tip||""} style={{padding:"10px 14px",borderRight:"1px solid var(--border-subtle)",flex:"1 1 0",minWidth:80,textAlign:"center",boxSizing:"border-box",cursor:"help"}}>
                     <div className="cpf-kpi-label" style={{fontSize:9,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
                     <div className="cpf-kpi-value" style={{fontSize:14,fontWeight:900,color,fontFamily:"monospace"}}>{value}</div>
                   </div>
