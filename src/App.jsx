@@ -12,7 +12,7 @@ import {
   LayoutDashboard, RotateCcw, Activity, Bell, X,
   SlidersHorizontal, Percent, Link, Target,
   Moon, Sun, Monitor, Lightbulb, Copy, ChevronDown, ChevronUp,
-  ArrowRightLeft, LogOut, Users, ExternalLink
+  ArrowRightLeft, LogOut, Users, ExternalLink, Home
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
