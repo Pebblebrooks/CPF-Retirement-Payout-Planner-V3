@@ -526,7 +526,7 @@ export default function App() {
   }, [inputs]);
 
   // #8 — Warn before leaving if inputs differ from last saved state
-  const lastSavedRef = React.useRef(JSON.stringify(inputs));
+  const lastSavedRef = useRef(JSON.stringify(inputs));
   useEffect(() => {
     const handler = (e) => {
       if (JSON.stringify(inputs) !== lastSavedRef.current) {
