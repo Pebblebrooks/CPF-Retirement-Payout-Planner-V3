@@ -3268,6 +3268,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
             );
           })()}
+          </div>
+          </div>
+          </div>
+          </div>
+          </div>
           </div>{/* /cpf-sidebar-inner */}
         </aside>
         {/* MAIN CONTENT */}
@@ -4413,8 +4418,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                         const pa=Number(inputs.payoutAge)||65;
                         return [r.age,Math.round(base.oa||0),Math.round((base.sa||0)+(base.ra||0)),Math.round(base.ma||0),Math.round((base.oa||0)+(base.sa||0)+(base.ma||0)+(base.ra||0)),Math.round(base.injected||0),Math.round(base.outflow||0),r.age>=pa?Math.round(r.standardAnnual||0):"",r.age>=pa?Math.round(r.escalatingAnnual||0):"",r.age>=pa?Math.round(r.basicAnnual||0):"",Math.round(r[`${highlightPlan}NetWorth`]||0)];
                       })];
-                      const csv=rows.map(r=>r.join(",")).join("
-");
+                      const csv=rows.map(r=>r.join(",")).join("\n");
                       const blob=new Blob([csv],{type:"text/csv"});
                       const url=URL.createObjectURL(blob);
                       const a=document.createElement("a");
