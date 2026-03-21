@@ -800,9 +800,10 @@ export default function App() {
   };
 
   const handleBlur = (e) => {
-    let { name, value } = e.target;
+    let { name } = e.target;
     setInputs(prev => {
-      const next = { ...prev, [name]: (value === "" || isNaN(Number(value))) ? 0 : value };
+      let currentVal = prev[name];
+      const next = { ...prev, [name]: (currentVal === "" || isNaN(Number(currentVal))) ? 0 : Number(currentVal) };
       validateInputs(next);
       return next;
     });
@@ -949,6 +950,7 @@ export default function App() {
 
   const handleImportProfile = (e) => {
     const file = e.target.files[0]; if (!file) return;
+    const target = e.target;
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -971,15 +973,18 @@ export default function App() {
           // Restore scenario slots (full projection saved since this session)
           if (p.scenarioA) setScenarioA(p.scenarioA); else setScenarioA(null);
           if (p.scenarioB) setScenarioB(p.scenarioB); else setScenarioB(null);
+          setMobileMenuOpen(false);
           showToast("✓ Full profile restored (inputs + scenarios + settings)");
         } else {
           // Legacy: old format was just the inputs object
           setInputs(prev => ({...DEFAULT_INPUTS, ...p}));
+          setMobileMenuOpen(false);
           showToast("✓ Profile inputs imported");
         }
       } catch { alert("Invalid profile file."); }
+      target.value = "";
     };
-    reader.readAsText(file); e.target.value="";
+    reader.readAsText(file);
   };
 
   // ── Lightweight LZ77-style compression for short share URLs ──
@@ -2716,7 +2721,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             <button onClick={()=>{setMobileMenuOpen(false);handleExportProfile();}} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}}>
               <Download style={{width:13,height:13}}/>Save Profile
             </button>
-            <label style={{display:"flex",alignItems:"center",gap:6,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}} onClick={()=>setTimeout(()=>setMobileMenuOpen(false),300)}>
+            <label style={{display:"flex",alignItems:"center",gap:6,background:"rgba(59,130,246,0.1)",color:"#60a5fa",padding:"8px 14px",borderRadius:20,fontSize:11,fontWeight:700,border:"1px solid rgba(59,130,246,0.3)",cursor:"pointer"}}>
               <ArrowDownToLine style={{width:13,height:13}}/>Load Profile
               <input type="file" accept=".json" style={{display:"none"}} onChange={handleImportProfile}/>
             </label>
