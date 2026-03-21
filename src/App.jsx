@@ -916,8 +916,8 @@ export default function App() {
       viewMode,
       basicPremiumPct,
       // Scenario comparison state
-      scenarioA: scenarioA ? { projection: scenarioA.projection, inputs: scenarioA.inputs, label: scenarioA.label } : null,
-      scenarioB: scenarioB ? { projection: scenarioB.projection, inputs: scenarioB.inputs, label: scenarioB.label } : null,
+      scenarioA: scenarioA ? { projection: scenarioA.projection, payoutProj: scenarioA.payoutProj, inputs: scenarioA.inputs, label: scenarioA.label } : null,
+      scenarioB: scenarioB ? { projection: scenarioB.projection, payoutProj: scenarioB.payoutProj, inputs: scenarioB.inputs, label: scenarioB.label } : null,
       scenarioLabelA,
       scenarioLabelB,
       // What-If explorer state
@@ -2801,7 +2801,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                 {[["currentYear","Curr Year"],["currentAge","Curr Age"]].map(([n,l])=>(
                   <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:inputErrors[n]?"#f87171":"#34d399",textTransform:"uppercase",marginBottom:4}}>{l}{inputErrors[n]&&<span style={{marginLeft:4,fontSize:9,color:"#f87171"}}>⚠ {inputErrors[n]}</span>}</label>
-                    <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
+                    <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
                 ))}
                 <div><label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>Payout At</label>
                   <select name="payoutAge" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}>
@@ -2823,7 +2823,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
               {[["oaBalance","Ordinary (OA)"],["saBalance",is55Plus?"Retirement (RA)":"Special (SA)"],["maBalance","MediSave (MA)"]].map(([n,l])=>(
                 <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l+' balance'} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                  <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l+' balance'} style={{width:"100%",padding:"8px 12px",background:"var(--bg-input)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
               ))}
             </div>
             {/* Goal Trackers */}
@@ -2897,11 +2897,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   {[["salaryGross","OW / Monthly Gross ($)"],["salaryBonus","AW / Annual Bonus ($)"]].map(([n,l])=>(
                     <div key={n}><label style={{display:"block",fontSize:9,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:3}}>{l}</label>
-                      <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{width:"100%",padding:"6px 10px",background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:6,color:"var(--text-bright)",fontSize:11,outline:"none",boxSizing:"border-box"}}/></div>
+                      <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{width:"100%",padding:"6px 10px",background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:6,color:"var(--text-bright)",fontSize:11,outline:"none",boxSizing:"border-box"}}/></div>
                   ))}
                 </div>
                 <div><label style={{display:"block",fontSize:9,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:3}}>Salary Growth Rate (% /yr)</label>
-                  <input type="number" name="salaryGrowthRate" value={inputs.salaryGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual salary growth rate" step="0.5" style={{width:"100%",padding:"6px 10px",background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:6,color:"var(--text-bright)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input type="text" inputMode="decimal" name="salaryGrowthRate" value={inputs.salaryGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual salary growth rate" step="0.5" style={{width:"100%",padding:"6px 10px",background:"var(--bg-panel)",border:"1px solid var(--border-strong)",borderRadius:6,color:"var(--text-bright)",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   <p style={{fontSize:9,color:"var(--text-muted)",marginTop:2}}>OW ceiling: $8,000/mo · AW ceiling: $102,000/yr</p>
                 </div>
                 <button onClick={handleAutoCalc} style={{width:"100%",background:"#10b981",color:"#020617",fontWeight:700,padding:"7px",borderRadius:8,fontSize:11,border:"none",cursor:"pointer"}}>⚡ Auto-Calc CPF Contributions</button>
@@ -2940,7 +2940,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             {!isSelfEmployed && <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {[["empOaCont","OA"],["empSaCont",is55Plus?"RA":"SA/RA"],["empMaCont","MA"]].map(([n,l])=>(
                 <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:"#34d399",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                  <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
               ))}
             </div>}
           </div>}
@@ -2974,7 +2974,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   VC3A – Cash Lump Sum
                   <TooltipBox id="t-vc3a" text="Voluntary Contribution to 3 Accounts — cash only. Auto-split across OA/SA/MA using your age-band allocation rates. Counts toward the $37,740 Annual Limit. No tax relief for employees."/>
                 </label>
-                <input type="number" name="vc3aCash" value={inputs.vc3aCash} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="VC3A annual cash contribution" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${isVcOverLimit?"#f97316":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="vc3aCash" value={inputs.vc3aCash} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="VC3A annual cash contribution" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${isVcOverLimit?"#f97316":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Auto-split by age-band rates · max {formatCurrency(Math.max(0,maxAllowableVC))}/yr remaining · no tax relief</p>
                 {/* Read-only breakdown of how lump-sum is auto-split */}
                 {(Number(inputs.vc3aCash)||0) > 0 && (() => {
@@ -3012,7 +3012,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   RSTU – {is55Plus?"RA":"SA/RA"} Cash Top-up
                   <TooltipBox id="t-rstu" text={`Retirement Sum Topping-Up Scheme — cash top-up to your ${is55Plus?"RA":"SA/RA"} directly (not split across accounts). Eligible for up to $8,000/yr tax relief (own account) + $8,000 for loved ones. Capped at FRS (SA) or ERS (RA). NOT counted in Annual Limit.`}/>
                 </label>
-                <input type="number" name="vcSaTopup" value={inputs.vcSaTopup} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="RSTU annual cash top-up" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="vcSaTopup" value={inputs.vcSaTopup} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="RSTU annual cash top-up" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Tax relief up to $8,000/yr · not in Annual Limit · capped at {is55Plus?"ERS":"FRS"}</p>
               </div>
 
@@ -3022,7 +3022,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   Housing Refund – VHR (to OA)
                   <TooltipBox id="t-vhr" text="Voluntary Housing Refund: cash returned to OA to offset CPF used for housing. Credited to OA. Counts toward Annual Limit."/>
                 </label>
-                <input type="number" name="vcVhr" value={inputs.vcVhr} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Voluntary housing refund" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="vcVhr" value={inputs.vcVhr} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Voluntary housing refund" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
               </div>
 
               {/* Gov grants */}
@@ -3031,7 +3031,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   Gov Grants (to {is55Plus?"RA":"SA/RA"})
                   <TooltipBox id="t-govgrant" text="Government grants credited to SA (pre-55) or RA (post-55). Tracked separately for the 20% RA transfer base calculation."/>
                 </label>
-                <input type="number" name="annualGovGrant" value={inputs.annualGovGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual government grant" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="annualGovGrant" value={inputs.annualGovGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual government grant" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
               </div>
 
               {/* MRSS */}
@@ -3040,7 +3040,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   MRSS Grant (to RA)
                   <TooltipBox id="t-mrss" text="Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $2,000/yr (lifetime cap $20,000) for Singapore Citizens aged 55 and above with RA below the Basic Retirement Sum (BRS). No age cap of 70. Credited to RA."/>
                 </label>
-                <input type="number" name="mrssGrant" value={inputs.mrssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MRSS annual grant" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.mrssGrant?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="mrssGrant" value={inputs.mrssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MRSS annual grant" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.mrssGrant?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                 {inputErrors.mrssGrant && <p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.mrssGrant}</p>}
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Max $2,000/yr · $20,000 lifetime cap · age 55+ · RA below BRS</p>
               </div>
@@ -3051,7 +3051,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   MMSS Grant (to MA)
                   <TooltipBox id="t-mmss" text="Matched MediSave Scheme (from Jan 2026): Govt matches voluntary MA cash top-ups dollar-for-dollar up to $1,000/yr for Singapore Citizens aged 55–70 with MA below half of BHS (~$39,500 in 2026) and monthly income ≤ $4,000. No tax relief on top-ups attracting MMSS match."/>
                 </label>
-                <input type="number" name="mmssGrant" value={inputs.mmssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MMSS annual grant to MA" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.mmssGrant?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="mmssGrant" value={inputs.mmssGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="MMSS annual grant to MA" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.mmssGrant?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                 {inputErrors.mmssGrant && <p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.mmssGrant}</p>}
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Max $1,000/yr · age 55–70 · MA below ½ BHS · income ≤ $4,000/mo</p>
               </div>
@@ -3062,7 +3062,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   WIS – Workfare Supplement
                   <TooltipBox id="t-wis" text="Workfare Income Supplement (WIS): Enter your total annual WIS award. CPF portion is modelled: Employees — 60% to CPF (OA/SA/MA) + 40% cash paid separately to you. SEPs — 90% to MA (BHS-capped) + 10% cash. The cash portion (shown below) is not included in CPF projection but forms part of your real income."/>
                 </label>
-                <input type="number" name="wisAmount" value={inputs.wisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual WIS workfare supplement" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.wisAmount?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="wisAmount" value={inputs.wisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual WIS workfare supplement" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.wisAmount?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                   {(Number(inputs.wisAmount)||0)>0 && (
                     <p style={{fontSize:9,color:"#34d399",marginTop:4}}>
                       CPF portion: {formatCurrency(Math.round((Number(inputs.wisAmount)||0)*(isSelfEmployed?0.9:0.6)))} · 
@@ -3089,7 +3089,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {[["housingOutflow","Housing Loan (OA)"],["medicalUsage","Medical Usage (MA)"],["medishieldIP","MediShield Life / IP (MA)"],["elderCareShield","ElderShield / CareShield (MA)"]].map(([n,l])=>(
                 <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                  <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                  <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
               ))}
               {/* CPFIS */}
               <div>
@@ -3097,7 +3097,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   CPFIS – OA/SA Invested
                   <TooltipBox id="t-cpfis" text="CPF Investment Scheme: Annual amount moved from OA/SA into investments. Reduces OA balance in the projection. Investment returns are NOT modelled."/>
                 </label>
-                <input type="number" name="cpfisAmount" value={inputs.cpfisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual CPFIS investment amount" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="cpfisAmount" value={inputs.cpfisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual CPFIS investment amount" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Reduces OA balance · investment returns not modelled</p>
               </div>
               {/* OA Withdrawal (from age 55) */}
@@ -3106,7 +3106,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   OA Lump-Sum Withdrawal (from age 55)
                   <TooltipBox id="t-oawithdraw" text="From age 55, after SA closes, you may withdraw OA savings above the BRS ($110,200). Withdrawn from OA permanently. This is for general OA cash-out — for Property Pledge withdrawals use the separate Pledge Withdrawal field below."/>
                 </label>
-                <input type="number" name="oaWithdrawalAt55" value={inputs.oaWithdrawalAt55} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="OA lump sum withdrawal from age 55" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="oaWithdrawalAt55" value={inputs.oaWithdrawalAt55} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="OA lump sum withdrawal from age 55" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.15)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>From age 55 · partial or full withdrawal · OA balance reduces accordingly</p>
               </div>
 
@@ -3142,12 +3142,12 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                         <div>
                           <label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>Withdrawal Amount ($)</label>
-                          <input type="number" name="pledgeWithdrawalAmount" value={inputs.pledgeWithdrawalAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Pledge RA withdrawal amount" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.2)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                          <input type="text" inputMode="decimal" name="pledgeWithdrawalAmount" value={inputs.pledgeWithdrawalAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Pledge RA withdrawal amount" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.2)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                           <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Max = RA − BRS at withdrawal age</p>
                         </div>
                         <div>
                           <label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>Withdrawal Age</label>
-                          <input type="number" name="pledgeWithdrawalAge" value={inputs.pledgeWithdrawalAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Pledge RA withdrawal age" min="55" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:`1px solid ${inputErrors.pledgeWithdrawalAge?"#f87171":"rgba(244,63,94,0.2)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                          <input type="text" inputMode="decimal" name="pledgeWithdrawalAge" value={inputs.pledgeWithdrawalAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Pledge RA withdrawal age" min="55" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:`1px solid ${inputErrors.pledgeWithdrawalAge?"#f87171":"rgba(244,63,94,0.2)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                           {inputErrors.pledgeWithdrawalAge && <p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.pledgeWithdrawalAge}</p>}
                           <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Min age 55 · applied once</p>
                         </div>
@@ -3157,7 +3157,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                 })()}
               </div>
               <div><label style={{display:"block",fontSize:10,fontWeight:700,color:"#f472b6",textTransform:"uppercase",marginBottom:4}}>Medical Inflation Rate (%)</label>
-                <input type="number" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" aria-label="Medical inflation rate" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.3)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                <input type="text" inputMode="decimal" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" aria-label="Medical inflation rate" style={{width:"100%",padding:"8px 12px",background:"rgba(244,63,94,0.05)",border:"1px solid rgba(244,63,94,0.3)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
             </div>
           </div>}
           </div>
@@ -3178,7 +3178,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                   OA → MA Transfer
                   <TooltipBox id="t-oatoma" text="Transfer from OA to MA to earn 4% instead of 2.5%, or to top up MA towards BHS. Capped at BHS headroom. Irreversible."/>
                 </label>
-                <input type="number" name="oaToMaTransfer" value={inputs.oaToMaTransfer} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual OA to MA transfer" style={{width:"100%",padding:"8px 12px",background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                <input type="text" inputMode="decimal" name="oaToMaTransfer" value={inputs.oaToMaTransfer} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual OA to MA transfer" style={{width:"100%",padding:"8px 12px",background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                 <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Capped at BHS headroom · irreversible</p>
               </div>
               {/* OA → SA (pre-55 only) */}
@@ -3188,7 +3188,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     OA → SA/RA Transfer
                     <TooltipBox id="t-oatosa" text="Transfer from OA to SA to earn 4% instead of 2.5%. Only allowed before age 55 and irreversible. Funds count toward the FRS cap in SA."/>
                   </label>
-                  <input type="number" name="oaToSaTransfer" value={inputs.oaToSaTransfer} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual OA to SA transfer" style={{width:"100%",padding:"8px 12px",background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                  <input type="text" inputMode="decimal" name="oaToSaTransfer" value={inputs.oaToSaTransfer} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual OA to SA transfer" style={{width:"100%",padding:"8px 12px",background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/>
                   <p style={{fontSize:9,color:"var(--text-muted)",marginTop:3}}>Pre-55 only · capped at OA balance · irreversible · not in Annual Limit</p>
                 </div>
               )}
@@ -3212,7 +3212,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                     <label style={{display:"block",fontSize:10,fontWeight:700,color:inputErrors[n]?"#f87171":"#60a5fa",textTransform:"uppercase",marginBottom:4}}>
                       {l}{inputErrors[n]&&<span style={{marginLeft:4,fontSize:9,color:"#f87171"}}>⚠</span>}
                     </label>
-                    <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l+' age'} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+                    <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l+' age'} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                 ))}
               </div>
@@ -3223,11 +3223,11 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               </div>
               <div style={{opacity:inputs.includeProperty?1:0.3,pointerEvents:inputs.includeProperty?"auto":"none",display:"flex",flexDirection:"column",gap:8}}>
                 <div><label style={{display:"block",fontSize:10,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",marginBottom:4}}>Property Value ($)</label>
-                  <input type="number" name="propertyValue" value={inputs.propertyValue} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Property value" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
+                  <input type="text" inputMode="decimal" name="propertyValue" value={inputs.propertyValue} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Property value" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:"1px solid var(--border-strong)",borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",fontFamily:"monospace",boxSizing:"border-box"}}/></div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   {[["propertyGrowthRate","Prop Growth (%)"],["inflationRate","Inflation (%)"]].map(([n,l])=>(
                     <div key={n}><label style={{display:"block",fontSize:10,fontWeight:700,color:inputErrors[n]?"#f87171":"#60a5fa",textTransform:"uppercase",marginBottom:4}}>{l}</label>
-                      <input type="number" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
+                      <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors[n]?"#f87171":"var(--border-strong)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>
                   ))}
                 </div>
               </div>
@@ -3240,7 +3240,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
               🏠 Sell Property at Age
               <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA. Property value is removed from net worth at the sale age."/>
             </label>
-            <input type="number" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.sellPropertyAge?"#f87171":"rgba(96,165,250,0.4)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
+            <input type="text" inputMode="decimal" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" style={{width:"100%",padding:"8px 12px",background:"var(--bg-muted)",border:`1px solid ${inputErrors.sellPropertyAge?"#f87171":"rgba(96,165,250,0.4)"}`,borderRadius:8,color:"var(--text-bright)",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
             {inputErrors.sellPropertyAge&&<p style={{fontSize:9,color:"#f87171",marginTop:2}}>⚠ {inputErrors.sellPropertyAge}</p>}
             {(Number(inputs.sellPropertyAge)||0)>0 && (
               <p style={{fontSize:9,color:"#60a5fa",marginTop:4,lineHeight:1.5}}>
@@ -3986,7 +3986,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                               <span style={{fontSize:9,color:"var(--text-subtle)",fontWeight:400,marginLeft:4}}>{Number(inputs.currentAge)<55?"(SA → FRS)":"(RA → ERS)"}</span>
                             </label>
                             <input
-                              type="number" min={0} step={500}
+                              type="text" inputMode="decimal" min={0} step={500}
                               value={effST}
                               onChange={e=>setWhatIfSaTopup(Math.max(0,Number(e.target.value)||0))}
                               style={{width:90,padding:"3px 8px",borderRadius:6,fontSize:13,fontWeight:900,fontFamily:"monospace",color:"#34d399",background:"var(--bg-input)",border:"1px solid var(--border-strong)",outline:"none",textAlign:"right"}}
@@ -4045,7 +4045,7 @@ ${milestones.length>0?`<table><thead><tr><th>Age</th><th>Event</th><th>Details</
                           <ResponsiveContainer width="99%" height="100%">
                             <LineChart>
                               <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)"/>
-                              <XAxis dataKey="age" type="number" domain={["dataMin","dataMax"]} stroke="var(--chart-text)" fontSize={10}/>
+                              <XAxis dataKey="age" type="text" inputMode="decimal" domain={["dataMin","dataMax"]} stroke="var(--chart-text)" fontSize={10}/>
                               <YAxis tickFormatter={v=>`$${v>999?(v/1000).toFixed(0)+"k":v}`} stroke="var(--chart-text)" fontSize={10} label={{value:"CPF Balance ($)",angle:-90,position:"insideLeft",offset:14,fill:"var(--chart-text)",fontSize:9,style:{textAnchor:"middle"}}}/>
                               <Tooltip contentStyle={{background:"rgba(6, 13, 31, 0.75)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,fontSize:10,padding:"6px 8px"}} itemStyle={{padding:0,color:"#fff"}} labelStyle={{fontSize:10,color:"#94a3b8",marginBottom:2}} formatter={(v,n)=>[formatCurrency(v),n]} wrapperStyle={{pointerEvents:"none"}}/>
                               <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={{fontSize:9,fontWeight:600}}/>
