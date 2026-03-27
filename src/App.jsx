@@ -597,8 +597,7 @@ export default function App() {
 
   // #8 — Warn before leaving if inputs differ from last saved state
   const lastSavedRef = useRef(JSON.stringify(inputs));
-  const desktopFileInputRef = useRef(null);
-  const mobileFileInputRef = useRef(null);
+
   useEffect(() => {
     const handler = (e) => {
       if (JSON.stringify(inputs) !== lastSavedRef.current) {
@@ -2708,10 +2707,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={handleExportProfile} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Save inputs as a JSON backup file">
               <Download style={{ width: 12, height: 12 }} />Export Profile
             </button>
-            <button onClick={() => { if (desktopFileInputRef.current) { desktopFileInputRef.current.value = ""; desktopFileInputRef.current.click(); } }} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Load a previously saved JSON profile">
-              <UploadCloud style={{ width: 12, height: 12 }} />Import Profile
-            </button>
-            <input ref={desktopFileInputRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleImportProfile} />
+            <label style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Load a previously saved JSON profile">
+              <UploadCloud style={{ width: 12, height: 12 }} />Import Profile<input type="file" accept=".json" style={{ display: "none" }} onClick={(e) => { e.target.value = null; }} onChange={handleImportProfile} />
+            </label>
             <button onClick={() => {
               try {
                 const fullState = { inputs, highlightPlan, viewMode, basicPremiumPct, isRealDollars, pdfOrientation };
@@ -2781,10 +2779,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={() => { setMobileMenuOpen(false); handleExportProfile(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>
               <Download style={{ width: 13, height: 13 }} />Export Profile
             </button>
-            <button onClick={() => { if (mobileFileInputRef.current) { mobileFileInputRef.current.value = ""; mobileFileInputRef.current.click(); } }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>
               <UploadCloud style={{ width: 13, height: 13 }} />Import Profile
-            </button>
-            <input ref={mobileFileInputRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleImportProfile} />
+              <input type="file" accept=".json" style={{ display: "none" }} onClick={(e) => { e.target.value = null; }} onChange={handleImportProfile} />
+            </label>
             <button onClick={() => {
               setMobileMenuOpen(false);
               try {
