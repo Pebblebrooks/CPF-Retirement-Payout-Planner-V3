@@ -1068,15 +1068,9 @@ export default function App() {
           if (p.showWhatIf != null) setShowWhatIf(p.showWhatIf);
           if (p.isRealDollars != null) setIsRealDollars(p.isRealDollars);
           if (p.pdfOrientation) setPdfOrientation(p.pdfOrientation);
-          // Only restore scenario slots from current version — older scenario objects
-          // use a different projection format and will cause chart rendering errors
-          if (p.appVersion === "V4-2026") {
-            if (p.scenarioA) setScenarioA(p.scenarioA); else setScenarioA(null);
-            if (p.scenarioB) setScenarioB(p.scenarioB); else setScenarioB(null);
-          } else {
-            setScenarioA(null);
-            setScenarioB(null);
-          }
+          // Restore scenario slots (full projection saved since this session)
+          if (p.scenarioA) setScenarioA(p.scenarioA); else setScenarioA(null);
+          if (p.scenarioB) setScenarioB(p.scenarioB); else setScenarioB(null);
           setMobileMenuOpen(false);
           showToast("✓ Full profile restored (inputs + scenarios + settings)");
         } else {
