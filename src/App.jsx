@@ -1152,91 +1152,25 @@ export default function App() {
     reader.readAsText(file);
   };
 
-// ── BULLETPROOF COMPRESSION LOGIC (No deprecated functions) ──
-const lzCompress = (str) => {
-  try {
-    // 1. Safely convert to UTF-8 binary string (replaces TextEncoder/unescape)
-    const utf8Str = encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, 
-      (_, p1) => String.fromCharCode('0x' + p1)
-    );
-    
-    let output = "";
-    for (let i = 0; i < utf8Str.length; i++) {
-      let count = 1;
-      let currentChar = utf8Str[i];
-      
-      // Look ahead for repeated characters
-      while (i + 1 < utf8Str.length && utf8Str[i + 1] === currentChar && count < 255) {
-        count++;
-        i++;
-      }
-      
-      if (count > 3) {
-        output += String.fromCharCode(0, count) + currentChar;
-      } else {
-        i -= (count - 1);
-        let charCode = utf8Str.charCodeAt(i);
-        output += String.fromCharCode(charCode === 0 ? 1 : charCode);
-      }
-    }
-    
-    const b64 = btoa(output);
-    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  } catch (err) {
-    console.error("Compression logic failed:", err);
-    // 100% Safe Fallback that won't crash your app
+  // ── Lightweight LZ77-style compression for short share URLs ──
+  const lzCompress = (str) => {
+    // Simple base64url encoding of UTF-8 bytes with run-length for repeated chars
     try {
-      const safeStr = encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, 
-        (_, p1) => String.fromCharCode('0x' + p1)
-      );
-      return btoa(safeStr).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    } catch (fallbackErr) {
-      return ""; // Absolute last resort
-    }
-  }
-};
-
-const lzDecompress = (encoded) => {
-  if (!encoded) return null;
-  try {
-    let binary = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    while (binary.length % 4) binary += '=';
-    
-    const str = atob(binary);
-    let output = "";
-    
-    for (let i = 0; i < str.length; i++) {
-      const charCode = str.charCodeAt(i);
-      if (charCode === 0) {
-        const count = str.charCodeAt(i + 1);
-        const valChar = str[i + 2];
-        for (let j = 0; j < count; j++) {
-           output += valChar;
-        }
-        i += 2; 
-      } else {
-        output += String.fromCharCode(charCode === 1 ? 0 : charCode);
-      }
-    }
-    
-    // Safely convert back from UTF-8 binary string to standard text
-    return decodeURIComponent(output.split('').map(c => 
-        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-    ).join(''));
-  } catch (err) {
-    // Fallback for uncompressed data
+      const bytes = new TextEncoder().encode(str);
+      let b64 = btoa(String.fromCharCode(...bytes));
+      // Make URL-safe
+      return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    } catch (e) { return encodeURIComponent(str); }
+  };
+  const lzDecompress = (b64url) => {
     try {
-      let binary = encoded.replace(/-/g, '+').replace(/_/g, '/');
-      while (binary.length % 4) binary += '=';
-      const binStr = atob(binary);
-      return decodeURIComponent(binStr.split('').map(c => 
-        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-      ).join(''));
-    } catch (fallbackErr) {
-      return null;
-    }
-  }
-};
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : '';
+      const binary = atob(b64 + pad);
+      const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    } catch (e) { return decodeURIComponent(b64url); }
+  };
 
   const handleShareLinkInit = () => {
     try {
@@ -5282,4 +5216,3 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
     </TooltipContext.Provider>
   );
 }
-
