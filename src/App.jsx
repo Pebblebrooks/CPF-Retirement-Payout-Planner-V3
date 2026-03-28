@@ -857,6 +857,7 @@ export default function App() {
           });
           setInputs({ ...DEFAULT_INPUTS, ...safeInputs });
         }
+        if (fullState.activeTab) setActiveTab(fullState.activeTab);
         if (fullState.highlightPlan) setHighlightPlan(fullState.highlightPlan);
         if (fullState.viewMode) setViewMode(fullState.viewMode);
         if (fullState.basicPremiumPct != null) setBasicPremiumPct(fullState.basicPremiumPct);
@@ -1149,7 +1150,8 @@ export default function App() {
     const fullState = {
       // Core inputs
       inputs,
-      // LIFE tab choices
+      // Tab + LIFE tab choices
+      activeTab,
       highlightPlan,
       viewMode,
       basicPremiumPct,
@@ -1196,6 +1198,7 @@ export default function App() {
         // Support both old format (just inputs) and new full-state format
         if (p.inputs) {
           setInputs(prev => ({ ...DEFAULT_INPUTS, ...p.inputs }));
+          if (p.activeTab) setActiveTab(p.activeTab);
           if (p.highlightPlan) setHighlightPlan(p.highlightPlan);
           if (p.viewMode) setViewMode(p.viewMode);
           if (p.basicPremiumPct != null) setBasicPremiumPct(p.basicPremiumPct);
@@ -1255,7 +1258,7 @@ export default function App() {
       // Encode inputs + UI state into share code. scenarioA/B excluded — projection
       // data is too large for a URL and is recalculated automatically from inputs.
       const fullState = {
-        inputs, highlightPlan, viewMode, basicPremiumPct,
+        inputs, activeTab, highlightPlan, viewMode, basicPremiumPct,
         scenarioLabelA, scenarioLabelB,
         whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf,
         isRealDollars, pdfOrientation, appVersion: "V4-2026"
@@ -2894,7 +2897,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </label>
             <button onClick={() => {
               try {
-                const fullState = { inputs, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" };
+                const fullState = { inputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" };
                 const code = lzCompress(JSON.stringify(fullState));
                 const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
                 const shareURL = `${base}?p=${code}`;
@@ -2904,7 +2907,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     .catch(() => { prompt("Copy & share this link:", shareURL); });
                 } else { prompt("Copy & share this link:", shareURL); }
               } catch (e) { showToast("Could not generate share link: " + e.message); }
-            }} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Copy a link that encodes your full profile — anyone opening it sees your exact inputs">
+            }} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Copy a link that encodes all inputs + active tab. Saved comparison scenarios (Compare tab) are not included — use Export Profile to preserve those.">
               <Link style={{ width: 12, height: 12 }} />Share Link
             </button>
             <button onClick={generatePDF} disabled={isGeneratingPdf} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(16,185,129,0.15)", color: "#34d399", padding: "6px 16px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(16,185,129,0.4)", cursor: "pointer", opacity: isGeneratingPdf ? 0.5 : 1 }} title="Generate a full PDF report with all charts and tables">
@@ -2968,7 +2971,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={() => {
               setMobileMenuOpen(false);
               try {
-                const fullState = { inputs, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" };
+                const fullState = { inputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" };
                 const code = lzCompress(JSON.stringify(fullState));
                 const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
                 const shareURL = `${base}?p=${code}`;
@@ -3611,13 +3614,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#fb923c", textTransform: "uppercase", marginBottom: 4 }}>Scheme</label>
                           <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 2 }}>
                             {[["downgrade", "Downgrade"], ["lbs", "LBS"], ["shb", "Silver HB"]].map(([val, label]) => (
-                              <button key={val} onClick={() => setInputs(p => ({ ...p, propMonetiseScheme: val }))} style={{ flex: 1, padding: "4px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.propMonetiseScheme === val ? "#fb923c" : "transparent", color: inputs.propMonetiseScheme === val ? "#fff" : "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</button>
+                              <button key={val} onClick={() => setInputs(p => ({ ...p, propMonetiseScheme: val }))} style={{ flex: 1, padding: "4px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer", background: (inputs.propMonetiseScheme ?? "downgrade") === val ? "#fb923c" : "transparent", color: (inputs.propMonetiseScheme ?? "downgrade") === val ? "#fff" : "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</button>
                             ))}
                           </div>
                           <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
-                            {inputs.propMonetiseScheme === "downgrade" && "Sell current home, buy smaller — net sale proceeds after CPF refund, stamp duty, and new home cost."}
-                            {inputs.propMonetiseScheme === "lbs" && "HDB Lease Buyback Scheme — sell tail-end of lease back to HDB; stay in flat. Lump-sum proceeds credited to RA + cash portion."}
-                            {inputs.propMonetiseScheme === "shb" && "Silver Housing Bonus — downgrade to 3-room or smaller HDB; receive up to $30k–$90k cash bonus + CPF top-up to RA."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Sell current home, buy smaller — net sale proceeds after CPF refund, stamp duty, and new home cost."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "HDB Lease Buyback Scheme — sell tail-end of lease back to HDB; stay in flat. Lump-sum proceeds credited to RA + cash portion."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Silver Housing Bonus — downgrade to 3-room or smaller HDB; receive up to $30k–$90k cash bonus + CPF top-up to RA."}
                           </p>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -3794,18 +3797,25 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               const frsGap = Math.max(0, projFRS55 - raForAlert);
               if (frsGap <= 0) return null;
 
-              const yearsToGo = ca >= 55 ? 1 : Math.max(1, 55 - ca);
-              // Use future-value-of-annuity formula: PMT = FV * r / ((1+r)^n - 1)
-              // where FV = gap needed, r = CPF SA rate 4%, n = years remaining
-              // This gives the level annual top-up that, compounded at 4%, closes the gap
+              // Bug fix A: for members >= 55, use years to payoutAge (not 1) so top-up is meaningful
+              // Bug fix B: annualTopUp IS the additional top-up (projection already includes vcSaTopup)
+              //            so additionalNeeded = annualTopUp; do NOT subtract currentVcSa again
+              const pa = Number(inputs.payoutAge) || 65;
+              const yearsToGo = ca >= 55 ? Math.max(1, pa - ca) : Math.max(1, 55 - ca);
               const r = 0.04;
               const fvAnnuityFactor = (Math.pow(1 + r, yearsToGo) - 1) / r;
+              // annualTopUp = additional top-up needed on top of what is already in the projection
               const annualTopUp = fvAnnuityFactor > 0 ? Math.round(frsGap / fvAnnuityFactor) : Math.round(frsGap / yearsToGo);
               const monthlyTopUp = Math.round(annualTopUp / 12);
               const isUrgent = yearsToGo <= 5;
-              // Show what the projection currently has vs what's needed
               const currentVcSa = Number(inputs.vcSaTopup) || 0;
-              const additionalNeeded = Math.max(0, annualTopUp - currentVcSa);
+              // Bug fix B: annualTopUp is already the net additional amount — no further subtraction needed
+              const newTopUp = Math.round(currentVcSa + annualTopUp);
+              // Bug fix C: adjust display text for members already past age 55
+              const raLabel = ca >= 55 ? "Current RA" : "Projected RA at 55";
+              const topupNote = ca >= 55
+                ? "RSTU cash top-up to RA · credited directly · subject to ERS cap"
+                : "RSTU SA/RA cash top-up · compounds at 4% p.a.";
               return (
                 <div style={{ borderRadius: 16, padding: 16, border: `1px solid ${isUrgent ? "rgba(239,68,68,0.3)" : "rgba(245,158,11,0.3)"}`, background: isUrgent ? "rgba(239,68,68,0.08)" : "rgba(245,158,11,0.08)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -3813,23 +3823,24 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: isUrgent ? "#f87171" : "#fbbf24" }}>Contribution Gap Alert</span>
                   </div>
                   <p style={{ fontSize: 10, color: isUrgent ? "#fca5a5" : "#fcd34d", marginBottom: 8 }}>
-                    Projected RA at 55 is <strong>{formatCurrency(raForAlert)}</strong> — <strong>{formatCurrency(frsGap)}</strong> short of FRS ({formatCurrency(projFRS55)}).
+                    {raLabel} is <strong>{formatCurrency(raForAlert)}</strong> — <strong>{formatCurrency(frsGap)}</strong> short of {ca >= 55 ? "cohort" : ""} FRS ({formatCurrency(projFRS55)}).
                   </p>
                   <div style={{ background: isUrgent ? "rgba(239,68,68,0.1)" : "rgba(245,158,11,0.1)", borderRadius: 8, padding: 10, fontSize: 10, fontFamily: "monospace" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "var(--text-muted)" }}>Annual top-up needed*:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(annualTopUp)}/yr</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "var(--text-muted)" }}>Additional top-up needed*:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(annualTopUp)}/yr</span></div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "var(--text-muted)" }}>Monthly equivalent:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(monthlyTopUp)}/mo</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid rgba(100,116,139,0.3)" }}><span style={{ color: "var(--text-muted)" }}>Years remaining:</span><span style={{ fontWeight: 900, color: "var(--text-highlight)" }}>{yearsToGo} yrs</span></div>
-                    {currentVcSa > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--text-muted)" }}>Additional top-up needed:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(additionalNeeded)}/yr</span></div>}
-                    <p style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.4 }}>*Assumes 4% p.a. SA/RA growth on top-ups. Includes existing contributions in projection.</p>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid rgba(100,116,139,0.3)" }}><span style={{ color: "var(--text-muted)" }}>Years to target age:</span><span style={{ fontWeight: 900, color: "var(--text-highlight)" }}>{yearsToGo} yrs</span></div>
+                    {currentVcSa > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "var(--text-muted)" }}>Current RSTU top-up:</span><span style={{ fontWeight: 700, color: "var(--text-muted)" }}>{formatCurrency(currentVcSa)}/yr</span></div>}
+                    {currentVcSa > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--text-muted)" }}>Suggested new top-up:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(newTopUp)}/yr</span></div>}
+                    <p style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.4 }}>*Additional top-up ON TOP of current projection. {topupNote}.</p>
                   </div>
-                  {additionalNeeded > 0 && (
+                  {annualTopUp > 0 && (
                     <button
                       onClick={() => {
-                        setInputs(prev => ({ ...prev, vcSaTopup: Math.round(currentVcSa + additionalNeeded) }));
-                        showToast(`SA/RA Top-up increased to ${formatCurrency(Math.round(currentVcSa + additionalNeeded))}/yr`);
+                        setInputs(prev => ({ ...prev, vcSaTopup: newTopUp }));
+                        showToast(`RSTU Top-up set to ${formatCurrency(newTopUp)}/yr`);
                       }}
                       style={{ width: "100%", marginTop: 10, padding: "8px 0", borderRadius: 8, fontSize: 10, fontWeight: 800, border: `1px solid ${isUrgent ? "rgba(239,68,68,0.4)" : "rgba(245,158,11,0.4)"}`, background: isUrgent ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)", color: isUrgent ? "#f87171" : "#fbbf24", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      ⚡ Apply Additional Top-up ({formatCurrency(additionalNeeded)}/yr)
+                      ⚡ Apply Top-up — Set RSTU to {formatCurrency(newTopUp)}/yr
                     </button>
                   )}
                 </div>
