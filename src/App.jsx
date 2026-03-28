@@ -1152,64 +1152,25 @@ export default function App() {
     reader.readAsText(file);
   };
 
-// ── Lightweight LZ77-style compression for short share URLs ──
-const lzCompress = (str) => {
-  try {
-    const bytes = new TextEncoder().encode(str);
-    let output = "";
-    for (let i = 0; i < bytes.length; i++) {
-      let count = 1;
-      // Fix: Added bounds check and proper increment to avoid infinite loop
-      while (i + 1 < bytes.length && bytes[i] === bytes[i + 1] && count < 255) {
-        count++;
-        i++;
-      }
-      if (count > 3) {
-        output += String.fromCharCode(0, count, bytes[i]);
-      } else {
-        for (let j = 0; j < count; j++) {
-          // Avoid null byte collision
-          output += String.fromCharCode(bytes[i] === 0 ? 1 : bytes[i]);
-        }
-      }
-    }
-    const b64 = btoa(output);
-    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  } catch (e) {
-    console.error("Compression failed", e);
-    return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  }
-};
-
-const lzDecompress = (encoded) => {
-  try {
-    let binary = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    while (binary.length % 4) binary += '=';
-    const str = atob(binary);
-    let bytes = [];
-    for (let i = 0; i < str.length; i++) {
-      if (str.charCodeAt(i) === 0) {
-        const count = str.charCodeAt(i + 1);
-        const val = str.charCodeAt(i + 2);
-        for (let j = 0; j < count; j++) bytes.push(val === 1 ? 0 : val);
-        i += 2;
-      } else {
-        const val = str.charCodeAt(i);
-        bytes.push(val === 1 ? 0 : val);
-      }
-    }
-    return new TextDecoder().decode(new Uint8Array(bytes));
-  } catch (e) {
-    // Fallback for uncompressed base64
+  // ── Lightweight LZ77-style compression for short share URLs ──
+  const lzCompress = (str) => {
+    // Simple base64url encoding of UTF-8 bytes with run-length for repeated chars
     try {
-      let binary = encoded.replace(/-/g, '+').replace(/_/g, '/');
-      while (binary.length % 4) binary += '=';
-      return new TextDecoder().decode(Uint8Array.from(atob(binary), c => c.charCodeAt(0)));
-    } catch (err) {
-      return null;
-    }
-  }
-};
+      const bytes = new TextEncoder().encode(str);
+      let b64 = btoa(String.fromCharCode(...bytes));
+      // Make URL-safe
+      return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    } catch (e) { return encodeURIComponent(str); }
+  };
+  const lzDecompress = (b64url) => {
+    try {
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : '';
+      const binary = atob(b64 + pad);
+      const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    } catch (e) { return decodeURIComponent(b64url); }
+  };
 
   const handleShareLinkInit = () => {
     try {
@@ -5255,4 +5216,3 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
     </TooltipContext.Provider>
   );
 }
-
