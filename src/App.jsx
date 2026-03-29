@@ -29,7 +29,7 @@ const LEGAL_DISCLAIMER = "DISCLAIMER: This application is a prototype simulation
 const DEFAULT_INPUTS = {
   name: "", currentAge: 35, currentYear: 2026, payoutAge: 65,
   contributionStopAge: 65, housingStopAge: 55,
-  isSelfEmployed: false, isMale: true,
+  isSelfEmployed: false, isMale: true, netTradeIncome: 0,
   oaBalance: 50000, saBalance: 40000, maBalance: 30000,
   showSalaryCalc: false, salaryGross: 6000, salaryBonus: 12000, salaryGrowthRate: 0,
   empOaCont: 12000, empSaCont: 4000, empMaCont: 4000,
@@ -90,7 +90,7 @@ const DEFAULT_INPUTS = {
 const SCENARIO_LABELS = {
   name: "Name", currentAge: "Current Age", currentYear: "Current Year", payoutAge: "Payout Age",
   contributionStopAge: "Contrib Stop Age", housingStopAge: "Housing Stop Age",
-  isMale: "Gender (Male)", oaBalance: "OA Balance", saBalance: "SA Balance", maBalance: "MA Balance",
+  isMale: "Gender (Male)", netTradeIncome: "Net Trade Income", oaBalance: "OA Balance", saBalance: "SA Balance", maBalance: "MA Balance",
   salaryGross: "Gross Salary", salaryBonus: "Annual Bonus", salaryGrowthRate: "Salary Growth %",
   empOaCont: "Emp OA Contrib", empSaCont: "Emp SA Contrib", empMaCont: "Emp MA Contrib",
   vc3aCash: "VC3A Cash (Annual)", vcSaTopup: "RSTU SA/RA Top-up", vcVhr: "Housing Refund (VHR)",
@@ -347,27 +347,39 @@ function runProjectionEngine(inputs, {
       if (isSEP) {
         // SEP VC3A: single cash lump-sum auto-split by age-band rates + VHR to OA
         // VHR is NOT subject to the Annual Limit — apply it straight to OA
-        const vc3aTotal = Math.min(vc3aCash, ANNUAL_LIMIT);
+        const nti = Number(inputs.netTradeIncome) || 0;
+        let sepMandatoryMA = 0;
+        if (nti > 6000) {
+            let maRate = 0.08;
+            if (age > 50) maRate = 0.105;
+            else if (age > 45) maRate = 0.10;
+            else if (age > 35) maRate = 0.09;
+            sepMandatoryMA = Math.round(Math.min(nti, 96000) * maRate);
+        }
+        const vc3aTotal = Math.min(vc3aCash, Math.max(0, ANNUAL_LIMIT - sepMandatoryMA));
         let vc3aOaRatio, vc3aSaRatio, vc3aMaRatio;
         if (age <= 35) { vc3aOaRatio = 0.23; vc3aSaRatio = 0.06; vc3aMaRatio = 0.08; }
         else if (age <= 45) { vc3aOaRatio = 0.21; vc3aSaRatio = 0.07; vc3aMaRatio = 0.09; }
         else if (age <= 50) { vc3aOaRatio = 0.19; vc3aSaRatio = 0.08; vc3aMaRatio = 0.10; }
         else if (age <= 55) { vc3aOaRatio = 0.15; vc3aSaRatio = 0.115; vc3aMaRatio = 0.105; }
-        else if (age <= 60) { vc3aOaRatio = 0.12; vc3aSaRatio = 0.115; vc3aMaRatio = 0.105; }
-        else if (age <= 65) { vc3aOaRatio = 0.035; vc3aSaRatio = 0.11; vc3aMaRatio = 0.105; }
-        else if (age <= 70) { vc3aOaRatio = 0.01; vc3aSaRatio = 0.05; vc3aMaRatio = 0.105; }
-        else { vc3aOaRatio = 0.01; vc3aSaRatio = 0.01; vc3aMaRatio = 0.105; }
+        else if (age <= 60) { vc3aOaRatio = 0.24; vc3aSaRatio = 0.35; vc3aMaRatio = 0.41; }
+        else if (age <= 65) { vc3aOaRatio = 0.21; vc3aSaRatio = 0.29; vc3aMaRatio = 0.50; }
+        else if (age <= 70) { vc3aOaRatio = 0.09; vc3aSaRatio = 0.16; vc3aMaRatio = 0.75; }
+        else { vc3aOaRatio = 0.07; vc3aSaRatio = 0.08; vc3aMaRatio = 0.85; }
         const ratioSum = vc3aOaRatio + vc3aSaRatio + vc3aMaRatio;
-        const toOA_vc3a = Math.round(vc3aCash * (vc3aOaRatio / ratioSum)) + vcVhrAmt;
-        const toMA_vc3a = Math.round(vc3aCash * (vc3aMaRatio / ratioSum));
-        const toSA_vc3a = vc3aCash - Math.round(vc3aCash * (vc3aOaRatio / ratioSum)) - toMA_vc3a;
+        const toOA_vc3a = Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) + vcVhrAmt;
+        const toMA_vc3a = Math.round(vc3aTotal * (vc3aMaRatio / ratioSum));
+        const toSA_vc3a = vc3aTotal - Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) - toMA_vc3a;
         // WIS for SEP: 90% goes to MA (subject to BHS), 10% is cash (not modelled here)
         const wisToMA_sep = wisAmount > 0 ? Math.round(wisAmount * 0.9) : 0;
         const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
         const maRoom = Math.max(0, projBHS_i - ma);
-        const actualToMA = Math.min(toMA_vc3a + wisToMA_sep, maRoom);
-        const maSpill = Math.max(0, toMA_vc3a - Math.min(toMA_vc3a, maRoom)); // only vc3a spills; WIS excess lost
-        ma += actualToMA;
+        const maContribution = toMA_vc3a + sepMandatoryMA;
+        const actualToMAContrib = Math.min(maContribution, maRoom);
+        const maSpill = maContribution - actualToMAContrib;
+        const remainingMaRoom = maRoom - actualToMAContrib;
+        const actualToMAWis = Math.min(wisToMA_sep, remainingMaRoom);
+        ma += (actualToMAContrib + actualToMAWis);
         if (age >= 55) {
           // VC3A: RA cap is FRS (not ERS — ERS applies only to RSTU cash top-ups)
           const projFRS_vc3a_sep = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
@@ -387,7 +399,7 @@ function runProjectionEngine(inputs, {
         oa += toOA_vc3a;
         if (age >= 55) { ra += (Number(inputs.annualGovGrant) || 0) + mrssGrant; }
         else { sa += (Number(inputs.annualGovGrant) || 0) + mrssGrant; }
-        yearInflow = vc3aCash + vcVhrAmt + (Number(inputs.annualGovGrant) || 0) + mrssGrant;
+        yearInflow = vc3aTotal + vcVhrAmt + sepMandatoryMA + (Number(inputs.annualGovGrant) || 0) + mrssGrant;
         totalInjected += yearInflow;
         cumRaCashTopUps += toSA_vc3a + maSpill + (Number(inputs.annualGovGrant) || 0) + mrssGrant;
       } else {
@@ -751,6 +763,9 @@ export default function App() {
       const v = Number(inp[k]) || 0;
       if (v < 0 || v > 5000000) errs[k] = "0 – $5,000,000";
     });
+    // NTI
+    const nti = Number(inp.netTradeIncome) || 0;
+    if (nti < 0 || nti > 2000000) errs.netTradeIncome = "0 – $2,000,000";
     // Annual contributions: 0 – $100,000
     ["empOaCont", "empSaCont", "empMaCont"].forEach(k => {
       const v = Number(inp[k]) || 0;
@@ -997,7 +1012,17 @@ export default function App() {
   const is55Plus = (Number(inputs.currentAge) || 0) >= 55;
   const isSelfEmployed = inputs.isSelfEmployed === true;
   // SEP has no mandatory contributions → full $37,740 VC3A available
-  const totalMandatory = isSelfEmployed ? 0 : ((Number(inputs.empOaCont) || 0) + (Number(inputs.empSaCont) || 0) + (Number(inputs.empMaCont) || 0));
+  const currentAge_ui = Number(inputs.currentAge) || 35;
+  const nti_ui = Number(inputs.netTradeIncome) || 0;
+  let sepMandatoryMA_ui = 0;
+  if (isSelfEmployed && nti_ui > 6000) {
+      let maRate = 0.08;
+      if (currentAge_ui > 50) maRate = 0.105;
+      else if (currentAge_ui > 45) maRate = 0.10;
+      else if (currentAge_ui > 35) maRate = 0.09;
+      sepMandatoryMA_ui = Math.round(Math.min(nti_ui, 96000) * maRate);
+  }
+  const totalMandatory = isSelfEmployed ? sepMandatoryMA_ui : ((Number(inputs.empOaCont) || 0) + (Number(inputs.empSaCont) || 0) + (Number(inputs.empMaCont) || 0));
   const maxAllowableVC = Math.max(0, ANNUAL_LIMIT - totalMandatory);
   // VC3A lump-sum + VHR counted toward Annual Limit; RSTU is separate (no Annual Limit)
   // VHR (Housing Refund) is NOT subject to the Annual Limit — it refunds CPF used for housing
@@ -1445,7 +1470,7 @@ export default function App() {
       cpfisAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
-      salaryGross, salaryBonus, salaryGrowthRate,
+      salaryGross, salaryBonus, salaryGrowthRate, netTradeIncome,
       sellPropertyAge,
       currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
       plannedDownpaymentOA, downpaymentAge,
@@ -1465,7 +1490,7 @@ export default function App() {
       cpfisAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
-      salaryGross, salaryBonus, salaryGrowthRate,
+      salaryGross, salaryBonus, salaryGrowthRate, netTradeIncome,
       sellPropertyAge,
       currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
       plannedDownpaymentOA, downpaymentAge,
@@ -3129,8 +3154,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </button>}
                 </div>
                 {isSelfEmployed && (
-                  <div style={{ background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.25)", borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 10, color: "#fdba74", lineHeight: 1.5 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, padding: 10, borderRadius: 10, background: "var(--bg-muted)", border: "1px solid var(--border-strong)" }}>
+                  <div style={{ background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.25)", borderRadius: 10, padding: 10, marginBottom: 4, fontSize: 10, color: "#fdba74", lineHeight: 1.5 }}>
                     <strong style={{ color: "#fb923c" }}>Self-Employed Member (SEP):</strong> No mandatory OA/SA contributions. Use the Inflows panel below to enter your VC3A (up to $37,740/yr). Funds are <strong style={{ color: "#fdba74" }}>proportionally allocated</strong> across OA/SA/MA using your age-based CPF rates. MA excess above BHS spills to SA/RA (capped at FRS); further excess flows to OA. MA contributions required if net trade income &gt; $6,000.
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>Net Trade Income ($/yr)</label>
+                    <input type="text" inputMode="decimal" name="netTradeIncome" value={inputs.netTradeIncome} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Net Trade Income" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                  </div>
                   </div>
                 )}
                 {/* Salary fields — always visible for employed members */}
@@ -3164,7 +3195,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <th style={{ padding: "4px 8px", textAlign: "center", color: "var(--text-highlight)" }}>Tot</th>
                         </tr></thead>
                         <tbody>
-                          {[["≤ 35", 23, 6, 8, 37], ["36–45", 21, 7, 9, 37], ["46–50", 19, 8, 10, 37], ["51–55", 15, 11.5, 10.5, 37], ["56–60", 12, 11.5, 10.5, 34], ["61–65", 3.5, 11, 10.5, 25], ["66–70", 1, 5, 10.5, 16.5], ["> 70", 1, 1, 10.5, 12.5]].map(([bracket, oa, sa, ma, total]) => {
+                          {[["≤ 35", 23, 6, 8, 37], ["36–45", 21, 7, 9, 37], ["46–50", 19, 8, 10, 37], ["51–55", 15, 11.5, 10.5, 37], ["56–60", 12, 8, 10.5, 30.5], ["61–65", 3.5, 6.5, 10.5, 20.5], ["66–70", 1, 2.5, 10.5, 14], ["> 70", 1, 0, 9.5, 10.5]].map(([bracket, oa, sa, ma, total]) => {
                             const age = Number(inputs.currentAge) || 35;
                             const active = (bracket === "≤ 35" && age <= 35) || (bracket === "36–45" && age > 35 && age <= 45) || (bracket === "46–50" && age > 45 && age <= 50) || (bracket === "51–55" && age > 50 && age <= 55) || (bracket === "56–60" && age > 55 && age <= 60) || (bracket === "61–65" && age > 60 && age <= 65) || (bracket === "66–70" && age > 65 && age <= 70) || (bracket === "> 70" && age > 70);
                             return (<tr key={bracket} style={{ borderTop: "1px solid var(--border-subtle)", background: active ? "rgba(16,185,129,0.08)" : "" }}>
@@ -5404,3 +5435,4 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
     </TooltipContext.Provider>
   );
 }
+
