@@ -67,6 +67,16 @@ const DEFAULT_INPUTS = {
   privateAssetGrowthRate: 0,
   plannedDownpaymentOA: 0,
   downpaymentAge: 35,
+  // OA Drawdown (post-payout-age supplementary income from OA)
+  oaDrawdownStartAge: 0,         // 0 = disabled; age to begin drawing from OA (must be >= payoutAge)
+  oaDrawdownMonthly: 0,          // monthly cash draw from OA (in addition to CPF LIFE)
+  oaDrawdownFloor: 0,            // minimum OA balance to preserve (bequest floor); draw stops when OA hits this
+  // Property Monetisation
+  propMonetiseEnabled: false,    // master toggle
+  propMonetiseScheme: "downgrade", // "downgrade" | "lbs" | "shb"
+  propMonetiseAge: 65,           // age at which the scheme event occurs (one-time)
+  propMonetiseCashProceeds: 0,   // net cash received by member (after CPF refund, stamp duty etc.)
+  propMonetiseRaTopup: 0,        // RA top-up component (Silver Housing Bonus CPF portion, or LBS annuity lump-sum)
   // SRS (Supplementary Retirement Scheme)
   srsBalance: 0,
   srsAnnualContribution: 0,
@@ -97,6 +107,10 @@ const SCENARIO_LABELS = {
   targetMonthlyIncome: "Target Monthly Income", currentPrivateAssets: "Private Assets",
   annualPrivateSaving: "Annual Private Saving", privateAssetGrowthRate: "Private Asset Growth %",
   plannedDownpaymentOA: "OA Downpayment", downpaymentAge: "Downpayment Age",
+  oaDrawdownStartAge: "OA Drawdown Start Age", oaDrawdownMonthly: "OA Monthly Drawdown",
+  oaDrawdownFloor: "OA Drawdown Floor", propMonetiseEnabled: "Prop Monetise",
+  propMonetiseScheme: "Prop Scheme", propMonetiseAge: "Prop Monetise Age",
+  propMonetiseCashProceeds: "Prop Cash Proceeds", propMonetiseRaTopup: "Prop RA Top-up",
   srsBalance: "SRS Balance", srsAnnualContribution: "SRS Annual Contrib",
   srsContribStopAge: "SRS Contrib Stop Age", srsReturnRate: "SRS Return Rate %",
   srsDrawdownStartAge: "SRS Drawdown Start Age", srsDrawdownYears: "SRS Drawdown Years",
@@ -209,6 +223,22 @@ function runProjectionEngine(inputs, {
   const pledgeWithdrawalAmount = (usePropertyPledge && Number(inputs.pledgeWithdrawalAmount)) ? Number(inputs.pledgeWithdrawalAmount) : 0;
   const pledgeWithdrawalAge = Math.max(55, Number(inputs.pledgeWithdrawalAge) || 55);
   let pledgeWithdrawalApplied = startAge >= pledgeWithdrawalAge;
+
+  // OA Drawdown: post-payout-age supplementary cash drawn from OA
+  // Supplements CPF LIFE shortfall; stops when OA hits oaDrawdownFloor.
+  const oaDrawdownStartAge = Number(inputs.oaDrawdownStartAge) || 0;
+  const oaDrawdownMonthly = Number(inputs.oaDrawdownMonthly) || 0;
+  const oaDrawdownAnnual = oaDrawdownMonthly * 12;
+  const oaDrawdownFloor = Number(inputs.oaDrawdownFloor) || 0;
+  const oaDrawdownActive = oaDrawdownStartAge > 0 && oaDrawdownMonthly > 0;
+
+  // Property Monetisation: one-time event (downgrade / LBS / Silver Housing Bonus)
+  // Cash proceeds go to member's bank account (private assets); RA top-up credited to RA.
+  const propMonetiseEnabled = inputs.propMonetiseEnabled === true;
+  const propMonetiseAge = Number(inputs.propMonetiseAge) || 65;
+  const propMonetiseCash = Number(inputs.propMonetiseCashProceeds) || 0;
+  const propMonetiseRaTopup = Number(inputs.propMonetiseRaTopup) || 0;
+  let propMonetiseApplied = startAge >= propMonetiseAge && propMonetiseEnabled;
 
   // AW ceiling: $102,000 − Total Ordinary Wages subject to CPF for the year
   // (NOT the CPF contributions themselves — the OW wages, capped at $8,000/mo × 12 = $96,000)
@@ -508,6 +538,30 @@ function runProjectionEngine(inputs, {
     const yearTotalOut = activeHousing + totalMaOut;
     totalOutSpent += yearTotalOut;
 
+    // OA Drawdown — post-payout supplementary income drawn from OA
+    if (oaDrawdownActive && age >= oaDrawdownStartAge) {
+      const availableToDraw = Math.max(0, oa - oaDrawdownFloor);
+      const actualDraw = Math.min(oaDrawdownAnnual, availableToDraw);
+      oa = Math.max(oaDrawdownFloor, oa - actualDraw);
+      totalOutSpent += actualDraw; // tracked as outflow (cash leaving CPF to member)
+    }
+
+    // Property Monetisation — one-time event (downgrade / LBS / Silver Housing Bonus)
+    if (propMonetiseEnabled && age === propMonetiseAge && !propMonetiseApplied) {
+      // Cash proceeds credited to private assets (member's bank account)
+      privateAssets += propMonetiseCash;
+      // RA top-up (e.g. Silver Housing Bonus CPF component, or LBS annuity lump-sum to RA)
+      if (propMonetiseRaTopup > 0) {
+        ra += propMonetiseRaTopup;
+        cumRaCashTopUps += propMonetiseRaTopup;
+        yearInflow += propMonetiseRaTopup;
+        totalInjected += propMonetiseRaTopup;
+      }
+      // Property value reduced to reflect downgrade / LBS (approximate: remove proceeds from property value)
+      currentPropValue = Math.max(0, currentPropValue - propMonetiseCash - propMonetiseRaTopup);
+      propMonetiseApplied = true;
+    }
+
     // Property
     leaseRemaining = Math.max(0, totalLease - yrSince);
     let effPropGrowth = propGrowth;
@@ -739,6 +793,25 @@ export default function App() {
     // Contrib stop and housing stop age bounds
     if (cs > 95) errs.contributionStopAge = "Must be ≤ 95";
     if (hs > 95) errs.housingStopAge = "Must be ≤ 95";
+    // OA Drawdown validation
+    const oaDrawStart = Number(inp.oaDrawdownStartAge) || 0;
+    const pa2 = Number(inp.payoutAge) || 65;
+    if (oaDrawStart > 0 && oaDrawStart < pa2) errs.oaDrawdownStartAge = `Must be ≥ payout age (${pa2})`;
+    if (oaDrawStart > 95) errs.oaDrawdownStartAge = "Must be ≤ 95";
+    const oaDrawAmt = Number(inp.oaDrawdownMonthly) || 0;
+    if (oaDrawAmt < 0 || oaDrawAmt > 50000) errs.oaDrawdownMonthly = "0 – $50,000/mo";
+    const oaFloor = Number(inp.oaDrawdownFloor) || 0;
+    if (oaFloor < 0 || oaFloor > 5000000) errs.oaDrawdownFloor = "0 – $5,000,000";
+    // Property Monetisation validation
+    if (inp.propMonetiseEnabled) {
+      const pmAge = Number(inp.propMonetiseAge) || 65;
+      const ca3 = Number(inp.currentAge) || 35;
+      if (pmAge < ca3 || pmAge > 95) errs.propMonetiseAge = `${ca3}–95`;
+      const pmCash = Number(inp.propMonetiseCashProceeds) || 0;
+      if (pmCash < 0 || pmCash > 10000000) errs.propMonetiseCashProceeds = "0 – $10M";
+      const pmRA = Number(inp.propMonetiseRaTopup) || 0;
+      if (pmRA < 0 || pmRA > 2000000) errs.propMonetiseRaTopup = "0 – $2,000,000";
+    }
     // SRS validation
     const srsCap = (inp.srsCitizenPR === false) ? 35700 : 15300;
     const srsContrib = Number(inp.srsAnnualContribution) || 0;
@@ -784,6 +857,7 @@ export default function App() {
           });
           setInputs({ ...DEFAULT_INPUTS, ...safeInputs });
         }
+        if (fullState.activeTab) setActiveTab(fullState.activeTab);
         if (fullState.highlightPlan) setHighlightPlan(fullState.highlightPlan);
         if (fullState.viewMode) setViewMode(fullState.viewMode);
         if (fullState.basicPremiumPct != null) setBasicPremiumPct(fullState.basicPremiumPct);
@@ -1076,7 +1150,8 @@ export default function App() {
     const fullState = {
       // Core inputs
       inputs,
-      // LIFE tab choices
+      // Tab + LIFE tab choices
+      activeTab,
       highlightPlan,
       viewMode,
       basicPremiumPct,
@@ -1123,6 +1198,7 @@ export default function App() {
         // Support both old format (just inputs) and new full-state format
         if (p.inputs) {
           setInputs(prev => ({ ...DEFAULT_INPUTS, ...p.inputs }));
+          if (p.activeTab) setActiveTab(p.activeTab);
           if (p.highlightPlan) setHighlightPlan(p.highlightPlan);
           if (p.viewMode) setViewMode(p.viewMode);
           if (p.basicPremiumPct != null) setBasicPremiumPct(p.basicPremiumPct);
@@ -1154,12 +1230,17 @@ export default function App() {
 
   // ── Lightweight LZ77-style compression for short share URLs ──
   const lzCompress = (str) => {
-    // Simple base64url encoding of UTF-8 bytes with run-length for repeated chars
+    // Base64url encoding of UTF-8 bytes.
+    // Uses chunked btoa to avoid "Maximum call stack size exceeded" when spreading
+    // large Uint8Arrays as function arguments (crashes above ~65k bytes).
     try {
       const bytes = new TextEncoder().encode(str);
-      let b64 = btoa(String.fromCharCode(...bytes));
-      // Make URL-safe
-      return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      let b64 = '';
+      const CHUNK = 8192;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        b64 += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+      }
+      return btoa(b64).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     } catch (e) { return encodeURIComponent(str); }
   };
   const lzDecompress = (b64url) => {
@@ -1174,12 +1255,13 @@ export default function App() {
 
   const handleShareLinkInit = () => {
     try {
-      // Encode ALL app state (same as Save Profile) into the share code
+      // Encode inputs + UI state into share code. scenarioA/B excluded — projection
+      // data is too large for a URL and is recalculated automatically from inputs.
       const fullState = {
-        inputs, highlightPlan, viewMode, basicPremiumPct,
+        inputs, activeTab, highlightPlan, viewMode, basicPremiumPct,
         scenarioLabelA, scenarioLabelB,
         whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf,
-        isRealDollars, pdfOrientation
+        isRealDollars, pdfOrientation, appVersion: "V4-2026"
       };
       const compressed = lzCompress(JSON.stringify(fullState));
       setShareUrl(compressed);
@@ -1368,7 +1450,10 @@ export default function App() {
       currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
       plannedDownpaymentOA, downpaymentAge,
       srsBalance, srsAnnualContribution, srsContribStopAge, srsReturnRate,
-      srsDrawdownStartAge, srsDrawdownYears, srsCitizenPR
+      srsDrawdownStartAge, srsDrawdownYears, srsCitizenPR,
+      oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
+      propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
+      propMonetiseCashProceeds, propMonetiseRaTopup
     } = debouncedInputs;
     return JSON.stringify({
       currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
@@ -1385,7 +1470,10 @@ export default function App() {
       currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
       plannedDownpaymentOA, downpaymentAge,
       srsBalance, srsAnnualContribution, srsContribStopAge, srsReturnRate,
-      srsDrawdownStartAge, srsDrawdownYears, srsCitizenPR
+      srsDrawdownStartAge, srsDrawdownYears, srsCitizenPR,
+      oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
+      propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
+      propMonetiseCashProceeds, propMonetiseRaTopup
     });
   }, [debouncedInputs]);
   const projection = useMemo(() => runProjectionEngine(debouncedInputs), [engineKey]); // eslint-disable-line
@@ -2809,7 +2897,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </label>
             <button onClick={() => {
               try {
-                const fullState = { inputs, highlightPlan, viewMode, basicPremiumPct, scenarioA: scenarioA ? { projection: scenarioA.projection, payoutProj: scenarioA.payoutProj, inputs: scenarioA.inputs, label: scenarioA.label } : null, scenarioB: scenarioB ? { projection: scenarioB.projection, payoutProj: scenarioB.payoutProj, inputs: scenarioB.inputs, label: scenarioB.label } : null, scenarioLabelA, scenarioLabelB, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" };
+                const fullState = { inputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" };
                 const code = lzCompress(JSON.stringify(fullState));
                 const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
                 const shareURL = `${base}?p=${code}`;
@@ -2819,7 +2907,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     .catch(() => { prompt("Copy & share this link:", shareURL); });
                 } else { prompt("Copy & share this link:", shareURL); }
               } catch (e) { showToast("Could not generate share link: " + e.message); }
-            }} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Copy a link that encodes your full profile — anyone opening it sees your exact inputs">
+            }} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Copy a link that encodes all inputs + active tab. Saved comparison scenarios (Compare tab) are not included — use Export Profile to preserve those.">
               <Link style={{ width: 12, height: 12 }} />Share Link
             </button>
             <button onClick={generatePDF} disabled={isGeneratingPdf} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(16,185,129,0.15)", color: "#34d399", padding: "6px 16px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(16,185,129,0.4)", cursor: "pointer", opacity: isGeneratingPdf ? 0.5 : 1 }} title="Generate a full PDF report with all charts and tables">
@@ -2883,7 +2971,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={() => {
               setMobileMenuOpen(false);
               try {
-                const fullState = { inputs, highlightPlan, viewMode, basicPremiumPct, scenarioA: scenarioA ? { projection: scenarioA.projection, payoutProj: scenarioA.payoutProj, inputs: scenarioA.inputs, label: scenarioA.label } : null, scenarioB: scenarioB ? { projection: scenarioB.projection, payoutProj: scenarioB.payoutProj, inputs: scenarioB.inputs, label: scenarioB.label } : null, scenarioLabelA, scenarioLabelB, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" };
+                const fullState = { inputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" };
                 const code = lzCompress(JSON.stringify(fullState));
                 const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
                 const shareURL = `${base}?p=${code}`;
@@ -3471,6 +3559,98 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <input type="text" inputMode="decimal" name="targetMonthlyIncome" value={inputs.targetMonthlyIncome} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} aria-label="Target monthly income" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "monospace", fontWeight: 700 }} />
                   </div>
 
+                  {/* OA Drawdown */}
+                  <div style={{ paddingTop: 8, borderTop: "1px solid rgba(168,85,247,0.15)", marginTop: 4 }}>
+                    <div style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+                      <p style={{ fontSize: 10, fontWeight: 800, color: "#fbbf24", textTransform: "uppercase", marginBottom: 3, letterSpacing: "0.06em" }}>
+                        OA Drawdown
+                        <TooltipBox id="t-oa-draw" text="Draw monthly cash from OA after CPF LIFE starts — supplements shortfall against your retirement income goal. OA continues earning 2.5%/yr on remaining balance. Drawdown stops when OA falls to your chosen floor (bequest reserve). Set Start Age to 0 to disable." />
+                      </p>
+                      <p style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>Supplements CPF LIFE payout · OA earns 2.5%/yr on remaining balance · set floor to preserve bequest</p>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#fbbf24", textTransform: "uppercase", marginBottom: 4 }}>
+                          Start Age
+                          <TooltipBox id="t-oa-draw-age" text="Age to begin OA drawdown. Must be at or after your CPF LIFE payout age. Set to 0 to disable." />
+                        </label>
+                        <input type="text" inputMode="decimal" name="oaDrawdownStartAge" value={inputs.oaDrawdownStartAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownStartAge ? "#f87171" : "rgba(251,191,36,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                        {inputErrors.oaDrawdownStartAge && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownStartAge}</p>}
+                        <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>0 = disabled · ≥ payout age</p>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#fbbf24", textTransform: "uppercase", marginBottom: 4 }}>Monthly Draw ($)</label>
+                        <input type="text" inputMode="decimal" name="oaDrawdownMonthly" value={inputs.oaDrawdownMonthly} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownMonthly ? "#f87171" : "rgba(251,191,36,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                        {inputErrors.oaDrawdownMonthly && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownMonthly}</p>}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#fbbf24", textTransform: "uppercase", marginBottom: 4 }}>
+                        OA Bequest Floor ($)
+                        <TooltipBox id="t-oa-floor" text="Minimum OA balance to preserve at all times. Drawdown stops when OA reaches this amount. Set to 0 to allow full depletion." />
+                      </label>
+                      <input type="text" inputMode="decimal" name="oaDrawdownFloor" value={inputs.oaDrawdownFloor} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownFloor ? "#f87171" : "rgba(251,191,36,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                      {inputErrors.oaDrawdownFloor && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownFloor}</p>}
+                      <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>0 = deplete fully · preserves bequest from OA</p>
+                    </div>
+                  </div>
+
+                  {/* Property Monetisation */}
+                  <div style={{ paddingTop: 8, borderTop: "1px solid rgba(168,85,247,0.15)", marginTop: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div>
+                        <p style={{ fontSize: 10, fontWeight: 800, color: "#fb923c", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
+                          Property Monetisation
+                          <TooltipBox id="t-prop-mon" text="Model a one-time property monetisation event: downgrading to a smaller home (Silver Housing Bonus), Lease Buyback Scheme (LBS), or open-market sale and downgrade. Net cash proceeds are credited to private assets. Any RA top-up component (e.g. Silver Housing Bonus CPF portion) is credited to RA." />
+                        </p>
+                        <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>Downgrade · LBS · Silver Housing Bonus</p>
+                      </div>
+                      <button onClick={() => setInputs(p => ({ ...p, propMonetiseEnabled: !p.propMonetiseEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.propMonetiseEnabled ? "#10b981" : "var(--border-strong)", color: inputs.propMonetiseEnabled ? "#020617" : "var(--text-muted)", flexShrink: 0 }}>{inputs.propMonetiseEnabled ? "ON" : "OFF"}</button>
+                    </div>
+                    {inputs.propMonetiseEnabled && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {/* Scheme selector */}
+                        <div>
+                          <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#fb923c", textTransform: "uppercase", marginBottom: 4 }}>Scheme</label>
+                          <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 2 }}>
+                            {[["downgrade", "Downgrade"], ["lbs", "LBS"], ["shb", "Silver HB"]].map(([val, label]) => (
+                              <button key={val} onClick={() => setInputs(p => ({ ...p, propMonetiseScheme: val }))} style={{ flex: 1, padding: "4px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer", background: (inputs.propMonetiseScheme ?? "downgrade") === val ? "#fb923c" : "transparent", color: (inputs.propMonetiseScheme ?? "downgrade") === val ? "#fff" : "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</button>
+                            ))}
+                          </div>
+                          <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Sell current home, buy smaller — net sale proceeds after CPF refund, stamp duty, and new home cost."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "HDB Lease Buyback Scheme — sell tail-end of lease back to HDB; stay in flat. Lump-sum proceeds credited to RA + cash portion."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Silver Housing Bonus — downgrade to 3-room or smaller HDB; receive up to $30k–$90k cash bonus + CPF top-up to RA."}
+                          </p>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                          <div>
+                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#fb923c", textTransform: "uppercase", marginBottom: 4 }}>Age of Event</label>
+                            <input type="text" inputMode="decimal" name="propMonetiseAge" value={inputs.propMonetiseAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseAge ? "#f87171" : "rgba(251,146,60,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                            {inputErrors.propMonetiseAge && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.propMonetiseAge}</p>}
+                          </div>
+                          <div>
+                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#fb923c", textTransform: "uppercase", marginBottom: 4 }}>
+                              Net Cash Proceeds ($)
+                              <TooltipBox id="t-pm-cash" text="Net cash received by you after CPF refunds, agent fees, stamp duty, and cost of replacement home (if downgrading). This goes to your private assets / bank account." />
+                            </label>
+                            <input type="text" inputMode="decimal" name="propMonetiseCashProceeds" value={inputs.propMonetiseCashProceeds} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseCashProceeds ? "#f87171" : "rgba(251,146,60,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                            {inputErrors.propMonetiseCashProceeds && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.propMonetiseCashProceeds}</p>}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#fb923c", textTransform: "uppercase", marginBottom: 4 }}>
+                            RA Top-up Component ($)
+                            <TooltipBox id="t-pm-ra" text="Amount credited directly to your RA. For LBS: the annuity premium lump-sum paid by HDB to RA. For Silver Housing Bonus: the CPF top-up portion (up to $30k). For open-market downgrade: typically 0 unless proceeds are voluntarily topped up." />
+                          </label>
+                          <input type="text" inputMode="decimal" name="propMonetiseRaTopup" value={inputs.propMonetiseRaTopup} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseRaTopup ? "#f87171" : "rgba(251,146,60,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          {inputErrors.propMonetiseRaTopup && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.propMonetiseRaTopup}</p>}
+                          <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>Credited to RA · increases CPF LIFE payout from next recalculation</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Private Assets */}
                   <div>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#c084fc", textTransform: "uppercase", marginBottom: 4 }}>Current Private Assets ($)</label>
@@ -3617,18 +3797,25 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               const frsGap = Math.max(0, projFRS55 - raForAlert);
               if (frsGap <= 0) return null;
 
-              const yearsToGo = ca >= 55 ? 1 : Math.max(1, 55 - ca);
-              // Use future-value-of-annuity formula: PMT = FV * r / ((1+r)^n - 1)
-              // where FV = gap needed, r = CPF SA rate 4%, n = years remaining
-              // This gives the level annual top-up that, compounded at 4%, closes the gap
+              // Bug fix A: for members >= 55, use years to payoutAge (not 1) so top-up is meaningful
+              // Bug fix B: annualTopUp IS the additional top-up (projection already includes vcSaTopup)
+              //            so additionalNeeded = annualTopUp; do NOT subtract currentVcSa again
+              const pa = Number(inputs.payoutAge) || 65;
+              const yearsToGo = ca >= 55 ? Math.max(1, pa - ca) : Math.max(1, 55 - ca);
               const r = 0.04;
               const fvAnnuityFactor = (Math.pow(1 + r, yearsToGo) - 1) / r;
+              // annualTopUp = additional top-up needed on top of what is already in the projection
               const annualTopUp = fvAnnuityFactor > 0 ? Math.round(frsGap / fvAnnuityFactor) : Math.round(frsGap / yearsToGo);
               const monthlyTopUp = Math.round(annualTopUp / 12);
               const isUrgent = yearsToGo <= 5;
-              // Show what the projection currently has vs what's needed
               const currentVcSa = Number(inputs.vcSaTopup) || 0;
-              const additionalNeeded = Math.max(0, annualTopUp - currentVcSa);
+              // Bug fix B: annualTopUp is already the net additional amount — no further subtraction needed
+              const newTopUp = Math.round(currentVcSa + annualTopUp);
+              // Bug fix C: adjust display text for members already past age 55
+              const raLabel = ca >= 55 ? "Current RA" : "Projected RA at 55";
+              const topupNote = ca >= 55
+                ? "RSTU cash top-up to RA · credited directly · subject to ERS cap"
+                : "RSTU SA/RA cash top-up · compounds at 4% p.a.";
               return (
                 <div style={{ borderRadius: 16, padding: 16, border: `1px solid ${isUrgent ? "rgba(239,68,68,0.3)" : "rgba(245,158,11,0.3)"}`, background: isUrgent ? "rgba(239,68,68,0.08)" : "rgba(245,158,11,0.08)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -3636,23 +3823,24 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: isUrgent ? "#f87171" : "#fbbf24" }}>Contribution Gap Alert</span>
                   </div>
                   <p style={{ fontSize: 10, color: isUrgent ? "#fca5a5" : "#fcd34d", marginBottom: 8 }}>
-                    Projected RA at 55 is <strong>{formatCurrency(raForAlert)}</strong> — <strong>{formatCurrency(frsGap)}</strong> short of FRS ({formatCurrency(projFRS55)}).
+                    {raLabel} is <strong>{formatCurrency(raForAlert)}</strong> — <strong>{formatCurrency(frsGap)}</strong> short of {ca >= 55 ? "cohort" : ""} FRS ({formatCurrency(projFRS55)}).
                   </p>
                   <div style={{ background: isUrgent ? "rgba(239,68,68,0.1)" : "rgba(245,158,11,0.1)", borderRadius: 8, padding: 10, fontSize: 10, fontFamily: "monospace" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "var(--text-muted)" }}>Annual top-up needed*:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(annualTopUp)}/yr</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "var(--text-muted)" }}>Additional top-up needed*:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(annualTopUp)}/yr</span></div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "var(--text-muted)" }}>Monthly equivalent:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(monthlyTopUp)}/mo</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid rgba(100,116,139,0.3)" }}><span style={{ color: "var(--text-muted)" }}>Years remaining:</span><span style={{ fontWeight: 900, color: "var(--text-highlight)" }}>{yearsToGo} yrs</span></div>
-                    {currentVcSa > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--text-muted)" }}>Additional top-up needed:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(additionalNeeded)}/yr</span></div>}
-                    <p style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.4 }}>*Assumes 4% p.a. SA/RA growth on top-ups. Includes existing contributions in projection.</p>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid rgba(100,116,139,0.3)" }}><span style={{ color: "var(--text-muted)" }}>Years to target age:</span><span style={{ fontWeight: 900, color: "var(--text-highlight)" }}>{yearsToGo} yrs</span></div>
+                    {currentVcSa > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "var(--text-muted)" }}>Current RSTU top-up:</span><span style={{ fontWeight: 700, color: "var(--text-muted)" }}>{formatCurrency(currentVcSa)}/yr</span></div>}
+                    {currentVcSa > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "var(--text-muted)" }}>Suggested new top-up:</span><span style={{ fontWeight: 900, color: isUrgent ? "#f87171" : "#fcd34d" }}>{formatCurrency(newTopUp)}/yr</span></div>}
+                    <p style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.4 }}>*Additional top-up ON TOP of current projection. {topupNote}.</p>
                   </div>
-                  {additionalNeeded > 0 && (
+                  {annualTopUp > 0 && (
                     <button
                       onClick={() => {
-                        setInputs(prev => ({ ...prev, vcSaTopup: Math.round(currentVcSa + additionalNeeded) }));
-                        showToast(`SA/RA Top-up increased to ${formatCurrency(Math.round(currentVcSa + additionalNeeded))}/yr`);
+                        setInputs(prev => ({ ...prev, vcSaTopup: newTopUp }));
+                        showToast(`RSTU Top-up set to ${formatCurrency(newTopUp)}/yr`);
                       }}
                       style={{ width: "100%", marginTop: 10, padding: "8px 0", borderRadius: 8, fontSize: 10, fontWeight: 800, border: `1px solid ${isUrgent ? "rgba(239,68,68,0.4)" : "rgba(245,158,11,0.4)"}`, background: isUrgent ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)", color: isUrgent ? "#f87171" : "#fbbf24", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      ⚡ Apply Additional Top-up ({formatCurrency(additionalNeeded)}/yr)
+                      ⚡ Apply Top-up — Set RSTU to {formatCurrency(newTopUp)}/yr
                     </button>
                   )}
                 </div>
@@ -5216,4 +5404,3 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
     </TooltipContext.Provider>
   );
 }
-
