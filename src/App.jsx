@@ -3525,8 +3525,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#fbbf24", textTransform: "uppercase", marginBottom: 4 }}>
                       {is55Plus ? "OA → RA Transfer" : "OA → SA Transfer"}
                       <TooltipBox id="t-oatosa" text={is55Plus
-                        ? "Transfer OA savings to your RA to earn 4% instead of 2.5%. Available at age 55 and above. Capped at the Enhanced Retirement Sum (ERS, $440,800 in 2026) in RA. Irreversible. Does not qualify for tax relief. Boosts CPF LIFE monthly payouts."
-                        : "Transfer OA savings to your SA to earn 4% instead of 2.5%. Only allowed before age 55. Capped at the Full Retirement Sum (FRS, $220,400 in 2026) in SA. Irreversible. Does not qualify for tax relief."
+                        ? "Transfer OA savings to your RA to earn 4% instead of 2.5%. For age 55 and above, transfer is capped at the Enhanced Retirement Sum (ERS, $440,800 in 2026) in RA. Irreversible. Does not qualify for tax relief. Boosts CPF LIFE monthly payouts."
+                        : "Transfer OA savings to your SA to earn 4% instead of 2.5%. For age below 55, transfer is capped at the Full Retirement Sum (FRS, $220,400 in 2026) in SA. Irreversible. Does not qualify for tax relief."
                       } />
                     </label>
                     <input type="text" inputMode="decimal" name="oaToSaTransfer" value={inputs.oaToSaTransfer} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={is55Plus ? "Annual OA to RA transfer" : "Annual OA to SA transfer"} style={{ width: "100%", padding: "8px 12px", background: "rgba(251,191,36,0.05)", border: `1px solid ${inputErrors.oaToSaTransfer ? "#f87171" : "rgba(251,191,36,0.2)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
