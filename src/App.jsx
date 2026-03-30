@@ -85,9 +85,50 @@ const DEFAULT_INPUTS = {
   srsDrawdownStartAge: 63,
   srsDrawdownYears: 10,
   srsCitizenPR: true,
+  // Die with Zero — fully deplete liquid assets by a target age
+  dieWithZeroEnabled: false,
+  dieWithZeroAge: 85,
 };
 
-const SCENARIO_LABELS = {
+const PRESET_PROFILES = [
+  {
+    id: "blank", label: "Blank Slate", icon: "🧹",
+    desc: "All zeros — start completely fresh",
+    inputs: { name: "", currentAge: 30, payoutAge: 65, oaBalance: 0, saBalance: 0, maBalance: 0, empOaCont: 0, empSaCont: 0, empMaCont: 0, housingOutflow: 0, propertyValue: 0, includeProperty: false, annualGovGrant: 0 }
+  },
+  {
+    id: "typical35", label: "Typical Employee, 35", icon: "👔",
+    desc: "Median CPF balances, $5.5k salary, HDB mortgage",
+    inputs: { name: "Sample Member", currentAge: 35, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isMale: true, oaBalance: 55000, saBalance: 35000, maBalance: 28000, salaryGross: 5500, salaryBonus: 11000, empOaCont: 12804, empSaCont: 4302, empMaCont: 4302, housingOutflow: 12000, medicalUsage: 500, medishieldIP: 900, elderCareShield: 500, propertyValue: 450000, propertyGrowthRate: 2, annualGovGrant: 500, targetMonthlyIncome: 3000 }
+  },
+  {
+    id: "late50", label: "Late Starter, 50", icon: "⏰",
+    desc: "Lower balances at 50, 5 years to SA closure",
+    inputs: { name: "Late Starter", currentAge: 50, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isMale: true, oaBalance: 80000, saBalance: 60000, maBalance: 55000, salaryGross: 6000, salaryBonus: 12000, empOaCont: 7920, empSaCont: 5160, empMaCont: 5160, housingOutflow: 8400, medicalUsage: 800, medishieldIP: 1200, elderCareShield: 600, propertyValue: 500000, propertyGrowthRate: 2, vcSaTopup: 8000, annualGovGrant: 500, oaToSaTransfer: 10000, targetMonthlyIncome: 3500 }
+  },
+  {
+    id: "sep40", label: "Self-Employed, 40", icon: "💼",
+    desc: "SEP mode, NTI $80k, no mandatory OA/SA",
+    inputs: { name: "Freelancer", currentAge: 40, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isSelfEmployed: true, isMale: true, netTradeIncome: 80000, oaBalance: 30000, saBalance: 25000, maBalance: 20000, empOaCont: 0, empSaCont: 0, empMaCont: 6720, vc3aCash: 20000, housingOutflow: 9600, medicalUsage: 500, medishieldIP: 900, elderCareShield: 500, propertyValue: 400000, propertyGrowthRate: 2, srsAnnualContribution: 15300, srsReturnRate: 4, srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10, targetMonthlyIncome: 3500 }
+  },
+  {
+    id: "highearn40", label: "High Earner, 40", icon: "🚀",
+    desc: "$8k salary cap, bonus at AW ceiling, ERS target",
+    inputs: { name: "High Earner", currentAge: 40, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isMale: true, oaBalance: 150000, saBalance: 120000, maBalance: 65000, salaryGross: 8000, salaryBonus: 6000, empOaCont: 14400, empSaCont: 5040, empMaCont: 5040, housingOutflow: 18000, medicalUsage: 600, medishieldIP: 1500, elderCareShield: 600, propertyValue: 1200000, propertyGrowthRate: 2, vcSaTopup: 8000, oaToSaTransfer: 20000, annualGovGrant: 0, srsAnnualContribution: 15300, srsBalance: 50000, srsReturnRate: 5, srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10, targetMonthlyIncome: 6000 }
+  },
+  {
+    id: "near55", label: "Near Retirement, 54", icon: "🔔",
+    desc: "Age 54, near-FRS, focus on OA→SA + payout choice",
+    inputs: { name: "Near Retirement", currentAge: 54, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isMale: true, oaBalance: 180000, saBalance: 200000, maBalance: 72000, salaryGross: 7000, salaryBonus: 14000, empOaCont: 8400, empSaCont: 5520, empMaCont: 5520, housingOutflow: 6000, medicalUsage: 800, medishieldIP: 1500, elderCareShield: 600, propertyValue: 700000, propertyGrowthRate: 1.5, oaToSaTransfer: 15000, vcSaTopup: 8000, annualGovGrant: 500, targetMonthlyIncome: 4000 }
+  },
+  {
+    id: "post55ra", label: "Post-55 RA Builder, 57", icon: "🏦",
+    desc: "SA closed, RA below FRS — OA→RA + MRSS focus",
+    inputs: { name: "RA Builder", currentAge: 57, payoutAge: 67, contributionStopAge: 65, housingStopAge: 57, isMale: true, oaBalance: 120000, saBalance: 90000, maBalance: 68000, salaryGross: 5000, salaryBonus: 10000, empOaCont: 6000, empSaCont: 3900, empMaCont: 3900, housingOutflow: 0, medicalUsage: 900, medishieldIP: 1600, elderCareShield: 600, propertyValue: 550000, propertyGrowthRate: 1.5, oaToSaTransfer: 12000, vcSaTopup: 8000, mrssGrant: 2000, annualGovGrant: 500, targetMonthlyIncome: 3500 }
+  },
+];
+
+const INPUT_LABELS = {
   name: "Name", currentAge: "Current Age", currentYear: "Current Year", payoutAge: "Payout Age",
   contributionStopAge: "Contrib Stop Age", housingStopAge: "Housing Stop Age",
   isMale: "Gender (Male)", netTradeIncome: "Net Trade Income", oaBalance: "OA Balance", saBalance: "SA Balance", maBalance: "MA Balance",
@@ -685,8 +726,9 @@ export default function App() {
   const [pdfOrientation, setPdfOrientation] = useState("portrait");
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [desktopMode, setDesktopMode] = useState("auto"); // "auto"|"fhd"|"hd"
-  const [sidebarOpen, setSidebarOpen] = useState(true); // collapsible on mobile/tablet
+  const [desktopMode, setDesktopMode] = useState("auto");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showPresets, setShowPresets] = useState(false);
 
   // Sidebar accordion — supports multiple open sections simultaneously
   const [openSections, setOpenSections] = useState(() => {
@@ -2592,6 +2634,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .rg-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
         .rg-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
         .sidebar-toggle-btn { display: none; }
+        /* Sidebar sticky expand/collapse bar — only meaningful on desktop where sidebar scrolls */
+        .sidebar-sticky-bar { display: flex; }
+        @media (max-width: 1024px) { .sidebar-sticky-bar { display: none !important; } }
         /* Keyboard accessibility for sidebar sections */
         .sidebar-section-header:focus { outline: 2px solid #34d399; outline-offset: -2px; border-radius: 8px; }
         .sidebar-section-header:focus:not(:focus-visible) { outline: none; }
@@ -2674,7 +2719,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .mobile-menu-btn { display: flex !important; }
           .cpf-header-actions > *:not(.mobile-menu-btn):not(.sidebar-toggle-btn) { display: none !important; }
           .cpf-header-actions { gap: 4px; }
-          .cpf-mobile-menu { display: flex !important; flex-direction: column; gap: 8px; position: fixed; top: 54px; right: 0; left: 0; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); padding: 12px 14px; z-index: 49; box-shadow: 0 8px 24px rgba(0,0,0,0.3); max-height: calc(100vh - 54px); max-height: calc(100dvh - 54px); overflow-y: auto; }
+          /* Pin the header so inputs toggle + hamburger are always reachable */
+          header { position: fixed !important; top: 0; left: 0; right: 0; z-index: 50; }
+          /* Push layout content below the fixed header (header is ~48px tall on mobile) */
+          .cpf-mobile-top-spacer { display: block !important; height: 48px; flex-shrink: 0; }
+          .cpf-mobile-menu { display: flex !important; flex-direction: column; gap: 8px; position: fixed; top: 48px; right: 0; left: 0; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); padding: 12px 14px; z-index: 49; box-shadow: 0 8px 24px rgba(0,0,0,0.3); max-height: calc(100dvh - 48px); overflow-y: auto; }
           .cpf-mobile-menu-row { display: flex; gap: 8px; flex-wrap: wrap; }
           .cpf-logo-text { font-size: 13px !important; }
           .cpf-logo-sub  { display: none !important; }
@@ -2684,6 +2733,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         }
         @media (min-width: 641px) {
           .cpf-mobile-menu { display: none !important; }
+          .cpf-mobile-top-spacer { display: none !important; }
         }
 
         /* ─── GLOBAL OVERFLOW GUARD (Fixed for Recharts) ───────────── */
@@ -2905,6 +2955,42 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       )}
 
       {/* ONBOARDING MODAL */}
+      {/* PRESET PROFILES MODAL */}
+      {showPresets && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(2,6,23,0.88)", backdropFilter: "blur(6px)", zIndex: 99998, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "var(--bg-panel)", borderRadius: 20, border: "1px solid var(--border-strong)", width: "100%", maxWidth: 640, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 900, color: "var(--text-bright)", margin: 0 }}>Sample Profiles</h3>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>Load a pre-built scenario to explore the tool — all values can be edited after loading.</p>
+              </div>
+              <button onClick={() => setShowPresets(false)} style={{ background: "none", border: "none", color: "var(--text-subtle)", cursor: "pointer", padding: 4 }}><X style={{ width: 20, height: 20 }} /></button>
+            </div>
+            <div style={{ padding: "16px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+              {PRESET_PROFILES.map(p => (
+                <button key={p.id} onClick={() => {
+                  setInputs({ ...DEFAULT_INPUTS, ...p.inputs });
+                  setShowPresets(false);
+                  showToast(`✓ Loaded: ${p.label}`);
+                }} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%", transition: "border-color 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = "#fbbf24"}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border-subtle)"}
+                >
+                  <span style={{ fontSize: 26, flexShrink: 0 }}>{p.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", marginBottom: 3 }}>{p.label}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>{p.desc}</div>
+                  </div>
+                  <div style={{ fontSize: 10, color: "#fbbf24", fontWeight: 700, flexShrink: 0 }}>Load →</div>
+                </button>
+              ))}
+            </div>
+            <div style={{ padding: "12px 24px", borderTop: "1px solid var(--border-subtle)", background: "var(--bg-base)", borderRadius: "0 0 20px 20px" }}>
+              <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>⚠ Loading a sample profile will overwrite your current inputs. Export your profile first if you want to keep it.</p>
+            </div>
+          </div>
+        </div>
+      )}
       {showWelcome && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, width: "100%", maxWidth: 640, height: "min(90vh,700px)", overflow: "hidden", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)", display: "flex", flexDirection: "column" }}>
@@ -3080,6 +3166,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={handleReset} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(100,116,139,0.2)", color: "var(--text-subtle)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer" }}>
               <RotateCcw style={{ width: 12, height: 12 }} />Reset
             </button>
+            <button onClick={() => setShowPresets(true)} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(251,191,36,0.12)", color: "#fbbf24", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(251,191,36,0.3)", cursor: "pointer" }} title="Load a sample scenario to explore different profiles">
+              <Users style={{ width: 12, height: 12 }} />Samples
+            </button>
             <button onClick={handleExportProfile} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Save inputs as a JSON backup file">
               <Download style={{ width: 12, height: 12 }} />Export Profile
             </button>
@@ -3180,6 +3269,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         </div>
       )}
 
+      {/* Mobile fixed-header spacer — hidden on desktop via CSS */}
+      <div className="cpf-mobile-top-spacer" style={{ display: "none" }} />
       {isVcOverLimit && (
         <div style={{ background: "rgba(234,88,12,0.2)", borderBottom: "1px solid rgba(234,88,12,0.5)", padding: "8px 20px", textAlign: "center", color: "#fdba74", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <AlertTriangle style={{ width: 14, height: 14, color: "#fb923c" }} />VC Exceeds Available Limit ({formatCurrency(maxAllowableVC)})
@@ -3205,16 +3296,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </div>
             <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700 }}>{sidebarOpen ? "▲ Hide" : "▼ Show"}</span>
           </div>
+          {/* Sticky Expand / Collapse bar — always visible at top of sidebar while scrolling */}
+          <div className="sidebar-sticky-bar" style={{ display: "flex", gap: 6, padding: "6px 8px", position: "sticky", top: 0, zIndex: 10, background: "var(--bg-base)", borderBottom: "1px solid var(--border-subtle)", backdropFilter: "blur(6px)" }}>
+            <button onClick={expandAllSections} style={{ flex: 1, padding: "5px 0", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "rgba(16,185,129,0.1)", color: "#34d399", border: "1px solid rgba(16,185,129,0.2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <ChevronDown style={{ width: 11, height: 11 }} />Expand All
+            </button>
+            <button onClick={collapseAllSections} style={{ flex: 1, padding: "5px 0", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <ChevronUp style={{ width: 11, height: 11 }} />Collapse All
+            </button>
+          </div>
           <div className={`cpf-sidebar-inner${sidebarOpen ? "" : " sidebar-collapsed"}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {/* Expand / Collapse all sections */}
-            <div style={{ display: "flex", gap: 6, padding: "4px 2px" }}>
-              <button onClick={expandAllSections} style={{ flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "rgba(16,185,129,0.1)", color: "#34d399", border: "1px solid rgba(16,185,129,0.2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                <ChevronDown style={{ width: 11, height: 11 }} />Expand All
-              </button>
-              <button onClick={collapseAllSections} style={{ flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                <ChevronUp style={{ width: 11, height: 11 }} />Collapse All
-              </button>
-            </div>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <div onClick={() => toggleSection("profile")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); () => toggleSection("profile"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("profile") ? "rgba(16,185,129,0.06)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -3889,6 +3980,88 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     })()}
 
                   </div>{/* /OA Drawdown section */}
+
+                  {/* ── Die with Zero ── */}
+                  <div style={{ paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.2)", marginTop: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div>
+                        <p style={{ fontSize: 10, fontWeight: 800, color: "#f43f5e", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
+                          Die with Zero
+                          <TooltipBox id="t-dwz" text="Based on Bill Perkins' concept: spend your liquid assets fully by a chosen age instead of leaving unspent wealth. The tool computes the optimal monthly draw from OA and Private Assets using the PMT annuity formula so both reach $0 at your target age. RA/CPF LIFE and MA cannot be depleted — these are governed by CPF Board rules." />
+                        </p>
+                        <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>Deplete OA + Private Assets by a target age · RA/MA excluded (CPF rules)</p>
+                      </div>
+                      <button onClick={() => setInputs(p => ({ ...p, dieWithZeroEnabled: !p.dieWithZeroEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.dieWithZeroEnabled ? "#f43f5e" : "var(--border-strong)", color: inputs.dieWithZeroEnabled ? "#fff" : "var(--text-muted)", flexShrink: 0 }}>{inputs.dieWithZeroEnabled ? "ON" : "OFF"}</button>
+                    </div>
+                    {inputs.dieWithZeroEnabled && (() => {
+                      const pa = Number(inputs.payoutAge) || 65;
+                      const dwzAge = Number(inputs.dieWithZeroAge) || 85;
+                      const n = Math.max(1, dwzAge - pa); // years of drawdown
+                      const rOA = 0.025;
+                      const rPriv = (Number(inputs.privateAssetGrowthRate) || 0) / 100;
+                      // OA at payout age from projection
+                      const oaAtPayout = projection.find(r => r.age === pa)?.oa || 0;
+                      const privAtPayout = projection.find(r => r.age === pa)?.privateAssets || 0;
+                      // PMT formula: A = PV × r / (1 − (1+r)^−n)
+                      const pmtOA = oaAtPayout > 0 && rOA > 0
+                        ? Math.round(oaAtPayout * rOA / (1 - Math.pow(1 + rOA, -n)) / 12)
+                        : oaAtPayout > 0 ? Math.round(oaAtPayout / n / 12) : 0;
+                      const pmtPriv = privAtPayout > 0 && rPriv > 0
+                        ? Math.round(privAtPayout * rPriv / (1 - Math.pow(1 + rPriv, -n)) / 12)
+                        : privAtPayout > 0 ? Math.round(privAtPayout / n / 12) : 0;
+                      const cpfLife = payoutProjection.find(r => r.age === pa)?.[`${highlightPlan}Monthly`] || 0;
+                      const totalMonthly = cpfLife + pmtOA + pmtPriv;
+                      const srsDwzStart = Math.max(Number(inputs.srsDrawdownStartAge) || 63, 63);
+                      const srsDwzYrs = Math.min(Math.max(Number(inputs.srsDrawdownYears) || 10, 1), 10);
+                      const srsAtStart = projection.find(r => r.age === srsDwzStart)?.srsBalance || 0;
+                      const srsMoDwz = srsDwzYrs > 0 ? Math.round(srsAtStart / srsDwzYrs / 12) : 0;
+                      const srsWarning = dwzAge > srsDwzStart + srsDwzYrs;
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div>
+                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f43f5e", textTransform: "uppercase", marginBottom: 4 }}>Target Age (Deplete by)</label>
+                            <input type="text" inputMode="decimal" name="dieWithZeroAge" value={inputs.dieWithZeroAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={e => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid rgba(244,63,94,0.35)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                            <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>Age {pa} (payout) → Age {dwzAge} = {n} year drawdown window</p>
+                          </div>
+                          {/* Computed PMT summary */}
+                          <div style={{ background: "rgba(244,63,94,0.06)", border: "1px solid rgba(244,63,94,0.2)", borderRadius: 10, padding: "12px 14px" }}>
+                            <p style={{ fontSize: 9, fontWeight: 800, color: "#f43f5e", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.06em" }}>Computed Draw Schedule (PMT)</p>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                              {[
+                                ["OA Draw/mo", pmtOA > 0 ? formatCurrency(pmtOA) : "—", "#fbbf24", `OA balance ${formatCurrency(oaAtPayout)} at age ${pa}`],
+                                ["SRS Draw/mo", srsMoDwz > 0 ? formatCurrency(srsMoDwz) : "—", "#0ea5e9", `Governed by IRAS: max 10yr window from age ${srsDwzStart}`],
+                                ["Private Draw/mo", pmtPriv > 0 ? formatCurrency(pmtPriv) : "—", "#10b981", `Private assets ${formatCurrency(privAtPayout)} at age ${pa}`],
+                                ["CPF LIFE/mo", formatCurrency(cpfLife), "#a855f7", "Lifetime annuity — cannot be depleted"],
+                              ].map(([lbl, val, color, note]) => (
+                                <div key={lbl} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 5, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                  <div>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color }}>{lbl}</span>
+                                    <p style={{ fontSize: 8, color: "var(--text-subtle)", margin: 0, marginTop: 1 }}>{note}</p>
+                                  </div>
+                                  <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 12, color }}>{val}</span>
+                                </div>
+                              ))}
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4 }}>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: "var(--text-bright)" }}>Total/mo</span>
+                                <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 14, color: "#f43f5e" }}>{formatCurrency(totalMonthly + srsMoDwz)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Apply button */}
+                          <button onClick={() => setInputs(p => ({
+                            ...p,
+                            oaDrawdownStartAge: pa, oaDrawdownMonthly: pmtOA, oaDrawdownFloor: 0,
+                          }))} style={{ width: "100%", background: "#f43f5e", color: "#fff", fontWeight: 800, padding: "8px 0", borderRadius: 8, fontSize: 10, border: "none", cursor: "pointer" }}>
+                            ⚡ Apply OA Draw to Projection ({formatCurrency(pmtOA)}/mo)
+                          </button>
+                          <div style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 8, padding: "8px 12px", fontSize: 9, color: "#fde68a", lineHeight: 1.6 }}>
+                            <strong style={{ color: "#fbbf24" }}>CPF Constraints:</strong> RA and MA cannot be depleted by choice — RA funds CPF LIFE for life; MA withdrawals are limited to approved medical uses. SRS is capped at a 10-year withdrawal window by IRAS regardless of target age.
+                            {srsWarning && <span style={{ color: "#f87171" }}> ⚠ Your Die with Zero age ({dwzAge}) exceeds your SRS window ({srsDwzStart + srsDwzYrs}) — SRS depletes at age {srsDwzStart + srsDwzYrs}.</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
 
                   {/* Property Monetisation */}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(168,85,247,0.15)", marginTop: 4 }}>
@@ -4904,23 +5077,66 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>
                         )}
                         {whatIfProjection && (
-                          <div style={{ height: 260 }}>
-                            <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>Blue = base · Green = what-if</p>
+                          <div style={{ height: 280 }}>
+                            <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>Blue = base · Green = what-if · <span style={{ color: "var(--text-subtle)" }}>Hover for account breakdown</span></p>
                             <ResponsiveContainer width="99%" height="100%">
                               <LineChart data={(() => {
-                                const baseData = displayAccumulation.filter(d => d.age <= Number(inputs.payoutAge));
+                                const baseData = displayAccumulation.filter(d => d.age <= Math.max(Number(inputs.payoutAge), effPA));
                                 return baseData.map(d => {
                                   const whatIfRow = whatIfProjection.rows.find(w => w.age === d.age);
-                                  return { age: d.age, baseTotal: d.total, whatIfTotal: whatIfRow ? whatIfRow.total : null };
+                                  return {
+                                    age: d.age,
+                                    baseTotal: d.total, baseOA: d.oa, baseSA: d.sa, baseMA: d.ma, baseRA: d.ra,
+                                    whatIfTotal: whatIfRow ? (whatIfRow.oa + whatIfRow.sa + whatIfRow.ma + whatIfRow.ra) : null,
+                                    whatIfOA: whatIfRow?.oa ?? null, whatIfSA: whatIfRow?.sa ?? null,
+                                    whatIfMA: whatIfRow?.ma ?? null, whatIfRA: whatIfRow?.ra ?? null,
+                                  };
                                 });
-                              })()}>
+                              })()}
+                                margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                                <XAxis dataKey="age" type="text" inputMode="decimal" domain={["dataMin", "dataMax"]} stroke="var(--chart-text)" fontSize={10} />
-                                <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={10} label={{ value: "CPF Balance ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
-                                <Tooltip contentStyle={{ background: "rgba(6, 13, 31, 0.75)", backdropFilter: "blur(4px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, fontSize: 10, padding: "6px 8px" }} itemStyle={{ padding: 0, color: "#fff" }} labelStyle={{ fontSize: 10, color: "#94a3b8", marginBottom: 2 }} formatter={(v, n) => [formatCurrency(v), n]} wrapperStyle={{ pointerEvents: "none" }} />
+                                <XAxis dataKey="age" type="number" domain={["dataMin", "dataMax"]} stroke="var(--chart-text)" fontSize={10} tickCount={8} />
+                                <YAxis tickFormatter={v => `$${v >= 1000000 ? (v / 1000000).toFixed(1) + "M" : v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={10} width={52} />
+                                <Tooltip
+                                  cursor={{ stroke: "rgba(255,255,255,0.2)", strokeWidth: 1, strokeDasharray: "4 3" }}
+                                  wrapperStyle={{ pointerEvents: "none", zIndex: 100 }}
+                                  content={({ active, payload, label }) => {
+                                    if (!active || !payload?.length) return null;
+                                    const base = payload.find(p => p.dataKey === "baseTotal");
+                                    const wi = payload.find(p => p.dataKey === "whatIfTotal");
+                                    const d = payload[0]?.payload || {};
+                                    const diff = (wi?.value ?? 0) - (base?.value ?? 0);
+                                    return (
+                                      <div style={{ background: "rgba(6,13,31,0.96)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "10px 14px", fontSize: 10, minWidth: 210 }}>
+                                        <p style={{ color: "#94a3b8", fontWeight: 800, marginBottom: 8, fontSize: 11 }}>Age {label}</p>
+                                        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: "3px 10px", alignItems: "center" }}>
+                                          <span style={{ color: "#64748b", fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}></span>
+                                          <span style={{ color: "#3b82f6", fontSize: 9, fontWeight: 800, textAlign: "right" }}>BASE</span>
+                                          <span style={{ color: "#10b981", fontSize: 9, fontWeight: 800, textAlign: "right" }}>WHAT-IF</span>
+                                          {[["OA", d.baseOA, d.whatIfOA, "#60a5fa"], ["SA/RA", (d.baseSA||0)+(d.baseRA||0), (d.whatIfSA||0)+(d.whatIfRA||0), "#34d399"], ["MA", d.baseMA, d.whatIfMA, "#a78bfa"]].map(([lbl, bv, wv, c]) => (
+                                            <>
+                                              <span style={{ color: c, fontWeight: 700 }}>{lbl}</span>
+                                              <span style={{ color: "#e2e8f0", fontFamily: "monospace", textAlign: "right" }}>{formatCurrency(bv ?? 0)}</span>
+                                              <span style={{ color: wv != null ? "#e2e8f0" : "#64748b", fontFamily: "monospace", textAlign: "right" }}>{wv != null ? formatCurrency(wv) : "—"}</span>
+                                            </>
+                                          ))}
+                                          <span style={{ color: "#fff", fontWeight: 800, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>Total</span>
+                                          <span style={{ color: "#3b82f6", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>{formatCurrency(base?.value ?? 0)}</span>
+                                          <span style={{ color: wi?.value != null ? "#10b981" : "#64748b", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>{wi?.value != null ? formatCurrency(wi.value) : "—"}</span>
+                                        </div>
+                                        {wi?.value != null && base?.value != null && (
+                                          <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <span style={{ fontSize: 9, color: "#64748b", fontWeight: 700 }}>Difference</span>
+                                            <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 11, color: diff >= 0 ? "#10b981" : "#f87171" }}>{diff >= 0 ? "+" : ""}{formatCurrency(diff)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  }}
+                                />
                                 <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={{ fontSize: 9, fontWeight: 600 }} />
-                                <Line isAnimationActive={false} type="monotone" dataKey="baseTotal" stroke="#3b82f6" strokeWidth={2} dot={false} name="Base" />
-                                <Line isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="#10b981" strokeWidth={2.5} dot={false} name={`What-If (PA:${effPA})`} />
+                                <Line isAnimationActive={false} type="monotone" dataKey="baseTotal" stroke="#3b82f6" strokeWidth={2} dot={false} name="Base" activeDot={{ r: 4, fill: "#3b82f6", stroke: "#fff", strokeWidth: 1.5 }} />
+                                <Line isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="#10b981" strokeWidth={2.5} dot={false} name={`What-If (PA:${effPA})`} activeDot={{ r: 4, fill: "#10b981", stroke: "#fff", strokeWidth: 1.5 }} />
                               </LineChart>
                             </ResponsiveContainer>
                           </div>
@@ -5982,3 +6198,4 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
     </TooltipContext.Provider>
   );
 }
+
