@@ -156,7 +156,14 @@ const INPUT_LABELS = {
   srsContribStopAge: "SRS Contrib Stop Age", srsReturnRate: "SRS Return Rate %",
   srsDrawdownStartAge: "SRS Drawdown Start Age", srsDrawdownYears: "SRS Drawdown Years",
   srsCitizenPR: "SRS SC/PR",
+  // Session 2 & 3 additions
+  isSelfEmployed: "Self-Employed", showSalaryCalc: "Show Salary Calc",
+  pledgeWithdrawalAmount: "Pledge Withdrawal Amount", pledgeWithdrawalAge: "Pledge Withdrawal Age",
+  dieWithZeroEnabled: "Die with Zero", dieWithZeroAge: "Die with Zero Age",
 };
+
+// Alias used by the Compare tab — same labels, one source of truth
+const SCENARIO_LABELS = INPUT_LABELS;
 
 // ─── SHARED PROJECTION ENGINE ───────────────────────────────────────────────
 // Single source of truth for year-by-year CPF accumulation logic.
@@ -1292,9 +1299,19 @@ export default function App() {
     reader.onload = (ev) => {
       try {
         const p = JSON.parse(ev.target.result);
+        // Whitelist helper — only copies known DEFAULT_INPUTS keys, fills gaps with
+        // defaults so a profile from any older/newer version never injects unknown
+        // keys or leaves required fields undefined (which causes NaN in the engine).
+        const sanitiseInputs = (raw) => {
+          const safe = { ...DEFAULT_INPUTS };
+          Object.keys(DEFAULT_INPUTS).forEach(k => {
+            if (raw[k] !== undefined) safe[k] = raw[k];
+          });
+          return safe;
+        };
         // Support both old format (just inputs) and new full-state format
         if (p.inputs) {
-          setInputs(prev => ({ ...DEFAULT_INPUTS, ...p.inputs }));
+          setInputs(sanitiseInputs(p.inputs));
           if (p.activeTab) setActiveTab(p.activeTab);
           if (p.highlightPlan) setHighlightPlan(p.highlightPlan);
           if (p.viewMode) setViewMode(p.viewMode);
@@ -1308,18 +1325,24 @@ export default function App() {
           if (p.showWhatIf != null) setShowWhatIf(p.showWhatIf);
           if (p.isRealDollars != null) setIsRealDollars(p.isRealDollars);
           if (p.pdfOrientation) setPdfOrientation(p.pdfOrientation);
-          // Restore scenario slots (full projection saved since this session)
-          if (p.scenarioA) setScenarioA(p.scenarioA); else setScenarioA(null);
-          if (p.scenarioB) setScenarioB(p.scenarioB); else setScenarioB(null);
+          // Restore scenario slots only when they contain valid data
+          if (p.scenarioA && p.scenarioA.inputs && p.scenarioA.projection) {
+            setScenarioA({ ...p.scenarioA, inputs: sanitiseInputs(p.scenarioA.inputs) });
+          } else { setScenarioA(null); }
+          if (p.scenarioB && p.scenarioB.inputs && p.scenarioB.projection) {
+            setScenarioB({ ...p.scenarioB, inputs: sanitiseInputs(p.scenarioB.inputs) });
+          } else { setScenarioB(null); }
           setMobileMenuOpen(false);
           showToast("✓ Full profile restored (inputs + scenarios + settings)");
         } else {
-          // Legacy: old format was just the inputs object
-          setInputs(prev => ({ ...DEFAULT_INPUTS, ...p }));
+          // Legacy: old format was just the inputs object directly
+          setInputs(sanitiseInputs(p));
+          setScenarioA(null);
+          setScenarioB(null);
           setMobileMenuOpen(false);
           showToast("✓ Profile inputs imported");
         }
-      } catch { alert("Invalid profile file."); }
+      } catch { alert("Invalid profile file — could not read or parse JSON."); }
       target.value = "";
     };
     reader.readAsText(file);
@@ -2809,8 +2832,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   try {
                     const decoded = lzDecompress(val);
                     const parsed = JSON.parse(decoded);
-                    const inp = parsed.inputs || parsed;
-                    setInputs({ ...DEFAULT_INPUTS, ...inp });
+                    const rawInp = parsed.inputs || parsed;
+                    // Whitelist — same guard as JSON file import
+                    const safeInp = { ...DEFAULT_INPUTS };
+                    Object.keys(DEFAULT_INPUTS).forEach(k => { if (rawInp[k] !== undefined) safeInp[k] = rawInp[k]; });
+                    setInputs(safeInp);
                     if (parsed.highlightPlan) setHighlightPlan(parsed.highlightPlan);
                     if (parsed.viewMode) setViewMode(parsed.viewMode);
                     if (parsed.basicPremiumPct != null) setBasicPremiumPct(parsed.basicPremiumPct);
@@ -2822,8 +2848,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     if (parsed.whatIfSalaryBump != null) setWhatIfSalaryBump(parsed.whatIfSalaryBump);
                     if (parsed.showWhatIf != null) setShowWhatIf(parsed.showWhatIf);
                     if (parsed.isRealDollars != null) setIsRealDollars(parsed.isRealDollars);
-                    if (parsed.scenarioA) setScenarioA(parsed.scenarioA); else setScenarioA(null);
-                    if (parsed.scenarioB) setScenarioB(parsed.scenarioB); else setScenarioB(null);
+                    if (parsed.scenarioA && parsed.scenarioA.inputs && parsed.scenarioA.projection) {
+                      const sA = { ...parsed.scenarioA, inputs: { ...DEFAULT_INPUTS } };
+                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioA.inputs[k] !== undefined) sA.inputs[k] = parsed.scenarioA.inputs[k]; });
+                      setScenarioA(sA);
+                    } else { setScenarioA(null); }
+                    if (parsed.scenarioB && parsed.scenarioB.inputs && parsed.scenarioB.projection) {
+                      const sB = { ...parsed.scenarioB, inputs: { ...DEFAULT_INPUTS } };
+                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioB.inputs[k] !== undefined) sB.inputs[k] = parsed.scenarioB.inputs[k]; });
+                      setScenarioB(sB);
+                    } else { setScenarioB(null); }
                     setShowShareModal(false);
                     showToast("✓ Profile restored — all settings loaded");
                   } catch (e) { alert("Invalid code — please check and try again."); }
@@ -5415,33 +5449,64 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 6 }}>💡 <strong>Tip:</strong> Give each scenario a descriptive label (e.g. "Retire at 65" vs "Defer to 70") using the label field to make the chart legend readable.</p>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-                  {[["A", "#3b82f6", "rgba(59,130,246,0.08)", "rgba(59,130,246,0.2)", scenarioA, scenarioLabelA, setScenarioLabelA, setScenarioA, "blue"], ["B", "#f97316", "rgba(249,115,22,0.08)", "rgba(249,115,22,0.2)", scenarioB, scenarioLabelB, setScenarioLabelB, setScenarioB, "orange"]].map(([letter, color, bg, border, scenario, label, setLabel, setScenario]) => (
-                    <div key={letter} style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                        <h4 style={{ fontWeight: 700, color, fontSize: 14 }}>Scenario {letter}</h4>
-                        {scenario && <button onClick={() => { setScenario(null); setLabel(""); }} style={{ fontSize: 10, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
-                      </div>
-                      <input type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder={`Label (e.g. Retire at ${letter === "A" ? "65" : "70"})`} style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 11, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
-
-                      {scenario ? (
-                        <div style={{ flex: 1, marginBottom: 16 }}>
-                          <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
-                            {Object.keys(DEFAULT_INPUTS).filter(k => (scenario.inputs[k] !== DEFAULT_INPUTS[k] || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => (
-                              <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
-                                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{typeof scenario.inputs[k] === "boolean" ? (scenario.inputs[k] ? "Yes" : "No") : scenario.inputs[k]}</span>
-                              </div>
-                            ))}
-                          </div>
+                  {/* ── Slot A ── */}
+                  {(() => {
+                    const color = "#3b82f6", bg = "rgba(59,130,246,0.08)", border = "rgba(59,130,246,0.2)";
+                    return (
+                      <div style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                          <h4 style={{ fontWeight: 700, color, fontSize: 14 }}>Scenario A</h4>
+                          {scenarioA && <button onClick={() => { setScenarioA(null); setScenarioLabelA(""); }} style={{ fontSize: 10, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
                         </div>
-                      ) : (
-                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 16 }}>Empty — fill in inputs then save</div>
-                      )}
-
-                      <button onClick={() => setScenario({ inputs: { ...inputs }, projection: displayAccumulation, payoutProj: displayProjection })} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as {letter}</button>
-                    </div>
-                  ))}
+                        <input type="text" value={scenarioLabelA} onChange={e => setScenarioLabelA(e.target.value)} placeholder="Label (e.g. Retire at 65)" style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 11, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
+                        {scenarioA ? (
+                          <div style={{ flex: 1, marginBottom: 16 }}>
+                            <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
+                              {Object.keys(DEFAULT_INPUTS).filter(k => (scenarioA.inputs[k] !== DEFAULT_INPUTS[k] || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => (
+                                <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
+                                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{typeof scenarioA.inputs[k] === "boolean" ? (scenarioA.inputs[k] ? "Yes" : "No") : scenarioA.inputs[k]}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 16 }}>Empty — configure inputs then save</div>
+                        )}
+                        <button onClick={() => setScenarioA({ inputs: { ...inputs }, projection: displayAccumulation, payoutProj: displayProjection })} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as A</button>
+                      </div>
+                    );
+                  })()}
+                  {/* ── Slot B ── */}
+                  {(() => {
+                    const color = "#f97316", bg = "rgba(249,115,22,0.08)", border = "rgba(249,115,22,0.2)";
+                    return (
+                      <div style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                          <h4 style={{ fontWeight: 700, color, fontSize: 14 }}>Scenario B</h4>
+                          {scenarioB && <button onClick={() => { setScenarioB(null); setScenarioLabelB(""); }} style={{ fontSize: 10, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
+                        </div>
+                        <input type="text" value={scenarioLabelB} onChange={e => setScenarioLabelB(e.target.value)} placeholder="Label (e.g. Retire at 70)" style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 11, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
+                        {scenarioB ? (
+                          <div style={{ flex: 1, marginBottom: 16 }}>
+                            <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
+                              {Object.keys(DEFAULT_INPUTS).filter(k => (scenarioB.inputs[k] !== DEFAULT_INPUTS[k] || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => (
+                                <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
+                                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{typeof scenarioB.inputs[k] === "boolean" ? (scenarioB.inputs[k] ? "Yes" : "No") : scenarioB.inputs[k]}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 16 }}>Empty — configure inputs then save</div>
+                        )}
+                        <button onClick={() => setScenarioB({ inputs: { ...inputs }, projection: displayAccumulation, payoutProj: displayProjection })} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as B</button>
+                      </div>
+                    );
+                  })()}
                 </div>
                 {scenarioA && scenarioB ? (<div>
                   <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 6, lineHeight: 1.6 }}>
