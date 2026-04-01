@@ -399,6 +399,19 @@ function runProjectionEngine(inputs, {
   const owAnnualSubjectToCPF = owMonthly * 12;
   const awCeiling = Math.max(0, 102000 - owAnnualSubjectToCPF);
 
+  // PR tenure rate advancement
+  // isPR: true only for PR members; SC and undefined default to SC behaviour.
+  // startPrYear: the PR tenure year the member is currently in (1, 2, or 3+).
+  //   Clamped to [1, 3] — 3 means "Year 3 and beyond" (full SC/PR3+ rates).
+  // annualGrossSalary: annual OW subject to CPF (capped at $8,000/mo), used to
+  //   derive mandatory OA/SA/MA from the G/G rate table when isPR && currentPrYear < 3.
+  // currentPrYear: mutable counter incremented each loop iteration; drives
+  //   the rate-tier switch from Year 1 → Year 2 → Year 3+ automatically.
+  const isPR = (inputs.citizenStatus || 'SC') === 'PR';
+  const startPrYear = Math.min(3, Math.max(1, Number(inputs.prYear) || 3));
+  const annualGrossSalary = owMonthly * 12; // already capped at $8,000/mo above
+  let currentPrYear = startPrYear;
+
   const data = [];
 
   for (let age = startAge; age <= maxAge; age++) {
@@ -544,7 +557,10 @@ function runProjectionEngine(inputs, {
 
     if (age < contribStop) {
       const gf = Math.pow(1 + salaryGrowth, Math.max(0, age - startAge)) * (1 + salaryBump);
-      const mandatorySA = Math.round(baseSA_Emp * gf);
+      // mandatorySA_base: used by SEP branch (always from user-entered baseSA_Emp).
+      // Non-SEP branch computes its own mandatorySA_dyn below, which may come from
+      // the PR G/G rate table when isPR && currentPrYear < 3.
+      const mandatorySA_base = Math.round(baseSA_Emp * gf);
 
       if (isSEP) {
         // SEP VC3A: single cash lump-sum auto-split by age-band rates + VHR to OA
@@ -615,8 +631,21 @@ function runProjectionEngine(inputs, {
         yearVoluntary += vc3aTotal + vcVhrAmt;
         yearGovGrants += govGrant_sep + actualMrss_sep;
       } else {
-        const mandatoryOA_i = Math.round(baseOA_Emp * gf);
-        let mandatoryMA_i = Math.round(baseMA_Emp * gf);
+        // PR Year 1/2: derive mandatory OA/SA/MA from the advancing G/G rate table
+        // applied to the actual annual gross salary (scaled by gf for salary growth).
+        // PR Year 3+ and SC: use the user-entered base fields as before.
+        let mandatoryOA_i, mandatorySA_dyn, mandatoryMA_i;
+        if (isPR && currentPrYear < 3) {
+          const prRates = getPRRates(currentPrYear, age);
+          const grossScaled = annualGrossSalary * gf;
+          mandatoryOA_i  = Math.round(grossScaled * prRates.oa);
+          mandatorySA_dyn = Math.round(grossScaled * prRates.sa);
+          mandatoryMA_i  = Math.round(grossScaled * prRates.ma);
+        } else {
+          mandatoryOA_i  = Math.round(baseOA_Emp * gf);
+          mandatorySA_dyn = mandatorySA_base; // same as Math.round(baseSA_Emp * gf)
+          mandatoryMA_i  = Math.round(baseMA_Emp * gf);
+        }
         // VC3A: single lump-sum auto-split by age-band rates + VHR to OA
         // WIS employees: 60% goes to CPF via age-band rates
         let vc3aOaRatio, vc3aSaRatio, vc3aMaRatio;
@@ -639,7 +668,7 @@ function runProjectionEngine(inputs, {
         const vc3aMA = Math.round(vc3aCash * (vc3aMaRatio / ratioSum_emp));
         const vc3aSA = vc3aCash - vc3aOA - vc3aMA;
         // Annual Limit: applies to mandatory + VC3A (WIS is govt, not counted in limit)
-        const totalMandatory = mandatoryOA_i + mandatorySA + mandatoryMA_i;
+        const totalMandatory = mandatoryOA_i + mandatorySA_dyn + mandatoryMA_i;
         const vcRoomThisYear = Math.max(0, ANNUAL_LIMIT - totalMandatory);
         // Scale VC3A if it exceeds the room (VHR + RSTU handled separately outside limit)
         const vc3aScale = vc3aCash > 0 && vc3aCash > vcRoomThisYear ? vcRoomThisYear / vc3aCash : 1;
@@ -659,10 +688,10 @@ function runProjectionEngine(inputs, {
 
         oa += totalOA;
         ma += actualMA;
-        yearInflow = totalOA + mandatorySA + cappedVcSA + actualMA + wisSA;
+        yearInflow = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + wisSA;
         totalInjected += yearInflow;
         // Cashflow ledger breakdown (employed)
-        yearMandatory += mandatoryOA_i + mandatorySA + Math.min(mandatoryMA_i, maRoomEmp);
+        yearMandatory += mandatoryOA_i + mandatorySA_dyn + Math.min(mandatoryMA_i, maRoomEmp);
         yearVoluntary += (cappedVcOA - vcVhrAmt) + (vc3aCash > 0 ? Math.min(cappedVcMA, maRoomEmp) : 0) + ((Number(inputs.vcSaTopup)||0)) + vcVhrAmt;
         // MRSS eligibility: SC only · age >= 55 · RA below BRS · lifetime cap $20,000
         const projBRS_emp = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
@@ -673,9 +702,9 @@ function runProjectionEngine(inputs, {
 
         if (age >= 55) {
           let roomInRA_Mand = Math.max(0, cohortRetSum - ra);
-          let mandToRA = Math.min(mandatorySA, roomInRA_Mand);
+          let mandToRA = Math.min(mandatorySA_dyn, roomInRA_Mand);
           ra += mandToRA;
-          oa += (mandatorySA - mandToRA);
+          oa += (mandatorySA_dyn - mandToRA);
           // VC3A: RA cap is FRS (not ERS — ERS applies only to RSTU cash top-ups)
           const projFRS_vc3a_emp = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
           const vcRoomInRA = Math.max(0, projFRS_vc3a_emp - ra);
@@ -687,7 +716,7 @@ function runProjectionEngine(inputs, {
         } else {
           // MA spill to SA is capped at FRS — excess above FRS overflows to OA
           const projFRS_sa = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-          const totalToSA = mandatorySA + cappedVcSA + maSpillEmp + wisSA + actualMrss_emp;
+          const totalToSA = mandatorySA_dyn + cappedVcSA + maSpillEmp + wisSA + actualMrss_emp;
           const saRoom = Math.max(0, projFRS_sa - sa);
           const actualToSA = Math.min(totalToSA, saRoom);
           const saOverflow = totalToSA - actualToSA;
@@ -805,6 +834,10 @@ function runProjectionEngine(inputs, {
     let effPropGrowth = propGrowth;
     if (isLeasehold && leaseRemaining < 60) effPropGrowth = propGrowth + Math.max(-0.05, -0.002 * (60 - leaseRemaining) / 10);
     currentPropValue = Math.max(0, currentPropValue * (1 + effPropGrowth));
+
+    // PR tenure advancement: each projection year advances the PR rate tier by 1,
+    // capped at 3 (full SC/PR3+ rates). Has no effect for SC members (isPR = false).
+    if (isPR && currentPrYear < 3) currentPrYear++;
 
     data.push({
       age,
