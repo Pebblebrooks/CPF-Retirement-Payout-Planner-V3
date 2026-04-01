@@ -127,7 +127,8 @@ const DEFAULT_INPUTS = {
   pledgeWithdrawalAmount: 0,    // amount to withdraw from RA (pledged sum) as cash
   pledgeWithdrawalAge: 55,      // age at which member applies to withdraw pledged RA funds
   // CPFIS
-  cpfisAmount: 0,
+  cpfisOaAmount: 0,    // Annual CPFIS investment from OA (OA must be > $20,000)
+  cpfisSaAmount: 0,    // Annual CPFIS investment from SA (SA must be > $40,000, pre-55 only)
   // Outflows
   housingOutflow: 12000, medicalUsage: 500, medishieldIP: 900, elderCareShield: 500,
   medicalInflationRate: 5,
@@ -201,7 +202,7 @@ const PRESET_PROFILES = [
       // ── CPF Transfers ─────────────────────────────────────────────────────
       oaToSaTransfer: 0, oaToMaTransfer: 0, oaToMaForLovedOne: false,
       // ── CPFIS ─────────────────────────────────────────────────────────────
-      cpfisAmount: 0,
+      cpfisOaAmount: 0, cpfisSaAmount: 0,
       // ── Outflows ──────────────────────────────────────────────────────────
       housingOutflow: 0, medicalUsage: 0, medishieldIP: 0,
       elderCareShield: 0, medicalInflationRate: 0,
@@ -269,7 +270,7 @@ const INPUT_LABELS = {
   annualGovGrant: "Annual Gov Grant", mrssGrant: "MRSS Grant", mmssGrant: "MMSS Grant",
   wisAmount: "WIS (Workfare)", oaToSaTransfer: "OA→SA Transfer",
   oaToMaTransfer: "OA→MA Transfer", oaWithdrawalAt55: "OA Withdrawal at 55",
-  usePropertyPledge: "Property Pledge", cpfisAmount: "CPFIS (OA/SA)",
+  usePropertyPledge: "Property Pledge", cpfisOaAmount: "CPFIS OA Invested", cpfisSaAmount: "CPFIS SA Invested",
   housingOutflow: "Housing Outflow", medicalUsage: "Medical Usage",
   medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
@@ -343,7 +344,9 @@ function runProjectionEngine(inputs, {
   //   Employees:  60% allocated to CPF accounts via age-band rates, 40% cash (not modelled in CPF)
   //   SEP:        90% to MA (subject to BHS), 10% cash (not modelled in CPF)
   const wisAmount = Number(inputs.wisAmount) || 0;
-  const cpfisAmount = Number(inputs.cpfisAmount) || 0;
+  const cpfisOaAmount = Number(inputs.cpfisOaAmount) || 0;
+  // SA CPFIS: only investible pre-55 (SA closes at 55); SA above $40,000 required.
+  const cpfisSaAmount = Number(inputs.cpfisSaAmount) || 0;
   const baseHousing = overrideHousingOutflow !== undefined ? overrideHousingOutflow : (Number(inputs.housingOutflow) || 0);
   const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0) + (Number(inputs.elderCareShield) || 0);
   const medInfl = (Number(inputs.medicalInflationRate) || 0) / 100;
@@ -465,6 +468,8 @@ function runProjectionEngine(inputs, {
     let yearOaDrawOut = 0;
     let yearLovedOneOut = 0; // OA→MA for loved one (true outflow)
 
+    let yearCpfisOut = 0;    // CPFIS outflow from OA + SA this year
+
     // Phase 2: Private Assets Growth
     if (age > startAge) {
       privateAssets = privateAssets * (1 + privateGrowth) + privateSaving;
@@ -583,13 +588,22 @@ function runProjectionEngine(inputs, {
       }
     }
 
-    // CPFIS: annual OA reduction for investments
-    // CPF policy: only OA savings ABOVE $20,000 are investible.
-    // SA investments require SA > $40,000 (only the portion above $40k is investible from SA).
-    if (cpfisAmount > 0) {
-      const cpfisInvestible = Math.max(0, oa - 20000);
-      const actualCpfis = Math.min(cpfisAmount, cpfisInvestible);
-      oa -= actualCpfis;
+    // CPFIS — OA tranche: only OA savings ABOVE $20,000 are investible.
+    if (cpfisOaAmount > 0) {
+      const cpfisOaInvestible = Math.max(0, oa - 20000);
+      const actualCpfisOa = Math.min(cpfisOaAmount, cpfisOaInvestible);
+      oa -= actualCpfisOa;
+      yearCpfisOut += actualCpfisOa;
+      totalOutSpent += actualCpfisOa;
+    }
+    // CPFIS — SA tranche: only SA savings ABOVE $40,000 are investible; SA is open pre-55 only.
+    // Post-55 SA is closed (merged to RA) so SA CPFIS is silently skipped after age 55.
+    if (cpfisSaAmount > 0 && age < 55) {
+      const cpfisSaInvestible = Math.max(0, sa - 40000);
+      const actualCpfisSa = Math.min(cpfisSaAmount, cpfisSaInvestible);
+      sa -= actualCpfisSa;
+      yearCpfisOut += actualCpfisSa;
+      totalOutSpent += actualCpfisSa;
     }
 
     if (age < contribStop) {
@@ -901,6 +915,7 @@ function runProjectionEngine(inputs, {
       yearMedOut: Math.round(yearMedOut),
       yearOaDrawOut: Math.round(yearOaDrawOut),
       yearLovedOneOut: Math.round(yearLovedOneOut),
+      yearCpfisOut: Math.round(yearCpfisOut),
     });
   }
   return data;
@@ -1136,16 +1151,33 @@ export default function App() {
       const v = Number(inp[k]) || 0;
       if (v < 0 || v > 100000) errs[k] = "0 – $100,000/yr";
     });
-    // CPFIS: only OA savings above $20,000 and SA savings above $40,000 are investible
-    const cpfisVal = Number(inp.cpfisAmount) || 0;
-    if (cpfisVal < 0) errs.cpfisAmount = "Must be ≥ 0";
-    if (cpfisVal > 0) {
+    // CPFIS OA tranche: only OA savings above $20,000 are investible
+    const cpfisOaVal = Number(inp.cpfisOaAmount) || 0;
+    if (cpfisOaVal < 0) errs.cpfisOaAmount = "Must be ≥ 0";
+    if (cpfisOaVal > 0) {
       const cpfisOaBal = Number(inp.oaBalance) || 0;
-      const cpfisInvestible = Math.max(0, cpfisOaBal - 20000);
+      const cpfisOaInvestible = Math.max(0, cpfisOaBal - 20000);
       if (cpfisOaBal <= 20000) {
-        errs.cpfisAmount = `OA must exceed $20,000 before investing. Current OA: ${formatCurrency(cpfisOaBal)}.`;
-      } else if (cpfisVal > cpfisInvestible) {
-        errs.cpfisAmount = `Max investible from OA is $${cpfisInvestible.toLocaleString()} (OA − $20,000 reserve). Engine auto-caps.`;
+        errs.cpfisOaAmount = `OA must exceed $20,000 before investing. Current OA: ${formatCurrency(cpfisOaBal)}.`;
+      } else if (cpfisOaVal > cpfisOaInvestible) {
+        errs.cpfisOaAmount = `Max investible from OA is $${cpfisOaInvestible.toLocaleString()} (OA − $20k reserve). Engine auto-caps.`;
+      }
+    }
+    // CPFIS SA tranche: only SA savings above $40,000 are investible; SA is only available pre-55
+    const cpfisSaVal = Number(inp.cpfisSaAmount) || 0;
+    if (cpfisSaVal < 0) errs.cpfisSaAmount = "Must be ≥ 0";
+    if (cpfisSaVal > 0) {
+      const ca_cpfis = Number(inp.currentAge) || 0;
+      if (ca_cpfis >= 55) {
+        errs.cpfisSaAmount = "SA is closed at 55 — SA CPFIS not available at age 55+.";
+      } else {
+        const cpfisSaBal = Number(inp.saBalance) || 0;
+        const cpfisSaInvestible = Math.max(0, cpfisSaBal - 40000);
+        if (cpfisSaBal <= 40000) {
+          errs.cpfisSaAmount = `SA must exceed $40,000 before investing. Current SA: ${formatCurrency(cpfisSaBal)}.`;
+        } else if (cpfisSaVal > cpfisSaInvestible) {
+          errs.cpfisSaAmount = `Max investible from SA is $${cpfisSaInvestible.toLocaleString()} (SA − $40k reserve). Engine auto-caps.`;
+        }
       }
     }
     // VC3A: 0 – Annual Limit
@@ -1734,6 +1766,10 @@ export default function App() {
           Object.keys(DEFAULT_INPUTS).forEach(k => {
             if (raw[k] !== undefined) safe[k] = raw[k];
           });
+          // Legacy migration: old profiles stored a single cpfisAmount — seed OA field from it
+          if (raw.cpfisAmount !== undefined && !raw.cpfisOaAmount) {
+            safe.cpfisOaAmount = raw.cpfisAmount;
+          }
           return safe;
         };
         // Support both old format (just inputs) and new full-state format
@@ -2004,7 +2040,7 @@ export default function App() {
       annualGovGrant, mrssGrant, mmssGrant, wisAmount,
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
-      cpfisAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
+      cpfisOaAmount, cpfisSaAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
       salaryGross, salaryBonus, salaryGrowthRate, netTradeIncome,
@@ -2025,7 +2061,7 @@ export default function App() {
       annualGovGrant, mrssGrant, mmssGrant, wisAmount,
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
-      cpfisAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
+      cpfisOaAmount, cpfisSaAmount, housingOutflow, medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
       salaryGross, salaryBonus, salaryGrowthRate, netTradeIncome,
@@ -4119,6 +4155,109 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         ≤ $50 → Nil &nbsp;|&nbsp; $51–$500 → {activeFlatRate} × OW (employer only) &nbsp;|&nbsp; $501–$750 → {activeFlatRate} × OW + {activeGradFactor} × (OW − $500) &nbsp;|&nbsp; &gt; $750 → full rates above
                         <br /><span style={{ color: "var(--text-subtle)" }}>Rates shown are combined employer + employee as % of wages (OW &gt; $750). Auto-Calc applies the correct band formula automatically.</span>
                       </div>
+
+                      {/* ── PR Tier Progression Panel — only shown when PR Year 1 or Year 2 ── */}
+                      {displayIsPR && displayPrYr < 3 && (() => {
+                        const growthRate = (Number(inputs.salaryGrowthRate) || 0) / 100;
+                        const baseMonthly = Math.min(Number(inputs.salaryGross) || 0, 8000);
+                        const bonusBase   = Number(inputs.salaryBonus) || 0;
+
+                        // Helper: compute annual OA/SA/MA for a given PR tier and year offset
+                        const computeTierYear = (tierYear, offset) => {
+                          const gf = Math.pow(1 + growthRate, offset);
+                          const cappedMo = Math.min(baseMonthly * gf, 8000);
+                          const ageAtYear = displayAge + offset;
+                          let oaR, saR, maR, totalPct;
+                          if (tierYear < 3) {
+                            const r = getPRRates(tierYear, ageAtYear, displayRateType);
+                            oaR = r.oa; saR = r.sa; maR = r.ma;
+                            totalPct = Math.round(r.total * 1000) / 10;
+                          } else {
+                            // SC/PR3+ full rates
+                            if      (ageAtYear <= 35) { oaR=0.23; saR=0.06;  maR=0.08;  }
+                            else if (ageAtYear <= 45) { oaR=0.21; saR=0.07;  maR=0.09;  }
+                            else if (ageAtYear <= 50) { oaR=0.19; saR=0.08;  maR=0.10;  }
+                            else if (ageAtYear <= 55) { oaR=0.15; saR=0.115; maR=0.105; }
+                            else if (ageAtYear <= 60) { oaR=0.12; saR=0.115; maR=0.105; }
+                            else if (ageAtYear <= 65) { oaR=0.035;saR=0.11;  maR=0.105; }
+                            else if (ageAtYear <= 70) { oaR=0.01; saR=0.05;  maR=0.105; }
+                            else                      { oaR=0.01; saR=0.01;  maR=0.105; }
+                            totalPct = Math.round((oaR+saR+maR) * 1000) / 10;
+                          }
+                          const totalR  = oaR + saR + maR;
+                          const owAnn   = cappedMo * 12;
+                          const owOwContrib = totalR * owAnn;
+                          const owOA   = totalR > 0 ? Math.round(owOwContrib * oaR / totalR) : 0;
+                          const owMA   = totalR > 0 ? Math.round(owOwContrib * maR / totalR) : 0;
+                          const owSA   = owOwContrib > 0 ? Math.round(owOwContrib) - owOA - owMA : 0;
+                          // AW (bonus) — always at full standard rates
+                          const awCap  = Math.max(0, 102000 - owAnn);
+                          const bCpf   = Math.min(bonusBase * gf, awCap);
+                          const oa  = owOA + Math.round(bCpf * oaR);
+                          const sa  = owSA + Math.round(bCpf * saR);
+                          const ma  = owMA + Math.round(bCpf * maR);
+                          return { oa, sa, ma, total: oa+sa+ma, totalPct, tierYear, ageAtYear };
+                        };
+
+                        // Build 4 rows: Year 1 → Year 2 → Year 3 → Year 4+
+                        const rows = [
+                          { label: `Year 1 (now)`,  offset: 0, tier: displayPrYr },
+                          { label: `Year 2`,         offset: 1, tier: Math.min(displayPrYr + 1, 3) },
+                          { label: `Year 3`,         offset: 2, tier: Math.min(displayPrYr + 2, 3) },
+                          { label: `Year 4+`,        offset: 3, tier: 3 },
+                        ].map(r => ({ ...r, ...computeTierYear(r.tier, r.offset) }));
+
+                        const tierLabel = t => t === 1 ? 'PR Yr 1' : t === 2 ? 'PR Yr 2' : 'SC/PR3+';
+                        const tierColor = t => t === 1 ? '#fbbf24' : t === 2 ? '#fb923c' : '#34d399';
+                        const fc = v => `$${(v/1000).toFixed(1)}k`;
+
+                        return (
+                          <div style={{ marginTop: 10, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(251,191,36,0.3)" }}>
+                            <div style={{ background: "rgba(251,191,36,0.08)", padding: "6px 10px", fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "#fbbf24", letterSpacing: "0.05em" }}>
+                              📈 PR Tier Progression — Annual Contributions (Yr 1 → Yr 4+)
+                              <span style={{ marginLeft: 6, fontWeight: 400, color: "var(--text-muted)", textTransform: "none" }}>Rate tier auto-advances each year in the engine</span>
+                            </div>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
+                              <thead>
+                                <tr style={{ background: "var(--bg-muted)" }}>
+                                  {["Proj. Year", "Tier (Rate)", "OA", "SA/RA", "MA", "Total"].map((h, i) => (
+                                    <th key={h} style={{ padding: "4px 8px", textAlign: i <= 1 ? "left" : "right",
+                                      color: i===2?"#60a5fa": i===3?"#34d399": i===4?"#a78bfa": i===5?"var(--text-highlight)":"var(--text-muted)",
+                                      fontWeight: 800, fontSize: 9 }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rows.map((r, idx) => {
+                                  const isNow = idx === 0;
+                                  const isFull = r.tier >= 3;
+                                  return (
+                                    <tr key={r.label} style={{ borderTop: "1px solid var(--border-subtle)", background: isNow ? "rgba(251,191,36,0.06)" : isFull ? "rgba(52,211,153,0.04)" : "" }}>
+                                      <td style={{ padding: "5px 8px", fontWeight: isNow ? 800 : 600, color: isNow ? "#fbbf24" : "var(--text-muted)", fontFamily: "system-ui", whiteSpace: "nowrap" }}>
+                                        {r.label}{isNow && <span style={{ marginLeft: 4, fontSize: 7, background: "rgba(251,191,36,0.2)", color: "#fbbf24", padding: "1px 4px", borderRadius: 4 }}>AUTO-CALC</span>}
+                                        {growthRate > 0 && <span style={{ marginLeft: 3, fontSize: 7, color: "var(--text-subtle)" }}>×{(Math.pow(1+growthRate, r.offset)*100).toFixed(0)}%</span>}
+                                      </td>
+                                      <td style={{ padding: "5px 8px" }}>
+                                        <span style={{ fontSize: 8, fontWeight: 800, color: tierColor(r.tier), background: `${tierColor(r.tier)}18`, border: `1px solid ${tierColor(r.tier)}40`, borderRadius: 4, padding: "1px 5px" }}>
+                                          {tierLabel(r.tier)} · {r.totalPct}%
+                                        </span>
+                                      </td>
+                                      <td style={{ padding: "5px 8px", textAlign: "right", color: "#93c5fd", fontFamily: "monospace" }}>{fc(r.oa)}</td>
+                                      <td style={{ padding: "5px 8px", textAlign: "right", color: "#6ee7b7", fontFamily: "monospace" }}>{fc(r.sa)}</td>
+                                      <td style={{ padding: "5px 8px", textAlign: "right", color: "#c4b5fd", fontFamily: "monospace" }}>{fc(r.ma)}</td>
+                                      <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--text-highlight)", fontFamily: "monospace", fontWeight: 800 }}>{fc(r.total)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                            <div style={{ padding: "5px 10px", background: "rgba(251,191,36,0.04)", fontSize: 8, color: "var(--text-subtle)", lineHeight: 1.6 }}>
+                              Auto-Calc fills Year 1 figures into the OA/SA/MA fields below. Year 2–4+ are projections only — the engine advances the tier automatically each year without further input.
+                              {growthRate > 0 && ` Salary growth of ${inputs.salaryGrowthRate}%/yr applied.`}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
@@ -4323,27 +4462,63 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div key={n}><label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>{l.replace(" — Annual","")}<FreqBadge type={freq} /></label>
                       <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
                   ))}
-                  {/* CPFIS */}
-                  <div>
-                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
-                      CPFIS – OA/SA Invested <FreqBadge type="annual" />
-                      <TooltipBox id="t-cpfis" text="CPF Investment Scheme: Annual amount moved from OA into investments. Only OA savings ABOVE $20,000 are investible — the first $20k must remain in OA. SA savings above $40,000 can also be invested (modelled separately). Investment returns are NOT modelled — only the OA outflow is applied. Age 18+. Must complete CPFIS Self-Awareness Questionnaire (SAQ) first." />
-                    </label>
-                    {(() => {
-                      const oaBal = Number(inputs.oaBalance) || 0;
-                      const cpfisInvestible = Math.max(0, oaBal - 20000);
-                      return (
-                        <>
-                          <input type="text" inputMode="decimal" name="cpfisAmount" value={inputs.cpfisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual CPFIS investment amount" style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: `1px solid ${inputErrors.cpfisAmount ? "#f87171" : "rgba(244,63,94,0.15)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                          {inputErrors.cpfisAmount && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.cpfisAmount}</p>}
-                          <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
-                            Investible (OA − $20k floor): <strong style={{ color: cpfisInvestible === 0 ? "#f87171" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisInvestible)}</strong>
-                            {cpfisInvestible === 0 && <span style={{ color: "#f87171", fontWeight: 700 }}> · OA too low</span>}
-                            {" "}· returns not modelled
-                          </p>
-                        </>
-                      );
-                    })()}
+                  {/* CPFIS — OA and SA separate fields */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(244,63,94,0.04)", border: "1px solid rgba(244,63,94,0.18)" }}>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
+                        CPFIS – OA Invested <FreqBadge type="annual" />
+                        <TooltipBox id="t-cpfis-oa" text="CPF Investment Scheme (OA): Only OA savings ABOVE $20,000 are investible — the first $20k must always remain in OA. Investment returns are NOT modelled — only the annual outflow from OA is applied. Age 18+. Complete CPFIS SAQ first." />
+                      </label>
+                      {(() => {
+                        const oaBal = Number(inputs.oaBalance) || 0;
+                        const cpfisOaInvestible = Math.max(0, oaBal - 20000);
+                        return (
+                          <>
+                            <input type="text" inputMode="decimal" name="cpfisOaAmount" value={inputs.cpfisOaAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual CPFIS OA investment amount" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.cpfisOaAmount ? "#f87171" : "rgba(244,63,94,0.2)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                            {inputErrors.cpfisOaAmount && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.cpfisOaAmount}</p>}
+                            <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
+                              Investible (OA − $20k floor): <strong style={{ color: cpfisOaInvestible === 0 ? "#f87171" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisOaInvestible)}</strong>
+                              {cpfisOaInvestible === 0 && <span style={{ color: "#f87171", fontWeight: 700 }}> · OA ≤ $20k</span>}
+                              {" "}· returns not modelled
+                            </p>
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(244,63,94,0.04)", border: "1px solid rgba(244,63,94,0.18)" }}>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
+                        CPFIS – SA Invested <FreqBadge type="annual" />
+                        <TooltipBox id="t-cpfis-sa" text="CPF Investment Scheme (SA): Only SA savings ABOVE $40,000 are investible. SA CPFIS is only available before age 55 — SA closes at 55 (merges into RA) and cannot be invested via CPFIS after that. Investment returns are NOT modelled — only the annual outflow from SA is applied." />
+                      </label>
+                      {(() => {
+                        const saBal = Number(inputs.saBalance) || 0;
+                        const ca = Number(inputs.currentAge) || 0;
+                        const is55Plus_cpfis = ca >= 55;
+                        const cpfisSaInvestible = is55Plus_cpfis ? 0 : Math.max(0, saBal - 40000);
+                        return (
+                          <>
+                            <input type="text" inputMode="decimal" name="cpfisSaAmount" value={inputs.cpfisSaAmount}
+                              onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                              readOnly={is55Plus_cpfis} tabIndex={is55Plus_cpfis ? -1 : undefined}
+                              aria-label="Annual CPFIS SA investment amount"
+                              style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)",
+                                border: `1px solid ${inputErrors.cpfisSaAmount ? "#f87171" : "rgba(244,63,94,0.2)"}`,
+                                borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none",
+                                fontFamily: "monospace", boxSizing: "border-box",
+                                cursor: is55Plus_cpfis ? "not-allowed" : "text",
+                                opacity: is55Plus_cpfis ? 0.45 : 1 }} />
+                            {inputErrors.cpfisSaAmount && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.cpfisSaAmount}</p>}
+                            <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
+                              {is55Plus_cpfis
+                                ? <span style={{ color: "#f87171" }}>SA closed at 55 — SA CPFIS not available</span>
+                                : <>Investible (SA − $40k floor): <strong style={{ color: cpfisSaInvestible === 0 ? "#f87171" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisSaInvestible)}</strong>
+                                  {cpfisSaInvestible === 0 && <span style={{ color: "#f87171", fontWeight: 700 }}> · SA ≤ $40k</span>}
+                                  {" "}· returns not modelled</>}
+                            </p>
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                   {/* OA Withdrawal (from age 55) */}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.15)" }}>
@@ -6275,14 +6450,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <p style={{ fontSize: 10, lineHeight: 1.6, margin: 0 }}>
                           <strong style={{ color: "#34d399" }}>Inflows:</strong> Mandatory contributions · Voluntary (VC3A/RSTU/VHR/Cash MA) · Gov grants/MRSS/MMSS/WIS &nbsp;|&nbsp;
                           <strong style={{ color: "#60a5fa" }}>Interest:</strong> OA (2.5%) · SA/RA (4%) · MA (4%) &nbsp;|&nbsp;
-                          <strong style={{ color: "#f472b6" }}>Outflows:</strong> Housing loan · Medical · OA Drawdown · Loved-one transfers
+                          <strong style={{ color: "#f472b6" }}>Outflows:</strong> Housing loan · Medical · OA Drawdown · CPFIS (OA+SA) · Loved-one transfers
                         </p>
                       </div>
                       <div style={{ overflowX: "auto" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, fontFamily: "monospace" }}>
                           <thead>
                             <tr style={{ background: "var(--bg-base)", borderBottom: "2px solid var(--border-strong)" }}>
-                              {["Age", "Mandatory", "Voluntary", "Grants/WIS", "OA Int.", "SA/RA Int.", "MA Int.", "Housing Out", "Medical Out", "OA Draw", "Loved One Out", "Net Flow"].map((h, i) => (
+                              {["Age", "Mandatory", "Voluntary", "Grants/WIS", "OA Int.", "SA/RA Int.", "MA Int.", "▶ Total In", "Housing Out", "Medical Out", "OA Draw", "Loved One Out", "CPFIS Out", "▶ Total Out", "Net Flow"].map((h, i) => (
                                 <th key={h} style={{ padding: "6px 8px", textAlign: i === 0 ? "center" : "right", fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>{h}</th>
                               ))}
                             </tr>
@@ -6300,8 +6475,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               const medOut = row.yearMedOut || 0;
                               const oaDraw = row.yearOaDrawOut || 0;
                               const lovedOut = row.yearLovedOneOut || 0;
+                              const cpfisOut = row.yearCpfisOut || 0;
                               const totalIn = mandatory + voluntary + grants + oaInt + saRaInt + maInt;
-                              const totalOut = housOut + medOut + oaDraw + lovedOut;
+                              const totalOut = housOut + medOut + oaDraw + lovedOut + cpfisOut;
                               const net = totalIn - totalOut;
                               return (
                                 <tr key={row.age} style={{ borderBottom: "1px solid var(--border-subtle)", background: isPayout ? "rgba(16,185,129,0.08)" : i % 2 === 1 ? "rgba(255,255,255,0.01)" : "transparent" }}>
@@ -6312,10 +6488,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#60a5fa" }}>{fc2(oaInt)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#818cf8" }}>{fc2(saRaInt)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#c084fc" }}>{fc2(maInt)}</td>
+                                  <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 700, color: "#34d399", borderLeft: "1px solid var(--border-subtle)" }}>{fc2(totalIn)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#f472b6" }}>{fc2(housOut)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#fb7185" }}>{fc2(medOut)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#f87171" }}>{fc2(oaDraw)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#fca5a5" }}>{fc2(lovedOut)}</td>
+                                  <td style={{ padding: "5px 8px", textAlign: "right", color: "#fb923c" }}>{fc2(cpfisOut)}</td>
+                                  <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 700, color: "#f472b6", borderLeft: "1px solid var(--border-subtle)" }}>{fc2(totalOut)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 700, color: net >= 0 ? "#34d399" : "#f87171" }}>{net >= 0 ? "+" : "-"}{fc2(Math.abs(net))}</td>
                                 </tr>
                               );
@@ -6329,10 +6508,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 saRaInt: a.saRaInt+(r.yearSaRaInterest||0), maInt: a.maInt+(r.yearMaInterest||0),
                                 housOut: a.housOut+(r.yearHousingOut||0), medOut: a.medOut+(r.yearMedOut||0),
                                 oaDraw: a.oaDraw+(r.yearOaDrawOut||0), lovedOut: a.lovedOut+(r.yearLovedOneOut||0),
-                              }), {mandatory:0,voluntary:0,grants:0,oaInt:0,saRaInt:0,maInt:0,housOut:0,medOut:0,oaDraw:0,lovedOut:0});
+                                cpfisOut: a.cpfisOut+(r.yearCpfisOut||0),
+                              }), {mandatory:0,voluntary:0,grants:0,oaInt:0,saRaInt:0,maInt:0,housOut:0,medOut:0,oaDraw:0,lovedOut:0,cpfisOut:0});
                               const fc3 = v => v===0?"—":`$${(v/1000).toFixed(0)}k`;
                               const totalIn = t.mandatory+t.voluntary+t.grants+t.oaInt+t.saRaInt+t.maInt;
-                              const totalOut = t.housOut+t.medOut+t.oaDraw+t.lovedOut;
+                              const totalOut = t.housOut+t.medOut+t.oaDraw+t.lovedOut+t.cpfisOut;
                               const net = totalIn - totalOut;
                               return (
                                 <tr style={{ borderTop: "2px solid var(--border-strong)", background: "var(--bg-panel)", fontWeight: 800 }}>
@@ -6343,10 +6523,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#60a5fa" }}>{fc3(t.oaInt)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#818cf8" }}>{fc3(t.saRaInt)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#c084fc" }}>{fc3(t.maInt)}</td>
+                                  <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 900, color: "#34d399", borderLeft: "1px solid var(--border-strong)" }}>{fc3(totalIn)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#f472b6" }}>{fc3(t.housOut)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#fb7185" }}>{fc3(t.medOut)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#f87171" }}>{fc3(t.oaDraw)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#fca5a5" }}>{fc3(t.lovedOut)}</td>
+                                  <td style={{ padding: "7px 8px", textAlign: "right", color: "#fb923c" }}>{fc3(t.cpfisOut)}</td>
+                                  <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 900, color: "#f472b6", borderLeft: "1px solid var(--border-strong)" }}>{fc3(totalOut)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 900, color: net>=0?"#34d399":"#f87171" }}>{net>=0?"+":"-"}{fc3(Math.abs(net))}</td>
                                 </tr>
                               );
@@ -6666,7 +6849,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#f472b6", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>CPFIS — CPF Investment Scheme:</strong> Annual amount moved from OA into investments. Reduces your OA balance in the projection. Investment returns are <strong>not</strong> modelled — only the cash outflow from OA is applied. Available in the Outflows panel.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>CPFIS — CPF Investment Scheme:</strong> Annual amounts moved from OA and/or SA into investments. OA: only savings <strong>above $20,000</strong> are investible (the first $20k must stay in OA). SA: only savings <strong>above $40,000</strong> are investible, and SA CPFIS is only available before age 55 (SA closes at 55). You can invest from both accounts simultaneously. Investment returns are <strong>not</strong> modelled — only the cash outflows from OA and SA are applied. Age 18+. Available in the Outflows panel.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", marginTop: 6, flexShrink: 0 }} />
