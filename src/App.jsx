@@ -145,7 +145,50 @@ const PRESET_PROFILES = [
   {
     id: "blank", label: "Blank Slate", icon: "🧹",
     desc: "All zeros — start completely fresh",
-    inputs: { name: "", currentAge: 30, payoutAge: 65, oaBalance: 0, saBalance: 0, maBalance: 0, empOaCont: 0, empSaCont: 0, empMaCont: 0, housingOutflow: 0, propertyValue: 0, includeProperty: false, annualGovGrant: 0 }
+    inputs: {
+      // ── Profile (sensible defaults, not zeroed) ──────────────────────────
+      name: "", currentAge: 30, currentYear: 2026, payoutAge: 65,
+      contributionStopAge: 65, housingStopAge: 65,
+      isMale: true, isSelfEmployed: false,
+      citizenStatus: "SC", prYear: 3,
+      // ── CPF Balances ─────────────────────────────────────────────────────
+      oaBalance: 0, saBalance: 0, maBalance: 0,
+      // ── Salary & Mandatory Contributions ─────────────────────────────────
+      salaryGross: 0, salaryBonus: 0, salaryGrowthRate: 0,
+      showSalaryCalc: false,
+      empOaCont: 0, empSaCont: 0, empMaCont: 0,
+      netTradeIncome: 0,
+      // ── Voluntary Top-ups & Grants ────────────────────────────────────────
+      vc3aCash: 0, vcSaTopup: 0, vcVhr: 0, vcMaCash: 0,
+      annualGovGrant: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
+      // ── CPF Transfers ─────────────────────────────────────────────────────
+      oaToSaTransfer: 0, oaToMaTransfer: 0, oaToMaForLovedOne: false,
+      // ── CPFIS ─────────────────────────────────────────────────────────────
+      cpfisAmount: 0,
+      // ── Outflows ──────────────────────────────────────────────────────────
+      housingOutflow: 0, medicalUsage: 0, medishieldIP: 0,
+      elderCareShield: 0, medicalInflationRate: 0,
+      // ── Property & Timelines ──────────────────────────────────────────────
+      propertyValue: 0, propertyGrowthRate: 0,
+      includeProperty: false, propertyLeasehold: false, propertyLeaseYears: 99,
+      sellPropertyAge: 0,
+      // ── Age-55 Options ────────────────────────────────────────────────────
+      oaWithdrawalAt55: 0,
+      usePropertyPledge: false, pledgeWithdrawalAmount: 0, pledgeWithdrawalAge: 55,
+      // ── Housing Downpayment ───────────────────────────────────────────────
+      plannedDownpaymentOA: 0, downpaymentAge: 35,
+      // ── SRS ───────────────────────────────────────────────────────────────
+      srsBalance: 0, srsAnnualContribution: 0, srsReturnRate: 0,
+      srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10,
+      // ── Private Assets & Goals ────────────────────────────────────────────
+      currentPrivateAssets: 0, annualPrivateSaving: 0, privateAssetGrowthRate: 0,
+      targetMonthlyIncome: 0,
+      oaDrawdownMonthly: 0, oaDrawdownStartAge: 65, oaDrawdownFloor: 0,
+      // ── Property Monetisation ─────────────────────────────────────────────
+      propMonetiseEnabled: false, propMonetiseCashProceeds: 0, propMonetiseRaTopup: 0,
+      // ── Die with Zero ─────────────────────────────────────────────────────
+      dieWithZeroEnabled: false, dieWithZeroAge: 85,
+    }
   },
   {
     id: "typical35", label: "Typical Employee, 35", icon: "👔",
@@ -1462,6 +1505,24 @@ export default function App() {
     const annualSA = owSA + Math.round(bonusCpf * saRate);
     const annualMA = owMA + Math.round(bonusCpf * maRate);
 
+    // ── Step 5: duplicate-press guard ────────────────────────────────────
+    // If computed values are identical to what is already in the fields,
+    // do NOT update state. Prevents user confusion about whether repeated
+    // presses accumulate values (they never do — this just makes it explicit).
+    const alreadyCurrent =
+      Number(inputs.empOaCont) === annualOA &&
+      Number(inputs.empSaCont) === annualSA &&
+      Number(inputs.empMaCont) === annualMA;
+
+    if (alreadyCurrent) {
+      showToast(
+        `ℹ Contributions already up to date — ` +
+        `OA $${annualOA.toLocaleString()} / SA $${annualSA.toLocaleString()} / MA $${annualMA.toLocaleString()} (annual). ` +
+        `No changes made.`
+      );
+      return;
+    }
+
     setInputs(prev => ({
       ...prev,
       empOaCont: annualOA,
@@ -1470,13 +1531,32 @@ export default function App() {
       showSalaryCalc: false
     }));
 
-    // Toast message with context
+    // ── Step 6: toast — state annual figures and basis explicitly ─────────
+    // "Annual" is called out prominently so users don't confuse these totals
+    // with the monthly salary figure shown in the input above.
+    const totalAnnual = annualOA + annualSA + annualMA;
+    const annualSalaryBase = cappedGross * 12;
+    const effectivePct = annualSalaryBase > 0
+      ? Math.round((totalAnnual / annualSalaryBase) * 1000) / 10
+      : 0;
+    const bandNote = cappedGross <= 50  ? ' [OW ≤$50: Nil]'
+      : cappedGross <= 500 ? ' [OW ≤$500: employer-only flat rate]'
+      : cappedGross <= 750 ? ' [OW $500–$750: graduated rate]'
+      : '';
+
     if (isPR && prYr < 3) {
-      const pct = Math.round(totalRate * 100 * 10) / 10;
-      const bandNote = cappedGross <= 500 ? ` (OW ≤$500: employer-only flat rate applied)` : cappedGross <= 750 ? ` (OW $500–$750: graduated rate applied)` : '';
-      showToast(`⚡ PR Year ${prYr} rates applied — ${pct}% total${bandNote}. OA/SA/MA proportionally allocated per 2026 CPF schedule.`);
-    } else if (cappedGross <= 750 && cappedGross > 50) {
-      showToast(`⚡ Contributions calculated with salary-band formula (OW = $${cappedGross.toLocaleString()}/mo)`);
+      showToast(
+        `⚡ PR Year ${prYr} (G/G) applied${bandNote}. ` +
+        `Annual contributions: OA $${annualOA.toLocaleString()} / SA $${annualSA.toLocaleString()} / MA $${annualMA.toLocaleString()} ` +
+        `= $${totalAnnual.toLocaleString()} (${effectivePct}% of $${annualSalaryBase.toLocaleString()}/yr). ` +
+        `Rates auto-advance Yr 1 → Yr 2 → Yr 3+ in the projection.`
+      );
+    } else {
+      showToast(
+        `⚡ ${isPR ? 'PR Year 3+' : 'SC'} rates applied${bandNote}. ` +
+        `Annual contributions: OA $${annualOA.toLocaleString()} / SA $${annualSA.toLocaleString()} / MA $${annualMA.toLocaleString()} ` +
+        `= $${totalAnnual.toLocaleString()} (${effectivePct}% of $${annualSalaryBase.toLocaleString()}/yr).`
+      );
     }
   };
 
