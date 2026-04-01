@@ -59,9 +59,42 @@ const PR_CONTRIBUTION_RATES = {
     { maxAge: Infinity, oa: 0.007, sa: 0.007, ma: 0.071, total: 0.085, flatRate: 0.035, gradFactor: 0.15  }, // 8.5%  >70
   ],
 };
-// Helper: look up PR OA/SA/MA rates for a given year and age
-const getPRRates = (prYear, age) => {
-  const table = PR_CONTRIBUTION_RATES[prYear];
+// F/G rates: Full Employer (same as SC/PR3+ employer rates) + Graduated Employee (same as G/G employee rates).
+// Requires voluntary joint application by employer and employee.
+// Source: CPF Board — employer rates from Table 1, employee rates from Tables 2 & 3.
+// OA/SA/MA splits proportionally scaled from SC/PR3+ ratios (same method as G/G above).
+// flatRate = full employer-only rate (same as SC/PR3+ employer share).
+// gradFactor = employeeRate × 3 (Yr1: 5%×3=0.15; Yr2: age-banded, same as G/G Yr2).
+const PR_FG_CONTRIBUTION_RATES = {
+  1: [
+    // F/G Year 1: Employer 17% (full) + Employee 5% (graduated) = 22% total (≤55)
+    { maxAge: 35, oa: 0.136, sa: 0.036, ma: 0.048, total: 0.220, flatRate: 0.17,  gradFactor: 0.15  }, // 22.0% ≤35
+    { maxAge: 45, oa: 0.124, sa: 0.042, ma: 0.054, total: 0.220, flatRate: 0.17,  gradFactor: 0.15  }, // 22.0% 36–45
+    { maxAge: 50, oa: 0.112, sa: 0.048, ma: 0.060, total: 0.220, flatRate: 0.17,  gradFactor: 0.15  }, // 22.0% 46–50
+    { maxAge: 55, oa: 0.090, sa: 0.068, ma: 0.062, total: 0.220, flatRate: 0.17,  gradFactor: 0.15  }, // 22.0% 51–55
+    { maxAge: 60, oa: 0.074, sa: 0.071, ma: 0.065, total: 0.210, flatRate: 0.16,  gradFactor: 0.15  }, // 21.0% 56–60
+    { maxAge: 65, oa: 0.024, sa: 0.077, ma: 0.074, total: 0.175, flatRate: 0.125, gradFactor: 0.15  }, // 17.5% 61–65
+    { maxAge: 70, oa: 0.009, sa: 0.042, ma: 0.089, total: 0.140, flatRate: 0.09,  gradFactor: 0.15  }, // 14.0% 66–70
+    { maxAge: Infinity, oa: 0.010, sa: 0.010, ma: 0.105, total: 0.125, flatRate: 0.075, gradFactor: 0.15  }, // 12.5% >70
+  ],
+  2: [
+    // F/G Year 2: Employer full + Employee graduated (15% ≤55, 12.5% 56–60, 7.5% 61–65, 5% >65)
+    { maxAge: 35, oa: 0.199, sa: 0.052, ma: 0.069, total: 0.320, flatRate: 0.17,  gradFactor: 0.45  }, // 32.0% ≤35
+    { maxAge: 45, oa: 0.182, sa: 0.060, ma: 0.078, total: 0.320, flatRate: 0.17,  gradFactor: 0.45  }, // 32.0% 36–45
+    { maxAge: 50, oa: 0.164, sa: 0.069, ma: 0.087, total: 0.320, flatRate: 0.17,  gradFactor: 0.45  }, // 32.0% 46–50
+    { maxAge: 55, oa: 0.130, sa: 0.099, ma: 0.091, total: 0.320, flatRate: 0.17,  gradFactor: 0.45  }, // 32.0% 51–55
+    { maxAge: 60, oa: 0.101, sa: 0.096, ma: 0.088, total: 0.285, flatRate: 0.16,  gradFactor: 0.375 }, // 28.5% 56–60
+    { maxAge: 65, oa: 0.028, sa: 0.088, ma: 0.084, total: 0.200, flatRate: 0.125, gradFactor: 0.225 }, // 20.0% 61–65
+    { maxAge: 70, oa: 0.009, sa: 0.042, ma: 0.089, total: 0.140, flatRate: 0.09,  gradFactor: 0.15  }, // 14.0% 66–70
+    { maxAge: Infinity, oa: 0.010, sa: 0.010, ma: 0.105, total: 0.125, flatRate: 0.075, gradFactor: 0.15  }, // 12.5% >70
+  ],
+};
+// Helper: look up PR OA/SA/MA rates for a given year, age, and rate type (GG or FG).
+// rateType 'GG' = Graduated Employer + Graduated Employee (default, no application needed).
+// rateType 'FG' = Full Employer + Graduated Employee (requires voluntary joint application).
+const getPRRates = (prYear, age, rateType = 'GG') => {
+  const rateSet = rateType === 'FG' ? PR_FG_CONTRIBUTION_RATES : PR_CONTRIBUTION_RATES;
+  const table = rateSet[prYear];
   if (!table) return null;
   return table.find(r => age <= r.maxAge) || table[table.length - 1];
 };
@@ -135,6 +168,10 @@ const DEFAULT_INPUTS = {
   oaToMaForLovedOne: false,
   // PR tenure year — 1, 2, or 3+ (3 = full rates). Only shown/relevant when citizenStatus === 'PR'.
   prYear: 3,
+  // PR rate type — 'GG' (Graduated Employer + Graduated Employee, default) or
+  // 'FG' (Full Employer + Graduated Employee, requires voluntary joint application).
+  // Only applies when citizenStatus === 'PR' && prYear < 3. Year 3+ always uses full SC/PR3+ rates.
+  prRateType: 'GG',
   // Global citizenship status: 'SC' (Singapore Citizen) or 'PR' (Permanent Resident).
   // Gates MRSS, MMSS (SC only), and PR tenure contribution warnings.
   // Foreigners are not modelled — they have no CPF entitlements.
@@ -150,7 +187,7 @@ const PRESET_PROFILES = [
       name: "", currentAge: 30, currentYear: 2026, payoutAge: 65,
       contributionStopAge: 65, housingStopAge: 65,
       isMale: true, isSelfEmployed: false,
-      citizenStatus: "SC", prYear: 3,
+      citizenStatus: "SC", prYear: 3, prRateType: 'GG',
       // ── CPF Balances ─────────────────────────────────────────────────────
       oaBalance: 0, saBalance: 0, maBalance: 0,
       // ── Salary & Mandatory Contributions ─────────────────────────────────
@@ -255,7 +292,7 @@ const INPUT_LABELS = {
   pledgeWithdrawalAmount: "Pledge Withdrawal Amount", pledgeWithdrawalAge: "Pledge Withdrawal Age",
   dieWithZeroEnabled: "Die with Zero", dieWithZeroAge: "Die with Zero Age",
   vcMaCash: "Cash Top-up to MA", oaToMaForLovedOne: "OA→MA For Loved One",
-  prYear: "PR Tenure Year", citizenStatus: "Citizenship Status",
+  prYear: "PR Tenure Year", citizenStatus: "Citizenship Status", prRateType: "PR Rate Type",
 };
 
 // Alias used by the Compare tab — same labels, one source of truth
@@ -636,7 +673,7 @@ function runProjectionEngine(inputs, {
         // PR Year 3+ and SC: use the user-entered base fields as before.
         let mandatoryOA_i, mandatorySA_dyn, mandatoryMA_i;
         if (isPR && currentPrYear < 3) {
-          const prRates = getPRRates(currentPrYear, age);
+          const prRates = getPRRates(currentPrYear, age, inputs.prRateType || 'GG');
           const grossScaled = annualGrossSalary * gf;
           mandatoryOA_i  = Math.round(grossScaled * prRates.oa);
           mandatorySA_dyn = Math.round(grossScaled * prRates.sa);
@@ -1473,6 +1510,7 @@ export default function App() {
     const age = Number(inputs.currentAge) || 35;
     const prYr = Number(inputs.prYear) || 3;
     const isPR = (inputs.citizenStatus || 'SC') === 'PR';
+    const prRateType = (isPR && prYr < 3) ? (inputs.prRateType || 'GG') : 'GG';
 
     // ── Step 1: determine OA/SA/MA rates and salary-band parameters ──────────────
     // totalRate = combined employer+employee rate for OW > $750 (standard band).
@@ -1484,8 +1522,8 @@ export default function App() {
     let oaRate, saRate, maRate, flatRate, gradFactor;
 
     if (isPR && prYr < 3) {
-      // PR Year 1 or 2 G/G — CPF Tables 2 & 3 (1 Jan 2026)
-      const prRates = getPRRates(prYr, age);
+      // PR Year 1 or 2 — CPF Tables 2 & 3 (G/G) or F/G rates (1 Jan 2026)
+      const prRates = getPRRates(prYr, age, prRateType);
       oaRate = prRates.oa;
       saRate = prRates.sa;
       maRate = prRates.ma;
@@ -1578,8 +1616,9 @@ export default function App() {
       : '';
 
     if (isPR && prYr < 3) {
+      const rateLabel = prRateType === 'FG' ? 'F/G (Full ER)' : 'G/G (Graduated)';
       showToast(
-        `⚡ PR Year ${prYr} (G/G) applied${bandNote}. ` +
+        `⚡ PR Year ${prYr} ${rateLabel} applied${bandNote}. ` +
         `Annual contributions: OA $${annualOA.toLocaleString()} / SA $${annualSA.toLocaleString()} / MA $${annualMA.toLocaleString()} ` +
         `= $${totalAnnual.toLocaleString()} (${effectivePct}% of $${annualSalaryBase.toLocaleString()}/yr). ` +
         `Rates auto-advance Yr 1 → Yr 2 → Yr 3+ in the projection.`
@@ -1977,7 +2016,7 @@ export default function App() {
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
-      vcMaCash, oaToMaForLovedOne, citizenStatus
+      vcMaCash, oaToMaForLovedOne, citizenStatus, prYear, prRateType
     } = debouncedInputs;
     return JSON.stringify({
       currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
@@ -1998,7 +2037,7 @@ export default function App() {
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
-      vcMaCash, oaToMaForLovedOne, citizenStatus
+      vcMaCash, oaToMaForLovedOne, citizenStatus, prYear, prRateType
     });
   }, [debouncedInputs]);
   const projection = useMemo(() => runProjectionEngine(debouncedInputs), [engineKey]); // eslint-disable-line
@@ -3831,12 +3870,36 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>
                         </div>
                         {(inputs.prYear || 3) < 3 && (
-                          <div style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: 6, padding: "5px 8px", marginBottom: 4 }}>
-                            <p style={{ fontSize: 9, color: "#fcd34d", margin: 0, lineHeight: 1.5 }}>
-                              {(inputs.prYear || 3) === 1
-                                ? "⚠ PR Year 1: Lower rates apply (9% total). Auto-Calc will show a warning. Manually check your actual contribution amounts."
-                                : "⚠ PR Year 2: Intermediate rates apply. Auto-Calc will show a warning. Manually verify your contribution amounts."}
-                            </p>
+                          <div style={{ marginBottom: 6 }}>
+                            {/* G/G vs F/G rate type toggle — only relevant for PR Year 1 or 2 */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "#fbbf24", textTransform: "uppercase" }}>Rate Type</span>
+                                <TooltipBox id="t-prRateType" text="G/G (default): Both employer and employee pay graduated rates — no application needed. F/G (Full ER): Employer pays full 17% while employee still pays graduated (lower) rates — requires a voluntary joint application by both parties to CPF Board. F/G boosts the employee's CPF savings without extra cost to the employee." />
+                              </div>
+                              <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 7, gap: 2 }}>
+                                {[["GG", "G/G"], ["FG", "F/G"]].map(([val, label]) => (
+                                  <button key={val} onClick={() => setInputs(p => ({ ...p, prRateType: val }))}
+                                    style={{ padding: "3px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
+                                      background: (inputs.prRateType || 'GG') === val ? "#fbbf24" : "transparent",
+                                      color: (inputs.prRateType || 'GG') === val ? "#020617" : "var(--text-muted)" }}>
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            {/* Warning box with rate-type-aware messaging */}
+                            <div style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: 6, padding: "5px 8px" }}>
+                              <p style={{ fontSize: 9, color: "#fcd34d", margin: 0, lineHeight: 1.5 }}>
+                                {(inputs.prRateType || 'GG') === 'FG'
+                                  ? (inputs.prYear || 3) === 1
+                                    ? "⚠ F/G Year 1: Employer pays full 17%, employee pays 5%. Total 22% (≤55). Requires joint CPF application."
+                                    : "⚠ F/G Year 2: Employer pays full rates, employee pays graduated rates. Requires joint CPF application."
+                                  : (inputs.prYear || 3) === 1
+                                    ? "⚠ G/G Year 1: Both pay graduated rates — 9% total (≤55). Default arrangement, no application needed."
+                                    : "⚠ G/G Year 2: Both pay graduated rates — 24% total (≤55). Default arrangement, no application needed."}
+                              </p>
+                            </div>
                           </div>
                         )}
                         <p style={{ fontSize: 9, color: "var(--text-muted)", margin: 0 }}>
@@ -3944,6 +4007,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   const displayAge = Number(inputs.currentAge) || 35;
                   const displayIsPR = (inputs.citizenStatus || 'SC') === 'PR';
                   const displayPrYr = Number(inputs.prYear) || 3;
+                  const displayRateType = (inputs.prRateType || 'GG');
                   // SC/PR3+ (Table 1 2026): combined employer+employee rates. PR1/PR2: correct totals, proportional splits.
                   const scTable = [
                     ["≤ 35",  23,   6,    8,    37,   "17%",   "0.60"],
@@ -3973,8 +4037,37 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ["61–65", 1.5,  4.9, 4.6, 11.0, "3.5%", "0.225"],
                     ["> 65",  0.5,  2.6, 5.4, 8.5,  "3.5%", "0.15"],
                   ];
-                  const activeTable = (displayIsPR && displayPrYr === 1) ? pr1Table : (displayIsPR && displayPrYr === 2) ? pr2Table : scTable;
-                  const tableTitle = (displayIsPR && displayPrYr === 1) ? "PR Year 1 G/G — Table 2 (1 Jan 2026)" : (displayIsPR && displayPrYr === 2) ? "PR Year 2 G/G — Table 3 (1 Jan 2026)" : "SC / PR Year 3+ — Table 1 (1 Jan 2026)";
+                  // F/G Year 1: Full Employer (17%) + Graduated Employee (5%)
+                  const fg1Table = [
+                    ["≤ 35",  13.6, 3.6, 4.8, 22.0, "17%",   "0.15"],
+                    ["36–45", 12.4, 4.2, 5.4, 22.0, "17%",   "0.15"],
+                    ["46–50", 11.2, 4.8, 6.0, 22.0, "17%",   "0.15"],
+                    ["51–55", 9.0,  6.8, 6.2, 22.0, "17%",   "0.15"],
+                    ["56–60", 7.4,  7.1, 6.5, 21.0, "16%",   "0.15"],
+                    ["61–65", 2.4,  7.7, 7.4, 17.5, "12.5%", "0.15"],
+                    ["> 65",  0.9,  4.2, 8.9, 14.0, "9%",    "0.15"],
+                  ];
+                  // F/G Year 2: Full Employer + Graduated Employee (15% ≤55, 12.5% 56–60, 7.5% 61–65, 5% >65)
+                  const fg2Table = [
+                    ["≤ 35",  19.9, 5.2, 6.9, 32.0, "17%",   "0.45"],
+                    ["36–45", 18.2, 6.0, 7.8, 32.0, "17%",   "0.45"],
+                    ["46–50", 16.4, 6.9, 8.7, 32.0, "17%",   "0.45"],
+                    ["51–55", 13.0, 9.9, 9.1, 32.0, "17%",   "0.45"],
+                    ["56–60", 10.1, 9.6, 8.8, 28.5, "16%",   "0.375"],
+                    ["61–65", 2.8,  8.8, 8.4, 20.0, "12.5%", "0.225"],
+                    ["> 65",  0.9,  4.2, 8.9, 14.0, "9%",    "0.15"],
+                  ];
+                  const isFG = displayIsPR && displayPrYr < 3 && displayRateType === 'FG';
+                  const activeTable =
+                    displayIsPR && displayPrYr === 1 ? (isFG ? fg1Table : pr1Table) :
+                    displayIsPR && displayPrYr === 2 ? (isFG ? fg2Table : pr2Table) :
+                    scTable;
+                  const tableTitle =
+                    displayIsPR && displayPrYr === 1 && isFG ? "PR Year 1 F/G (Full ER) — 1 Jan 2026" :
+                    displayIsPR && displayPrYr === 1         ? "PR Year 1 G/G — Table 2 (1 Jan 2026)" :
+                    displayIsPR && displayPrYr === 2 && isFG ? "PR Year 2 F/G (Full ER) — 1 Jan 2026" :
+                    displayIsPR && displayPrYr === 2         ? "PR Year 2 G/G — Table 3 (1 Jan 2026)" :
+                    "SC / PR Year 3+ — Table 1 (1 Jan 2026)";
                   const isActive = (bracket) => {
                     const a = displayAge;
                     if (bracket === "≤ 35")  return a <= 35;
