@@ -1038,6 +1038,14 @@ export const TooltipBox = ({ id, text }) => {
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
+  // Stable refs for keyboard shortcut handler — avoids stale closures in the
+  // useEffect (which uses [] deps so the listener is only registered once).
+  // Declared here, before activeTab useState, so activeTabRef.current = activeTab
+  // on the next line is never in the Temporal Dead Zone.
+  const handleShareLinkInitRef = useRef(null);
+  const handleResetRef = useRef(null);
+  const activeTabRef = useRef("summary");
+
   const [activeTab, setActiveTab] = useState("summary");
   activeTabRef.current = activeTab; // keep ref current for keyboard shortcut handler
   const [highlightPlan, setHighlightPlan] = useState("standard");
@@ -1108,16 +1116,6 @@ export default function App() {
 
   // #8 — Warn before leaving if inputs differ from last saved state
   const lastSavedRef = useRef(JSON.stringify(inputs));
-
-  // Stable refs for keyboard shortcut handler — avoids stale closures in the
-  // useEffect below (which uses [] deps so the listener is only registered once).
-  // Each ref is updated synchronously on every render so the handler always
-  // calls the latest version of each function/value.
-  const handleShareLinkInitRef = useRef(null);
-  const handleResetRef = useRef(null);
-  const activeTabRef = useRef(activeTab);
-  // activeTabRef is updated below (after activeTab is in scope); handleShareLinkInit
-  // and handleReset refs are updated after those functions are declared.
 
   useEffect(() => {
     const handler = (e) => {
