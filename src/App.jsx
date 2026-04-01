@@ -26,31 +26,37 @@ const ANNUAL_LIMIT = 37740;
 const ASSUMED_TARGET_GROWTH = 0.03;
 
 // CPF contribution rates for PR members in Year 1 and Year 2.
-// Source: CPF Board contribution rate tables (2026).
-// PR Year 1: 9% total (EE 5% + ER 4%) — MA prioritised to maintain healthcare coverage.
-// PR Year 2: 24% total (EE 15% + ER 9%) — scaled OA/SA allocation, MA close to full SC rate.
-// OA/SA/MA splits are CPF-specified age-band allocations applied to the reduced total rates.
-// All rates expressed as decimal fractions of wages (combined employer + employee).
+// Source: CPF Board Tables 2 & 3, Graduated Employer / Graduated Employee (G/G) rates, 1 Jan 2026.
+// Total rates per age band are taken directly from the official tables.
+// OA/SA/MA splits are proportionally derived from SC/PR3+ age-band allocation ratios (combined
+// employer + employee), scaled to each band's correct PR total — no separate CPF allocation
+// table is published for PR G/G, so proportional scaling is the authoritative approximation.
+// flatRate  = employer-only rate applicable when OW is $50–$500 (employee contributes Nil).
+// gradFactor = employee phase-in rate for OW $500–$750 band (= employeeRate × 750/250 = employeeRate × 3).
 const PR_CONTRIBUTION_RATES = {
-  1: [ // PR Year 1 — 9% total across all age bands, MA held at 5%
-    { maxAge: 35, oa: 0.035, sa: 0.005, ma: 0.05 }, // 9%
-    { maxAge: 45, oa: 0.030, sa: 0.010, ma: 0.05 }, // 9%
-    { maxAge: 50, oa: 0.025, sa: 0.015, ma: 0.05 }, // 9%
-    { maxAge: 55, oa: 0.020, sa: 0.020, ma: 0.05 }, // 9%
-    { maxAge: 60, oa: 0.015, sa: 0.025, ma: 0.05 }, // 9%
-    { maxAge: 65, oa: 0.010, sa: 0.030, ma: 0.05 }, // 9%
-    { maxAge: 70, oa: 0.005, sa: 0.035, ma: 0.05 }, // 9%
-    { maxAge: Infinity, oa: 0.005, sa: 0.035, ma: 0.05 }, // 9%
+  1: [
+    // PR Year 1 G/G (Table 2, 1 Jan 2026). Employee = 5% for all bands.
+    // Total: 9% (age ≤60), 8.5% (age >60). OA/SA/MA proportionally scaled from SC/PR3+ ratios.
+    { maxAge: 35, oa: 0.056, sa: 0.015, ma: 0.019, total: 0.090, flatRate: 0.040, gradFactor: 0.15  }, // 9.0%  ≤35
+    { maxAge: 45, oa: 0.051, sa: 0.017, ma: 0.022, total: 0.090, flatRate: 0.040, gradFactor: 0.15  }, // 9.0%  36–45
+    { maxAge: 50, oa: 0.046, sa: 0.019, ma: 0.025, total: 0.090, flatRate: 0.040, gradFactor: 0.15  }, // 9.0%  46–50
+    { maxAge: 55, oa: 0.036, sa: 0.028, ma: 0.026, total: 0.090, flatRate: 0.040, gradFactor: 0.15  }, // 9.0%  51–55
+    { maxAge: 60, oa: 0.032, sa: 0.030, ma: 0.028, total: 0.090, flatRate: 0.040, gradFactor: 0.15  }, // 9.0%  56–60
+    { maxAge: 65, oa: 0.012, sa: 0.037, ma: 0.036, total: 0.085, flatRate: 0.035, gradFactor: 0.15  }, // 8.5%  61–65
+    { maxAge: 70, oa: 0.005, sa: 0.026, ma: 0.054, total: 0.085, flatRate: 0.035, gradFactor: 0.15  }, // 8.5%  66–70
+    { maxAge: Infinity, oa: 0.007, sa: 0.007, ma: 0.071, total: 0.085, flatRate: 0.035, gradFactor: 0.15  }, // 8.5%  >70
   ],
-  2: [ // PR Year 2 — 24% total (≤55), MA close to full SC rate
-    { maxAge: 35, oa: 0.120, sa: 0.035, ma: 0.085 }, // 24%
-    { maxAge: 45, oa: 0.110, sa: 0.045, ma: 0.085 }, // 24%
-    { maxAge: 50, oa: 0.100, sa: 0.055, ma: 0.085 }, // 24%
-    { maxAge: 55, oa: 0.090, sa: 0.065, ma: 0.085 }, // 24%
-    { maxAge: 60, oa: 0.070, sa: 0.085, ma: 0.085 }, // 24%
-    { maxAge: 65, oa: 0.020, sa: 0.135, ma: 0.085 }, // 24%
-    { maxAge: 70, oa: 0.005, sa: 0.150, ma: 0.085 }, // 24%
-    { maxAge: Infinity, oa: 0.005, sa: 0.150, ma: 0.085 }, // 24%
+  2: [
+    // PR Year 2 G/G (Table 3, 1 Jan 2026). Employee: 15% (≤55), 12.5% (56–60), 7.5% (61–65), 5% (>65).
+    // Total: 24% (≤55), 18.5% (56–60), 11% (61–65), 8.5% (>65). OA/SA/MA proportionally scaled.
+    { maxAge: 35, oa: 0.149, sa: 0.039, ma: 0.052, total: 0.240, flatRate: 0.090, gradFactor: 0.45  }, // 24.0% ≤35
+    { maxAge: 45, oa: 0.136, sa: 0.045, ma: 0.059, total: 0.240, flatRate: 0.090, gradFactor: 0.45  }, // 24.0% 36–45
+    { maxAge: 50, oa: 0.123, sa: 0.052, ma: 0.065, total: 0.240, flatRate: 0.090, gradFactor: 0.45  }, // 24.0% 46–50
+    { maxAge: 55, oa: 0.097, sa: 0.075, ma: 0.068, total: 0.240, flatRate: 0.090, gradFactor: 0.45  }, // 24.0% 51–55
+    { maxAge: 60, oa: 0.065, sa: 0.063, ma: 0.057, total: 0.185, flatRate: 0.060, gradFactor: 0.375 }, // 18.5% 56–60
+    { maxAge: 65, oa: 0.015, sa: 0.049, ma: 0.046, total: 0.110, flatRate: 0.035, gradFactor: 0.225 }, // 11.0% 61–65
+    { maxAge: 70, oa: 0.005, sa: 0.026, ma: 0.054, total: 0.085, flatRate: 0.035, gradFactor: 0.15  }, // 8.5%  66–70
+    { maxAge: Infinity, oa: 0.007, sa: 0.007, ma: 0.071, total: 0.085, flatRate: 0.035, gradFactor: 0.15  }, // 8.5%  >70
   ],
 };
 // Helper: look up PR OA/SA/MA rates for a given year and age
@@ -1387,38 +1393,69 @@ export default function App() {
   const handleAutoCalc = () => {
     const gross = Number(inputs.salaryGross) || 0;
     const bonus = Number(inputs.salaryBonus) || 0;
-    const cappedGross = Math.min(gross, 8000);
+    const cappedGross = Math.min(gross, 8000); // OW ceiling $8,000/mo
     const age = Number(inputs.currentAge) || 35;
     const prYr = Number(inputs.prYear) || 3;
     const isPR = (inputs.citizenStatus || 'SC') === 'PR';
 
-    let oaRate, saRate, maRate;
+    // ── Step 1: determine OA/SA/MA rates and salary-band parameters ──────────────
+    // totalRate = combined employer+employee rate for OW > $750 (standard band).
+    // flatRate  = employer-only rate for OW $50–$500 (employee Nil in this band).
+    //             Equals the employer share of the standard rate.
+    // gradFactor = employee phase-in coefficient for OW $500–$750.
+    //              = employeeRate × 750 / (750 − 500) = employeeRate × 3.
+    //              At exactly OW = $750: flatRate×750 + gradFactor×250 = totalRate×750 ✓
+    let oaRate, saRate, maRate, flatRate, gradFactor;
 
     if (isPR && prYr < 3) {
-      // Use actual CPF PR Year 1 or Year 2 rates from the rate table
+      // PR Year 1 or 2 G/G — CPF Tables 2 & 3 (1 Jan 2026)
       const prRates = getPRRates(prYr, age);
       oaRate = prRates.oa;
       saRate = prRates.sa;
       maRate = prRates.ma;
-      const totalPct = Math.round((oaRate + saRate + maRate) * 100);
-      showToast(`⚡ PR Year ${prYr} rates applied — ${totalPct}% total (OA/SA/MA per CPF schedule)`);
+      flatRate = prRates.flatRate;
+      gradFactor = prRates.gradFactor;
     } else {
-      // SC or PR Year 3+ — full SC rates by age band
-      if (age <= 35) { oaRate = 0.23; saRate = 0.06; maRate = 0.08; }
-      else if (age <= 45) { oaRate = 0.21; saRate = 0.07; maRate = 0.09; }
-      else if (age <= 50) { oaRate = 0.19; saRate = 0.08; maRate = 0.10; }
-      else if (age <= 55) { oaRate = 0.15; saRate = 0.115; maRate = 0.105; }
-      else if (age <= 60) { oaRate = 0.12; saRate = 0.115; maRate = 0.105; }
-      else if (age <= 65) { oaRate = 0.035; saRate = 0.11; maRate = 0.105; }
-      else if (age <= 70) { oaRate = 0.01; saRate = 0.05; maRate = 0.105; }
-      else { oaRate = 0.01; saRate = 0.01; maRate = 0.105; }
+      // SC / PR Year 3+ — CPF Table 1 (1 Jan 2026), combined employer+employee rates
+      // flatRate = employer rate (= total − employee). gradFactor = employeeRate × 3.
+      if      (age <= 35) { oaRate=0.23; saRate=0.06;  maRate=0.08;  flatRate=0.17;  gradFactor=0.60;  }
+      else if (age <= 45) { oaRate=0.21; saRate=0.07;  maRate=0.09;  flatRate=0.17;  gradFactor=0.60;  }
+      else if (age <= 50) { oaRate=0.19; saRate=0.08;  maRate=0.10;  flatRate=0.17;  gradFactor=0.60;  }
+      else if (age <= 55) { oaRate=0.15; saRate=0.115; maRate=0.105; flatRate=0.17;  gradFactor=0.60;  }
+      else if (age <= 60) { oaRate=0.12; saRate=0.115; maRate=0.105; flatRate=0.16;  gradFactor=0.54;  }
+      else if (age <= 65) { oaRate=0.035;saRate=0.11;  maRate=0.105; flatRate=0.125; gradFactor=0.375; }
+      else if (age <= 70) { oaRate=0.01; saRate=0.05;  maRate=0.105; flatRate=0.09;  gradFactor=0.225; }
+      else                { oaRate=0.01; saRate=0.01;  maRate=0.105; flatRate=0.075; gradFactor=0.15;  }
     }
 
+    // ── Step 2: apply salary-band formula to monthly OW ──────────────────────────
+    // OW ≤ $50:       Nil (no contribution)
+    // OW $50–$500:    flatRate × OW  (employer share only, employee contributes Nil)
+    // OW $500–$750:   flatRate × OW + gradFactor × (OW − $500)  (employee phases in)
+    // OW > $750:      totalRate × OW  (standard full rates — most members fall here)
+    const totalRate = oaRate + saRate + maRate;
+    let monthlyOwContrib;
+    if (cappedGross <= 50) {
+      monthlyOwContrib = 0;
+    } else if (cappedGross <= 500) {
+      monthlyOwContrib = flatRate * cappedGross;
+    } else if (cappedGross <= 750) {
+      monthlyOwContrib = flatRate * cappedGross + gradFactor * (cappedGross - 500);
+    } else {
+      monthlyOwContrib = totalRate * cappedGross;
+    }
+    const annualOwContrib = monthlyOwContrib * 12;
+
+    // ── Step 3: proportionally allocate OW contribution across OA/SA/MA ──────────
+    // Uses OA:SA:MA ratios from the standard (>$750) rates — the same proportions
+    // apply regardless of which wage band is active; only the total changes.
+    const owOA = (totalRate > 0 && annualOwContrib > 0) ? Math.round(annualOwContrib * oaRate / totalRate) : 0;
+    const owMA = (totalRate > 0 && annualOwContrib > 0) ? Math.round(annualOwContrib * maRate / totalRate) : 0;
+    const owSA = (annualOwContrib > 0) ? (Math.round(annualOwContrib) - owOA - owMA) : 0;
+
+    // ── Step 4: AW (bonus) — always uses standard (>$750) rates ─────────────────
+    // AW ceiling = $102,000 − annual OW subject to CPF (wages, not contributions).
     const owIncome = cappedGross * 12;
-    const owOA = Math.round(owIncome * oaRate);
-    const owSA = Math.round(owIncome * saRate);
-    const owMA = Math.round(owIncome * maRate);
-    // AW ceiling = $102,000 − Total OW subject to CPF (the wages, not the contributions)
     const awCap = Math.max(0, 102000 - owIncome);
     const bonusCpf = Math.min(bonus, awCap);
     const annualOA = owOA + Math.round(bonusCpf * oaRate);
@@ -1432,6 +1469,15 @@ export default function App() {
       empMaCont: annualMA,
       showSalaryCalc: false
     }));
+
+    // Toast message with context
+    if (isPR && prYr < 3) {
+      const pct = Math.round(totalRate * 100 * 10) / 10;
+      const bandNote = cappedGross <= 500 ? ` (OW ≤$500: employer-only flat rate applied)` : cappedGross <= 750 ? ` (OW $500–$750: graduated rate applied)` : '';
+      showToast(`⚡ PR Year ${prYr} rates applied — ${pct}% total${bandNote}. OA/SA/MA proportionally allocated per 2026 CPF schedule.`);
+    } else if (cappedGross <= 750 && cappedGross > 50) {
+      showToast(`⚡ Contributions calculated with salary-band formula (OW = $${cappedGross.toLocaleString()}/mo)`);
+    }
   };
 
   const handleReset = () => {
@@ -3781,36 +3827,95 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <button onClick={handleAutoCalc} style={{ width: "100%", background: "#10b981", color: "#020617", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 11, border: "none", cursor: "pointer" }}>⚡ Auto-Calc CPF Contributions</button>
                   </div>
                 )}
-                {inputs.showSalaryCalc && !isSelfEmployed && (
-                  <div style={{ background: "var(--bg-input)", padding: 14, borderRadius: 12, marginBottom: 14, border: "1px solid var(--border-strong)" }}>
-                    {/* Rates reference table */}
-                    <div style={{ marginTop: 4, borderRadius: 8, overflow: "hidden", border: "1px solid var(--border-strong)" }}>
-                      <div style={{ background: "var(--bg-panel)", padding: "6px 10px", fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>CPF Contribution Rates by Age</div>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
-                        <thead><tr style={{ background: "var(--bg-muted)" }}>
-                          <th style={{ padding: "4px 8px", textAlign: "left", color: "var(--text-muted)" }}>Age</th>
-                          <th style={{ padding: "4px 8px", textAlign: "center", color: "#60a5fa" }}>OA</th>
-                          <th style={{ padding: "4px 8px", textAlign: "center", color: "#34d399" }}>SA</th>
-                          <th style={{ padding: "4px 8px", textAlign: "center", color: "#a78bfa" }}>MA</th>
-                          <th style={{ padding: "4px 8px", textAlign: "center", color: "var(--text-highlight)" }}>Tot</th>
-                        </tr></thead>
-                        <tbody>
-                          {[["≤ 35", 23, 6, 8, 37], ["36–45", 21, 7, 9, 37], ["46–50", 19, 8, 10, 37], ["51–55", 15, 11.5, 10.5, 37], ["56–60", 12, 8, 10.5, 30.5], ["61–65", 3.5, 6.5, 10.5, 20.5], ["66–70", 1, 2.5, 10.5, 14], ["> 70", 1, 0, 9.5, 10.5]].map(([bracket, oa, sa, ma, total]) => {
-                            const age = Number(inputs.currentAge) || 35;
-                            const active = (bracket === "≤ 35" && age <= 35) || (bracket === "36–45" && age > 35 && age <= 45) || (bracket === "46–50" && age > 45 && age <= 50) || (bracket === "51–55" && age > 50 && age <= 55) || (bracket === "56–60" && age > 55 && age <= 60) || (bracket === "61–65" && age > 60 && age <= 65) || (bracket === "66–70" && age > 65 && age <= 70) || (bracket === "> 70" && age > 70);
-                            return (<tr key={bracket} style={{ borderTop: "1px solid var(--border-subtle)", background: active ? "rgba(16,185,129,0.08)" : "" }}>
-                              <td style={{ padding: "5px 8px", fontWeight: 700, color: active ? "#34d399" : "var(--text-muted)", fontFamily: "system-ui" }}>{bracket}{active && <span style={{ marginLeft: 4, fontSize: 7, background: "rgba(16,185,129,0.2)", color: "#34d399", padding: "1px 4px", borderRadius: 4 }}>YOU</span>}</td>
-                              <td style={{ padding: "5px 8px", textAlign: "center", color: "#93c5fd", fontFamily: "monospace" }}>{oa}%</td>
-                              <td style={{ padding: "5px 8px", textAlign: "center", color: "#6ee7b7", fontFamily: "monospace" }}>{sa}%</td>
-                              <td style={{ padding: "5px 8px", textAlign: "center", color: "#c4b5fd", fontFamily: "monospace" }}>{ma}%</td>
-                              <td style={{ padding: "5px 8px", textAlign: "center", color: "var(--text-highlight)", fontFamily: "monospace", fontWeight: 700 }}>{total}%</td>
-                            </tr>);
-                          })}
-                        </tbody>
-                      </table>
+                {inputs.showSalaryCalc && !isSelfEmployed && (() => {
+                  const displayAge = Number(inputs.currentAge) || 35;
+                  const displayIsPR = (inputs.citizenStatus || 'SC') === 'PR';
+                  const displayPrYr = Number(inputs.prYear) || 3;
+                  // SC/PR3+ (Table 1 2026): combined employer+employee rates. PR1/PR2: correct totals, proportional splits.
+                  const scTable = [
+                    ["≤ 35",  23,   6,    8,    37,   "17%",   "0.60"],
+                    ["36–45", 21,   7,    9,    37,   "17%",   "0.60"],
+                    ["46–50", 19,   8,    10,   37,   "17%",   "0.60"],
+                    ["51–55", 15,   11.5, 10.5, 37,   "17%",   "0.60"],
+                    ["56–60", 12,   11.5, 10.5, 34,   "16%",   "0.54"],
+                    ["61–65", 3.5,  11,   10.5, 25,   "12.5%", "0.375"],
+                    ["66–70", 1,    5,    10.5, 16.5, "9%",    "0.225"],
+                    ["> 70",  1,    1,    10.5, 12.5, "7.5%",  "0.15"],
+                  ];
+                  const pr1Table = [
+                    ["≤ 35",  5.6, 1.5, 1.9, 9.0, "4%",   "0.15"],
+                    ["36–45", 5.1, 1.7, 2.2, 9.0, "4%",   "0.15"],
+                    ["46–50", 4.6, 1.9, 2.5, 9.0, "4%",   "0.15"],
+                    ["51–55", 3.6, 2.8, 2.6, 9.0, "4%",   "0.15"],
+                    ["56–60", 3.2, 3.0, 2.8, 9.0, "4%",   "0.15"],
+                    ["61–65", 1.2, 3.7, 3.6, 8.5, "3.5%", "0.15"],
+                    ["> 65",  0.5, 2.6, 5.4, 8.5, "3.5%", "0.15"],
+                  ];
+                  const pr2Table = [
+                    ["≤ 35",  14.9, 3.9, 5.2, 24.0, "9%",   "0.45"],
+                    ["36–45", 13.6, 4.5, 5.9, 24.0, "9%",   "0.45"],
+                    ["46–50", 12.3, 5.2, 6.5, 24.0, "9%",   "0.45"],
+                    ["51–55", 9.7,  7.5, 6.8, 24.0, "9%",   "0.45"],
+                    ["56–60", 6.5,  6.3, 5.7, 18.5, "6%",   "0.375"],
+                    ["61–65", 1.5,  4.9, 4.6, 11.0, "3.5%", "0.225"],
+                    ["> 65",  0.5,  2.6, 5.4, 8.5,  "3.5%", "0.15"],
+                  ];
+                  const activeTable = (displayIsPR && displayPrYr === 1) ? pr1Table : (displayIsPR && displayPrYr === 2) ? pr2Table : scTable;
+                  const tableTitle = (displayIsPR && displayPrYr === 1) ? "PR Year 1 G/G — Table 2 (1 Jan 2026)" : (displayIsPR && displayPrYr === 2) ? "PR Year 2 G/G — Table 3 (1 Jan 2026)" : "SC / PR Year 3+ — Table 1 (1 Jan 2026)";
+                  const isActive = (bracket) => {
+                    const a = displayAge;
+                    if (bracket === "≤ 35")  return a <= 35;
+                    if (bracket === "36–45") return a > 35 && a <= 45;
+                    if (bracket === "46–50") return a > 45 && a <= 50;
+                    if (bracket === "51–55") return a > 50 && a <= 55;
+                    if (bracket === "56–60") return a > 55 && a <= 60;
+                    if (bracket === "61–65") return a > 60 && a <= 65;
+                    if (bracket === "66–70") return a > 65 && a <= 70;
+                    if (bracket === "> 70")  return a > 70;
+                    if (bracket === "> 65")  return a > 65;
+                    return false;
+                  };
+                  const activeRow = activeTable.find(r => isActive(r[0])) || activeTable[0];
+                  const activeFlatRate = activeRow[5];
+                  const activeGradFactor = activeRow[6];
+                  return (
+                    <div style={{ background: "var(--bg-input)", padding: 14, borderRadius: 12, marginBottom: 14, border: "1px solid var(--border-strong)" }}>
+                      <div style={{ marginTop: 4, borderRadius: 8, overflow: "hidden", border: "1px solid var(--border-strong)" }}>
+                        <div style={{ background: "var(--bg-panel)", padding: "6px 10px", fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>{tableTitle}</div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
+                          <thead><tr style={{ background: "var(--bg-muted)" }}>
+                            <th style={{ padding: "4px 8px", textAlign: "left",   color: "var(--text-muted)" }}>Age</th>
+                            <th style={{ padding: "4px 8px", textAlign: "center", color: "#60a5fa" }}>OA</th>
+                            <th style={{ padding: "4px 8px", textAlign: "center", color: "#34d399" }}>SA/RA</th>
+                            <th style={{ padding: "4px 8px", textAlign: "center", color: "#a78bfa" }}>MA</th>
+                            <th style={{ padding: "4px 8px", textAlign: "center", color: "var(--text-highlight)" }}>Total</th>
+                          </tr></thead>
+                          <tbody>
+                            {activeTable.map(([bracket, oa, sa, ma, total]) => {
+                              const active = isActive(bracket);
+                              return (
+                                <tr key={bracket} style={{ borderTop: "1px solid var(--border-subtle)", background: active ? "rgba(16,185,129,0.08)" : "" }}>
+                                  <td style={{ padding: "5px 8px", fontWeight: 700, color: active ? "#34d399" : "var(--text-muted)", fontFamily: "system-ui" }}>
+                                    {bracket}{active && <span style={{ marginLeft: 4, fontSize: 7, background: "rgba(16,185,129,0.2)", color: "#34d399", padding: "1px 4px", borderRadius: 4 }}>YOU</span>}
+                                  </td>
+                                  <td style={{ padding: "5px 8px", textAlign: "center", color: "#93c5fd", fontFamily: "monospace" }}>{oa}%</td>
+                                  <td style={{ padding: "5px 8px", textAlign: "center", color: "#6ee7b7", fontFamily: "monospace" }}>{sa}%</td>
+                                  <td style={{ padding: "5px 8px", textAlign: "center", color: "#c4b5fd", fontFamily: "monospace" }}>{ma}%</td>
+                                  <td style={{ padding: "5px 8px", textAlign: "center", color: "var(--text-highlight)", fontFamily: "monospace", fontWeight: 700 }}>{total}%</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{ marginTop: 8, padding: "7px 10px", borderRadius: 6, background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.15)", fontSize: 9, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                        <strong style={{ color: "#fbbf24" }}>Salary banding (OW/month, your age band):</strong><br />
+                        ≤ $50 → Nil &nbsp;|&nbsp; $51–$500 → {activeFlatRate} × OW (employer only) &nbsp;|&nbsp; $501–$750 → {activeFlatRate} × OW + {activeGradFactor} × (OW − $500) &nbsp;|&nbsp; &gt; $750 → full rates above
+                        <br /><span style={{ color: "var(--text-subtle)" }}>Rates shown are combined employer + employee as % of wages (OW &gt; $750). Auto-Calc applies the correct band formula automatically.</span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 {!isSelfEmployed && <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[["empOaCont", "OA"], ["empSaCont", is55Plus ? "RA" : "SA/RA"], ["empMaCont", "MA"]].map(([n, l]) => (
                     <div key={n}><label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>{l}</label>
