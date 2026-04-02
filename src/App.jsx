@@ -7795,7 +7795,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       {/* Footer */}
       <footer style={{ borderTop: "1px solid var(--border-subtle)", flexShrink: 0, background: "var(--bg-panel)" }}>
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{ padding: "10px 20px", textAlign: "center" }}>
-          <p style={{ fontSize: 10, color: "var(--text-muted)", maxWidth: 900, margin: "0 auto", lineHeight: 1.7, textAlign: "justify" }}{LEGAL_DISCLAIMER}</p>
+          <p style={{ fontSize: 10, color: "var(--text-muted)", maxWidth: 900, margin: "0 auto", lineHeight: 1.7, textAlign: "justify" }}>{LEGAL_DISCLAIMER}</p>
         </div>
       </footer>
     </div>
