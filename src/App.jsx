@@ -3853,7 +3853,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <button onClick={() => setIsRealDollars(true)} style={{ padding: "4px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "#2563eb" : "transparent", color: isRealDollars ? "#fff" : "var(--text-muted)" }}>Real</button>
             </div>
 
-            <button onClick={handleReset} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(100,116,139,0.2)", color: "var(--text-subtle)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer" }}>
+            <button onClick={handleReset} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(239,68,68,0.12)", color: "#f87171", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(239,68,68,0.35)", cursor: "pointer" }} title="Reset all inputs and scenarios to defaults">
               <RotateCcw style={{ width: 12, height: 12 }} />Reset
             </button>
             <button onClick={() => setShowPresets(true)} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(251,191,36,0.12)", color: "#fbbf24", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(251,191,36,0.3)", cursor: "pointer" }} title="Load a sample scenario to explore different profiles">
@@ -3931,7 +3931,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={() => { setMobileMenuOpen(false); setShowPresets(true); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(251,191,36,0.12)", color: "#fbbf24", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(251,191,36,0.3)", cursor: "pointer" }}>
               <Users style={{ width: 13, height: 13 }} />Samples
             </button>
-            <button onClick={() => { setMobileMenuOpen(false); handleReset(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(100,116,139,0.2)", color: "var(--text-subtle)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer" }}>
+            <button onClick={() => { setMobileMenuOpen(false); handleReset(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.12)", color: "#f87171", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(239,68,68,0.35)", cursor: "pointer" }} title="Reset all inputs and scenarios to defaults">
               <RotateCcw style={{ width: 13, height: 13 }} />Reset
             </button>
             <button onClick={() => { setMobileMenuOpen(false); handleExportProfile(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>
@@ -7104,7 +7104,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ["#doc-sep", "💼 SEP Rules"],
                     ["#doc-yield", "📈 Yield & XIRR"],
                     ["#doc-montecarlo", "🎲 Monte Carlo"],
-                    ["#doc-legal", "⚖️ Legal Disclaimer"],
                   ].map(([href, label]) => (
                     <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--bg-input)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", textDecoration: "none", cursor: "pointer" }}
                       onClick={e => { e.preventDefault(); document.querySelector(href)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
@@ -7116,7 +7115,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <div style={{ display: "flex", flexDirection: "column", gap: 32, fontSize: 13, lineHeight: 1.7, color: "var(--text-muted)" }}>
 
                   {/* User Guide */}
-                  <section id="doc-guide">
+                  <section id="doc-guide" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#60a5fa", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><LayoutDashboard style={{ width: 18, height: 18 }} />Step-by-Step User Guide</h4>
                     {[
                       ["1", "Setup Your Profile", "#60a5fa", "rgba(59,130,246,0.08)", "rgba(59,130,246,0.2)", "Enter your current OA, SA, and MA balances. Select Male/Female (affects CPF LIFE payout ratio). Select SC or PR — PR members select their tenure year (1 / 2 / 3+) and rate type (G/G default or F/G). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates each projection year. Progress bars compare balances against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones."],
@@ -7139,7 +7138,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* ── Projection Engine ── */}
-                  <section id="doc-engine">
+                  <section id="doc-engine" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#34d399", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 18, height: 18 }} />Projection Engine — How the Numbers Are Computed</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7188,7 +7187,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* CPF Policy Reference */}
-                  <section id="doc-policy">
+                  <section id="doc-policy" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#2dd4bf", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><ShieldCheck style={{ width: 18, height: 18 }} />CPF 2026 Policy Reference</h4>
 
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", marginBottom: 16, overflowX: "auto" }}>
@@ -7268,7 +7267,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* New Planning Tools Policy Reference */}
-                  <section id="doc-planning">
+                  <section id="doc-planning" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#60a5fa", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Target style={{ width: 18, height: 18 }} />Planning Tools — Policy Reference <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)", marginLeft: 8 }}>(Assumptions)</span></h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7334,7 +7333,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* SRS */}
-                  <section id="doc-srs">
+                  <section id="doc-srs" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#0ea5e9", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><BookOpen style={{ width: 18, height: 18 }} />Supplementary Retirement Scheme (SRS)</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7367,7 +7366,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Property Monetisation */}
-                  <section id="doc-propmon">
+                  <section id="doc-propmon" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#fb923c", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Home style={{ width: 18, height: 18 }} />Property Monetisation</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7396,7 +7395,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Die with Zero */}
-                  <section id="doc-dwz">
+                  <section id="doc-dwz" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#f43f5e", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Clock style={{ width: 18, height: 18 }} />Die with Zero Mode</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7425,7 +7424,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Self-Employed Policy */}
-                  <section id="doc-sep">
+                  <section id="doc-sep" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#fb923c", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Briefcase style={{ width: 18, height: 18 }} />Self-Employed Person (SEP) — VC3A Rules</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7454,7 +7453,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Actuarial Math */}
-                  <section id="doc-montecarlo">
+                  <section id="doc-montecarlo" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#fb923c", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><PieChart style={{ width: 18, height: 18 }} />Actuarial Math & Depletion Models</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7479,7 +7478,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Yield Math */}
-                  <section id="doc-yield">
+                  <section id="doc-yield" style={{ scrollMarginTop: "130px" }}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#fbbf24", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Scale style={{ width: 18, height: 18 }} />Yield Intersections & "The Flatline"</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
                       <p><strong style={{ color: "var(--text-highlight)" }}>The Flatline:</strong> Total Yield = Payouts Received + Remaining Bequest. Since Bequest = Initial Premium − Payouts, the formula nets out to exactly your Initial Premium. Total Yield flatlines until your Bequest hits $0 (~late 70s), then every payout becomes "pure profit" drawn from the mortality pool.</p>
@@ -7501,13 +7500,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   </section>
 
-                  {/* ── Legal Disclaimer — pinned to footer of docs tab ── */}
-                  <section id="doc-legal" style={{ marginTop: 8, paddingTop: 24, borderTop: "2px solid var(--border-subtle)" }}>
-                    <div style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)", padding: "18px 22px", borderRadius: 14 }}>
-                      <h4 style={{ fontWeight: 800, color: "#fbbf24", marginBottom: 10, display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}><AlertTriangle style={{ width: 16, height: 16 }} />Legal Disclaimer</h4>
-                      <p style={{ fontSize: 11, color: "rgba(253,211,77,0.75)", lineHeight: 1.8, textAlign: "justify", margin: 0 }}>{LEGAL_DISCLAIMER}</p>
-                    </div>
-                  </section>
                 </div>
               </div>
             )}
@@ -7803,7 +7795,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       {/* Footer */}
       <footer style={{ borderTop: "1px solid var(--border-subtle)", flexShrink: 0, background: "var(--bg-panel)" }}>
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{ padding: "10px 20px", textAlign: "center" }}>
-          <p style={{ fontSize: 10, color: "var(--text-muted)", maxWidth: 900, margin: "0 auto", lineHeight: 1.7, textAlign: "justify" }}>{LEGAL_DISCLAIMER}</p>
+          <p style={{ fontSize: 10, color: "var(--text-muted)", maxWidth: 900, margin: "0 auto", lineHeight: 1.7, textAlign: "justify" }}{LEGAL_DISCLAIMER}</p>
         </div>
       </footer>
     </div>
