@@ -2321,30 +2321,43 @@ export default function App() {
     const includeProp = inputs.includeProperty ?? true;
     let cumPayoutStandard = 0, cumPayoutEscalating = 0, cumPayoutBasic = 0;
 
-    // BASIC PLAN MATH (premium pct is user-configurable 10-20%)
-    // Phase 1 (pAge to ~90): member retains basicPV in personal RA, depleted via PMT amortisation.
-    //   Per CPF actuarial document: base PMT uses 4%/12 monthly rate over 240 months (20yr);
-    //   extra interest (1-2% on first $60k/$30k) extends duration to ~300 months (to age 90)
-    //   without increasing the PMT amount. Monthly PMT formula used for RA depletion tracking.
-    // Phase 2 (90+): pool premium funds continuing payouts for life at same monthly amount.
+    // ── BASIC PLAN MATH ────────────────────────────────────────────────────────
+    // Structure (per CPF actuarial document):
+    //   RA_Total = P_Basic (10–20%) + RA_Retained (80–90%)
+    //   Phase 1A (pAge → ~90): flat PMT drawn from RA_Retained while combined balance ≥ $60K.
+    //   Phase 1B (once combined RA+OA+MA < $60K): PMT recomputed each year with declining
+    //     effective rate as extra interest tiers shrink — produces the "cliff-then-slope" pattern.
+    //   Phase 2 (90+): constant lower payout from premium pool annuity.
+    //
+    // Extra interest rules (post-55, CPF priority order):
+    //   Combined balance = basicRaRemaining + OA + MA from live projection data.
+    //   b1: extra 1% on first $60K combined → credited to RA
+    //   b2: extra 2% on first $30K combined → credited to RA
+    //   As combined drops below $60K, b1 and b2 shrink → effective RA rate falls below 6%.
     const bPct = (basicPremiumPct || 10) / 100;
     const basicPremium = initialRA * bPct;
     const basicPV = initialRA * (1 - bPct);
-    // Monthly PMT: r=4%/12, n=300 months (extra interest extends 240→300 to reach age 90)
-    // n is adjusted for deferred payout: earlier start → more months to age 90
+    const basicBaseRate = 0.04 / 12; // monthly base rate
+    // Phase 1A PMT: use blended rate (4% base + full extra interest, combined ≥ $60K).
+    // Effective annual rate at full extra interest: 4% + 1% (on $60K tier) + 2% (on $30K tier)
+    // Averaged over the expected RA balance, simplified as 4.5% effective for initial PMT.
+    // The year-by-year recompute in Phase 1B will correct this as balance declines.
     const basicNMonths = Math.max(12, (90 - pAge) * 12);
-    const basicRMonthly = 0.04 / 12;
+    const basicPhase1Rate = 0.045 / 12; // blended rate accounting for extra interest at full balance
     const basicPMTMonthly = basicNMonths > 0
-      ? (basicRMonthly * basicPV) / (1 - Math.pow(1 + basicRMonthly, -basicNMonths))
+      ? (basicPhase1Rate * basicPV) / (1 - Math.pow(1 + basicPhase1Rate, -basicNMonths))
       : 0;
-    // Annual figure used in the projection loop (engine runs annually)
-    const basicPMT = basicPMTMonthly * 12;
+    const basicPMT = basicPMTMonthly * 12; // Phase 1A annual payout (stable period)
     const basicMonthlyPMT = basicPMTMonthly;
-    // RA depletion: track using monthly rate accumulated annually
-    // Approximation: apply annual equivalent of monthly PMT to annual loop
+    // Phase 2 payout: constant annuity from premium pool at base 4% only (no extra interest).
+    // Expected remaining life post-90: 15 years (conservative planning horizon).
+    const basicPhase2Rate = 0.04 / 12;
+    const basicPhase2N = 15 * 12; // 15 years post-90
+    const basicPhase2Monthly = basicPhase2N > 0
+      ? (basicPhase2Rate * basicPremium) / (1 - Math.pow(1 + basicPhase2Rate, -basicPhase2N))
+      : basicPremium / (15 * 12);
+    const basicPhase2Annual = basicPhase2Monthly * 12;
     let basicRaRemaining = basicPV;
-    // Annual depletion rate factor: (1+r_monthly)^12 compounding
-    const basicAnnualFactor = Math.pow(1 + basicRMonthly, 12);
     let cumPayoutBasicPool = 0;
 
     for (let p of projection) {
@@ -2360,21 +2373,58 @@ export default function App() {
         escPayY = (lifePlans.escalating.start * Math.pow(1.02, yearsElapsed)) * 12; cumPayoutEscalating += escPayY;
         escBeq = Math.max(0, initialRA - cumPayoutEscalating);
 
-        // Basic Plan: payout is the PMT (unified with RA depletion rate — no ad-hoc reductions)
-        basPayY = basicPMT; cumPayoutBasic += basPayY;
-
-        // Basic Plan Bequest:
-        // Phase 1 (age < 90): RA still has funds. Bequest = remaining RA balance PLUS full
-        //   premium refund (CPF policy: premium is fully returned if death before pool phase).
-        // Phase 2 (age >= 90): RA is 0. Bequest = max(0, premium - pool payouts drawn so far).
+        // ── Basic Plan: Phase 1A/1B/Phase 2 ────────────────────────────────────
         if (age < 90) {
-          // Apply annual compounding at monthly rate, deduct annual PMT (12 × monthly)
-          basicRaRemaining = Math.max(0, (basicRaRemaining * basicAnnualFactor) - basicPMT);
+          // Combined CPF balance = retained RA + OA + MA (from live projection)
+          const oaAtAge = p.oa || 0;
+          const maAtAge = p.ma || 0;
+          const combinedBalance = basicRaRemaining + oaAtAge + maAtAge;
+
+          // Effective monthly rate on RA, based on combined balance vs CPF extra interest tiers.
+          // Extra interest priority (post-55): RA → OA → MA fills the $30K and $60K pools.
+          // Only the portion of combined balance ≤ $60K earns extra 1% (tier 1, b1).
+          // Only the portion of combined balance ≤ $30K earns extra 2% (tier 2, b2).
+          // These are credited to RA (post-55 rule). OA's extra goes to RA, not OA.
+          const b1Pool = Math.min(combinedBalance, 60000); // amount earning extra 1%
+          const b2Pool = Math.min(combinedBalance, 30000); // amount earning extra 2%
+          // Extra interest credited to RA this year (annualised, then converted to effective monthly)
+          const extraAnnualToRA = b1Pool * 0.01 + b2Pool * 0.01;
+          // Effective annual rate on basicRaRemaining = base 4% + extra interest proportional to RA
+          const effectiveAnnualRate = 0.04 + (basicRaRemaining > 0 ? extraAnnualToRA / basicRaRemaining : 0);
+          const effectiveMonthlyRate = effectiveAnnualRate / 12;
+          const effectiveAnnualFactor = Math.pow(1 + effectiveMonthlyRate, 12);
+
+          // Phase 1A (combined ≥ $60K): use stable Phase 1A PMT (no change)
+          // Phase 1B (combined < $60K): recompute PMT each year so RA reaches $0 exactly at age 90
+          // This produces the declining slope as extra interest shrinks.
+          let thisYearPayout;
+          if (combinedBalance >= 60000 || age <= pAge) {
+            // Phase 1A: stable payout
+            thisYearPayout = basicPMT;
+          } else {
+            // Phase 1B: recompute PMT to deplete RA_Retained by age 90
+            const yearsLeft = Math.max(1, 90 - age);
+            const nMonthsLeft = yearsLeft * 12;
+            if (basicRaRemaining <= 0) {
+              thisYearPayout = 0;
+            } else {
+              const recomputedMonthly = (effectiveMonthlyRate * basicRaRemaining) /
+                (1 - Math.pow(1 + effectiveMonthlyRate, -nMonthsLeft));
+              thisYearPayout = recomputedMonthly * 12;
+            }
+          }
+          // Apply interest then deduct payout (interest earned before payout within the year)
+          basicRaRemaining = Math.max(0, (basicRaRemaining * effectiveAnnualFactor) - thisYearPayout);
+          basPayY = Math.max(0, thisYearPayout);
+          cumPayoutBasic += basPayY;
           basRA = Math.max(0, basicRaRemaining);
-          basBeq = basRA + basicPremium; // CPF policy: RA balance + full premium refund
+          basBeq = basRA + basicPremium; // Phase 1: remaining RA + full premium refund
         } else {
+          // Phase 2 (age ≥ 90): RA exhausted. Constant lower payout from premium pool.
           basicRaRemaining = 0;
           basRA = 0;
+          basPayY = basicPhase2Annual;
+          cumPayoutBasic += basPayY;
           cumPayoutBasicPool += basPayY;
           basBeq = Math.max(0, basicPremium - cumPayoutBasicPool);
         }
@@ -2545,28 +2595,41 @@ export default function App() {
       const escStart = interpolateCpfLife(raVal, 'esc', isMaleSens);
 
       const bPct2 = (basicPremiumPct || 10) / 100;
-      const basicPrem = raVal * bPct2; const basicPV = raVal * (1 - bPct2);
+      const basicPrem = raVal * bPct2; const basicPV2 = raVal * (1 - bPct2);
       const basicNM2 = Math.max(12, (90 - pAge) * 12);
-      const basicRM2 = 0.04 / 12;
-      const basicPMT = basicNM2 > 0 ? (basicRM2 * basicPV) / (1 - Math.pow(1 + basicRM2, -basicNM2)) * 12 : 0;
-      let basicRaRem = basicPV, cumBasicPool = 0, cumStd = 0, cumEsc = 0, cumBas = 0, escVsStd = null, stdVsBasic = null, escVsBasic = null;
+      const basicRM2p1 = 0.045 / 12; // blended Phase 1A rate
+      const basicPMT2 = basicNM2 > 0 ? (basicRM2p1 * basicPV2) / (1 - Math.pow(1 + basicRM2p1, -basicNM2)) * 12 : 0;
+      const basicRM2base = 0.04 / 12;
+      const basicPhase2Annual2 = ((basicRM2base * basicPrem) / (1 - Math.pow(1 + basicRM2base, -(15 * 12)))) * 12;
+      let basicRaRem = basicPV2, cumBasicPool = 0, cumStd = 0, cumEsc = 0, cumBas = 0, escVsStd = null, stdVsBasic = null, escVsBasic = null;
 
       for (let age = pAge; age <= 95; age++) {
         const yr = age - pAge; const stdPay = stdStart * 12; const escPay = (escStart * Math.pow(1.02, yr)) * 12;
-        // Basic payout = PMT (no invented reductions at 88/90)
-        const basPay = basicPMT;
-        cumStd += stdPay; cumEsc += escPay; cumBas += basPay;
+        cumStd += stdPay; cumEsc += escPay;
 
-        let basBeq = 0;
+        let basPay, basBeq = 0;
         if (age < 90) {
-          basicRaRem = Math.max(0, (basicRaRem * (1 + 0.04)) - basicPMT);
-          // Phase 1 bequest: remaining RA + full premium refund (CPF policy)
+          const b1s = Math.min(basicRaRem, 60000); const b2s = Math.min(basicRaRem, 30000);
+          const effAnnS = 0.04 + (basicRaRem > 0 ? (b1s * 0.01 + b2s * 0.01) / basicRaRem : 0);
+          const effFactorS = Math.pow(1 + effAnnS / 12, 12);
+          if (basicRaRem <= 0) {
+            basPay = 0;
+          } else if (basicRaRem >= 60000) {
+            basPay = basicPMT2; // Phase 1A stable
+          } else { // Phase 1B declining
+            const effMoS = effAnnS / 12;
+            const yearsLeftS = Math.max(1, 90 - age);
+            basPay = ((effMoS * basicRaRem) / (1 - Math.pow(1 + effMoS, -(yearsLeftS * 12)))) * 12;
+          }
+          basicRaRem = Math.max(0, (basicRaRem * effFactorS) - basPay);
           basBeq = Math.max(0, basicRaRem) + basicPrem;
         } else {
           basicRaRem = 0;
+          basPay = basicPhase2Annual2;
           cumBasicPool += basPay;
           basBeq = Math.max(0, basicPrem - cumBasicPool);
         }
+        cumBas += basPay;
 
         const stdBeq = Math.max(0, raVal - cumStd), escBeq = Math.max(0, raVal - cumEsc);
         const stdT = cumStd + stdBeq, escT = cumEsc + escBeq, basT = cumBas + basBeq;
