@@ -2559,7 +2559,7 @@ export default function App() {
 
         let basBeq = 0;
         if (age < 90) {
-          basicRaRem = Math.max(0, (basicRaRem * (1 + basicR)) - basicPMT);
+          basicRaRem = Math.max(0, (basicRaRem * (1 + 0.04)) - basicPMT);
           // Phase 1 bequest: remaining RA + full premium refund (CPF policy)
           basBeq = Math.max(0, basicRaRem) + basicPrem;
         } else {
