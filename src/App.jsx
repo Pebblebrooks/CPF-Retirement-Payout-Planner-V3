@@ -1289,6 +1289,7 @@ export default function App() {
   const [showPresets, setShowPresets] = useState(false);
   const [tableSubTab, setTableSubTab] = useState("projection");
   const [showDataTableGuide, setShowDataTableGuide] = useState(false);
+  const [showWisEligibility, setShowWisEligibility] = useState(false); // WIS eligibility panel toggle — must be top-level (Rules of Hooks)
 
   // Sidebar accordion — supports multiple open sections simultaneously
   const [openSections, setOpenSections] = useState(() => {
@@ -5077,7 +5078,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     const estimated = monthlyIncome >= 500 && monthlyIncome <= 3000
                       ? (table.find(r => monthlyIncome <= r.maxIncome) || table[table.length - 1]).wis
                       : null;
-                    const [showEligibility, setShowEligibility] = useState(false);
+                    const [showEligibility, setShowEligibility] = [showWisEligibility, setShowWisEligibility]; // top-level state — no hook call here
                     return (
                       <div>
                         <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
