@@ -536,12 +536,10 @@ function runProjectionEngine(inputs, {
   // #3 Property CPF refund: track cumulative OA housing withdrawals for refund calc
   const sellPropertyAge = Number(inputs.sellPropertyAge) || 0;
   let cumHousingOA = 0;        // tracks cumulative OA used for housing (principal)
-  // cumHousingFV tracks the compound future value of ALL OA housing withdrawals at 2.5%/yr.
-  // Each year: cumHousingFV = (cumHousingFV + activeHousing) * 1.025
-  // This correctly compounds each year's withdrawal forward from its own date.
-  // At sell time: totalRefund = cumHousingFV (principal + compounded interest).
-  // Accrued interest = cumHousingFV - cumHousingOA.
-  let cumHousingFV = 0;
+  let cumHousingAccrued = 0;   // tracks 2.5%/yr accrued interest on per-withdrawal basis
+  // Each year the engine runs: cumHousingAccrued = cumHousingAccrued * 1.025 + activeHousing * 0.025
+  // This correctly models CPF's rule: each withdrawal accrues 2.5% from its own withdrawal date,
+  // rather than treating all past withdrawals as a single day-1 lump sum.
   let refundApplied = startAge >= sellPropertyAge && sellPropertyAge > 0;
   // Track SA/RA cash top-ups (vcSa + govGrant + mrss) and interest earned on RA
   // separately — needed to compute the correct 20% RA-to-OA transfer base.
@@ -664,7 +662,6 @@ function runProjectionEngine(inputs, {
       const actualDownpayment = Math.min(oa, plannedDownpaymentOA);
       oa -= actualDownpayment;
       cumHousingOA += actualDownpayment;
-      cumHousingFV  += actualDownpayment;   // start compounding interest from downpayment year
       downpaymentApplied = true;
     }
 
@@ -1060,14 +1057,14 @@ function runProjectionEngine(inputs, {
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
     if (activeHousing > 0) { cumHousingOA += activeHousing; yearHousingOut = activeHousing; }
     // Compound existing accrued interest and add this year's withdrawal's first year of interest
-    cumHousingFV = (cumHousingFV + activeHousing) * 1.025;   // (prev + this year's withdrawal) × 1.025 — each withdrawal compounds from its own year
+    cumHousingAccrued = cumHousingAccrued * 1.025 + activeHousing * 0.025;
     oa = Math.max(0, oa - activeHousing);
     // #3 Property CPF refund: at sell age, refund principal + 2.5% accrued interest to OA
     if (sellPropertyAge > 0 && age === sellPropertyAge && !refundApplied) {
-      // cumHousingFV = FV of all OA housing withdrawals compounded at 2.5%/yr per withdrawal date.
-      // This correctly compounds each withdrawal from its own year — no lump-sum assumption.
-      // Accrued interest = cumHousingFV - cumHousingOA (principal).
-      const totalRefund = Math.round(cumHousingFV);
+      // Use per-withdrawal accrued interest (cumHousingAccrued) instead of the lump-sum
+      // formula (cumHousingOA × (1.025^years − 1)) which overstates interest by treating
+      // all payments as if they were withdrawn on day one.
+      const totalRefund = Math.round(cumHousingOA + cumHousingAccrued);
       // Step 1: Full refund credited to OA
       oa += totalRefund;
       yearInflow += totalRefund;
@@ -1361,18 +1358,9 @@ export default function App() {
     } else if (mmss < 0) {
       errs.mmssGrant = 'Must be ≥ 0';
     }
-    // WIS: max $4,900/yr (employee cap from 2025); eligibility requires avg gross monthly income $500–$3,000
+    // WIS: max $4,000/yr (approx upper bound for full WIS award)
     const wis = Number(inp.wisAmount) || 0;
-    if (wis < 0) errs.wisAmount = "Must be ≥ 0";
-    else if (wis > 4900) errs.wisAmount = "Max $4,900/yr (employee WIS cap from 2025)";
-    // W1: Salary eligibility gate — amber warning only, not a hard block
-    if (wis > 0 && !errs.wisAmount) {
-      const sg = Number(inp.salaryGross) || 0;
-      const nti = Number(inp.netTradeIncome) || 0;
-      const monthlyIncome = inp.isSelfEmployed ? (nti / 12) : sg;
-      if (monthlyIncome > 3000) errs.wisAmount = `WIS eligibility: avg gross ≤ $3,000/mo (your income: ~$${Math.round(monthlyIncome).toLocaleString()}/mo). Verify at cpf.gov.sg/wis.`;
-      else if (monthlyIncome > 0 && monthlyIncome < 500) errs.wisAmount = `WIS eligibility: avg gross ≥ $500/mo (unless PWD/caregiver/ComCare). Your income: ~$${Math.round(monthlyIncome).toLocaleString()}/mo.`;
-    }
+    if (wis < 0 || wis > 4000) errs.wisAmount = "Max ~$4,000/yr";
     // Pledge withdrawal age must be ≥ 55
     if (inp.usePropertyPledge) {
       const pwa = Number(inp.pledgeWithdrawalAge) || 55;
@@ -4965,75 +4953,22 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>Max $1,000/yr · age 55–70 · MA below ½ BHS · income ≤ $4,000/mo · SC only</p>
                   </div>
 
-                  {/* WIS — W2: Estimate button + W3: eligibility panel */}
-                  {(() => {
-                    // W2: WIS estimate table by monthly income band (employee, 2025 schedule)
-                    // Source: CPF Board WIS 2025 — https://www.cpf.gov.sg/member/infohub/news/wis
-                    const WIS_EMPLOYEE = [
-      { maxIncome: 1000, wis: 4900 }, { maxIncome: 1500, wis: 3267 },
-      { maxIncome: 2000, wis: 2450 }, { maxIncome: 2500, wis: 1633 },
-      { maxIncome: 3000, wis: 700  },
-    ];
-                    const WIS_SEP = [
-      { maxIncome: 1000, wis: 3267 }, { maxIncome: 1500, wis: 2450 },
-      { maxIncome: 2000, wis: 1633 }, { maxIncome: 2500, wis: 1225 },
-      { maxIncome: 3000, wis: 467  },
-    ];
-                    const monthlyIncome = isSelfEmployed
-                      ? Math.round((Number(inputs.netTradeIncome) || 0) / 12)
-                      : (Number(inputs.salaryGross) || 0);
-                    const table = isSelfEmployed ? WIS_SEP : WIS_EMPLOYEE;
-                    const estimated = monthlyIncome >= 500 && monthlyIncome <= 3000
-                      ? (table.find(r => monthlyIncome <= r.maxIncome) || table[table.length - 1]).wis
-                      : null;
-                    const [showEligibility, setShowEligibility] = React.useState(false);
-                    return (
-                      <div>
-                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                          WIS – Workfare Supplement <FreqToggle freqKey="wisFreq" />
-                          <TooltipBox id="t-wis" text="Workfare Income Supplement (WIS): Enter your total annual WIS award. CPF portion is modelled: Employees — 60% to CPF (OA/SA/MA) + 40% cash paid separately to you. SEPs — 90% to MA (BHS-capped) + 10% cash. The cash portion (shown below) is not included in CPF projection but forms part of your real income. Auto-assessed by CPF Board — no application needed." />
-                        </label>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          <input type="text" inputMode="decimal" name="wisAmount" value={inputs.wisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual WIS workfare supplement"
-                            style={{ flex: 1, padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.wisAmount ? "#f87171" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                          {/* W2: Estimate WIS button */}
-                          {estimated !== null && (
-                            <button onClick={() => setInputs(p => ({ ...p, wisAmount: estimated }))}
-                              title={`Estimate based on your salary (~$${monthlyIncome.toLocaleString()}/mo)`}
-                              style={{ padding: "6px 10px", borderRadius: 7, fontSize: 9, fontWeight: 800, border: "1px solid rgba(52,211,153,0.4)", background: "rgba(52,211,153,0.1)", color: "#34d399", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-                              ⚡ ${estimated.toLocaleString()}
-                            </button>
-                          )}
-                        </div>
-                        {(Number(inputs.wisAmount) || 0) > 0 && (
-                          <p style={{ fontSize: 9, color: "#34d399", marginTop: 4 }}>
-                            CPF portion: {formatCurrency(Math.round((Number(inputs.wisAmount) || 0) * (isSelfEmployed ? 0.9 : 0.6)))} ·
-                            Cash paid to you: {formatCurrency(Math.round((Number(inputs.wisAmount) || 0) * (isSelfEmployed ? 0.1 : 0.4)))} (not in projection)
-                          </p>
-                        )}
-                        {inputErrors.wisAmount && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.wisAmount}</p>}
-                        <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
-                          {isSelfEmployed ? "SEP: 90% → MA (BHS-capped), 10% cash (not modelled)" : "Employee: 60% → CPF (age-band split), 40% cash (not modelled)"}
-                        </p>
-                        {/* W3: Eligibility criteria toggle */}
-                        <button onClick={() => setShowEligibility(v => !v)}
-                          style={{ marginTop: 5, fontSize: 9, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
-                          {showEligibility ? "▲ Hide eligibility criteria" : "▼ WIS eligibility criteria"}
-                        </button>
-                        {showEligibility && (
-                          <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 7, background: "rgba(52,211,153,0.05)", border: "1px solid rgba(52,211,153,0.2)", fontSize: 9, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                            <strong style={{ color: "var(--text-highlight)" }}>WIS eligibility (2025):</strong><br />
-                            • Singapore Citizen · Age ≥ 30 (or any age if PWD)<br />
-                            • Avg gross monthly income: $500–$3,000<br />
-                            • Live in property with Annual Value ≤ $21,000<br />
-                            • Own ≤ 1 property (≤ 2 combined if married)<br />
-                            • Spouse income ≤ $70,000/yr (if married)<br />
-                            • <strong>Automatic</strong> — no application needed; CPF Board assesses annually
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
+                  {/* WIS */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
+                      WIS – Workfare Supplement <FreqToggle freqKey="wisFreq" />
+                      <TooltipBox id="t-wis" text="Workfare Income Supplement (WIS): Enter your total annual WIS award. CPF portion is modelled: Employees — 60% to CPF (OA/SA/MA) + 40% cash paid separately to you. SEPs — 90% to MA (BHS-capped) + 10% cash. The cash portion (shown below) is not included in CPF projection but forms part of your real income." />
+                    </label>
+                    <input type="text" inputMode="decimal" name="wisAmount" value={inputs.wisAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual WIS workfare supplement" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.wisAmount ? "#f87171" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                    {(Number(inputs.wisAmount) || 0) > 0 && (
+                      <p style={{ fontSize: 9, color: "#34d399", marginTop: 4 }}>
+                        CPF portion: {formatCurrency(Math.round((Number(inputs.wisAmount) || 0) * (isSelfEmployed ? 0.9 : 0.6)))} ·
+                        Cash paid to you: {formatCurrency(Math.round((Number(inputs.wisAmount) || 0) * (isSelfEmployed ? 0.1 : 0.4)))} (not in projection)
+                      </p>
+                    )}
+                    {inputErrors.wisAmount && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.wisAmount}</p>}
+                    <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>{isSelfEmployed ? "SEP: 90% → MA (BHS-capped), 10% cash (not modelled)" : "Employee: 60% → CPF (age-band split), 40% cash (not modelled)"}</p>
+                  </div>
 
                 </div>
               </div>}
@@ -7433,7 +7368,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {activeTab === "notes" && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Sticky wrapper: title + anchor nav scroll together as one bar */}
-                <div style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 24, paddingBottom: 0, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
+                <div style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", marginLeft: -28, marginRight: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 0, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
                   <h3 style={{ fontSize: 20, fontWeight: 900, marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}><BookOpen style={{ width: 22, height: 22, color: "#34d399" }} />User Guide & Financial Analysis</h3>
                   {/* Anchor navigation */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10 }}>
@@ -7459,7 +7394,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <div style={{ display: "flex", flexDirection: "column", gap: 32, fontSize: 13, lineHeight: 1.7, color: "var(--text-muted)" }}>
 
                   {/* User Guide */}
-                  <section id="doc-guide" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-guide" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#60a5fa", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><LayoutDashboard style={{ width: 18, height: 18 }} />Step-by-Step User Guide</h4>
                     {[
                       ["1", "Setup Your Profile", "#60a5fa", "rgba(59,130,246,0.08)", "rgba(59,130,246,0.2)", "Enter your current OA, SA, and MA balances. Select Male/Female (affects CPF LIFE payout ratio). Select SC or PR — PR members select their tenure year (1 / 2 / 3+) and rate type (G/G default or F/G). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates each projection year. Progress bars compare balances against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones."],
@@ -7482,7 +7417,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* ── Projection Engine ── */}
-                  <section id="doc-engine" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-engine" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#34d399", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 18, height: 18 }} />Projection Engine — How the Numbers Are Computed</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7531,7 +7466,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* CPF Policy Reference */}
-                  <section id="doc-policy" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-policy" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#2dd4bf", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><ShieldCheck style={{ width: 18, height: 18 }} />CPF 2026 Policy Reference</h4>
 
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", marginBottom: 16, overflowX: "auto" }}>
@@ -7611,7 +7546,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* New Planning Tools Policy Reference */}
-                  <section id="doc-planning" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-planning" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#60a5fa", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Target style={{ width: 18, height: 18 }} />Planning Tools — Policy Reference <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)", marginLeft: 8 }}>(Assumptions)</span></h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7681,7 +7616,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* SRS */}
-                  <section id="doc-srs" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-srs" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#0ea5e9", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><BookOpen style={{ width: 18, height: 18 }} />Supplementary Retirement Scheme (SRS)</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7714,7 +7649,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Property Monetisation */}
-                  <section id="doc-propmon" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-propmon" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#fb923c", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Home style={{ width: 18, height: 18 }} />Property Monetisation</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7743,7 +7678,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Die with Zero */}
-                  <section id="doc-dwz" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-dwz" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#f43f5e", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Clock style={{ width: 18, height: 18 }} />Die with Zero Mode</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7772,7 +7707,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Self-Employed Policy */}
-                  <section id="doc-sep" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-sep" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#fb923c", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Briefcase style={{ width: 18, height: 18 }} />Self-Employed Person (SEP) — VC3A Rules</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7801,7 +7736,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Actuarial Math */}
-                  <section id="doc-montecarlo" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-montecarlo" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#fb923c", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><PieChart style={{ width: 18, height: 18 }} />Actuarial Math & Depletion Models</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -7826,7 +7761,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Yield Math */}
-                  <section id="doc-yield" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-yield" style={{ scrollMarginTop: "130px" }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#fbbf24", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Scale style={{ width: 18, height: 18 }} />Yield Intersections & "The Flatline"</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
                       <p><strong style={{ color: "var(--text-highlight)" }}>The Flatline:</strong> Total Yield = Payouts Received + Remaining Bequest. Since Bequest = Initial Premium − Payouts, the formula nets out to exactly your Initial Premium. Total Yield flatlines until your Bequest hits $0 (~late 70s), then every payout becomes "pure profit" drawn from the mortality pool.</p>
