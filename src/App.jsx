@@ -999,35 +999,59 @@ function runProjectionEngine(inputs, {
     const saAvg = (saOpen + sa) / 2;
     const maAvg = (maOpen + ma) / 2;
     const raAvg = (raOpen + ra) / 2;
-    // Bonus interest tiers computed on average balances
-    const nonOaAvg = saAvg + maAvg + raAvg;
-    const e1 = Math.min(60000, nonOaAvg);
-    const e1oa = Math.min(Math.max(0, 60000 - e1), Math.min(oaAvg, 20000));
-    const b1 = (e1 + e1oa) * CPF_RATES.EXTRA_1;
-    let b2 = 0;
-    if (age >= 55) {
-      // Tier 2 pool: RA priority, then OA (≤$20K). SA and MA do not participate.
-      const e2ra = Math.min(30000, raAvg);
-      const e2oa = Math.min(Math.max(0, 30000 - e2ra), Math.min(oaAvg, 20000));
-      b2 = (e2ra + e2oa) * CPF_RATES.EXTRA_2;
+    // ── Extra interest: correct CPF priority order and credit destinations ────
+    // Pre-55  (+1% on first $60K): OA* first (cap $20K) → SA → MA
+    //   OA's extra credited to SA; SA's extra to SA; MA's extra stays in MA.
+    // Post-55 (+1% on first $60K AND +1% on first $30K): RA → OA* (cap $20K) → MA
+    //   OA's extra credited to RA (not to OA itself); MA's extra stays in MA.
+    // Source: CPF Board interest priority tables (Images 1–4 reviewed Apr 2025).
+    let b1ToSA = 0, b1ToMA = 0, b1ToRA = 0;  // extra 1% ($60K pool) credit splits
+    let b2ToRA = 0, b2ToMA = 0;               // extra 2nd 1% ($30K pool) credit splits
+    if (age < 55) {
+      // Pre-55 pool: OA* (cap $20K) → SA → MA
+      const oaP1 = Math.min(oaAvg, 20000);
+      const rem1 = Math.max(0, 60000 - oaP1);
+      const saP1 = Math.min(saAvg, rem1);
+      const maP1 = Math.min(maAvg, Math.max(0, rem1 - saP1));
+      b1ToSA = (oaP1 + saP1) * CPF_RATES.EXTRA_1;  // OA & SA extra → SA
+      b1ToMA = maP1 * CPF_RATES.EXTRA_1;             // MA extra stays in MA
+    } else {
+      // Post-55 extra 1% ($60K pool): RA → OA* (cap $20K) → MA
+      const raP1 = Math.min(raAvg, 60000);
+      const rem1 = Math.max(0, 60000 - raP1);
+      const oaP1 = Math.min(oaAvg, Math.min(20000, rem1));
+      const maP1 = Math.min(maAvg, Math.max(0, rem1 - oaP1));
+      b1ToRA = (raP1 + oaP1) * CPF_RATES.EXTRA_1;   // RA & OA extra → RA
+      b1ToMA = maP1 * CPF_RATES.EXTRA_1;              // MA extra stays in MA
+      // Post-55 extra 2nd 1% ($30K pool): RA → OA* (cap $20K) → MA
+      const raP2 = Math.min(raAvg, 30000);
+      const rem2 = Math.max(0, 30000 - raP2);
+      const oaP2 = Math.min(oaAvg, Math.min(20000, rem2));
+      const maP2 = Math.min(maAvg, Math.max(0, rem2 - oaP2));
+      b2ToRA = (raP2 + oaP2) * CPF_RATES.EXTRA_2;   // RA & OA extra → RA
+      b2ToMA = maP2 * CPF_RATES.EXTRA_2;              // MA extra stays in MA
     }
+    const b1 = b1ToSA + b1ToMA + b1ToRA;
+    const b2 = b2ToRA + b2ToMA;
     const yearTotalInterest = (oaAvg * rOA) + (saAvg * rSA) + (maAvg * rMA) + (raAvg * rRA) + b1 + b2;
     totalInterest += yearTotalInterest;
-    // Per-account interest for cashflow ledger
+    // Per-account interest for cashflow ledger — MA extra now correctly attributed to MA column
     yearOaInterest = Math.round(oaAvg * rOA);
-    yearMaInterest = Math.round(maAvg * rMA);
+    yearMaInterest = Math.round(maAvg * rMA + b1ToMA + b2ToMA);
     yearSaRaInterest = Math.round(yearTotalInterest) - yearOaInterest - yearMaInterest;
-    // Track interest accruing to SA (pre-55) and RA (post-55) for 20% transfer base
+    // Track interest accruing to SA (pre-55) or RA (post-55) for 20% transfer base
     const yearRaInterest = age >= 55
-      ? (raAvg * rRA) + b1 + b2          // post-55: RA avg + all extra interest → RA
-      : (saAvg * rSA) + b1;              // pre-55:  SA avg + extra tier 1 → SA
+      ? (raAvg * rRA) + b1ToRA + b2ToRA    // post-55: RA base + RA/OA pool extras → RA
+      : (saAvg * rSA) + b1ToSA;            // pre-55:  SA base + OA/SA pool extras → SA
     cumRaInterest += yearRaInterest;
 
     oa += oaAvg * rOA;
     sa += saAvg * rSA;
     ra += raAvg * rRA;
-    if (age >= 55) ra += (b1 + b2); else sa += (b1 + b2);
     ma += maAvg * rMA;
+    // Apply extra interest to the correct accounts (MA's share stays in MA, not SA/RA)
+    if (age < 55) { sa += b1ToSA; ma += b1ToMA; }
+    else           { ra += b1ToRA + b2ToRA; ma += b1ToMA + b2ToMA; }
 
     // Outflows
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
@@ -1283,7 +1307,9 @@ export default function App() {
     const pa = Number(inp.payoutAge) || 65;
     const cs = Number(inp.contributionStopAge) || 65;
     const hs = Number(inp.housingStopAge) || 55;
-    if (ca < 1 || ca > 120) errs.currentAge = "Age must be 1–120";
+    if (ca < 0 || ca > 95) errs.currentAge = "Age must be 0–95";
+    // A7: soft warning when current age is at or beyond payout age (no hard block)
+    if (!errs.currentAge && ca > 0 && ca >= pa) errs.currentAge = `Age ${ca} ≥ payout age ${pa} — CPF LIFE has likely started. Most contribution fields will have no effect.`;
     if (pa < 65 || pa > 70) errs.payoutAge = "Payout age must be 65–70";
     if (cs < ca) errs.contributionStopAge = "Must be ≥ current age";
     if (hs < ca) errs.housingStopAge = "Must be ≥ current age";
@@ -4247,6 +4273,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </select>
                     </div>
                   </div>
+                  {/* A9: Age-conditional info banners for minors */}
+                  {(Number(inputs.currentAge) || 0) < 16 && (Number(inputs.currentAge) || 0) >= 0 && (
+                    <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.35)", fontSize: 10, color: "#fbbf24", lineHeight: 1.5 }}>
+                      👶 <strong>Under 16:</strong> Parents or guardians manage CPF transactions on the member's behalf. Cash top-ups to SA/MA and OA→SA transfers are supported. CPFIS (age 18+) and CPF nominations (age 16+) are not available.
+                    </div>
+                  )}
+                  {(Number(inputs.currentAge) || 0) >= 16 && (Number(inputs.currentAge) || 0) < 18 && (
+                    <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.3)", fontSize: 10, color: "#93c5fd", lineHeight: 1.5 }}>
+                      ℹ️ <strong>Age 16–17:</strong> CPF nominations are available. CPFIS requires age 18+ and is disabled in the Outflows section below.
+                    </div>
+                  )}
                   {/* Gender toggle — affects CPF LIFE monthly payout ratio */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -4961,15 +4998,28 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       {(() => {
                         const oaBal = Number(inputs.oaBalance) || 0;
                         const cpfisOaInvestible = Math.max(0, oaBal - 20000);
+                        const isUnder18_cpfis = (Number(inputs.currentAge) || 0) < 18;
                         return (
                           <>
-                            <input type="text" inputMode="decimal" name="cpfisOaAmount" value={inputs.cpfisOaAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual CPFIS OA investment amount" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.cpfisOaAmount ? "#f87171" : "rgba(244,63,94,0.2)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                            {inputErrors.cpfisOaAmount && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.cpfisOaAmount}</p>}
-                            <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
-                              Investible (OA − $20k floor): <strong style={{ color: cpfisOaInvestible === 0 ? "#f87171" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisOaInvestible)}</strong>
-                              {cpfisOaInvestible === 0 && <span style={{ color: "#f87171", fontWeight: 700 }}> · OA ≤ $20k</span>}
-                              {" "}· returns not modelled
-                            </p>
+                            <input type="text" inputMode="decimal" name="cpfisOaAmount" value={inputs.cpfisOaAmount}
+                              onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                              readOnly={isUnder18_cpfis} tabIndex={isUnder18_cpfis ? -1 : undefined}
+                              aria-label="Annual CPFIS OA investment amount"
+                              style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)",
+                                border: `1px solid ${inputErrors.cpfisOaAmount ? "#f87171" : "rgba(244,63,94,0.2)"}`,
+                                borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none",
+                                fontFamily: "monospace", boxSizing: "border-box",
+                                opacity: isUnder18_cpfis ? 0.4 : 1, cursor: isUnder18_cpfis ? "not-allowed" : "text" }} />
+                            {isUnder18_cpfis
+                              ? <p style={{ fontSize: 9, color: "#fbbf24", marginTop: 2 }}>⚠ CPFIS requires age 18+</p>
+                              : inputErrors.cpfisOaAmount && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.cpfisOaAmount}</p>}
+                            {!isUnder18_cpfis && (
+                              <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
+                                Investible (OA − $20k floor): <strong style={{ color: cpfisOaInvestible === 0 ? "#f87171" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisOaInvestible)}</strong>
+                                {cpfisOaInvestible === 0 && <span style={{ color: "#f87171", fontWeight: 700 }}> · OA ≤ $20k</span>}
+                                {" "}· returns not modelled
+                              </p>
+                            )}
                           </>
                         );
                       })()}
@@ -4983,26 +5033,30 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         const saBal = Number(inputs.saBalance) || 0;
                         const ca = Number(inputs.currentAge) || 0;
                         const is55Plus_cpfis = ca >= 55;
-                        const cpfisSaInvestible = is55Plus_cpfis ? 0 : Math.max(0, saBal - 40000);
+                        const isUnder18_cpfis_sa = ca < 18;
+                        const cpfisDisabled = is55Plus_cpfis || isUnder18_cpfis_sa;
+                        const cpfisSaInvestible = cpfisDisabled ? 0 : Math.max(0, saBal - 40000);
                         return (
                           <>
                             <input type="text" inputMode="decimal" name="cpfisSaAmount" value={inputs.cpfisSaAmount}
                               onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                              readOnly={is55Plus_cpfis} tabIndex={is55Plus_cpfis ? -1 : undefined}
+                              readOnly={cpfisDisabled} tabIndex={cpfisDisabled ? -1 : undefined}
                               aria-label="Annual CPFIS SA investment amount"
                               style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)",
                                 border: `1px solid ${inputErrors.cpfisSaAmount ? "#f87171" : "rgba(244,63,94,0.2)"}`,
                                 borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none",
                                 fontFamily: "monospace", boxSizing: "border-box",
-                                cursor: is55Plus_cpfis ? "not-allowed" : "text",
-                                opacity: is55Plus_cpfis ? 0.45 : 1 }} />
-                            {inputErrors.cpfisSaAmount && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.cpfisSaAmount}</p>}
+                                cursor: cpfisDisabled ? "not-allowed" : "text",
+                                opacity: cpfisDisabled ? 0.4 : 1 }} />
+                            {!cpfisDisabled && inputErrors.cpfisSaAmount && <p style={{ fontSize: 9, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.cpfisSaAmount}</p>}
                             <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
                               {is55Plus_cpfis
                                 ? <span style={{ color: "#f87171" }}>SA closed at 55 — SA CPFIS not available</span>
-                                : <>Investible (SA − $40k floor): <strong style={{ color: cpfisSaInvestible === 0 ? "#f87171" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisSaInvestible)}</strong>
-                                  {cpfisSaInvestible === 0 && <span style={{ color: "#f87171", fontWeight: 700 }}> · SA ≤ $40k</span>}
-                                  {" "}· returns not modelled</>}
+                                : isUnder18_cpfis_sa
+                                  ? <span style={{ color: "#fbbf24" }}>⚠ CPFIS requires age 18+</span>
+                                  : <>Investible (SA − $40k floor): <strong style={{ color: cpfisSaInvestible === 0 ? "#f87171" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisSaInvestible)}</strong>
+                                    {cpfisSaInvestible === 0 && <span style={{ color: "#f87171", fontWeight: 700 }}> · SA ≤ $40k</span>}
+                                    {" "}· returns not modelled</>}
                             </p>
                           </>
                         );
