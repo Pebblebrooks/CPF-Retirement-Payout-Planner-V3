@@ -820,10 +820,10 @@ function runProjectionEngine(inputs, {
         else if (age <= 45) { vc3aOaRatio = 0.21; vc3aSaRatio = 0.07; vc3aMaRatio = 0.09; }
         else if (age <= 50) { vc3aOaRatio = 0.19; vc3aSaRatio = 0.08; vc3aMaRatio = 0.10; }
         else if (age <= 55) { vc3aOaRatio = 0.15; vc3aSaRatio = 0.115; vc3aMaRatio = 0.105; }
-        else if (age <= 60) { vc3aOaRatio = 0.24; vc3aSaRatio = 0.35; vc3aMaRatio = 0.41; }
-        else if (age <= 65) { vc3aOaRatio = 0.21; vc3aSaRatio = 0.29; vc3aMaRatio = 0.50; }
-        else if (age <= 70) { vc3aOaRatio = 0.09; vc3aSaRatio = 0.16; vc3aMaRatio = 0.75; }
-        else { vc3aOaRatio = 0.07; vc3aSaRatio = 0.08; vc3aMaRatio = 0.85; }
+        else if (age <= 60) { vc3aOaRatio = 0.12;  vc3aSaRatio = 0.115; vc3aMaRatio = 0.105; }
+        else if (age <= 65) { vc3aOaRatio = 0.035; vc3aSaRatio = 0.11;  vc3aMaRatio = 0.105; }
+        else if (age <= 70) { vc3aOaRatio = 0.01;  vc3aSaRatio = 0.05;  vc3aMaRatio = 0.105; }
+        else               { vc3aOaRatio = 0.01;  vc3aSaRatio = 0.01;  vc3aMaRatio = 0.105; }
         const ratioSum = vc3aOaRatio + vc3aSaRatio + vc3aMaRatio;
         const toOA_vc3a = Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) + vcVhrAmt;
         const toMA_vc3a = Math.round(vc3aTotal * (vc3aMaRatio / ratioSum));
@@ -832,24 +832,31 @@ function runProjectionEngine(inputs, {
         const wisToMA_sep = wisAmount > 0 ? Math.round(wisAmount * 0.9) : 0;
         const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
         const maRoom = Math.max(0, projBHS_i - ma);
-        const maContribution = toMA_vc3a + sepMandatoryMA;
-        const actualToMAContrib = Math.min(maContribution, maRoom);
-        const maSpill = maContribution - actualToMAContrib;
-        const remainingMaRoom = maRoom - actualToMAContrib;
+        // B3 SEP: priority split — mandatory MA gets first claim on BHS room, vc3a MA gets remainder
+        const actualMandatoryMA_sep = Math.min(sepMandatoryMA, maRoom);
+        const vcMaRoomSep = Math.max(0, maRoom - actualMandatoryMA_sep);
+        const actualVcMA_sep = Math.min(toMA_vc3a, vcMaRoomSep);
+        // maSpill carries both mandatory overflow (if BHS already full) and vc3a MA overflow
+        const maSpill = (sepMandatoryMA - actualMandatoryMA_sep) + (toMA_vc3a - actualVcMA_sep);
+        // B2 SEP: WIS MA overflow — any WIS that can't fit in remaining BHS room spills to SA/RA
+        const remainingMaRoom = Math.max(0, maRoom - actualMandatoryMA_sep - actualVcMA_sep);
         const actualToMAWis = Math.min(wisToMA_sep, remainingMaRoom);
-        ma += (actualToMAContrib + actualToMAWis);
+        const wisMASpill = wisToMA_sep - actualToMAWis;   // B2: overflow routed below
+        ma += (actualMandatoryMA_sep + actualVcMA_sep + actualToMAWis);
         if (age >= 55) {
           // VC3A: RA cap is FRS (not ERS — ERS applies only to RSTU cash top-ups)
           const projFRS_vc3a_sep = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
           const raRoom_sep = Math.max(0, projFRS_vc3a_sep - ra);
-          const toRA_sep = Math.min(toSA_vc3a + maSpill, raRoom_sep);
+          // B2: include wisMASpill in SA/RA routing alongside vc3a SA and maSpill
+          const toRA_sep = Math.min(toSA_vc3a + maSpill + wisMASpill, raRoom_sep);
           ra += toRA_sep;
-          oa += (toSA_vc3a + maSpill - toRA_sep);
+          oa += (toSA_vc3a + maSpill + wisMASpill - toRA_sep);
         } else {
           // MA spill to SA is capped at FRS — excess above FRS overflows to OA
           const projFRS_sep_sa = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
           const saRoomSep = Math.max(0, projFRS_sep_sa - sa);
-          const toSA_total = toSA_vc3a + maSpill;
+          // B2: include wisMASpill in SA routing
+          const toSA_total = toSA_vc3a + maSpill + wisMASpill;
           const actualToSA_sep = Math.min(toSA_total, saRoomSep);
           sa += actualToSA_sep;
           oa += (toSA_total - actualToSA_sep); // FRS overflow to OA
@@ -863,13 +870,14 @@ function runProjectionEngine(inputs, {
         const govGrant_sep = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
         if (age >= 55) { ra += govGrant_sep + actualMrss_sep; }
         else { sa += govGrant_sep + actualMrss_sep; }
-        yearInflow = vc3aTotal + vcVhrAmt + sepMandatoryMA + govGrant_sep + actualMrss_sep;
+        // B2: yearInflow and yearGovGrants now include WIS (wisToMA_sep = actualToMAWis + wisMASpill)
+        yearInflow = vc3aTotal + vcVhrAmt + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep;
         totalInjected += yearInflow;
-        cumRaCashTopUps += toSA_vc3a + maSpill + govGrant_sep + actualMrss_sep;
+        cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + govGrant_sep + actualMrss_sep;
         // Cashflow ledger breakdown (SEP)
-        yearMandatory += sepMandatoryMA;
+        yearMandatory += actualMandatoryMA_sep;          // B3: actual amount credited to MA, not nominal
         yearVoluntary += vc3aTotal + vcVhrAmt;
-        yearGovGrants += govGrant_sep + actualMrss_sep;
+        yearGovGrants += govGrant_sep + actualMrss_sep + wisToMA_sep; // B2: WIS included
       } else {
         // PR Year 1/2: derive mandatory OA/SA/MA from the advancing G/G rate table
         // applied to the actual annual gross salary (scaled by gf for salary growth).
@@ -921,20 +929,25 @@ function runProjectionEngine(inputs, {
         const cappedVcMA = Math.round(vc3aMA * vc3aScale);
 
         const totalOA = mandatoryOA_i + cappedVcOA + wisOA;
-        // BHS cap on MA
+        // BHS cap on MA — B3: priority split so mandatory gets first claim, then vc3a MA, then WIS MA
         const projBHS_emp = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
         const maRoomEmp = Math.max(0, projBHS_emp - ma);
-        const rawMA = mandatoryMA_i + cappedVcMA + wisMA;
-        const actualMA = Math.min(rawMA, maRoomEmp);
+        const actualMandatoryMA_emp = Math.min(mandatoryMA_i, maRoomEmp);
+        const vcMaRoomEmp = Math.max(0, maRoomEmp - actualMandatoryMA_emp);
+        const actualVcMA_emp = Math.min(cappedVcMA, vcMaRoomEmp);
+        const wisMARoom_emp = Math.max(0, vcMaRoomEmp - actualVcMA_emp);
+        const actualWisMA_emp = Math.min(wisMA, wisMARoom_emp);
+        const actualMA = actualMandatoryMA_emp + actualVcMA_emp + actualWisMA_emp;
+        const rawMA = mandatoryMA_i + cappedVcMA + wisMA;  // retained for maSpillEmp
         const maSpillEmp = rawMA - actualMA;
 
         oa += totalOA;
         ma += actualMA;
         yearInflow = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + wisSA;
         totalInjected += yearInflow;
-        // Cashflow ledger breakdown (employed)
-        yearMandatory += mandatoryOA_i + mandatorySA_dyn + Math.min(mandatoryMA_i, maRoomEmp);
-        yearVoluntary += (cappedVcOA - vcVhrAmtEff) + (vc3aCashEff > 0 ? Math.min(cappedVcMA, maRoomEmp) : 0) + ((Number(inputs.vcSaTopup)||0)) * effVcSaFreq + vcVhrAmtEff;
+        // Cashflow ledger breakdown (employed) — B3: use priority-split actuals, not Math.min on raw
+        yearMandatory += mandatoryOA_i + mandatorySA_dyn + actualMandatoryMA_emp;
+        yearVoluntary += (cappedVcOA - vcVhrAmtEff) + (vc3aCashEff > 0 ? actualVcMA_emp : 0) + ((Number(inputs.vcSaTopup)||0)) * effVcSaFreq + vcVhrAmtEff;
         // MRSS eligibility: SC only · age >= 55 · RA below BRS · lifetime cap $20,000
         const projBRS_emp = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
         const mrssEligible_emp = isSC && age >= 55 && ra < projBRS_emp && cumMrssReceived < 20000;
@@ -993,10 +1006,10 @@ function runProjectionEngine(inputs, {
     const b1 = (e1 + e1oa) * CPF_RATES.EXTRA_1;
     let b2 = 0;
     if (age >= 55) {
+      // Tier 2 pool: RA priority, then OA (≤$20K). SA and MA do not participate.
       const e2ra = Math.min(30000, raAvg);
-      const e2noa = Math.min(Math.max(0, 30000 - e2ra), saAvg + maAvg);
-      const e2oa = Math.min(Math.max(0, 30000 - e2ra - e2noa), Math.min(oaAvg, 20000));
-      b2 = (e2ra + e2noa + e2oa) * CPF_RATES.EXTRA_2;
+      const e2oa = Math.min(Math.max(0, 30000 - e2ra), Math.min(oaAvg, 20000));
+      b2 = (e2ra + e2oa) * CPF_RATES.EXTRA_2;
     }
     const yearTotalInterest = (oaAvg * rOA) + (saAvg * rSA) + (maAvg * rMA) + (raAvg * rRA) + b1 + b2;
     totalInterest += yearTotalInterest;
