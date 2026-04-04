@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, createContext, useContext } from "react";
+import React, { useState, useMemo, useEffect, useRef, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -5077,7 +5077,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     const estimated = monthlyIncome >= 500 && monthlyIncome <= 3000
                       ? (table.find(r => monthlyIncome <= r.maxIncome) || table[table.length - 1]).wis
                       : null;
-                    const [showEligibility, setShowEligibility] = React.useState(false);
+                    const [showEligibility, setShowEligibility] = useState(false);
                     return (
                       <div>
                         <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
