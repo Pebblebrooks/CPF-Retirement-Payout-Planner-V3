@@ -993,11 +993,10 @@ function runProjectionEngine(inputs, {
     const b1 = (e1 + e1oa) * CPF_RATES.EXTRA_1;
     let b2 = 0;
     if (age >= 55) {
-      // Tier 2: additional +1% on first $30,000 — RA priority, then OA (≤$20K only).
-      // SA and MA do NOT participate in the Tier 2 pool per CPF Board rules.
       const e2ra = Math.min(30000, raAvg);
-      const e2oa = Math.min(Math.max(0, 30000 - e2ra), Math.min(oaAvg, 20000));
-      b2 = (e2ra + e2oa) * CPF_RATES.EXTRA_2;
+      const e2noa = Math.min(Math.max(0, 30000 - e2ra), saAvg + maAvg);
+      const e2oa = Math.min(Math.max(0, 30000 - e2ra - e2noa), Math.min(oaAvg, 20000));
+      b2 = (e2ra + e2noa + e2oa) * CPF_RATES.EXTRA_2;
     }
     const yearTotalInterest = (oaAvg * rOA) + (saAvg * rSA) + (maAvg * rMA) + (raAvg * rRA) + b1 + b2;
     totalInterest += yearTotalInterest;
@@ -2463,11 +2462,12 @@ export default function App() {
             basPayY = basicPhase2Annual + t * (basicPhase1aAnnual - basicPhase2Annual);
           }
           cumPayoutBasic += basPayY;
-          // RA_Retained tracking: use actual CPF rate (4% + tiered extra interest on RA)
-          // This is for bequest calculation only — payout is driven by Phase logic above.
-          const raExtra = (Math.min(basicRaRemaining, 60000) * 0.01 + Math.min(basicRaRemaining, 30000) * 0.01);
-          const raEffRate = basicRaRemaining > 0 ? (0.04 + raExtra / basicRaRemaining) : 0.04;
-          basicRaRemaining = Math.max(0, (basicRaRemaining * (1 + raEffRate)) - basPayY);
+          // RA_Retained tracking: use Newton-Raphson effective annual factor, NOT the actual
+          // CPF rate (~4%). The effective rate (~8–11%/yr) embeds the annuity pool subsidy and
+          // is calibrated to deplete basicPV to exactly $0 at age 90 at the lookup-table PMT.
+          // Using the actual 4% rate causes premature RA depletion (age ~80–85) and an
+          // incorrect bequest flatline at basicPremium years before Phase 2 begins.
+          basicRaRemaining = Math.max(0, (basicRaRemaining * basicEffAnnualFactor) - basPayY);
           basRA = basicRaRemaining;
           basBeq = basRA + basicPremium; // Phase 1: remaining RA + full premium refund
         } else {
@@ -2657,6 +2657,10 @@ export default function App() {
       const basicP2Annual = basicP1aAnnual * (1 - basicDropS);
       // Phase 1B trigger from empirical table
       const phase1bTriggerS = interpolatePhase1bTrigger(raVal, pAge);
+      // Effective annual rate: calibrated to deplete basicPVS to $0 at age 90 given the
+      // lookup-table Phase 1A PMT. Must match payoutProjection's tracking convention.
+      const basicEffRS = solveEffectiveRate(basicP1aMonthly, basicPVS, basicNS);
+      const basicEffAFS = Math.pow(1 + basicEffRS, 12);
       let basicRaRem = basicPVS, cumBasicPool = 0, cumStd = 0, cumEsc = 0, cumBas = 0;
       let escVsStd = null, stdVsBasic = null, escVsBasic = null;
 
@@ -2677,8 +2681,8 @@ export default function App() {
             basPay = basicP2Annual + t * (basicP1aAnnual - basicP2Annual);
           }
           const raExtraS = (Math.min(basicRaRem,60000)*0.01 + Math.min(basicRaRem,30000)*0.01);
-          const raEffS = basicRaRem > 0 ? (0.04 + raExtraS/basicRaRem) : 0.04;
-          basicRaRem = Math.max(0, (basicRaRem * (1 + raEffS)) - basPay);
+          void raExtraS; // retained for reference; effective rate used below
+          basicRaRem = Math.max(0, (basicRaRem * basicEffAFS) - basPay);
           basBeq = basicRaRem + basicPremS;
         } else {
           basicRaRem = 0;
@@ -7360,7 +7364,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#a855f7", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Interest Rates & Bonus Tiers:</strong> OA: 2.5%/yr. SA, RA, MA: 4%/yr. <strong>Bonus tiers (also on average balance):</strong> +1% on the first $60,000 combined (OA capped at $20k). Members aged 55+: additional +1% on the first $30,000 combined RA + OA (RA priority, then OA up to $20k; SA and MA do not participate in this tier). These bonus tiers are computed on average balances using the same mid-year convention.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>Interest Rates & Bonus Tiers:</strong> OA: 2.5%/yr. SA, RA, MA: 4%/yr. <strong>Bonus tiers (also on average balance):</strong> +1% on the first $60,000 combined (OA capped at $20k). Members aged 55+: additional +1% on the first $30,000 of RA (priority), then SA+MA, then OA (up to $20k). These bonus tiers are computed on average balances using the same mid-year convention.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fbbf24", marginTop: 6, flexShrink: 0 }} />
