@@ -1209,6 +1209,46 @@ export const TooltipBox = ({ id, text }) => {
   );
 };
 
+// ── FreqToggle ──────────────────────────────────────────────────────────────
+// Top-level component (NOT defined inside App) so its reference is stable
+// across renders. Defined inside App previously caused React to unmount/remount
+// every FreqToggle on each setInputs call, which could collapse sidebar sections.
+// All call sites pass inputs={inputs} setInputs={setInputs} explicitly.
+const FreqToggle = ({ freqKey, type, inputs, setInputs }) => {
+  if (type === "one-time") {
+    return (
+      <span style={{ marginLeft: 6, padding: "1px 5px", borderRadius: 3, fontSize: 8, fontWeight: 800,
+        letterSpacing: "0.04em", verticalAlign: "middle",
+        background: "rgba(251,191,36,0.15)", color: "#fbbf24",
+        border: "1px solid rgba(251,191,36,0.3)" }}>ONE-TIME</span>
+    );
+  }
+  const current = (inputs && inputs[freqKey]) || "annual";
+  const isAnnual = current === "annual";
+  const btnBase = { fontSize: 8, fontWeight: 800, padding: "1px 6px", border: "none", cursor: "pointer", letterSpacing: "0.04em", lineHeight: 1.6 };
+  const makeHandler = (val) => (e) => {
+    e.stopPropagation();
+    if (setInputs) setInputs(p => ({ ...p, [freqKey]: val }));
+  };
+  return (
+    <span className="freq-toggle-wrap" onClick={e => e.stopPropagation()} style={{ display: "inline-flex", marginLeft: 6, borderRadius: 3, overflow: "hidden", border: `1px solid ${isAnnual ? "rgba(16,185,129,0.35)" : "rgba(251,191,36,0.35)"}`, verticalAlign: "middle", flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={makeHandler("annual")}
+        style={{ ...btnBase, background: isAnnual ? "rgba(16,185,129,0.25)" : "transparent", color: isAnnual ? "#34d399" : "var(--text-subtle)" }}>
+        Recurring
+      </button>
+      <button
+        type="button"
+        onClick={makeHandler("one-time")}
+        style={{ ...btnBase, background: !isAnnual ? "rgba(251,191,36,0.25)" : "transparent", color: !isAnnual ? "#fbbf24" : "var(--text-subtle)", borderLeft: "1px solid var(--border-subtle)" }}>
+        One-Time
+      </button>
+    </span>
+  );
+};
+// ────────────────────────────────────────────────────────────────────────────
+
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
@@ -1464,8 +1504,8 @@ export default function App() {
     const vcMaCashVal = Number(inp.vcMaCash) || 0;
     if (_under16 && vcMaCashVal > 0) {
       errs.vcMaCash = "Cash top-ups require age 16+. A parent/guardian may action this on the member's behalf.";
-    } else if (vcMaCashVal < 0) { errs.vcMaCash = "Must be ≥ 0";
-    if (vcMaCashVal > 0) {
+    } else if (vcMaCashVal < 0) { errs.vcMaCash = "Must be ≥ 0"; }
+    if (!errs.vcMaCash && vcMaCashVal > 0) {
       const bhsForMa = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (Number(inp.currentYear)||2026) - 2026)));
       const maHead = Math.max(0, bhsForMa - (Number(inp.maBalance)||0));
       if (vcMaCashVal > maHead) errs.vcMaCash = `Exceeds BHS headroom ($${maHead.toLocaleString()}). Engine auto-caps.`;
@@ -1737,46 +1777,8 @@ export default function App() {
   const isUnder16 = (Number(inputs.currentAge) || 0) < 16;   // CPF minor gate: cash top-ups require age 16+
   const isSelfEmployed = inputs.isSelfEmployed === true;
 
-  // Frequency badge — shows RECURRING or ONE-TIME inline next to field labels
-  // FreqToggle — interactive toggle replacing static FreqBadge.
-  // freqKey: key in inputs (e.g. "vc3aFreq"). type="one-time" = non-toggleable badge.
-  const FreqToggle = ({ freqKey, type }) => {
-    if (type === "one-time") {
-      return (
-        <span style={{ marginLeft: 6, padding: "1px 5px", borderRadius: 3, fontSize: 8, fontWeight: 800,
-          letterSpacing: "0.04em", verticalAlign: "middle",
-          background: "rgba(251,191,36,0.15)", color: "#fbbf24",
-          border: "1px solid rgba(251,191,36,0.3)" }}>ONE-TIME</span>
-      );
-    }
-    const current = inputs[freqKey] || "annual";
-    const isAnnual = current === "annual"; // 'annual' is the stored value — label shows "Recurring"
-    const btnBase = { fontSize: 8, fontWeight: 800, padding: "1px 6px", border: "none", cursor: "pointer", letterSpacing: "0.04em", lineHeight: 1.6 };
-    // onPointerDown fires immediately on first touch (no 300ms delay) — critical for
-    // mobile responsiveness. onClick is kept as fallback for mouse/keyboard.
-    const makeHandler = (val) => (e) => {
-      e.stopPropagation();
-      setInputs(p => ({ ...p, [freqKey]: val }));
-    };
-    return (
-      <span className="freq-toggle-wrap" onClick={e => e.stopPropagation()} style={{ display: "inline-flex", marginLeft: 6, borderRadius: 3, overflow: "hidden", border: `1px solid ${isAnnual ? "rgba(16,185,129,0.35)" : "rgba(251,191,36,0.35)"}`, verticalAlign: "middle", flexShrink: 0 }}>
-        <button
-          type="button"
-          onClick={makeHandler("annual")}
-          style={{ ...btnBase, background: isAnnual ? "rgba(16,185,129,0.25)" : "transparent", color: isAnnual ? "#34d399" : "var(--text-subtle)" }}>
-          Recurring
-        </button>
-        <button
-          type="button"
-          onClick={makeHandler("one-time")}
-          style={{ ...btnBase, background: !isAnnual ? "rgba(251,191,36,0.25)" : "transparent", color: !isAnnual ? "#fbbf24" : "var(--text-subtle)", borderLeft: "1px solid var(--border-subtle)" }}>
-          One-Time
-        </button>
-      </span>
-    );
-  };
-  // Keep FreqBadge as alias for backward compatibility (non-toggleable one-time badges)
-  const FreqBadge = ({ type }) => <FreqToggle type={type} />;
+  // FreqToggle is now a top-level component (defined before App) — receives inputs+setInputs as props.
+  // This prevents it from being recreated on every App render, which was causing sidebar section flicker.
   // SEP has no mandatory contributions → full $37,740 VC3A available
   const currentAge_ui = Number(inputs.currentAge) || 35;
   const nti_ui = Number(inputs.netTradeIncome) || 0;
@@ -4898,7 +4900,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* VC3A — single cash lump-sum + read-only breakdown */}
                   <div>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: isVcOverLimit ? "#fb923c" : "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      VC3A – Cash Lump Sum <FreqToggle freqKey="vc3aFreq" />
+                      VC3A – Cash Lump Sum <FreqToggle freqKey="vc3aFreq" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-vc3a" text="Voluntary Contribution to 3 Accounts — cash only. Auto-split across OA/SA/MA using your age-band allocation rates. Counts toward the $37,740 Annual Limit. No tax relief for employees." />
                     </label>
                     <input type="text" inputMode="decimal" name="vc3aCash" value={inputs.vc3aCash} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -4941,7 +4943,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* RSTU */}
                   <div>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      RSTU – {is55Plus ? "RA" : "SA"} Cash Top-up <FreqToggle freqKey="vcSaFreq" />
+                      RSTU – {is55Plus ? "RA" : "SA"} Cash Top-up <FreqToggle freqKey="vcSaFreq" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-rstu" text={`Retirement Sum Topping-Up Scheme — cash top-up to your ${is55Plus ? "RA" : "SA"} directly (not split across accounts). Eligible for up to $8,000/yr tax relief (own account) + $8,000 for loved ones. Capped at FRS (SA) or ERS (RA). NOT counted in Annual Limit.`} />
                     </label>
                     <input type="text" inputMode="decimal" name="vcSaTopup" value={inputs.vcSaTopup} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -4956,7 +4958,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* VCMA — Cash Top-up to MA (moved directly after RSTU per docx #5) */}
                   <div>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      VCMA – Cash Top-up to MA <FreqToggle freqKey="vcMaFreq" />
+                      VCMA – Cash Top-up to MA <FreqToggle freqKey="vcMaFreq" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-vcmacash" text="Voluntary Cash MediSave Top-up (VCMA) — direct annual cash deposit to your own MA. Credited each year, capped at the Basic Healthcare Sum (BHS, $79,000 in 2026). Not subject to the $37,740 Annual Limit. If you are eligible for MMSS (SC, age 55–70, MA below ½ BHS, income ≤ $4,000/mo), enter the amount you personally contribute here and the matching govt grant in the MMSS Grant field." />
                     </label>
                     {(() => {
@@ -4987,7 +4989,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* Housing Refund (VHR) */}
                   <div>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      Housing Refund – VHR (to OA) <FreqToggle freqKey="vcVhrFreq" />
+                      Housing Refund – VHR (to OA) <FreqToggle freqKey="vcVhrFreq" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-vhr" text="Voluntary Housing Refund: cash returned to OA to offset CPF used for housing. Credited to OA. NOT counted in Annual Limit." />
                     </label>
                     <input type="text" inputMode="decimal" name="vcVhr" value={inputs.vcVhr} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Voluntary housing refund" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -4996,7 +4998,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* Gov grants */}
                   <div>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      Gov Grants (to {is55Plus ? "RA" : "SA"}) <FreqToggle freqKey="govGrantFreq" />
+                      Gov Grants (to {is55Plus ? "RA" : "SA"}) <FreqToggle freqKey="govGrantFreq" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-govgrant" text="Government grants credited to SA (pre-55) or RA (post-55). Tracked separately for the 20% RA transfer base calculation." />
                     </label>
                     <input type="text" inputMode="decimal" name="annualGovGrant" value={inputs.annualGovGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual government grant" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -5005,7 +5007,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* MRSS — SC only */}
                   <div style={{ opacity: (inputs.citizenStatus || 'SC') === 'PR' ? 0.45 : 1 }}>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      MRSS Grant (to RA) <FreqToggle freqKey="mrssFreq" />
+                      MRSS Grant (to RA) <FreqToggle freqKey="mrssFreq" inputs={inputs} setInputs={setInputs} />
                       <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#34d399", background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.04em" }}>SC ONLY</span>
                       <TooltipBox id="t-mrss" text="Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $2,000/yr (lifetime cap $20,000) for Singapore Citizens aged 55 and above with RA below the Basic Retirement Sum (BRS). SC only — PRs are not eligible. No age cap of 70. Credited to RA. Engine enforces the $20,000 lifetime cap automatically." />
                     </label>
@@ -5027,7 +5029,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* MMSS — SC only */}
                   <div style={{ opacity: (inputs.citizenStatus || 'SC') === 'PR' ? 0.45 : 1 }}>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      MMSS Grant (to MA) <FreqToggle freqKey="mmssFreq" />
+                      MMSS Grant (to MA) <FreqToggle freqKey="mmssFreq" inputs={inputs} setInputs={setInputs} />
                       <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#34d399", background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.04em" }}>SC ONLY</span>
                       <TooltipBox id="t-mmss" text="Matched MediSave Scheme (from Jan 2026): Govt matches voluntary MA cash top-ups (VCMA) dollar-for-dollar up to $1,000/yr for Singapore Citizens aged 55–70 with MA below half of BHS (~$39,500 in 2026) and monthly income ≤ $4,000. SC only — PRs are not eligible. Enter your own top-up in VCMA above; enter the matching govt grant here. No tax relief on top-ups attracting MMSS match. Engine enforces the age 55–70 window and MA < half-BHS rule automatically." />
                     </label>
@@ -5071,7 +5073,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     return (
                       <div>
                         <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                          WIS – Workfare Supplement <FreqToggle freqKey="wisFreq" />
+                          WIS – Workfare Supplement <FreqToggle freqKey="wisFreq" inputs={inputs} setInputs={setInputs} />
                           <TooltipBox id="t-wis" text="Workfare Income Supplement (WIS): Enter your total annual WIS award. CPF portion is modelled: Employees — 60% to CPF (OA/SA/MA) + 40% cash paid separately to you. SEPs — 90% to MA (BHS-capped) + 10% cash. The cash portion (shown below) is not included in CPF projection but forms part of your real income. Auto-assessed by CPF Board — no application needed." />
                         </label>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -5138,7 +5140,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(244,63,94,0.04)", border: "1px solid rgba(244,63,94,0.18)" }}>
                       <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
-                        CPFIS – OA Invested <FreqToggle freqKey="cpfisOaFreq" />
+                        CPFIS – OA Invested <FreqToggle freqKey="cpfisOaFreq" inputs={inputs} setInputs={setInputs} />
                         <TooltipBox id="t-cpfis-oa" text="CPF Investment Scheme (OA): Only OA savings ABOVE $20,000 are investible — the first $20k must always remain in OA. Investment returns are NOT modelled — only the annual outflow from OA is applied. Age 18+. Complete CPFIS SAQ first." />
                       </label>
                       {(() => {
@@ -5172,7 +5174,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                     <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(244,63,94,0.04)", border: "1px solid rgba(244,63,94,0.18)" }}>
                       <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
-                        CPFIS – SA Invested <FreqToggle freqKey="cpfisSaFreq" />
+                        CPFIS – SA Invested <FreqToggle freqKey="cpfisSaFreq" inputs={inputs} setInputs={setInputs} />
                         <TooltipBox id="t-cpfis-sa" text="CPF Investment Scheme (SA): Only SA savings ABOVE $40,000 are investible. SA CPFIS is only available before age 55 — SA closes at 55 (merges into RA) and cannot be invested via CPFIS after that. Investment returns are NOT modelled — only the annual outflow from SA is applied." />
                       </label>
                       {(() => {
@@ -5212,7 +5214,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* OA Withdrawal (from age 55) */}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.15)" }}>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
-                      OA Lump Sum Withdrawal (from age 55) <FreqToggle freqKey="oaWithdrawalFreq" />
+                      OA Lump Sum Withdrawal (from age 55) <FreqToggle freqKey="oaWithdrawalFreq" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-oawithdraw" text="From age 55, after SA closes, you may withdraw OA savings above the BRS ($110,200). Withdrawn from OA permanently. For Property Pledge withdrawals use the Pledge RA Withdrawal fields in the Property & Timelines panel." />
                     </label>
                     <input type="text" inputMode="decimal" name="oaWithdrawalAt55" value={inputs.oaWithdrawalAt55} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="OA lump sum withdrawal from age 55" style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -5237,7 +5239,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* OA → MA */}
                   <div>
                     <label style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: inputErrors.oaToMaTransfer ? "#fb923c" : "#fbbf24", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>OA → MA Transfer</span> <FreqToggle freqKey="oaToMaFreq" />
+                      <span>OA → MA Transfer</span> <FreqToggle freqKey="oaToMaFreq" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-oatoma" text="CPF policy: OA→MA requires age 55+. You must have set aside FRS, or BRS if you own a property with sufficient lease. For self: internal move (OA ↓, MA ↑). For loved one (spouse/parent/sibling/grandparent): funds leave your OA permanently as an outflow — your MA does not increase." />
                     </label>
                     {/* Age gate warning */}
@@ -5303,7 +5305,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* OA → SA (pre-55) / OA → RA (55 and above) */}
                   <div>
                     <label style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: inputErrors.oaToSaTransfer ? "#fb923c" : "#fbbf24", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>{is55Plus ? "OA → RA Transfer" : "OA → SA Transfer"}</span> <FreqToggle freqKey="oaToSaFreq" />
+                      <span>{is55Plus ? "OA → RA Transfer" : "OA → SA Transfer"}</span> <FreqToggle freqKey="oaToSaFreq" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-oatosa" text={is55Plus
                         ? "Transfer OA savings to your RA (or a loved one's RA) to earn 4% instead of 2.5%. Available at age 55 and above. For Self: capped at ERS ($440,800) in RA. Irreversible. No tax relief. For Loved One: OA is simply an outflow — their account is not tracked here."
                         : "Transfer OA savings to your SA (or a loved one's SA) to earn 4% instead of 2.5%. Only before age 55. For Self: capped at FRS ($220,400) in SA. Irreversible. No tax relief. For Loved One: OA is simply an outflow — their SA is not tracked here."
@@ -5410,7 +5412,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* Housing loan */}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(96,165,250,0.15)" }}>
                     <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", marginBottom: 4 }}>
-                      Housing Loan — OA Outflow ($/yr) <FreqToggle freqKey="housingFreq" />
+                      Housing Loan — OA Outflow ($/yr) <FreqToggle freqKey="housingFreq" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-housing-prop" text="Annual OA deduction for mortgage repayment. Stops at Housing Stop Age. Tracked for CPF refund on property sale." />
                     </label>
                     <input type="text" inputMode="decimal" name="housingOutflow" value={inputs.housingOutflow} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual housing loan outflow" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.housingOutflow ? "#f87171" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
