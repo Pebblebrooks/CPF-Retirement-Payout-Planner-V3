@@ -3833,65 +3833,146 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --mc-total-color: #ffffff;
         }
         .theme-light {
-          --bg-base: #f0f4f8;
-          --bg-panel: #ffffff;
-          --bg-input: #e4eaf0;
-          --bg-muted: rgba(240,244,248,0.92);
-          --bg-panel-muted: rgba(255,255,255,0.85);
-          --tooltip-bg: rgba(255, 255, 255, 0.99);
-          --tooltip-text: #0f172a;
-          --tooltip-border: rgba(30,41,59,0.18);
-          --tooltip-label: #475569;
-          --border-subtle: #c4cdd8;
-          --border-strong: #8a9bb0;
-          --text-main: #1e293b;
-          --text-bright: #0a0f1a;
-          --text-highlight: #1e3a5f;
-          --text-muted: #475569;
-          --text-subtle: #7a8fa8;
-          --header-bg: rgba(255,255,255,0.97);
-          --chart-grid: #dde4ed;
-          --chart-text: #475569;
-          /* Hero panel */
-          --hero-left-bg: #dce6f0;
-          --hero-right-bg: #f5f8fc;
-          --hero-border: #b8c8d8;
-          --hero-text: #0f1e30;
-          --hero-label: rgba(15,30,48,0.55);
-          --hero-card-bg: rgba(15,30,48,0.06);
-          --hero-acct-bg: rgba(15,30,48,0.04);
-          --hero-acct-border: rgba(15,30,48,0.12);
-          --hero-ring-bg: rgba(15,30,48,0.1);
-          --hero-divider: rgba(15,30,48,0.15);
-          --hero-arrow: #1e3a5f;
-          /* Shadows & interactive */
-          --shadow-modal: 0 25px 50px -12px rgba(0,0,0,0.18);
-          --shadow-panel: 0 2px 6px rgba(0,0,0,0.08);
-          --shadow-sticky: 2px 0 4px rgba(0,0,0,0.07);
-          --shadow-mobile-menu: 0 6px 18px rgba(0,0,0,0.12);
-          --shadow-kpi: 0 1px 3px rgba(0,0,0,0.08);
-          --chart-cursor: rgba(30,41,59,0.18);
-          --tooltip-border-inline: rgba(30,41,59,0.2);
-          --tooltip-shadow-inline: 0 8px 24px rgba(0,0,0,0.14);
-          --code-bg: #f0f4f8;
-          --code-text: #1e3a5f;
+          /* ── Backgrounds: warm slate-grey base, off-white panels — no blinding white ── */
+          --bg-base: #e4eaf2;
+          --bg-panel: #f2f5f9;
+          --bg-input: #d8e0eb;
+          --bg-muted: rgba(228,234,242,0.96);
+          --bg-panel-muted: rgba(242,245,249,0.92);
+          --tooltip-bg: rgba(242,245,249,0.99);
+          --tooltip-text: #0d1520;
+          --tooltip-border: rgba(20,40,70,0.22);
+          --tooltip-label: #334d6b;
+          /* ── Borders: clearly visible without being harsh ── */
+          --border-subtle: #adbcce;
+          --border-strong: #6e87a2;
+          /* ── Text: all levels darkened for WCAG AA minimum ── */
+          --text-main: #162033;
+          --text-bright: #08111e;
+          --text-highlight: #0d2a4a;
+          --text-muted: #2e4560;          /* was #475569 — 40% darker */
+          --text-subtle: #4a6480;          /* was #7a8fa8 — 35% darker */
+          --header-bg: rgba(236,241,248,0.98);
+          /* ── Charts: readable gridlines and labels ── */
+          --chart-grid: #c8d4e2;
+          --chart-text: #2e4560;
+          /* ── Hero / KPI panel ── */
+          --hero-left-bg: #ccd9e8;
+          --hero-right-bg: #e8eef6;
+          --hero-border: #a8bcce;
+          --hero-text: #0a1c2e;
+          --hero-label: rgba(10,28,46,0.65);
+          --hero-card-bg: rgba(10,28,46,0.07);
+          --hero-acct-bg: rgba(10,28,46,0.05);
+          --hero-acct-border: rgba(10,28,46,0.16);
+          --hero-ring-bg: rgba(10,28,46,0.12);
+          --hero-divider: rgba(10,28,46,0.18);
+          --hero-arrow: #0d2a4a;
+          /* ── Shadows & interactive ── */
+          --shadow-modal: 0 25px 50px -12px rgba(0,0,0,0.22);
+          --shadow-panel: 0 2px 8px rgba(0,0,0,0.10);
+          --shadow-sticky: 2px 0 5px rgba(0,0,0,0.09);
+          --shadow-mobile-menu: 0 6px 18px rgba(0,0,0,0.14);
+          --shadow-kpi: 0 1px 4px rgba(0,0,0,0.10);
+          --chart-cursor: rgba(20,40,70,0.20);
+          --tooltip-border-inline: rgba(20,40,70,0.22);
+          --tooltip-shadow-inline: 0 8px 24px rgba(0,0,0,0.16);
+          --code-bg: #e4eaf2;
+          --code-text: #0d2a4a;
           --share-url-color: #065f46;
-          --mc-total-border: rgba(30,41,59,0.15);
-          --mc-total-color: #0f172a;
+          --mc-total-border: rgba(20,40,70,0.18);
+          --mc-total-color: #08111e;
         }
-        /* Light mode specific overrides */
+        /* ── Light mode specific overrides ── */
+
+        /* Sidebar section headers — stronger gradient + crisper border */
         .theme-light .sidebar-section-hdr {
-          background: linear-gradient(135deg, #dce6f0 0%, #e8f0f8 100%) !important;
-          border-color: #b8c8d8 !important;
+          background: linear-gradient(135deg, #ccd9e8 0%, #d8e4f0 100%) !important;
+          border-color: #a8bcce !important;
         }
+
+        /* Input & select text — full darkness */
         .theme-light input[type="number"],
         .theme-light input[type="text"],
         .theme-light select {
-          color: #1e293b !important;
+          color: #162033 !important;
+          background: #d8e0eb !important;
         }
         .theme-light input[type="number"]::placeholder,
         .theme-light input[type="text"]::placeholder {
-          color: #7a8fa8 !important;
+          color: #4a6480 !important;
+        }
+
+        /* Table column headers — the most complained-about readability gap */
+        .theme-light table thead th {
+          color: #162033 !important;
+          font-weight: 800 !important;
+          background: #d4dde9 !important;
+        }
+        /* Sticky age column in ledger/projection */
+        .theme-light table thead th:first-child {
+          background: #d4dde9 !important;
+        }
+
+        /* Table body rows: stronger alternating stripe */
+        .theme-light table tbody tr:nth-child(even) {
+          background: rgba(180,198,220,0.18) !important;
+        }
+        .theme-light table tbody td {
+          color: #1e3350;
+        }
+
+        /* Nav/tab bar buttons: readable in light bg context */
+        .theme-light .cpf-nav-btn {
+          color: #2e4560 !important;
+        }
+        .theme-light .cpf-nav-btn.active {
+          color: #0d2a4a !important;
+          font-weight: 800 !important;
+        }
+
+        /* Sub-tab toggles (Projection Table / Cashflow Ledger) */
+        .theme-light button[style*="borderRadius: 20"] {
+          border-color: #6e87a2 !important;
+        }
+
+        /* KPI strip — inactive plan values should read as valid, not greyed out */
+        .theme-light .kpi-inactive-val {
+          color: #2e4560 !important;
+        }
+
+        /* Panel/card borders in main content */
+        .theme-light .panel-card {
+          border-color: #adbcce !important;
+          background: #f2f5f9 !important;
+        }
+
+        /* Lifetime Summary card labels */
+        .theme-light .lifetime-label {
+          color: #2e4560 !important;
+          font-size: 10px !important;
+        }
+
+        /* Chart legend text */
+        .theme-light .recharts-legend-item-text {
+          color: #2e4560 !important;
+          font-weight: 600 !important;
+        }
+        .theme-light .recharts-cartesian-axis-tick-value {
+          fill: #2e4560 !important;
+        }
+
+        /* Sidebar gap alert box */
+        .theme-light .gap-alert-box {
+          background: rgba(254,243,199,0.85) !important;
+          border-color: #d4a017 !important;
+        }
+
+        /* Bottom badge pills */
+        .theme-light .info-badge {
+          background: #d8e0eb !important;
+          color: #162033 !important;
+          border-color: #adbcce !important;
         }
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
