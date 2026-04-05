@@ -1248,7 +1248,7 @@ export const TooltipBox = ({ id, text }) => {
         style={{ width: 14, height: 14, display: "inline-block", verticalAlign: "middle", color: isOpen ? "#34d399" : "var(--text-muted)", transition: "color 0.15s" }}
       />
       {isOpen && rect && createPortal(
-        <span style={{ position: "fixed", zIndex: 999999, top: rect.top - 8, left: rect.left + (rect.width / 2), transform: "translate(-50%, -100%)", width: 280, padding: "10px 12px", background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", color: "var(--tooltip-text)", fontSize: 11, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.15)", lineHeight: 1.5, display: "block", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
+        <span style={{ position: "fixed", zIndex: 999999, top: rect.top - 8, left: rect.left + (rect.width / 2), transform: "translate(-50%, -100%)", width: 280, padding: "10px 12px", background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", color: "var(--tooltip-text)", fontSize: 11, borderRadius: 8, boxShadow: "var(--tooltip-shadow-inline)", border: "1px solid var(--tooltip-border-inline)", lineHeight: 1.5, display: "block", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
           {text}
           <span style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: "var(--tooltip-bg) transparent transparent transparent" }} />
         </span>,
@@ -3619,39 +3619,81 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --hero-ring-bg: rgba(255,255,255,0.1);
           --hero-divider: rgba(255,255,255,0.15);
           --hero-arrow: white;
+          /* Shadows & interactive */
+          --shadow-modal: 0 25px 50px -12px rgba(0,0,0,0.75);
+          --shadow-panel: 0 4px 8px rgba(0,0,0,0.35);
+          --shadow-sticky: 2px 0 6px rgba(0,0,0,0.35);
+          --shadow-mobile-menu: 0 8px 24px rgba(0,0,0,0.4);
+          --shadow-kpi: 0 2px 4px rgba(0,0,0,0.25);
+          --chart-cursor: rgba(255,255,255,0.2);
+          --tooltip-border-inline: rgba(255,255,255,0.15);
+          --tooltip-shadow-inline: 0 8px 24px rgba(0,0,0,0.65);
+          --code-bg: #060d1f;
+          --code-text: #c8d8f0;
+          --share-url-color: #6ee7b7;
+          --mc-total-border: rgba(255,255,255,0.12);
+          --mc-total-color: #ffffff;
         }
         .theme-light {
-          --bg-base: #f4f7f5;
+          --bg-base: #f0f4f8;
           --bg-panel: #ffffff;
-          --bg-input: #e9ecef;
-          --bg-muted: rgba(244,247,245,0.9);
-          --bg-panel-muted: rgba(255,255,255,0.8);
-          --tooltip-bg: rgba(255, 255, 255, 0.98);
+          --bg-input: #e4eaf0;
+          --bg-muted: rgba(240,244,248,0.92);
+          --bg-panel-muted: rgba(255,255,255,0.85);
+          --tooltip-bg: rgba(255, 255, 255, 0.99);
           --tooltip-text: #0f172a;
           --tooltip-border: rgba(30,41,59,0.18);
-          --tooltip-label: #64748b;
-          --border-subtle: #cbd5e1;
-          --border-strong: #94a3b8;
-          --text-main: #334155;
-          --text-bright: #0f172a;
-          --text-highlight: #1e293b;
-          --text-muted: #64748b;
-          --text-subtle: #94a3b8;
+          --tooltip-label: #475569;
+          --border-subtle: #c4cdd8;
+          --border-strong: #8a9bb0;
+          --text-main: #1e293b;
+          --text-bright: #0a0f1a;
+          --text-highlight: #1e3a5f;
+          --text-muted: #475569;
+          --text-subtle: #7a8fa8;
           --header-bg: rgba(255,255,255,0.97);
-          --chart-grid: #e2e8f0;
-          --chart-text: #64748b;
+          --chart-grid: #dde4ed;
+          --chart-text: #475569;
           /* Hero panel */
-          --hero-left-bg: #e2e8f0;
-          --hero-right-bg: #f8fafc;
-          --hero-border: #cbd5e1;
-          --hero-text: #1e293b;
-          --hero-label: rgba(30,41,59,0.55);
-          --hero-card-bg: rgba(30,41,59,0.06);
-          --hero-acct-bg: rgba(30,41,59,0.04);
-          --hero-acct-border: rgba(30,41,59,0.1);
-          --hero-ring-bg: rgba(30,41,59,0.12);
-          --hero-divider: rgba(30,41,59,0.15);
-          --hero-arrow: #334155;
+          --hero-left-bg: #dce6f0;
+          --hero-right-bg: #f5f8fc;
+          --hero-border: #b8c8d8;
+          --hero-text: #0f1e30;
+          --hero-label: rgba(15,30,48,0.55);
+          --hero-card-bg: rgba(15,30,48,0.06);
+          --hero-acct-bg: rgba(15,30,48,0.04);
+          --hero-acct-border: rgba(15,30,48,0.12);
+          --hero-ring-bg: rgba(15,30,48,0.1);
+          --hero-divider: rgba(15,30,48,0.15);
+          --hero-arrow: #1e3a5f;
+          /* Shadows & interactive */
+          --shadow-modal: 0 25px 50px -12px rgba(0,0,0,0.18);
+          --shadow-panel: 0 2px 6px rgba(0,0,0,0.08);
+          --shadow-sticky: 2px 0 4px rgba(0,0,0,0.07);
+          --shadow-mobile-menu: 0 6px 18px rgba(0,0,0,0.12);
+          --shadow-kpi: 0 1px 3px rgba(0,0,0,0.08);
+          --chart-cursor: rgba(30,41,59,0.18);
+          --tooltip-border-inline: rgba(30,41,59,0.2);
+          --tooltip-shadow-inline: 0 8px 24px rgba(0,0,0,0.14);
+          --code-bg: #f0f4f8;
+          --code-text: #1e3a5f;
+          --share-url-color: #065f46;
+          --mc-total-border: rgba(30,41,59,0.15);
+          --mc-total-color: #0f172a;
+        }
+        /* Light mode specific overrides */
+        .theme-light .sidebar-section-hdr {
+          background: linear-gradient(135deg, #dce6f0 0%, #e8f0f8 100%) !important;
+          border-color: #b8c8d8 !important;
+        }
+        .theme-light input[type="number"],
+        .theme-light input[type="text"],
+        .theme-light select {
+          color: #1e293b !important;
+        }
+        .theme-light input[type="number"]::placeholder,
+        .theme-light input[type="text"]::placeholder {
+          color: #7a8fa8 !important;
         }
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
@@ -3836,7 +3878,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           header { position: fixed !important; top: 0; left: 0; right: 0; z-index: 50; }
           /* Push layout content below the fixed header (header is ~48px tall on mobile) */
           .cpf-mobile-top-spacer { display: block !important; height: 48px; flex-shrink: 0; }
-          .cpf-mobile-menu { display: flex !important; flex-direction: column; gap: 8px; position: fixed; top: 48px; right: 0; left: 0; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); padding: 12px 14px; z-index: 49; box-shadow: 0 8px 24px rgba(0,0,0,0.3); max-height: calc(100dvh - 48px); overflow-y: auto; }
+          .cpf-mobile-menu { display: flex !important; flex-direction: column; gap: 8px; position: fixed; top: 48px; right: 0; left: 0; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); padding: 12px 14px; z-index: 49; box-shadow: var(--shadow-mobile-menu); max-height: calc(100dvh - 48px); overflow-y: auto; }
           .cpf-mobile-menu-row { display: flex; gap: 8px; flex-wrap: wrap; }
           .cpf-logo-text { font-size: 13px !important; }
           .cpf-logo-sub  { display: none !important; }
@@ -3874,7 +3916,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       {/* IN-APP CONFIRM DIALOG — replaces window.confirm (blocked in sandbox) */}
       {confirmModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.88)", backdropFilter: "blur(6px)", zIndex: 999999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 16, width: "100%", maxWidth: 400, padding: 28, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.7)" }}>
+          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 16, width: "100%", maxWidth: 400, padding: 28, boxShadow: "var(--shadow-modal)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
               <AlertTriangle style={{ width: 22, height: 22, color: "#f59e0b", flexShrink: 0 }} />
               <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>Confirm Action</h3>
@@ -3891,7 +3933,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       {/* SHARE CODE MODAL */}
       {showShareModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 20, width: "100%", maxWidth: 520, padding: 28, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)" }}>
+          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 20, width: "100%", maxWidth: 520, padding: 28, boxShadow: "var(--shadow-modal)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-bright)", display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
                 <Link style={{ width: 18, height: 18, color: "#60a5fa" }} />Share This Projection
@@ -3905,7 +3947,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* Profile Code */}
             <div style={{ marginBottom: 12 }}>
               <label style={{ display: "block", fontSize: 10, fontWeight: 800, color: "#10b981", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>📋 Your Encoded Profile Code</label>
-              <textarea readOnly value={shareUrl} rows={4} onFocus={e => e.target.select()} style={{ width: "100%", padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 10, color: "#6ee7b7", fontSize: 10, outline: "none", resize: "none", fontFamily: "monospace", boxSizing: "border-box", lineBreak: "anywhere" }} />
+              <textarea readOnly value={shareUrl} rows={4} onFocus={e => e.target.select()} style={{ width: "100%", padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 10, color: "var(--share-url-color)", fontSize: 10, outline: "none", resize: "none", fontFamily: "monospace", boxSizing: "border-box", lineBreak: "anywhere" }} />
             </div>
             <button onClick={executeCopy} style={{ width: "100%", padding: "11px", borderRadius: 12, background: "#10b981", color: "#020617", fontWeight: 800, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, marginBottom: 18 }}>
               <Copy style={{ width: 15, height: 15 }} />Copy Code to Clipboard
@@ -3967,7 +4009,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       {/* IN-APP EXPORT MODAL */}
       {exportModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.92)", backdropFilter: "blur(8px)", zIndex: 99998, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 20, width: "100%", maxWidth: exportModal.type === "pdf" ? "1040px" : "740px", maxHeight: "94vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.6)" }}>
+          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 20, width: "100%", maxWidth: exportModal.type === "pdf" ? "1040px" : "740px", maxHeight: "94vh", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-modal)" }}>
 
             {/* ── Header ── */}
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
@@ -4069,7 +4111,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <iframe id="pdf-preview-frame" srcDoc={exportModal.content} style={{ width: "100%", height: "100%", minHeight: 560, border: "none", background: "#fff" }} title="PDF Report Preview" />
               ) : (
                 <textarea id="export-modal-content" readOnly value={exportModal.content}
-                  style={{ width: "100%", height: "100%", minHeight: 420, padding: 12, background: "#060d1f", border: "1px solid var(--border-strong)", borderRadius: 10, color: "#c8d8f0", fontSize: 11, fontFamily: "monospace", resize: "none", outline: "none", lineHeight: 1.5, boxSizing: "border-box" }}
+                  style={{ width: "100%", height: "100%", minHeight: 420, padding: 12, background: "var(--code-bg)", border: "1px solid var(--border-strong)", borderRadius: 10, color: "var(--code-text)", fontSize: 11, fontFamily: "monospace", resize: "none", outline: "none", lineHeight: 1.5, boxSizing: "border-box" }}
                   onFocus={e => e.target.select()}
                 />
               )}
@@ -4117,7 +4159,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       )}
       {showWelcome && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, width: "100%", maxWidth: 640, height: "min(90vh,700px)", overflow: "hidden", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)", display: "flex", flexDirection: "column" }}>
+          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, width: "100%", maxWidth: 640, height: "min(90vh,700px)", overflow: "hidden", boxShadow: "var(--shadow-modal)", display: "flex", flexDirection: "column" }}>
             {/* Header */}
             <div className="cpf-welcome-header" style={{ padding: "12px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
@@ -6153,7 +6195,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         {/* Confidence badge comment cleaned up */}
         <section className="cpf-main-wrap" style={{ minWidth: 0, boxSizing: "border-box", width: "100%" }}>
           {/* Tabs + Persistent KPI Strip — sticky within the main scroll panel */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 0, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: "16px 16px 0 0", zIndex: 30, boxShadow: "0 4px 4px rgba(0,0,0,0.3)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: "16px 16px 0 0", zIndex: 30, boxShadow: "var(--shadow-panel)" }}>
             {/* Tab navigation */}
             <div className="cpf-tabs" role="tablist" aria-label="Dashboard sections" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "center", padding: "6px 6px 0", gap: 2, borderBottom: "1px solid var(--border-subtle)", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
               {[["welcome", "Welcome", Lightbulb, "#64748b"], ["summary", "Summary", PieChart, "#10b981"], ["strategy", "Strategy", Target, "#f43f5e"], ["accumulation", "Growth", BarChart3, "#3b82f6"], ["life", "LIFE", ShieldCheck, "#a855f7"], ["compare", "Compare", Split, "#f59e0b"], ["table", "Data Table", TableIcon, "#94a3b8"], ["notes", "Docs", BookOpen, "#60a5fa"]].map(([id, label, Icon, accent]) => (
@@ -6190,7 +6232,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 })().map(({ label, value, color, tip }, i) => (
                   <div key={i} title={tip || ""} style={{ padding: "16px 20px", borderRight: "1px solid var(--border-subtle)", flex: "1 1 0", minWidth: 100, textAlign: "center", boxSizing: "border-box", cursor: "help", background: i === 0 ? "rgba(96,165,250,0.08)" : i > 0 && i < 4 ? "rgba(16,185,129,0.04)" : "transparent" }}>
                     <div className="cpf-kpi-label" style={{ fontSize: 11, fontWeight: 800, color: i === 0 ? "#60a5fa" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
-                    <div className="cpf-kpi-value" style={{ fontSize: 22, fontWeight: 900, color, fontFamily: "monospace", textShadow: "0 2px 4px rgba(0,0,0,0.2)" }}>{value}</div>
+                    <div className="cpf-kpi-value" style={{ fontSize: 22, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)" }}>{value}</div>
                   </div>
                 ))}
               </div>
@@ -6960,7 +7002,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 <XAxis dataKey="age" type="number" domain={["dataMin", "dataMax"]} stroke="var(--chart-text)" fontSize={10} tickCount={8} />
                                 <YAxis tickFormatter={v => `$${v >= 1000000 ? (v / 1000000).toFixed(1) + "M" : v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={10} width={52} />
                                 <Tooltip
-                                  cursor={{ stroke: "rgba(255,255,255,0.2)", strokeWidth: 1, strokeDasharray: "4 3" }}
+                                  cursor={{ stroke: "var(--chart-cursor)", strokeWidth: 1, strokeDasharray: "4 3" }}
                                   wrapperStyle={{ pointerEvents: "none", zIndex: 100 }}
                                   content={({ active, payload, label }) => {
                                     if (!active || !payload?.length) return null;
@@ -6982,7 +7024,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                               <span style={{ color: wv != null ? "#e2e8f0" : "#64748b", fontFamily: "monospace", textAlign: "right" }}>{wv != null ? formatCurrency(wv) : "—"}</span>
                                             </>
                                           ))}
-                                          <span style={{ color: "#fff", fontWeight: 800, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>Total</span>
+                                          <span style={{ color: "var(--mc-total-color)", fontWeight: 800, borderTop: "1px solid var(--mc-total-border)", paddingTop: 4 }}>Total</span>
                                           <span style={{ color: "#3b82f6", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>{formatCurrency(base?.value ?? 0)}</span>
                                           <span style={{ color: wi?.value != null ? "#10b981" : "#64748b", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>{wi?.value != null ? formatCurrency(wi.value) : "—"}</span>
                                         </div>
@@ -6996,7 +7038,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                     );
                                   }}
                                 />
-                                <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={{ fontSize: 9, fontWeight: 600 }} />
+                                <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={{ fontSize: 9, fontWeight: 600, color: "var(--text-main)" }} />
                                 <Line isAnimationActive={false} type="monotone" dataKey="baseTotal" stroke="#3b82f6" strokeWidth={2} dot={false} name="Base" activeDot={{ r: 4, fill: "#3b82f6", stroke: "#fff", strokeWidth: 1.5 }} />
                                 <Line isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="#10b981" strokeWidth={2.5} dot={false} name={`What-If (PA:${effPA})`} activeDot={{ r: 4, fill: "#10b981", stroke: "#fff", strokeWidth: 1.5 }} />
                               </LineChart>
@@ -7073,7 +7115,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 9 }} />
                       <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "CPF Balance ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
                       <Tooltip contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 10, padding: "6px 8px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} labelStyle={{ fontSize: 10, color: "var(--tooltip-label)", marginBottom: 2 }} formatter={(v, n) => { if (n === "MC Band") return null; return [formatCurrency(v), n]; }} wrapperStyle={{ pointerEvents: "none" }} />
-                      <Legend verticalAlign="top" height={28} iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 600 }} />
+                      <Legend verticalAlign="top" height={28} iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 600, color: "var(--text-main)" }} />
                       {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="none" fill="#7c3aed" fillOpacity={0.12} name="MC Band" legendType="none" /><Area isAnimationActive={false} type="monotone" dataKey="mcP10" stroke="none" fill="var(--bg-base)" fillOpacity={1} name="" legendType="none" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
                       {milestones.filter(m => m.age <= Number(inputs.payoutAge)).map((m, idx) => {
                         const sc = m.type === "success" ? "#10b981" : m.type === "gold" ? "#f59e0b" : m.type === "warning" ? "#f97316" : "#ef4444";
@@ -7229,7 +7271,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 9 }} />
                       <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Amount ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
                       <Tooltip contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 10, padding: "6px 8px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} labelStyle={{ fontSize: 10, color: "var(--tooltip-label)", marginBottom: 2 }} formatter={v => formatCurrency(v)} wrapperStyle={{ pointerEvents: "none" }} />
-                      <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{ fontSize: 9, fontWeight: 600 }} />
+                      <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{ fontSize: 9, fontWeight: 600, color: "var(--text-main)" }} />
                       {viewMode === "total" && intersectionEscVsStd && <ReferenceLine x={intersectionEscVsStd} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Break-Even Age ${intersectionEscVsStd}`, fill: "#f59e0b", fontSize: 9, fontWeight: "bold" }} />}
                       {viewMode === "total" && intersectionStdVsBasic && <ReferenceLine x={intersectionStdVsBasic} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideBottomRight", value: `Std>Basic Age ${intersectionStdVsBasic}`, fill: "#3b82f6", fontSize: 9, fontWeight: "bold" }} />}
                       {viewMode === "payout" && intersectionEscPayVsStdPay && <ReferenceLine x={intersectionEscPayVsStdPay} stroke="#10b981" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std Pay Age ${intersectionEscPayVsStdPay}`, fill: "#10b981", fontSize: 9, fontWeight: "bold" }} />}
@@ -7402,7 +7444,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 10 }} />
                         <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Cumulative Total Yield", angle: -90, position: "insideLeft", offset: 10, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 10, padding: "6px 8px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} labelStyle={{ fontSize: 10, color: "var(--tooltip-label)", marginBottom: 2 }} formatter={(v, n) => [formatCurrency(v), n]} labelFormatter={v => `Age ${v}`} wrapperStyle={{ pointerEvents: "none" }} />
-                        <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 600 }} />
+                        <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 600, color: "var(--text-main)" }} />
                         <Line isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="#3b82f6" strokeWidth={3} dot={false} name={`Slot A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
                         <Line isAnimationActive={false} type="monotone" dataKey="yieldB" stroke="#f97316" strokeWidth={3} dot={false} name={`Slot B${scenarioLabelB ? `: ${scenarioLabelB}` : ""}`} />
                       </LineChart>
@@ -7470,7 +7512,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <tr style={{ background: "var(--bg-base)", borderBottom: "2px solid var(--border-strong)" }}>
                               {["Age", "Mandatory", "Voluntary", "Grants/WIS", "OA Int.", is55Plus ? "RA Int." : "SA Int.", "MA Int.", "▶ Total In", "Housing Out", "Medical Out", "OA Draw", "Edu Loan Out", "Loved One Out", "CPFIS Out", "▶ Total Out", "Net Flow"].map((h, i) => (
                                 <th key={h} style={{ padding: "6px 8px", textAlign: i === 0 ? "center" : "right", fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap",
-                                  ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--bg-base)", boxShadow: "2px 0 4px rgba(0,0,0,0.3)" } : {}) }}>{h}</th>
+                                  ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--bg-base)", boxShadow: "var(--shadow-sticky)" } : {}) }}>{h}</th>
                               ))}
                             </tr>
                           </thead>
@@ -7494,7 +7536,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               const net = totalIn - totalOut;
                               return (
                                 <tr key={row.age} style={{ borderBottom: "1px solid var(--border-subtle)", background: isPayout ? "rgba(16,185,129,0.08)" : i % 2 === 1 ? "rgba(255,255,255,0.01)" : "transparent" }}>
-                                  <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: isPayout ? 900 : 600, color: isPayout ? "#10b981" : "var(--text-highlight)", position: "sticky", left: 0, zIndex: 5, background: isPayout ? "rgba(16,185,129,0.12)" : "var(--bg-panel)", boxShadow: "2px 0 4px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{row.age}{isPayout ? " ★" : ""}</td>
+                                  <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: isPayout ? 900 : 600, color: isPayout ? "#10b981" : "var(--text-highlight)", position: "sticky", left: 0, zIndex: 5, background: isPayout ? "rgba(16,185,129,0.12)" : "var(--bg-panel)", boxShadow: "var(--shadow-sticky)", whiteSpace: "nowrap" }}>{row.age}{isPayout ? " ★" : ""}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#34d399" }}>{fc2(mandatory)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#6ee7b7" }}>{fc2(voluntary)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#a78bfa" }}>{fc2(grants)}</td>
@@ -7531,7 +7573,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               const net = totalIn - totalOut;
                               return (
                                 <tr style={{ borderTop: "2px solid var(--border-strong)", background: "var(--bg-panel)", fontWeight: 800 }}>
-                                  <td style={{ padding: "7px 8px", textAlign: "center", color: "var(--text-bright)", fontSize: 9, position: "sticky", left: 0, zIndex: 5, background: "var(--bg-panel)", boxShadow: "2px 0 4px rgba(0,0,0,0.2)", fontWeight: 800 }}>TOTAL</td>
+                                  <td style={{ padding: "7px 8px", textAlign: "center", color: "var(--text-bright)", fontSize: 9, position: "sticky", left: 0, zIndex: 5, background: "var(--bg-panel)", boxShadow: "var(--shadow-sticky)", fontWeight: 800 }}>TOTAL</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#34d399" }}>{fc3(t.mandatory)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#6ee7b7" }}>{fc3(t.voluntary)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#a78bfa" }}>{fc3(t.grants)}</td>
@@ -7647,7 +7689,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", `XIRR (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`].map((h, i) => (
                             <th key={h} style={{
                               padding: "10px 8px", textAlign: i === 0 ? "left" : "right", fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: i >= 12 ? "#60a5fa" : "var(--text-muted)", whiteSpace: "nowrap",
-                              ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--header-bg)", boxShadow: "2px 0 4px rgba(0,0,0,0.3)" } : {})
+                              ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--header-bg)", boxShadow: "var(--shadow-sticky)" } : {})
                             }}>{h}</th>
                           ))}
                         </tr>
@@ -7661,7 +7703,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           const rowBg = isPayoutAge ? "rgba(16,185,129,0.08)" : "transparent";
                           const c = (v, color = "var(--text-bright)") => <td style={{ padding: "7px 8px", textAlign: "right", color, whiteSpace: "nowrap" }}>{v != null ? formatCurrency(v) : "-"}</td>;
                           return (<tr key={row.age} style={{ borderBottom: "1px solid var(--border-subtle)", background: rowBg }}>
-                            <td style={{ padding: "7px 8px", fontWeight: 700, color: isPayoutAge ? "#34d399" : "var(--text-muted)", fontFamily: "system-ui", position: "sticky", left: 0, zIndex: 5, background: isPayoutAge ? "rgba(16,185,129,0.12)" : "var(--bg-panel)", boxShadow: "2px 0 4px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{row.age}</td>
+                            <td style={{ padding: "7px 8px", fontWeight: 700, color: isPayoutAge ? "#34d399" : "var(--text-muted)", fontFamily: "system-ui", position: "sticky", left: 0, zIndex: 5, background: isPayoutAge ? "rgba(16,185,129,0.12)" : "var(--bg-panel)", boxShadow: "var(--shadow-sticky)", whiteSpace: "nowrap" }}>{row.age}</td>
                             {c(baseRow.oa)}
                             {c(baseRow.ma)}
                             {c(raSaBal, "#34d399")}
@@ -8236,12 +8278,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <YAxis tickFormatter={v => `$${v >= 1000 ? (v / 1000).toFixed(1) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Monthly Income ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
                           <Tooltip
                             contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(6px)", border: "1px solid var(--tooltip-border)", borderRadius: 10, fontSize: 11, padding: "10px 14px" }}
-                            itemStyle={{ padding: "2px 0", color: "#fff" }}
-                            labelStyle={{ fontSize: 11, color: "#94a3b8", marginBottom: 6, fontWeight: 800 }}
+                            itemStyle={{ padding: "2px 0", color: "var(--tooltip-text)" }}
+                            labelStyle={{ fontSize: 11, color: "var(--tooltip-label)", marginBottom: 6, fontWeight: 800 }}
                             formatter={(v, n) => v > 0 ? [formatCurrency(v) + "/mo", n] : null}
                             wrapperStyle={{ pointerEvents: "none" }}
                           />
-                          <Legend verticalAlign="top" height={32} iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 600 }} />
+                          <Legend verticalAlign="top" height={32} iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 600, color: "var(--text-main)" }} />
                           {target > 0 && (
                             <ReferenceLine y={target} stroke="#f43f5e" strokeWidth={2} strokeDasharray="7 4"
                               label={{ position: "insideTopRight", value: `Target ${formatCurrency(target)}/mo`, fill: "#f43f5e", fontSize: 9, fontWeight: "bold" }} />
