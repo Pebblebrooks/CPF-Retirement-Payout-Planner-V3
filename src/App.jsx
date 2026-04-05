@@ -306,6 +306,13 @@ const DEFAULT_INPUTS = {
   govGrantFreq: 'annual', mrssFreq: 'annual', mmssFreq: 'annual', wisFreq: 'annual',
   cpfisOaFreq: 'annual', cpfisSaFreq: 'annual', housingFreq: 'annual',
   oaWithdrawalFreq: 'one-time', oaToMaFreq: 'annual', oaToSaFreq: 'annual',
+  // Duration for recurring fields (0 = indefinite/∞; N = apply for first N projection years from current age).
+  // Ignored when the paired *Freq is 'one-time' — one-time fields already fire only in year 1.
+  // SRS excluded — its stop is controlled precisely by srsContribStopAge instead.
+  vc3aDur: 0, vcSaDur: 0, vcMaDur: 0, vcVhrDur: 0,
+  govGrantDur: 0, mrssDur: 0, mmssDur: 0, wisDur: 0,
+  cpfisOaDur: 0, cpfisSaDur: 0, housingDur: 0,
+  oaToMaDur: 0, oaToSaDur: 0, oaEduLoanDur: 0,
   // PR tenure year — 1, 2, or 3+ (3 = full rates). Only shown/relevant when citizenStatus === 'PR'.
   prYear: 3,
   // PR rate type — 'GG' (Graduated Employer + Graduated Employee, default) or
@@ -436,6 +443,13 @@ const INPUT_LABELS = {
   prYear: "PR Tenure Year", citizenStatus: "Citizenship Status",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
+  // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
+  vc3aDur: "VC3A Duration (yrs)", vcSaDur: "RSTU Duration (yrs)", vcMaDur: "VCMA Duration (yrs)",
+  vcVhrDur: "VHR Duration (yrs)", govGrantDur: "Gov Grant Duration (yrs)",
+  mrssDur: "MRSS Duration (yrs)", mmssDur: "MMSS Duration (yrs)", wisDur: "WIS Duration (yrs)",
+  cpfisOaDur: "CPFIS OA Duration (yrs)", cpfisSaDur: "CPFIS SA Duration (yrs)",
+  housingDur: "Housing Duration (yrs)", oaToMaDur: "OA-MA Duration (yrs)",
+  oaToSaDur: "OA-SA Duration (yrs)", oaEduLoanDur: "OA Edu Loan Duration (yrs)",
 };
 
 // Alias used by the Compare tab — same labels, one source of truth
@@ -490,6 +504,21 @@ function runProjectionEngine(inputs, {
   const oaWithdrawalFreq = inputs.oaWithdrawalFreq || 'one-time';
   const oaToMaFreq    = inputs.oaToMaFreq    || 'annual';
   const oaToSaFreq    = inputs.oaToSaFreq    || 'annual';
+  // Duration limits for recurring fields (0 = indefinite; N = stop after N projection years from startAge)
+  const vc3aDur      = Number(inputs.vc3aDur)      || 0;
+  const vcSaDur      = Number(inputs.vcSaDur)      || 0;
+  const vcMaDur      = Number(inputs.vcMaDur)      || 0;
+  const vcVhrDur     = Number(inputs.vcVhrDur)     || 0;
+  const govGrantDur  = Number(inputs.govGrantDur)  || 0;
+  const mrssDur      = Number(inputs.mrssDur)      || 0;
+  const mmssDur      = Number(inputs.mmssDur)      || 0;
+  const wisDur       = Number(inputs.wisDur)       || 0;
+  const cpfisOaDur   = Number(inputs.cpfisOaDur)   || 0;
+  const cpfisSaDur   = Number(inputs.cpfisSaDur)   || 0;
+  const housingDur   = Number(inputs.housingDur)   || 0;
+  const oaToMaDur    = Number(inputs.oaToMaDur)    || 0;
+  const oaToSaDur    = Number(inputs.oaToSaDur)    || 0;
+  const oaEduLoanDur = Number(inputs.oaEduLoanDur) || 0;
   // Direct cash top-up to MA (any age, capped at BHS, not Annual Limit)
   const vcMaCash = Number(inputs.vcMaCash) || 0;
   const mrssGrant = Number(inputs.mrssGrant) || 0;
@@ -639,21 +668,25 @@ function runProjectionEngine(inputs, {
     let yearOaDrawOut = 0;
     let yearLovedOneOut = 0; // OA→MA/SA for loved one (true outflow)
 
-    // ── Frequency gating: 'one-time' fields only apply in the first projection year ──
+    // ── Frequency & duration gating ──────────────────────────────────────────────
+    // 'one-time' fields fire only in the first projection year.
+    // 'annual' fields with a duration (dur > 0) fire for the first dur years then stop.
+    // yearIdx is 0-based: 0 = current age, 1 = next year, etc.
     const isFirstYear = age === startAge;
-    const effVc3aFreq    = vc3aFreq     === 'one-time' && !isFirstYear ? 0 : 1;
-    const effVcSaFreq    = vcSaFreq     === 'one-time' && !isFirstYear ? 0 : 1;
-    const effVcMaFreq    = vcMaFreq     === 'one-time' && !isFirstYear ? 0 : 1;
-    const effVcVhrFreq   = vcVhrFreq    === 'one-time' && !isFirstYear ? 0 : 1;
-    const effGovGrantFreq= govGrantFreq === 'one-time' && !isFirstYear ? 0 : 1;
-    const effMrssFreq    = mrssFreq     === 'one-time' && !isFirstYear ? 0 : 1;
-    const effMmssFreq    = mmssFreq     === 'one-time' && !isFirstYear ? 0 : 1;
-    const effWisFreq     = wisFreq      === 'one-time' && !isFirstYear ? 0 : 1;
-    const effCpfisOaFreq  = cpfisOaFreq  === 'one-time' && !isFirstYear ? 0 : 1;
-    const effCpfisSaFreq  = cpfisSaFreq  === 'one-time' && !isFirstYear ? 0 : 1;
-    const effHousingFreq  = housingFreq  === 'one-time' && !isFirstYear ? 0 : 1;
-    const effOaToMaFreq   = oaToMaFreq   === 'one-time' && !isFirstYear ? 0 : 1;
-    const effOaToSaFreq   = oaToSaFreq   === 'one-time' && !isFirstYear ? 0 : 1;
+    const yearIdx     = age - startAge;
+    const effVc3aFreq    = vc3aFreq     === 'one-time' && !isFirstYear ? 0 : (vc3aDur     > 0 && yearIdx >= vc3aDur)     ? 0 : 1;
+    const effVcSaFreq    = vcSaFreq     === 'one-time' && !isFirstYear ? 0 : (vcSaDur     > 0 && yearIdx >= vcSaDur)     ? 0 : 1;
+    const effVcMaFreq    = vcMaFreq     === 'one-time' && !isFirstYear ? 0 : (vcMaDur     > 0 && yearIdx >= vcMaDur)     ? 0 : 1;
+    const effVcVhrFreq   = vcVhrFreq    === 'one-time' && !isFirstYear ? 0 : (vcVhrDur    > 0 && yearIdx >= vcVhrDur)    ? 0 : 1;
+    const effGovGrantFreq= govGrantFreq === 'one-time' && !isFirstYear ? 0 : (govGrantDur > 0 && yearIdx >= govGrantDur) ? 0 : 1;
+    const effMrssFreq    = mrssFreq     === 'one-time' && !isFirstYear ? 0 : (mrssDur     > 0 && yearIdx >= mrssDur)     ? 0 : 1;
+    const effMmssFreq    = mmssFreq     === 'one-time' && !isFirstYear ? 0 : (mmssDur     > 0 && yearIdx >= mmssDur)     ? 0 : 1;
+    const effWisFreq     = wisFreq      === 'one-time' && !isFirstYear ? 0 : (wisDur      > 0 && yearIdx >= wisDur)      ? 0 : 1;
+    const effCpfisOaFreq  = cpfisOaFreq  === 'one-time' && !isFirstYear ? 0 : (cpfisOaDur  > 0 && yearIdx >= cpfisOaDur)  ? 0 : 1;
+    const effCpfisSaFreq  = cpfisSaFreq  === 'one-time' && !isFirstYear ? 0 : (cpfisSaDur  > 0 && yearIdx >= cpfisSaDur)  ? 0 : 1;
+    const effHousingFreq  = housingFreq  === 'one-time' && !isFirstYear ? 0 : (housingDur  > 0 && yearIdx >= housingDur)  ? 0 : 1;
+    const effOaToMaFreq   = oaToMaFreq   === 'one-time' && !isFirstYear ? 0 : (oaToMaDur   > 0 && yearIdx >= oaToMaDur)   ? 0 : 1;
+    const effOaToSaFreq   = oaToSaFreq   === 'one-time' && !isFirstYear ? 0 : (oaToSaDur   > 0 && yearIdx >= oaToSaDur)   ? 0 : 1;
 
     let yearCpfisOut = 0;    // CPFIS outflow from OA + SA this year
     let yearEduOut = 0;      // D1: OA Education Loan Scheme outflow this year
@@ -1181,7 +1214,7 @@ function runProjectionEngine(inputs, {
     //   From the lender's projection perspective this is a pure OA outflow — cash repayment
     //   back to OA is not modelled here (repayment occurs externally in cash).
     if (oaEduLoanAnnual > 0) {
-      const effEduFreq = oaEduLoanFreq === 'one-time' && !isFirstYear ? 0 : 1;
+      const effEduFreq = oaEduLoanFreq === 'one-time' && !isFirstYear ? 0 : (oaEduLoanDur > 0 && yearIdx >= oaEduLoanDur) ? 0 : 1;
       if (effEduFreq > 0) {
         const yrsSince2026_edu = Math.max(0, (baseYear + (age - startAge)) - 2026);
         const projFRS_edu = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, yrsSince2026_edu));
@@ -1306,7 +1339,14 @@ export const TooltipBox = ({ id, text }) => {
 // across renders. Defined inside App previously caused React to unmount/remount
 // every FreqToggle on each setInputs call, which could collapse sidebar sections.
 // All call sites pass inputs={inputs} setInputs={setInputs} explicitly.
-const FreqToggle = ({ freqKey, type, inputs, setInputs }) => {
+//
+// Props:
+//   freqKey  — key in inputs for 'annual' | 'one-time'
+//   durKey   — (optional) key in inputs for duration in years (0 = indefinite/∞).
+//              Only shown when freq is 'annual' and durKey is provided.
+//   type     — pass "one-time" to render a static ONE-TIME badge (no toggle)
+//   inputs, setInputs — passed from App
+const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
   if (type === "one-time") {
     return (
       <span style={{ marginLeft: 6, padding: "1px 5px", borderRadius: 3, fontSize: 8, fontWeight: 800,
@@ -1317,25 +1357,61 @@ const FreqToggle = ({ freqKey, type, inputs, setInputs }) => {
   }
   const current = (inputs && inputs[freqKey]) || "annual";
   const isAnnual = current === "annual";
+  const durVal = durKey ? (Number((inputs && inputs[durKey]) || 0)) : 0;
   const btnBase = { fontSize: 8, fontWeight: 800, padding: "1px 6px", border: "none", cursor: "pointer", letterSpacing: "0.04em", lineHeight: 1.6 };
   const makeHandler = (val) => (e) => {
     e.stopPropagation();
     if (setInputs) setInputs(p => ({ ...p, [freqKey]: val }));
   };
+  const handleDurChange = (e) => {
+    e.stopPropagation();
+    const raw = e.target.value.replace(/[^0-9]/g, "");
+    const v = raw === "" ? 0 : Math.min(99, Math.max(0, parseInt(raw, 10)));
+    if (setInputs) setInputs(p => ({ ...p, [durKey]: v }));
+  };
   return (
-    <span className="freq-toggle-wrap" onClick={e => e.stopPropagation()} style={{ display: "inline-flex", marginLeft: 6, borderRadius: 3, overflow: "hidden", border: `1px solid ${isAnnual ? "rgba(16,185,129,0.35)" : "rgba(251,191,36,0.35)"}`, verticalAlign: "middle", flexShrink: 0 }}>
-      <button
-        type="button"
-        onClick={makeHandler("annual")}
-        style={{ ...btnBase, background: isAnnual ? "rgba(16,185,129,0.25)" : "transparent", color: isAnnual ? "#34d399" : "var(--text-subtle)" }}>
-        Recurring
-      </button>
-      <button
-        type="button"
-        onClick={makeHandler("one-time")}
-        style={{ ...btnBase, background: !isAnnual ? "rgba(251,191,36,0.25)" : "transparent", color: !isAnnual ? "#fbbf24" : "var(--text-subtle)", borderLeft: "1px solid var(--border-subtle)" }}>
-        One-Time
-      </button>
+    <span className="freq-toggle-wrap" onClick={e => e.stopPropagation()}
+      style={{ display: "inline-flex", alignItems: "center", marginLeft: 6, verticalAlign: "middle", flexShrink: 0, gap: 0 }}>
+      {/* Freq toggle pill */}
+      <span style={{ display: "inline-flex", borderRadius: 3, overflow: "hidden", border: `1px solid ${isAnnual ? "rgba(16,185,129,0.35)" : "rgba(251,191,36,0.35)"}` }}>
+        <button
+          type="button"
+          onClick={makeHandler("annual")}
+          style={{ ...btnBase, background: isAnnual ? "rgba(16,185,129,0.25)" : "transparent", color: isAnnual ? "#34d399" : "var(--text-subtle)" }}>
+          Recurring
+        </button>
+        <button
+          type="button"
+          onClick={makeHandler("one-time")}
+          style={{ ...btnBase, background: !isAnnual ? "rgba(251,191,36,0.25)" : "transparent", color: !isAnnual ? "#fbbf24" : "var(--text-subtle)", borderLeft: "1px solid var(--border-subtle)" }}>
+          One-Time
+        </button>
+      </span>
+      {/* Duration input — only shown for Recurring + durKey provided */}
+      {isAnnual && durKey && (
+        <span style={{ display: "inline-flex", alignItems: "center", marginLeft: 4,
+          background: "rgba(14,165,233,0.08)", border: "1px solid rgba(14,165,233,0.25)",
+          borderRadius: 3, padding: "0 4px 0 5px", height: 18 }}
+          title="Number of years to apply this recurring contribution (0 or blank = indefinite ∞)">
+          <span style={{ fontSize: 7.5, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em", marginRight: 2 }}>for</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={durVal === 0 ? "" : durVal}
+            placeholder="∞"
+            onChange={handleDurChange}
+            onClick={e => e.stopPropagation()}
+            onFocus={e => { e.stopPropagation(); e.target.select(); }}
+            style={{
+              width: 20, fontSize: 8, fontWeight: 800, fontFamily: "monospace",
+              background: "transparent", border: "none", outline: "none",
+              color: durVal > 0 ? "#38bdf8" : "var(--text-subtle)",
+              textAlign: "center", padding: 0, lineHeight: 1
+            }}
+          />
+          <span style={{ fontSize: 7.5, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em" }}>yr{durVal !== 1 ? "s" : ""}</span>
+        </span>
+      )}
     </span>
   );
 };
@@ -1449,11 +1525,14 @@ export default function App() {
   const [showWisEligibility, setShowWisEligibility] = useState(false); // WIS eligibility panel toggle — must be top-level (Rules of Hooks)
 
   // Sidebar accordion — supports multiple open sections simultaneously
+  // All section IDs — used for expand-all default and expandAllSections helper
+  const ALL_SECTION_IDS = ["profile", "contribs", "topups", "outflows", "transfers", "property", "privateAssets"];
   const [openSections, setOpenSections] = useState(() => {
     try {
       const saved = sessionStorage.getItem('cpf_sections');
-      return saved ? new Set(JSON.parse(saved)) : new Set(); // all collapsed on first load
-    } catch { return new Set(); } // all collapsed on error
+      // Fresh session (no saved state): default to ALL sections open so the sidebar is immediately usable
+      return saved ? new Set(JSON.parse(saved)) : new Set(ALL_SECTION_IDS);
+    } catch { return new Set(ALL_SECTION_IDS); } // also default open on parse error
   });
   const toggleSection = (id) => setOpenSections(prev => {
     const next = new Set(prev);
@@ -1461,8 +1540,15 @@ export default function App() {
     try { sessionStorage.setItem('cpf_sections', JSON.stringify([...next])); } catch { }
     return next;
   });
-  const expandAllSections = () => setOpenSections(new Set(["profile", "contribs", "topups", "outflows", "transfers", "property", "privateAssets"]));
-  const collapseAllSections = () => setOpenSections(new Set());
+  const expandAllSections = () => {
+    const all = new Set(ALL_SECTION_IDS);
+    setOpenSections(all);
+    try { sessionStorage.setItem('cpf_sections', JSON.stringify(ALL_SECTION_IDS)); } catch { }
+  };
+  const collapseAllSections = () => {
+    setOpenSections(new Set());
+    try { sessionStorage.setItem('cpf_sections', JSON.stringify([])); } catch { }
+  };
 
   // Welcome Modal, Share Modal & Toast State
   const [showWelcome, setShowWelcome] = useState(false);
@@ -2426,6 +2512,71 @@ export default function App() {
     }
   };
 
+  const handleExportLedgerCSV = () => {
+    if (!displayAccumulation || displayAccumulation.length === 0) return;
+    const memberName = (inputs.name || "Member").replace(/[^a-zA-Z0-9]/g, "_");
+    const startAge = Number(inputs.currentAge) || 35;
+    const saRaLabel = (Number(inputs.currentAge) >= 55 || (Number(inputs.payoutAge) <= Number(inputs.currentAge))) ? "RA Interest" : "SA Interest";
+    const headers = [
+      "Age",
+      "Mandatory",
+      "Voluntary",
+      "Grants/WIS",
+      "OA Interest",
+      saRaLabel,
+      "MA Interest",
+      "Total Inflow",
+      "Housing Out",
+      "Medical Out",
+      "OA Draw",
+      "Edu Loan Out",
+      "Loved One Out",
+      "CPFIS Out",
+      "Total Outflow",
+      "Net Flow"
+    ];
+    // Accumulate totals for the TOTAL row
+    const totals = { mandatory:0, voluntary:0, grants:0, oaInt:0, saRaInt:0, maInt:0, housOut:0, medOut:0, oaDraw:0, eduOut:0, lovedOut:0, cpfisOut:0 };
+    const dataRows = displayAccumulation.map(row => {
+      const mandatory  = row.yearMandatory    || 0;
+      const voluntary  = row.yearVoluntary    || 0;
+      const grants     = row.yearGovGrants    || 0;
+      const oaInt      = row.yearOaInterest   || 0;
+      const saRaInt    = row.yearSaRaInterest || 0;
+      const maInt      = row.yearMaInterest   || 0;
+      const housOut    = row.yearHousingOut   || 0;
+      const medOut     = row.yearMedOut       || 0;
+      const oaDraw     = row.yearOaDrawOut    || 0;
+      const eduOut     = row.yearEduOut       || 0;
+      const lovedOut   = row.yearLovedOneOut  || 0;
+      const cpfisOut   = row.yearCpfisOut     || 0;
+      const totalIn    = mandatory + voluntary + grants + oaInt + saRaInt + maInt;
+      const totalOut   = housOut + medOut + oaDraw + eduOut + lovedOut + cpfisOut;
+      const net        = totalIn - totalOut;
+      totals.mandatory += mandatory; totals.voluntary += voluntary; totals.grants += grants;
+      totals.oaInt     += oaInt;     totals.saRaInt   += saRaInt;  totals.maInt  += maInt;
+      totals.housOut   += housOut;   totals.medOut    += medOut;   totals.oaDraw += oaDraw;
+      totals.eduOut    += eduOut;    totals.lovedOut  += lovedOut; totals.cpfisOut += cpfisOut;
+      return [row.age, mandatory, voluntary, grants, oaInt, saRaInt, maInt, totalIn, housOut, medOut, oaDraw, eduOut, lovedOut, cpfisOut, totalOut, net];
+    });
+    const totIn  = totals.mandatory + totals.voluntary + totals.grants + totals.oaInt + totals.saRaInt + totals.maInt;
+    const totOut = totals.housOut + totals.medOut + totals.oaDraw + totals.eduOut + totals.lovedOut + totals.cpfisOut;
+    const totNet = totIn - totOut;
+    const totalRow = ["TOTAL", totals.mandatory, totals.voluntary, totals.grants, totals.oaInt, totals.saRaInt, totals.maInt, totIn, totals.housOut, totals.medOut, totals.oaDraw, totals.eduOut, totals.lovedOut, totals.cpfisOut, totOut, totNet];
+    const csv = [headers, ...dataRows, totalRow].map(r => r.join(",")).join("\n");
+    const filename = `CPF_Cashflow_Ledger_${memberName}_Age${startAge}_to95.csv`;
+    try {
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+      showToast(`✓ Ledger CSV downloaded: ${filename}`);
+    } catch (e) {
+      setExportModal({ type: "csv", content: csv, filename });
+    }
+  };
+
   const handlePrintTable = () => {
     const memberName = inputs.name || "Member";
     const startAge = Number(inputs.currentAge) || 35;
@@ -2526,6 +2677,8 @@ export default function App() {
       vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType,
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, mrssFreq, mmssFreq, wisFreq,
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
+      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, mrssDur, mmssDur, wisDur,
+      cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur,
       dieWithZeroEnabled, dieWithZeroAge
     } = debouncedInputs;
     return JSON.stringify({
@@ -2551,6 +2704,8 @@ export default function App() {
       vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType,
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, mrssFreq, mmssFreq, wisFreq,
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
+      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, mrssDur, mmssDur, wisDur,
+      cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur,
       dieWithZeroEnabled, dieWithZeroAge
     });
   }, [debouncedInputs]);
@@ -5112,7 +5267,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* VC3A — single cash lump-sum + read-only breakdown */}
                   <div>
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: isVcOverLimit ? "#fb923c" : "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      VC3A – Cash Lump Sum <FreqToggle freqKey="vc3aFreq" inputs={inputs} setInputs={setInputs} />
+                      VC3A – Cash Lump Sum <FreqToggle freqKey="vc3aFreq" durKey="vc3aDur" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-vc3a" text="Voluntary Contribution to 3 Accounts — cash only. Auto-split across OA/SA/MA using your age-band allocation rates. Counts toward the $37,740 Annual Limit. No tax relief for employees." />
                     </div>
                     <input type="text" inputMode="decimal" name="vc3aCash" value={inputs.vc3aCash} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -5155,7 +5310,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* RSTU */}
                   <div ref={rstuRef}>
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      RSTU – {is55Plus ? "RA" : "SA"} Cash Top-up <FreqToggle freqKey="vcSaFreq" inputs={inputs} setInputs={setInputs} />
+                      RSTU – {is55Plus ? "RA" : "SA"} Cash Top-up <FreqToggle freqKey="vcSaFreq" durKey="vcSaDur" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-rstu" text={`Retirement Sum Topping-Up Scheme — cash top-up to your ${is55Plus ? "RA" : "SA"} directly (not split across accounts). Eligible for up to $8,000/yr tax relief (own account) + $8,000 for loved ones. Capped at FRS (SA) or ERS (RA). NOT counted in Annual Limit.`} />
                     </div>
                     <input type="text" inputMode="decimal" name="vcSaTopup" value={inputs.vcSaTopup} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -5221,7 +5376,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* VCMA — Cash Top-up to MA (moved directly after RSTU per docx #5) */}
                   <div>
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      VCMA – Cash Top-up to MA <FreqToggle freqKey="vcMaFreq" inputs={inputs} setInputs={setInputs} />
+                      VCMA – Cash Top-up to MA <FreqToggle freqKey="vcMaFreq" durKey="vcMaDur" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-vcmacash" text="Voluntary Cash MediSave Top-up (VCMA) — direct annual cash deposit to your own MA. Credited each year, capped at the Basic Healthcare Sum (BHS, $79,000 in 2026). Not subject to the $37,740 Annual Limit. If you are eligible for MMSS (SC, age 55–70, MA below ½ BHS, income ≤ $4,000/mo), enter the amount you personally contribute here and the matching govt grant in the MMSS Grant field." />
                     </div>
                     {(() => {
@@ -5252,7 +5407,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* Housing Refund (VHR) */}
                   <div>
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      Housing Refund – VHR (to OA) <FreqToggle freqKey="vcVhrFreq" inputs={inputs} setInputs={setInputs} />
+                      Housing Refund – VHR (to OA) <FreqToggle freqKey="vcVhrFreq" durKey="vcVhrDur" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-vhr" text="Voluntary Housing Refund: cash returned to OA to offset CPF used for housing. Credited to OA. NOT counted in Annual Limit." />
                     </div>
                     <input type="text" inputMode="decimal" name="vcVhr" value={inputs.vcVhr} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Voluntary housing refund" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -5261,7 +5416,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* Gov grants */}
                   <div>
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      Gov Grants (to {is55Plus ? "RA" : "SA"}) <FreqToggle freqKey="govGrantFreq" inputs={inputs} setInputs={setInputs} />
+                      Gov Grants (to {is55Plus ? "RA" : "SA"}) <FreqToggle freqKey="govGrantFreq" durKey="govGrantDur" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-govgrant" text="Government grants credited to SA (pre-55) or RA (post-55). Tracked separately for the 20% RA transfer base calculation." />
                     </div>
                     <input type="text" inputMode="decimal" name="annualGovGrant" value={inputs.annualGovGrant} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual government grant" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -5270,7 +5425,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* MRSS — SC only */}
                   <div style={{ opacity: (inputs.citizenStatus || 'SC') === 'PR' ? 0.45 : 1 }}>
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      MRSS Grant (to RA) <FreqToggle freqKey="mrssFreq" inputs={inputs} setInputs={setInputs} />
+                      MRSS Grant (to RA) <FreqToggle freqKey="mrssFreq" durKey="mrssDur" inputs={inputs} setInputs={setInputs} />
                       <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#34d399", background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.04em" }}>SC ONLY</span>
                       <TooltipBox id="t-mrss" text="Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $2,000/yr (lifetime cap $20,000) for Singapore Citizens aged 55 and above with RA below the Basic Retirement Sum (BRS). SC only — PRs are not eligible. No age cap of 70. Credited to RA. Engine enforces the $20,000 lifetime cap automatically." />
                     </div>
@@ -5292,7 +5447,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* MMSS — SC only */}
                   <div style={{ opacity: (inputs.citizenStatus || 'SC') === 'PR' ? 0.45 : 1 }}>
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                      MMSS Grant (to MA) <FreqToggle freqKey="mmssFreq" inputs={inputs} setInputs={setInputs} />
+                      MMSS Grant (to MA) <FreqToggle freqKey="mmssFreq" durKey="mmssDur" inputs={inputs} setInputs={setInputs} />
                       <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#34d399", background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.04em" }}>SC ONLY</span>
                       <TooltipBox id="t-mmss" text="Matched MediSave Scheme (from Jan 2026): Govt matches voluntary MA cash top-ups (VCMA) dollar-for-dollar up to $1,000/yr for Singapore Citizens aged 55–70 with MA below half of BHS (~$39,500 in 2026) and monthly income ≤ $4,000. SC only — PRs are not eligible. Enter your own top-up in VCMA above; enter the matching govt grant here. No tax relief on top-ups attracting MMSS match. Engine enforces the age 55–70 window and MA < half-BHS rule automatically." />
                     </div>
@@ -5336,7 +5491,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     return (
                       <div>
                         <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
-                          WIS – Workfare Supplement <FreqToggle freqKey="wisFreq" inputs={inputs} setInputs={setInputs} />
+                          WIS – Workfare Supplement <FreqToggle freqKey="wisFreq" durKey="wisDur" inputs={inputs} setInputs={setInputs} />
                           <TooltipBox id="t-wis" text="Workfare Income Supplement (WIS): Enter your total annual WIS award. CPF portion is modelled: Employees — 60% to CPF (OA/SA/MA) + 40% cash paid separately to you. SEPs — 90% to MA (BHS-capped) + 10% cash. The cash portion (shown below) is not included in CPF projection but forms part of your real income. Auto-assessed by CPF Board — no application needed." />
                         </div>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -5403,7 +5558,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(244,63,94,0.04)", border: "1px solid rgba(244,63,94,0.18)" }}>
                       <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
-                        CPFIS – OA Invested <FreqToggle freqKey="cpfisOaFreq" inputs={inputs} setInputs={setInputs} />
+                        CPFIS – OA Invested <FreqToggle freqKey="cpfisOaFreq" durKey="cpfisOaDur" inputs={inputs} setInputs={setInputs} />
                         <TooltipBox id="t-cpfis-oa" text="CPF Investment Scheme (OA): Only OA savings ABOVE $20,000 are investible — the first $20k must always remain in OA. Investment returns are NOT modelled — only the annual outflow from OA is applied. Age 18+. Complete CPFIS SAQ first." />
                       </div>
                       {(() => {
@@ -5437,7 +5592,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                     <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(244,63,94,0.04)", border: "1px solid rgba(244,63,94,0.18)" }}>
                       <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
-                        CPFIS – SA Invested <FreqToggle freqKey="cpfisSaFreq" inputs={inputs} setInputs={setInputs} />
+                        CPFIS – SA Invested <FreqToggle freqKey="cpfisSaFreq" durKey="cpfisSaDur" inputs={inputs} setInputs={setInputs} />
                         <TooltipBox id="t-cpfis-sa" text="CPF Investment Scheme (SA): Only SA savings ABOVE $40,000 are investible. SA CPFIS is only available before age 55 — SA closes at 55 (merges into RA) and cannot be invested via CPFIS after that. Investment returns are NOT modelled — only the annual outflow from SA is applied." />
                       </div>
                       {(() => {
@@ -5489,7 +5644,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     return (
                       <div style={{ paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.15)" }}>
                         <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
-                          OA Education Loan Scheme <FreqToggle freqKey="oaEduLoanFreq" inputs={inputs} setInputs={setInputs} />
+                          OA Education Loan Scheme <FreqToggle freqKey="oaEduLoanFreq" durKey="oaEduLoanDur" inputs={inputs} setInputs={setInputs} />
                           <TooltipBox id="t-oaedu" text="CPF Education Loan Scheme: use your OA savings (or a family member's) to pay subsidised tuition fees at approved local institutions (NUS, NTU, SMU, SIT, SUTD, SUSS, polytechnics, LASALLE, NAFA). Withdrawal limit: 40% of accumulated OA savings (excluding housing amounts already used), or remaining OA balance, whichever is lower. Interest accrues at 2.5%/yr immediately upon withdrawal. Repayment must begin 1 year after graduation and be completed within 12 years — in cash only, not CPF. Age 55+ lenders: FRS must be set aside in RA first. Modelled as a pure OA outflow; cash repayment back to OA is not projected here." />
                         </div>
                         {frsNotMet && (
@@ -5546,7 +5701,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* OA → MA */}
                   <div>
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: inputErrors.oaToMaTransfer ? "#fb923c" : "#fbbf24", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>OA → MA Transfer</span> <FreqToggle freqKey="oaToMaFreq" inputs={inputs} setInputs={setInputs} />
+                      <span>OA → MA Transfer</span> <FreqToggle freqKey="oaToMaFreq" durKey="oaToMaDur" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-oatoma" text="CPF policy: OA→MA requires age 55+. You must have set aside FRS, or BRS if you own a property with sufficient lease. For self: internal move (OA ↓, MA ↑). For loved one (spouse/parent/sibling/grandparent): funds leave your OA permanently as an outflow — your MA does not increase." />
                     </div>
                     {/* Age gate warning */}
@@ -5612,7 +5767,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* OA → SA (pre-55) / OA → RA (55 and above) */}
                   <div>
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: inputErrors.oaToSaTransfer ? "#fb923c" : "#fbbf24", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>{is55Plus ? "OA → RA Transfer" : "OA → SA Transfer"}</span> <FreqToggle freqKey="oaToSaFreq" inputs={inputs} setInputs={setInputs} />
+                      <span>{is55Plus ? "OA → RA Transfer" : "OA → SA Transfer"}</span> <FreqToggle freqKey="oaToSaFreq" durKey="oaToSaDur" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-oatosa" text={is55Plus
                         ? "Transfer OA savings to your RA (or a loved one's RA) to earn 4% instead of 2.5%. Available at age 55 and above. For Self: capped at ERS ($440,800) in RA. Irreversible. No tax relief. For Loved One: OA is simply an outflow — their account is not tracked here."
                         : "Transfer OA savings to your SA (or a loved one's SA) to earn 4% instead of 2.5%. Only before age 55. For Self: capped at FRS ($220,400) in SA. Irreversible. No tax relief. For Loved One: OA is simply an outflow — their SA is not tracked here."
@@ -5719,7 +5874,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* Housing loan */}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(96,165,250,0.15)" }}>
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", marginBottom: 4 }}>
-                      Housing Loan — OA Outflow ($/yr) <FreqToggle freqKey="housingFreq" inputs={inputs} setInputs={setInputs} />
+                      Housing Loan — OA Outflow ($/yr) <FreqToggle freqKey="housingFreq" durKey="housingDur" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-housing-prop" text="Annual OA deduction for mortgage repayment. Stops at Housing Stop Age. Tracked for CPF refund on property sale." />
                     </div>
                     <input type="text" inputMode="decimal" name="housingOutflow" value={inputs.housingOutflow} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual housing loan outflow" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.housingOutflow ? "#f87171" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -7544,6 +7699,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <strong style={{ color: "#60a5fa" }}>Interest:</strong> OA (2.5%) · {is55Plus ? "RA" : "SA"} (4%) · MA (4%) &nbsp;|&nbsp;
                           <strong style={{ color: "#f472b6" }}>Outflows:</strong> Housing loan · Medical · OA Drawdown · CPFIS (OA+SA) · Education Loan · Loved-one transfers
                         </p>
+                      </div>
+                      {/* Export bar — matches projection table style */}
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+                        <button onClick={handleExportLedgerCSV} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: "rgba(16,185,129,0.15)", color: "#34d399", border: "1px solid rgba(16,185,129,0.3)", cursor: "pointer" }}>
+                          <Download style={{ width: 11, height: 11 }} />Download CSV
+                        </button>
                       </div>
                       {/* Single scroll container handles both axes — required for position:sticky
                           on thead to work correctly. Split outer/inner divs break sticky on mobile
