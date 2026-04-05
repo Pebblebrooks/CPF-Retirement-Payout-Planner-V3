@@ -323,6 +323,9 @@ const DEFAULT_INPUTS = {
   // Gates MRSS, MMSS (SC only), and PR tenure contribution warnings.
   // Foreigners are not modelled — they have no CPF entitlements.
   citizenStatus: 'SC',
+  // Person with Disabilities (PwD): unlocks MRSS eligibility below age 55.
+  // PwD members with OA+SA below BRS qualify for MRSS from 2026 regardless of age.
+  isPwD: false,
 };
 
 const PRESET_PROFILES = [
@@ -440,7 +443,7 @@ const INPUT_LABELS = {
   pledgeWithdrawalAmount: "Pledge Withdrawal Amount", pledgeWithdrawalAge: "Pledge Withdrawal Age",
   dieWithZeroEnabled: "Die with Zero", dieWithZeroAge: "Die with Zero Age",
   vcMaCash: "Cash Top-up to MA", oaToMaForLovedOne: "OA→MA For Loved One", oaToSaForLovedOne: "OA→SA/RA For Loved One",
-  prYear: "PR Tenure Year", citizenStatus: "Citizenship Status",
+  prYear: "PR Tenure Year", citizenStatus: "Citizenship Status", isPwD: "Person with Disabilities (PwD)",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
@@ -527,6 +530,8 @@ function runProjectionEngine(inputs, {
   // Citizenship gate: MRSS and MMSS are Singapore Citizens only.
   // PR members cannot receive either grant regardless of age or account balance.
   const isSC = (inputs.citizenStatus === 'SC') || (inputs.citizenStatus === undefined); // default to SC if field absent (legacy profiles)
+  // PwD gate: MRSS is available below age 55 for PwD members with OA+SA below BRS (from 2026).
+  const isPwD = !!inputs.isPwD;
   // WIS: Workfare Income Supplement
   //   Employees:  60% allocated to CPF accounts via age-band rates, 40% cash (not modelled in CPF)
   //   SEP:        90% to MA (subject to BHS), 10% cash (not modelled in CPF)
@@ -734,7 +739,8 @@ function runProjectionEngine(inputs, {
       let req = Math.max(0, cohortRetSum - ra);
       const fromSA = Math.min(sa, req); ra += fromSA; req -= fromSA;
       oa += (sa - fromSA); sa = 0;
-      const fromOA = Math.min(oa, req); ra += fromOA; oa -= fromOA;
+      // CPF policy (Slide 21): if FRS cannot be met, retain at least $5,000 in OA for withdrawal.
+      const fromOA = Math.min(Math.max(0, oa - 5000), req); ra += fromOA; oa -= fromOA;
     } else if (age === startAge && startAge >= 55 && sa > 0) {
       let req = Math.max(0, cohortRetSum - ra);
       const fromSA = Math.min(sa, req); ra += fromSA; req -= fromSA;
@@ -831,7 +837,9 @@ function runProjectionEngine(inputs, {
 
     // MMSS/Workfare grant → credited to MA (subject to BHS cap; excess lost, not spilled)
     // Eligibility: SC only · age 55–70 · MA balance below half of BHS (~$39,500 in 2026)
-    if (mmssGrant * effMmssFreq > 0 && isSC && age >= 55 && age <= 70) {
+    // 5-year pilot: grant only credited for simulation years ≤ 2030.
+    const simYear_mmss = baseYear + (age - startAge);
+    if (mmssGrant * effMmssFreq > 0 && isSC && age >= 55 && age <= 70 && simYear_mmss <= 2030) {
       const projBHS_mm = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
       if (ma < projBHS_mm / 2) {
         const maRoom_mm = Math.max(0, projBHS_mm - ma);
@@ -926,9 +934,11 @@ function runProjectionEngine(inputs, {
           oa += (toSA_total - actualToSA_sep); // FRS overflow to OA
         }
         oa += toOA_vc3a;
-        // MRSS eligibility: SC only · age >= 55 · RA below BRS · lifetime cap $20,000
+        // MRSS eligibility: SC only · age >= 55 (or PwD with OA+SA < BRS) · RA/balance below BRS · lifetime cap $20,000
         const projBRS_sep = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-        const mrssEligible_sep = isSC && age >= 55 && ra < projBRS_sep && cumMrssReceived < 20000;
+        const mrssAgeOk_sep = age >= 55 || (isPwD && age < 55);
+        const mrssBalOk_sep = age >= 55 ? ra < projBRS_sep : (oa + sa) < projBRS_sep;
+        const mrssEligible_sep = isSC && mrssAgeOk_sep && mrssBalOk_sep && cumMrssReceived < 20000;
         const actualMrss_sep = mrssEligible_sep ? Math.min(mrssGrant * effMrssFreq, 20000 - cumMrssReceived) : 0;
         if (actualMrss_sep > 0) cumMrssReceived += actualMrss_sep;
         const govGrant_sep = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
@@ -1050,9 +1060,11 @@ function runProjectionEngine(inputs, {
         // Cashflow ledger breakdown (employed) — B3: use priority-split actuals, not Math.min on raw
         yearMandatory += mandatoryOA_i + mandatorySA_dyn + actualMandatoryMA_emp;
         yearVoluntary += (cappedVcOA - vcVhrAmtEff) + (vc3aCashEff > 0 ? actualVcMA_emp : 0) + ((Number(inputs.vcSaTopup)||0)) * effVcSaFreq + vcVhrAmtEff;
-        // MRSS eligibility: SC only · age >= 55 · RA below BRS · lifetime cap $20,000
+        // MRSS eligibility: SC only · age >= 55 (or PwD with OA+SA < BRS) · RA/balance below BRS · lifetime cap $20,000
         const projBRS_emp = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-        const mrssEligible_emp = isSC && age >= 55 && ra < projBRS_emp && cumMrssReceived < 20000;
+        const mrssAgeOk_emp = age >= 55 || (isPwD && age < 55);
+        const mrssBalOk_emp = age >= 55 ? ra < projBRS_emp : (oa + sa) < projBRS_emp;
+        const mrssEligible_emp = isSC && mrssAgeOk_emp && mrssBalOk_emp && cumMrssReceived < 20000;
         const actualMrss_emp = mrssEligible_emp ? Math.min(mrssGrant * effMrssFreq, 20000 - cumMrssReceived) : 0;
         if (actualMrss_emp > 0) cumMrssReceived += actualMrss_emp;
         yearGovGrants += (Number(inputs.annualGovGrant)||0) * effGovGrantFreq + actualMrss_emp + wisCpf * effWisFreq;
@@ -1604,13 +1616,24 @@ export default function App() {
     if (infl < 0 || infl > 20) errs.inflationRate = "0–20%";
     const mInfl = Number(inp.medicalInflationRate) || 0;
     if (mInfl < 0 || mInfl > 30) errs.medicalInflationRate = "0–30%";
-    // MRSS: SC only · max $2,000/yr · age 55+ · RA below BRS · lifetime cap $20,000
+    // MRSS: SC only · max $2,000/yr · age 55+ (or PwD) · RA below BRS · lifetime cap $20,000 · income ≤ $4,000/mo
     const mrss = Number(inp.mrssGrant) || 0;
     if (inp.citizenStatus === 'PR' && mrss > 0) {
       errs.mrssGrant = 'SC only — PRs are not eligible for MRSS';
     } else if (mrss > 0) {
-      if (ca < 55) {
-        errs.mrssGrant = 'Available from age 55 only';
+      if (ca < 55 && !inp.isPwD) {
+        errs.mrssGrant = 'Available from age 55 only (unless PwD — enable the PwD flag in Profile)';
+      } else if (ca < 55 && inp.isPwD) {
+        // PwD under-55: check OA+SA < BRS
+        const oaBalNow = Number(inp.oaBalance) || 0;
+        const saBalNow = Number(inp.saBalance) || 0;
+        const yearsFromBase55 = Math.max(0, (Number(inp.currentYear) || 2026) - 2026);
+        const brsNow55 = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, yearsFromBase55));
+        if (oaBalNow + saBalNow >= brsNow55) {
+          errs.mrssGrant = `PwD MRSS: OA + SA ($${(oaBalNow + saBalNow).toLocaleString()}) must be below BRS ($${brsNow55.toLocaleString()}) to qualify`;
+        } else if (mrss > 2000) {
+          errs.mrssGrant = 'Max $2,000/yr';
+        }
       } else {
         // Post-55: saBalance field holds the RA balance
         const raBalNow = Number(inp.saBalance) || 0;
@@ -1620,6 +1643,15 @@ export default function App() {
           errs.mrssGrant = `RA ($${raBalNow.toLocaleString()}) must be below BRS ($${brsNow.toLocaleString()}) to qualify`;
         } else if (mrss > 2000) {
           errs.mrssGrant = 'Max $2,000/yr';
+        } else {
+          // Income gate: monthly income > $4,000 disqualifies MRSS
+          const isSEP_mrss = !!inp.isSelfEmployed;
+          const monthlyIncome_mrss = isSEP_mrss
+            ? Math.round((Number(inp.netTradeIncome) || 0) / 12)
+            : (Number(inp.salaryGross) || 0);
+          if (monthlyIncome_mrss > 4000) {
+            errs.mrssGrant = `MRSS requires monthly income ≤ $4,000. Your declared gross: ~$${monthlyIncome_mrss.toLocaleString()}/mo.`;
+          }
         }
       }
     } else if (mrss < 0) {
@@ -1630,7 +1662,12 @@ export default function App() {
     if (inp.citizenStatus === 'PR' && mmss > 0) {
       errs.mmssGrant = 'SC only — PRs are not eligible for MMSS';
     } else if (mmss > 0) {
-      if (ca < 55 || ca > 70) {
+      // Pilot end check: if the member won't reach age 55 until after 2030, MMSS won't apply at all
+      const baseYearVal = Number(inp.currentYear) || 2026;
+      const yearsTo55Val = Math.max(0, 55 - ca);
+      if (baseYearVal + yearsTo55Val > 2030) {
+        errs.mmssGrant = `MMSS pilot ends in 2030. You will not reach age 55 until ${baseYearVal + yearsTo55Val} — no MMSS benefit applies.`;
+      } else if (ca < 55 || ca > 70) {
         errs.mmssGrant = `Available for ages 55–70 only (your age: ${ca})`;
       } else {
         const maBal = Number(inp.maBalance) || 0;
@@ -1640,6 +1677,15 @@ export default function App() {
           errs.mmssGrant = `MA ($${maBal.toLocaleString()}) must be below half of BHS ($${halfBhsNow.toLocaleString()}) to qualify`;
         } else if (mmss > 1000) {
           errs.mmssGrant = 'Max $1,000/yr';
+        } else {
+          // Income gate: monthly income > $4,000 disqualifies MMSS
+          const isSEP_mmss = !!inp.isSelfEmployed;
+          const monthlyIncome_mmss = isSEP_mmss
+            ? Math.round((Number(inp.netTradeIncome) || 0) / 12)
+            : (Number(inp.salaryGross) || 0);
+          if (monthlyIncome_mmss > 4000) {
+            errs.mmssGrant = `MMSS requires monthly income ≤ $4,000. Your declared gross: ~$${monthlyIncome_mmss.toLocaleString()}/mo.`;
+          }
         }
       }
     } else if (mmss < 0) {
@@ -2674,7 +2720,7 @@ export default function App() {
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
-      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType,
+      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD,
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, mrssFreq, mmssFreq, wisFreq,
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
       vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, mrssDur, mmssDur, wisDur,
@@ -2701,7 +2747,7 @@ export default function App() {
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
-      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType,
+      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD,
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, mrssFreq, mmssFreq, wisFreq,
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
       vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, mrssDur, mmssDur, wisDur,
@@ -4904,6 +4950,20 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>Full SC rates apply · MRSS and MMSS available</p>
                     )}
                   </div>
+                  {/* PwD toggle — shown for SC members only (PRs cannot receive MRSS anyway) */}
+                  {(inputs.citizenStatus || 'SC') === 'SC' && (
+                    <div style={{ marginTop: 8, padding: "7px 10px", borderRadius: 8, background: inputs.isPwD ? "rgba(168,85,247,0.08)" : "var(--bg-muted)", border: `1px solid ${inputs.isPwD ? "rgba(168,85,247,0.35)" : "var(--border-subtle)"}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: inputs.isPwD ? "#c084fc" : "var(--text-muted)", textTransform: "uppercase" }}>Person with Disabilities</span>
+                        <TooltipBox id="t-isPwD" text="PwD members may qualify for MRSS below age 55 (from 2026), provided their combined OA + SA balance is below the Basic Retirement Sum (BRS). For members aged 55 and above, the standard MRSS eligibility applies regardless of PwD status. SC only — this flag has no effect for PR members." />
+                      </div>
+                      <button
+                        onClick={() => setInputs(p => ({ ...p, isPwD: !p.isPwD }))}
+                        style={{ padding: "3px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isPwD ? "#c084fc" : "var(--bg-panel)", color: inputs.isPwD ? "#020617" : "var(--text-muted)" }}>
+                        {inputs.isPwD ? "ON" : "OFF"}
+                      </button>
+                    </div>
+                  )}
                   {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
                     <div key={n}><div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
                       <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l + ' balance'} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
@@ -5508,7 +5568,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
                       MRSS Grant (to RA) <FreqToggle freqKey="mrssFreq" durKey="mrssDur" inputs={inputs} setInputs={setInputs} />
                       <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#34d399", background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.04em" }}>SC ONLY</span>
-                      <TooltipBox id="t-mrss" text="Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $2,000/yr (lifetime cap $20,000) for Singapore Citizens aged 55 and above with RA below the Basic Retirement Sum (BRS). SC only — PRs are not eligible. No age cap of 70. Credited to RA. Engine enforces the $20,000 lifetime cap automatically." />
+                      <TooltipBox id="t-mrss" text="Matched Retirement Savings Scheme: Govt matches RSTU cash top-ups dollar-for-dollar up to $2,000/yr (lifetime cap $20,000) for Singapore Citizens aged 55 and above with RA below the Basic Retirement Sum (BRS) and monthly income ≤ $4,000. Must own ≤ 1 property with Annual Value ≤ $21,000 (property check not validated in app — user's responsibility). SC only — PRs are not eligible. PwD members below age 55 are also eligible from 2026 if their combined OA + SA is below BRS — enable the PwD flag in the Profile section. No age cap of 70. Credited to RA (or SA if below 55). Engine enforces the $20,000 lifetime cap automatically." />
                     </div>
                     <input type="text" inputMode="decimal" name="mrssGrant" value={inputs.mrssGrant}
                       onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -5530,7 +5590,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 4 }}>
                       MMSS Grant (to MA) <FreqToggle freqKey="mmssFreq" durKey="mmssDur" inputs={inputs} setInputs={setInputs} />
                       <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#34d399", background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.04em" }}>SC ONLY</span>
-                      <TooltipBox id="t-mmss" text="Matched MediSave Scheme (from Jan 2026): Govt matches voluntary MA cash top-ups (VCMA) dollar-for-dollar up to $1,000/yr for Singapore Citizens aged 55–70 with MA below half of BHS (~$39,500 in 2026) and monthly income ≤ $4,000. SC only — PRs are not eligible. Enter your own top-up in VCMA above; enter the matching govt grant here. No tax relief on top-ups attracting MMSS match. Engine enforces the age 55–70 window and MA < half-BHS rule automatically." />
+                      <TooltipBox id="t-mmss" text="Matched MediSave Scheme (from Jan 2026): Govt matches voluntary MA cash top-ups (VCMA) dollar-for-dollar up to $1,000/yr for Singapore Citizens aged 55–70 with MA below half of BHS (~$39,500 in 2026) and monthly income ≤ $4,000. Must own ≤ 1 property with Annual Value ≤ $21,000 (property check not validated in app — user's responsibility). SC only — PRs are not eligible. Enter your own top-up in VCMA above; enter the matching govt grant here. No tax relief on top-ups attracting MMSS match. 5-year pilot: grants credited for simulation years 2026–2030 only. Engine enforces the age 55–70 window, MA < half-BHS rule, and 2030 pilot end automatically." />
                     </div>
                     <input type="text" inputMode="decimal" name="mmssGrant" value={inputs.mmssGrant}
                       onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
