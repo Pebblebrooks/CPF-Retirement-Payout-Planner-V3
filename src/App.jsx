@@ -13,7 +13,7 @@ import {
   LayoutDashboard, RotateCcw, Activity, Bell, X,
   SlidersHorizontal, Percent, Link, Target,
   Moon, Sun, Monitor, Lightbulb, Copy, ChevronDown, ChevronUp,
-  ArrowRightLeft, LogOut, Users, ExternalLink, Home, UploadCloud
+  ArrowRightLeft, LogOut, Users, ExternalLink, Home, Upload
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
@@ -4670,7 +4670,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <Download style={{ width: 12, height: 12 }} />Export Profile
             </button>
             <label style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Load a previously saved JSON profile">
-              <UploadCloud style={{ width: 12, height: 12 }} />Import Profile<input type="file" accept=".json" style={{ display: "none" }} onClick={(e) => { e.target.value = null; }} onChange={handleImportProfile} />
+              <Upload style={{ width: 12, height: 12 }} />Import Profile<input type="file" accept=".json" style={{ display: "none" }} onClick={(e) => { e.target.value = null; }} onChange={handleImportProfile} />
             </label>
             <button onClick={() => {
               try {
@@ -4745,7 +4745,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <Download style={{ width: 13, height: 13 }} />Export Profile
             </button>
             <label style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>
-              <UploadCloud style={{ width: 13, height: 13 }} />Import Profile
+              <Upload style={{ width: 13, height: 13 }} />Import Profile
               <input type="file" accept=".json" style={{ display: "none" }} onClick={(e) => { e.target.value = null; }} onChange={handleImportProfile} />
             </label>
             <button onClick={() => {
