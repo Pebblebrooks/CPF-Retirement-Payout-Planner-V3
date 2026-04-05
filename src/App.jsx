@@ -610,9 +610,14 @@ function runProjectionEngine(inputs, {
   // startPrYear: the PR tenure year the member is currently in (1, 2, or 3+).
   //   Clamped to [1, 3] — 3 means "Year 3 and beyond" (full SC/PR3+ rates).
   // annualGrossSalary: annual OW subject to CPF (capped at $8,000/mo), used to
-  //   derive mandatory OA/SA/MA from the G/G rate table when isPR && currentPrYear < 3.
+  //   derive mandatory OA/SA/MA from the G/G rate table when isPR && currentPrYear < 3,
+  //   and for the graduated PR→SC transition (startPrYear < 3, currentPrYear >= 3).
   // currentPrYear: mutable counter incremented each loop iteration; drives
   //   the rate-tier switch from Year 1 → Year 2 → Year 3+ automatically.
+  // Three engine paths (see mandatory-contribution block):
+  //   A. currentPrYear < 3 → PR rate table × (OW + AW)   [Yr1/Yr2]
+  //   B. startPrYear < 3, currentPrYear >= 3 → SC/PR3+ rates × gross salary [graduated]
+  //   C. SC or PR3+ from start → baseOA_Emp * gf          [standard]
   const isPR = (inputs.citizenStatus || 'SC') === 'PR';
   const startPrYear = Math.min(3, Math.max(1, Number(inputs.prYear) || 3));
   const annualGrossSalary = owMonthly * 12; // already capped at $8,000/mo above
@@ -905,17 +910,55 @@ function runProjectionEngine(inputs, {
         yearVoluntary += vc3aTotal + vcVhrAmt;
         yearGovGrants += govGrant_sep + actualMrss_sep + wisToMA_sep; // B2: WIS included
       } else {
-        // PR Year 1/2: derive mandatory OA/SA/MA from the advancing G/G rate table
-        // applied to the actual annual gross salary (scaled by gf for salary growth).
-        // PR Year 3+ and SC: use the user-entered base fields as before.
+        // Mandatory contribution calculation — three paths:
+        // Path A. PR Yr1/2 (currentPrYear < 3): use advancing PR rate table applied to
+        //    annualGrossSalary * gf (OW) + AW bonus portion. Bug fix: bonus was
+        //    previously excluded, understating PR Yr1/2 contributions for members
+        //    with a significant annual wage.
+        // Path B. PR Yr3+ graduated from Yr1/2 (isPR && startPrYear < 3 && currentPrYear >= 3):
+        //    use SC/PR3+ rates computed dynamically from gross salary. Bug fix: previously
+        //    fell back to baseOA_Emp which held PR Yr1/2 values (~9–24%), silently
+        //    understating contributions by the difference vs SC rates (~37%).
+        // Path C. SC or PR3+ from start: use user-entered base fields scaled by gf (unchanged).
         let mandatoryOA_i, mandatorySA_dyn, mandatoryMA_i;
         if (isPR && currentPrYear < 3) {
+          // Path A — PR Yr1/2: rate table × (OW + AW)
+          // Fix 2: include AW (bonus) using the same awCeiling logic as Auto-Calc.
+          // The bonus scales with gf (consistent with how SC path scales baseOA_Emp * gf,
+          // which already bakes in the bonus at year 0).
           const prRates = getPRRates(currentPrYear, age, inputs.prRateType || 'GG');
           const grossScaled = annualGrossSalary * gf;
-          mandatoryOA_i  = Math.round(grossScaled * prRates.oa);
-          mandatorySA_dyn = Math.round(grossScaled * prRates.sa);
-          mandatoryMA_i  = Math.round(grossScaled * prRates.ma);
+          // OW ceiling at $8k/mo already enforced in annualGrossSalary; scale with gf
+          // but re-cap at $96k (8000×12) if salary growth pushes past ceiling.
+          const owScaledCapped = Math.min(grossScaled, 96000);
+          const awCeilingEng = Math.max(0, 102000 - owScaledCapped);
+          const bonusCpfEng = Math.min((Number(inputs.salaryBonus) || 0) * gf, awCeilingEng);
+          const totalScaled = owScaledCapped + bonusCpfEng;
+          mandatoryOA_i  = Math.round(totalScaled * prRates.oa);
+          mandatorySA_dyn = Math.round(totalScaled * prRates.sa);
+          mandatoryMA_i  = Math.round(totalScaled * prRates.ma);
+        } else if (isPR && startPrYear < 3) {
+          // Path B — PR member graduated to Yr3+: compute SC/PR3+ rates dynamically.
+          // Fix 1: previously used baseOA_Emp (PR Yr1/2 values) — now uses SC rate table.
+          // OA/SA/MA rates mirror the SC/PR3+ (Table 1, 2026) age-band splits in Auto-Calc.
+          let scOA, scSA, scMA;
+          if      (age <= 35) { scOA=0.23; scSA=0.06;  scMA=0.08;  }
+          else if (age <= 45) { scOA=0.21; scSA=0.07;  scMA=0.09;  }
+          else if (age <= 50) { scOA=0.19; scSA=0.08;  scMA=0.10;  }
+          else if (age <= 55) { scOA=0.15; scSA=0.115; scMA=0.105; }
+          else if (age <= 60) { scOA=0.12; scSA=0.115; scMA=0.105; }
+          else if (age <= 65) { scOA=0.035;scSA=0.11;  scMA=0.105; }
+          else if (age <= 70) { scOA=0.01; scSA=0.05;  scMA=0.105; }
+          else               { scOA=0.01; scSA=0.01;  scMA=0.105; }
+          const grossScaled = Math.min(annualGrossSalary * gf, 96000);
+          const awCeilingEng = Math.max(0, 102000 - grossScaled);
+          const bonusCpfEng = Math.min((Number(inputs.salaryBonus) || 0) * gf, awCeilingEng);
+          const totalScaled = grossScaled + bonusCpfEng;
+          mandatoryOA_i  = Math.round(totalScaled * scOA);
+          mandatorySA_dyn = Math.round(totalScaled * scSA);
+          mandatoryMA_i  = Math.round(totalScaled * scMA);
         } else {
+          // Path C — SC or PR3+ from start: use user-entered base fields scaled by gf.
           mandatoryOA_i  = Math.round(baseOA_Emp * gf);
           mandatorySA_dyn = mandatorySA_base; // same as Math.round(baseSA_Emp * gf)
           mandatoryMA_i  = Math.round(baseMA_Emp * gf);
