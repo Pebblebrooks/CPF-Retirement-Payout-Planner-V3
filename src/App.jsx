@@ -7440,7 +7440,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <div style={{ height: 380 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <AreaChart data={(() => {
-                      const base = displayAccumulation.filter(d => d.age <= inputs.payoutAge);
+                      const base = displayAccumulation.filter(d => d.age <= inputs.payoutAge).map(row => ({
+                        ...row,
+                        // SA is closed at 55 — zero it out post-55 so the area ends cleanly.
+                        // RA only exists post-55 — zero it out pre-55 so it doesn't ghost below the axis.
+                        sa: row.age >= 55 ? 0 : (row.sa || 0),
+                        ra: row.age < 55 ? 0 : (row.ra || 0),
+                      }));
                       let merged = base;
                       if (showMonteCarlo && monteCarloData) {
                         merged = merged.map(row => { const mc = monteCarloData.rows.find(m => m.age === row.age); return mc ? { ...row, mcP10: mc.p10, mcP90: mc.p90, mcP50: mc.p50 } : row; });
@@ -7461,9 +7467,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         return <ReferenceLine key={idx} x={m.age} stroke={sc} strokeWidth={1.5} strokeDasharray="3 3" label={{ position: "insideTopRight", value: `Age ${m.age}`, fill: sc, fontSize: 8, fontWeight: "bold" }} />;
                       })}
                       <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" fill="#1d4ed8" fillOpacity={0.85} name="OA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="SA (closed at 55)" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="SA (pre-55)" />
                       <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" fill="#059669" fillOpacity={0.85} name="MA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.85} name="RA" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.85} name="RA (from 55)" />
                       {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="#94a3b8" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
                     </AreaChart>
                   </ResponsiveContainer>
@@ -8807,12 +8813,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         </section>
       </div>
 
-      {/* Footer */}
-      <footer style={{ borderTop: "1px solid var(--border-subtle)", flexShrink: 0, background: "var(--bg-panel)" }}>
-        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ padding: "10px 20px", textAlign: "center" }}>
-          <p style={{ fontSize: 10, color: "var(--text-muted)", maxWidth: 900, margin: "0 auto", lineHeight: 1.7, textAlign: "justify" }}>{LEGAL_DISCLAIMER}</p>
-        </div>
-      </footer>
+
     </div>
     </TooltipContext.Provider>
   );
