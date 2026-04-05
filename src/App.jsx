@@ -3272,7 +3272,7 @@ export default function App() {
     const cumFlows = { standard: [], escalating: [], basic: [] };
     for (const d of payoutRows) {
       for (const plan of ['standard', 'escalating', 'basic']) {
-        cumFlows[plan].push({ t: d.age - ca, v: d[\`\${plan}Annual\`] || 0 });
+        cumFlows[plan].push({ t: d.age - ca, v: d[`${plan}Annual`] || 0 });
       }
     }
     for (const row of projection) {
@@ -3282,7 +3282,7 @@ export default function App() {
       const idx = row.age - pa;
       for (const plan of ['standard', 'escalating', 'basic']) {
         const payoutFlows = cumFlows[plan].slice(0, idx + 1);
-        const terminalFlow = { t: row.age - ca, v: pp[\`\${plan}Bequest\`] || 0 };
+        const terminalFlow = { t: row.age - ca, v: pp[`${plan}Bequest`] || 0 };
         const xirr = computeXIRR([...contribFlows, ...payoutFlows, terminalFlow]);
         result[plan][row.age] = xirr !== null ? Math.max(-0.10, Math.min(0.10, xirr)) * 100 : null;
       }
