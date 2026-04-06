@@ -4597,6 +4597,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       ["OA Drawdown decumulation engine", Download], ["What-If Explorer sliders", SlidersHorizontal],
                       ["SRS — tax-deferred retirement savings", BookOpen], ["Property Monetisation (LBS / downgrade)", Home],
                       ["Die with Zero — PMT draw-down planner", Clock], ["7 sample profiles to explore instantly", Users],
+                      ["PR G/G & F/G contribution rates", Users], ["Recurring / One-Time frequency toggles", ArrowRightLeft],
+                      ["For Loved One CPF transfers (OA→MA / OA→SA / OA→RA)", Users], ["Annual Cashflow Ledger", TableIcon],
+                      ["Education Loan from OA (40% ceiling)", BookOpen], ["PwD MRSS bypass (age-55 waiver)", ShieldCheck],
+                      ["MMSS — MA top-up matching grant", Gift], ["SA / RA balance split view at age 55", Split],
                     ].map(([text, Icon], i) => (
                       <div key={i} style={{ background: "var(--bg-muted)", padding: "12px 16px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12, border: "1px solid var(--border-subtle)" }}>
                         <Icon style={{ width: 16, height: 16, color: "#10b981" }} />
@@ -4636,7 +4640,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ["Accumulation", BarChart3, "#3b82f6", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations with ±1% rate variance."],
                     ["LIFE Comparison", ShieldCheck, "#a855f7", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Basic payout = PMT formula; bequest in Phase 1 includes full premium refund. Vertical lines mark exact break-even ages."],
                     ["Compare", Split, "#fb923c", "Save two scenarios (e.g. retire at 65 vs 70) and view a colour-coded diff table showing every metric that changes between them."],
-                    ["Data Table", TableIcon, "#fbbf24", "Full year-by-year projection table with sticky Age column, Yield (B/S/E), and IRR %. Download as CSV."]
+                    ["Data Table", TableIcon, "#fbbf24", "Full year-by-year projection table with sticky Age column, Yield (B/S/E), and IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, and interest component. Download either view as CSV."]
                   ].map(([title, Icon, color, desc]) => (
                     <div key={title}>
                       <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}15`, border: `1px solid ${color}33`, padding: "4px 10px", borderRadius: 8, marginBottom: 8 }}>
@@ -4666,6 +4670,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       ["MRSS Grant", Gift, "Matched Retirement Savings Scheme — govt matches RSTU cash top-ups up to $2,000/yr (lifetime cap $20,000) for Singapore Citizens aged 55+ with RA below BRS."],
                       ["What-If Explorer", SlidersHorizontal, "Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome. Hover any point on the What-If chart for a full per-account breakdown tooltip."],
                       ["Gender Toggle", Users, "Male/Female selection (Profile section). Affects CPF LIFE payout — female payouts are ~7% lower (0.93× male) due to longer statistical life expectancy. Estimates based on 2026 CPF Board Estimator data."],
+                      ["MMSS Grant", Gift, "Matched MediSave Savings Scheme — govt tops up MA dollar-for-dollar up to $1,000/yr for Singapore Citizens aged 55–70 with MA below half of the Basic Healthcare Sum (~$39,500). SC only. Auto-assessed."],
+                      ["Education Loan from OA", BookOpen, "Model CPF Education Scheme withdrawals. Engine enforces the 40% OA ceiling (based on accumulated OA savings) and the age 55+ FRS-first rule. Modelled as a pure OA outflow in the Outflows panel."],
+                      ["PwD MRSS Bypass", ShieldCheck, "Enable the Person with Disabilities (PwD) flag in Profile to unlock MRSS eligibility below age 55. PwD members are exempt from the age-55 requirement for the Matched Retirement Savings Scheme. SC only."],
+                      ["PR G/G & F/G Rates", Users, "PR members in Year 1 or 2 can select G/G (graduated employer, default) or F/G (full employer 17% — requires joint CPF application). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates year-by-year in the projection."],
+                      ["Recurring / One-Time Toggles", ArrowRightLeft, "Every inflow and outflow field has a frequency toggle. 'Recurring' applies the amount every projection year. 'One-Time' applies it only in the first projection year — ideal for lump-sum top-ups or one-off withdrawals."],
                     ].map(([title, Icon, desc]) => (
                       <div key={title} style={{ background: "var(--bg-muted)", padding: "12px", borderRadius: 10, border: "1px solid var(--border-subtle)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -5457,7 +5466,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* Inflows */}
             <div style={{ background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit ? "#f97316" : isSelfEmployed ? "rgba(251,146,60,0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
               <div onClick={() => toggleSection("topups")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("topups"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("topups") ? (isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)") : "transparent" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: isVcOverLimit ? "#fb923c" : "var(--clr-lime)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: isVcOverLimit ? "#fb923c" : "#34d399" }}>
                   <Gift style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>Inflows ($/yr)</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -8457,6 +8466,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", marginTop: 6, flexShrink: 0 }} />
                           <div><strong style={{ color: "var(--text-highlight)" }}>Property CPF Refund on Sale:</strong> When you sell your HDB or private property, CPF Board requires you to refund the CPF Ordinary Account monies used for housing — including the principal withdrawn and the accrued interest at the OA rate of 2.5%/yr from the time of each withdrawal. The refund is credited back to your OA. If a Property Pledge was active (only BRS held in RA at 55), the refund first restores RA up to FRS; any surplus stays in OA. ERS top-up from OA is always optional. Model this using the <strong>Sell Property at Age</strong> field in Timelines &amp; Property.</div>
+                        </li>
+                        <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#34d399", marginTop: 6, flexShrink: 0 }} />
                           <div><strong style={{ color: "var(--text-highlight)" }}>MRSS — Matched Retirement Savings Scheme:</strong> Government matches RSTU cash top-ups to RA dollar-for-dollar up to $2,000/year (lifetime cap $20,000) for Singapore Citizens aged 55 and above (or any age if PwD is enabled) with RA below the Basic Retirement Sum (BRS) and monthly income ≤ $4,000. Automatically assessed — no application needed. <strong>No separate input required</strong>: the engine computes the MRSS match automatically each projection year based on your RSTU entry and eligibility conditions. An MRSS eligibility badge appears under the RSTU field in the Inflows panel showing the auto-credited amount. The $20,000 lifetime cap is tracked cumulatively across all projection years.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
