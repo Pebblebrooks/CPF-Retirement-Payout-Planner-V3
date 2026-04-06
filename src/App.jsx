@@ -563,7 +563,7 @@ function runProjectionEngine(inputs, {
   // Contributions grow at srsReturnRate. At srsDrawdownStartAge the balance is drawn down
   // evenly over srsDrawdownYears (must deplete within 10 yrs of first withdrawal per IRAS rules).
   // Only 50% of each annual withdrawal is taxable income (statutory retirement age concession).
-  const srsCap = 15300; // SC/PR only — foreigners not modelled in this tool
+  const srsCap = 15300; // SC/PR $15,300/yr — foreigners ($35,700 cap) not modelled in this tool
   const srsContrib = Math.min(Number(inputs.srsAnnualContribution) || 0, srsCap);
   const srsContribStop = Number(inputs.srsContribStopAge) || 63;
   const srsReturn = (Number(inputs.srsReturnRate) || 0) / 100;
@@ -3822,32 +3822,32 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         }
         .theme-light {
           /* ── Backgrounds: warm slate-grey base, off-white panels — no blinding white ── */
-          --bg-base: #e4eaf2;
-          --bg-panel: #f2f5f9;
-          --bg-input: #d8e0eb;
-          --bg-muted: rgba(228,234,242,0.96);
-          --bg-panel-muted: rgba(242,245,249,0.92);
-          --tooltip-bg: rgba(242,245,249,0.99);
+          --bg-base: #dce4ee;
+          --bg-panel: #eef1f6;
+          --bg-input: #d4dde8;
+          --bg-muted: rgba(220,228,238,0.96);
+          --bg-panel-muted: rgba(238,241,246,0.92);
+          --tooltip-bg: rgba(238,241,246,0.99);
           --tooltip-text: #0d1520;
           --tooltip-border: rgba(20,40,70,0.22);
           --tooltip-label: #334d6b;
           /* ── Borders: clearly visible without being harsh ── */
-          --border-subtle: #adbcce;
-          --border-strong: #6e87a2;
+          --border-subtle: #a2b4c8;
+          --border-strong: #627e98;
           /* ── Text: all levels darkened for WCAG AA minimum ── */
           --text-main: #162033;
           --text-bright: #08111e;
           --text-highlight: #0d2a4a;
-          --text-muted: #2e4560;          /* was #475569 — 40% darker */
-          --text-subtle: #4a6480;          /* was #7a8fa8 — 35% darker */
-          --header-bg: rgba(236,241,248,0.98);
+          --text-muted: #2e4560;
+          --text-subtle: #3d5875;
+          --header-bg: rgba(228,234,244,0.98);
           /* ── Charts: readable gridlines and labels ── */
-          --chart-grid: #c8d4e2;
+          --chart-grid: #c0cedd;
           --chart-text: #2e4560;
           /* ── Hero / KPI panel ── */
-          --hero-left-bg: #ccd9e8;
-          --hero-right-bg: #e8eef6;
-          --hero-border: #a8bcce;
+          --hero-left-bg: #c4d4e4;
+          --hero-right-bg: #e2eaf4;
+          --hero-border: #a0b8cc;
           --hero-text: #0a1c2e;
           --hero-label: rgba(10,28,46,0.65);
           --hero-card-bg: rgba(10,28,46,0.07);
@@ -3865,21 +3865,23 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --chart-cursor: rgba(20,40,70,0.20);
           --tooltip-border-inline: rgba(20,40,70,0.22);
           --tooltip-shadow-inline: 0 8px 24px rgba(0,0,0,0.16);
-          --code-bg: #e4eaf2;
+          --code-bg: #dce4ee;
           --code-text: #0d2a4a;
           --share-url-color: #065f46;
           --mc-total-border: rgba(20,40,70,0.18);
           --mc-total-color: #08111e;
         }
-        /* ── Light mode specific overrides ── */
+        /* ══════════════════════════════════════════════════════════════
+           LIGHT MODE SPECIFIC OVERRIDES — full contrast pass
+           ══════════════════════════════════════════════════════════════ */
 
-        /* Sidebar section headers — stronger gradient + crisper border */
+        /* ── Sidebar section headers — stronger gradient + crisper border ── */
         .theme-light .sidebar-section-hdr {
           background: linear-gradient(135deg, #ccd9e8 0%, #d8e4f0 100%) !important;
           border-color: #a8bcce !important;
         }
 
-        /* Input & select text — full darkness */
+        /* ── Input & select text — full darkness ── */
         .theme-light input[type="number"],
         .theme-light input[type="text"],
         .theme-light select {
@@ -3891,18 +3893,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           color: #4a6480 !important;
         }
 
-        /* Table column headers — the most complained-about readability gap */
+        /* ── Table column headers ── */
         .theme-light table thead th {
           color: #162033 !important;
           font-weight: 800 !important;
           background: #d4dde9 !important;
         }
-        /* Sticky age column in ledger/projection */
         .theme-light table thead th:first-child {
           background: #d4dde9 !important;
         }
-
-        /* Table body rows: stronger alternating stripe */
         .theme-light table tbody tr:nth-child(even) {
           background: rgba(180,198,220,0.18) !important;
         }
@@ -3910,7 +3909,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           color: #1e3350;
         }
 
-        /* Nav/tab bar buttons: readable in light bg context */
+        /* ── Nav/tab bar buttons ── */
         .theme-light .cpf-nav-btn {
           color: #2e4560 !important;
         }
@@ -3919,29 +3918,29 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           font-weight: 800 !important;
         }
 
-        /* Sub-tab toggles (Projection Table / Cashflow Ledger) */
+        /* ── Sub-tab toggles ── */
         .theme-light button[style*="borderRadius: 20"] {
           border-color: #6e87a2 !important;
         }
 
-        /* KPI strip — inactive plan values should read as valid, not greyed out */
+        /* ── KPI strip inactive values ── */
         .theme-light .kpi-inactive-val {
           color: #2e4560 !important;
         }
 
-        /* Panel/card borders in main content */
+        /* ── Panel/card borders ── */
         .theme-light .panel-card {
           border-color: #adbcce !important;
           background: #f2f5f9 !important;
         }
 
-        /* Lifetime Summary card labels */
+        /* ── Lifetime Summary card labels ── */
         .theme-light .lifetime-label {
           color: #2e4560 !important;
           font-size: 10px !important;
         }
 
-        /* Chart legend text */
+        /* ── Chart legend & axis text ── */
         .theme-light .recharts-legend-item-text {
           color: #2e4560 !important;
           font-weight: 600 !important;
@@ -3950,17 +3949,136 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           fill: #2e4560 !important;
         }
 
-        /* Sidebar gap alert box */
+        /* ── Sidebar gap alert box ── */
         .theme-light .gap-alert-box {
           background: rgba(254,243,199,0.85) !important;
           border-color: #d4a017 !important;
         }
 
-        /* Bottom badge pills */
+        /* ── Bottom badge pills ── */
         .theme-light .info-badge {
           background: #d8e0eb !important;
           color: #162033 !important;
           border-color: #adbcce !important;
+        }
+
+        /* ── Header action pill buttons: blue (Import/Export/Share/Link) ──
+             #60a5fa on rgba(236,241,248) ≈ 2.5:1 — fails WCAG AA.
+             Replace with #1d4ed8 on rgba(29,78,216,0.12) ≈ 5.8:1. ── */
+        .theme-light .cpf-header-actions button[style*="#60a5fa"],
+        .theme-light .cpf-header-actions label[style*="#60a5fa"] {
+          color: #1d4ed8 !important;
+          background: rgba(29,78,216,0.10) !important;
+          border-color: rgba(29,78,216,0.28) !important;
+        }
+
+        /* ── Reset button: #f87171 on near-white ≈ 2.0:1 — fails WCAG AA.
+             Replace with #b91c1c ≈ 5.4:1 ── */
+        .theme-light .cpf-header-actions button[style*="#f87171"] {
+          color: #b91c1c !important;
+          background: rgba(185,28,28,0.10) !important;
+          border-color: rgba(185,28,28,0.28) !important;
+        }
+
+        /* ── Samples button: #fbbf24 on near-white ≈ 1.9:1 — fails WCAG AA.
+             Replace with #92400e (dark amber) ≈ 5.7:1 ── */
+        .theme-light .cpf-header-actions button[style*="#fbbf24"] {
+          color: #92400e !important;
+          background: rgba(146,64,14,0.10) !important;
+          border-color: rgba(146,64,14,0.28) !important;
+        }
+
+        /* ── PDF/Export green buttons: #34d399 on near-white ≈ 1.7:1 — fails WCAG AA.
+             Replace with #065f46 ≈ 7.3:1 ── */
+        .theme-light button[style*="#34d399"] {
+          color: #065f46 !important;
+          background: rgba(6,95,70,0.10) !important;
+          border-color: rgba(6,95,70,0.28) !important;
+        }
+
+        /* ── FreqToggle: Recurring badge (#34d399 tint on panel bg) ── */
+        .theme-light .freq-recurring-active {
+          color: #065f46 !important;
+          background: rgba(6,95,70,0.14) !important;
+        }
+        /* ── FreqToggle: One-Time badge (#fbbf24 tint on panel bg) ── */
+        .theme-light .freq-onetime-active {
+          color: #92400e !important;
+          background: rgba(146,64,14,0.14) !important;
+        }
+
+        /* ── Sidebar field value hints (monospace amounts in teal) ──
+             #38bdf8 / #34d399 / #a78bfa etc. on #f2f5f9 need boosting ── */
+        .theme-light [style*="color: \"#38bdf8\""],
+        .theme-light [style*='color: "#38bdf8"'] { color: #0369a1 !important; }
+        .theme-light [style*="color: \"#a78bfa\""],
+        .theme-light [style*='color: "#a78bfa"'] { color: #6d28d9 !important; }
+        .theme-light [style*="color: \"#fb923c\""],
+        .theme-light [style*='color: "#fb923c"'] { color: #c2410c !important; }
+        .theme-light [style*="color: \"#f87171\""],
+        .theme-light [style*='color: "#f87171"'] { color: #b91c1c !important; }
+        .theme-light [style*="color: \"#fbbf24\""],
+        .theme-light [style*='color: "#fbbf24"'] { color: #92400e !important; }
+
+        /* ── Sidebar section body: labels use var(--text-subtle) = #4a6480.
+             Boost label contrast on #f2f5f9 panel background ── */
+        .theme-light .sidebar-field-label {
+          color: #2e4560 !important;
+          font-weight: 600 !important;
+        }
+
+        /* ── Toast notification: was near-invisible on light bg ── */
+        .theme-light .cpf-toast {
+          background: #162033 !important;
+          color: #f0f6ff !important;
+          border-color: #2e4560 !important;
+        }
+
+        /* ── Modal overlays: ensure headings readable ── */
+        .theme-light .modal-heading {
+          color: #08111e !important;
+        }
+
+        /* ── Tooltip box text inside sidebar ── */
+        .theme-light .tooltip-content {
+          color: #162033 !important;
+          background: rgba(242,245,249,0.99) !important;
+          border-color: rgba(20,40,70,0.22) !important;
+        }
+
+        /* ── Recharts Tooltip (chart hover) ── */
+        .theme-light .recharts-default-tooltip {
+          background: rgba(242,245,249,0.99) !important;
+          border-color: rgba(20,40,70,0.22) !important;
+          color: #162033 !important;
+        }
+        .theme-light .recharts-tooltip-label {
+          color: #162033 !important;
+          font-weight: 700 !important;
+        }
+        .theme-light .recharts-tooltip-item {
+          color: #2e4560 !important;
+        }
+
+        /* ── KPI / Summary panel metric values —
+             Large coloured dollar figures (OA blue, MA green, RA purple)
+             need higher luminance/contrast against light card backgrounds ── */
+        .theme-light [style*="color: \"#60a5fa\""],
+        .theme-light [style*='color: "#60a5fa"'] { color: #1d4ed8 !important; }   /* OA blue */
+        .theme-light [style*="color: \"#34d399\""],
+        .theme-light [style*='color: "#34d399"'] { color: #065f46 !important; }   /* MA green */
+        .theme-light [style*="color: \"#c084fc\""],
+        .theme-light [style*='color: "#c084fc"'] { color: #6d28d9 !important; }   /* RA purple */
+        .theme-light [style*="color: \"#10b981\""],
+        .theme-light [style*='color: "#10b981"'] { color: #065f46 !important; }   /* accent green */
+        .theme-light [style*="color: \"#818cf8\""],
+        .theme-light [style*='color: "#818cf8"'] { color: #4338ca !important; }   /* indigo */
+        .theme-light [style*="color: \"#94a3b8\""],
+        .theme-light [style*='color: "#94a3b8"'] { color: #334155 !important; }   /* gray headers (profile) */
+
+        /* ── Sidebar section header gray text: boost in light mode ── */
+        .theme-light [style*="color: \"#94a3b8\""] {
+          color: #475569 !important;
         }
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
@@ -4608,12 +4726,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={() => setShowPresets(true)} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(251,191,36,0.12)", color: "#fbbf24", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(251,191,36,0.3)", cursor: "pointer" }} title="Load a sample scenario to explore different profiles">
               <Users style={{ width: 12, height: 12 }} />Samples
             </button>
-            <button onClick={handleExportProfile} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Save inputs as a JSON backup file">
-              <Download style={{ width: 12, height: 12 }} />Export Profile
-            </button>
             <label style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Load a previously saved JSON profile">
               <Upload style={{ width: 12, height: 12 }} />Import Profile<input type="file" accept=".json" style={{ display: "none" }} onClick={(e) => { e.target.value = null; }} onChange={handleImportProfile} />
             </label>
+            <button onClick={handleExportProfile} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }} title="Save inputs as a JSON backup file">
+              <Download style={{ width: 12, height: 12 }} />Export Profile
+            </button>
             <button onClick={() => {
               try {
                 const fullState = { inputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" };
@@ -4683,13 +4801,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={() => { setMobileMenuOpen(false); handleReset(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.12)", color: "#f87171", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(239,68,68,0.35)", cursor: "pointer" }} title="Reset all inputs and scenarios to defaults">
               <RotateCcw style={{ width: 13, height: 13 }} />Reset
             </button>
-            <button onClick={() => { setMobileMenuOpen(false); handleExportProfile(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>
-              <Download style={{ width: 13, height: 13 }} />Export Profile
-            </button>
             <label style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>
               <Upload style={{ width: 13, height: 13 }} />Import Profile
               <input type="file" accept=".json" style={{ display: "none" }} onClick={(e) => { e.target.value = null; }} onChange={handleImportProfile} />
             </label>
+            <button onClick={() => { setMobileMenuOpen(false); handleExportProfile(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(59,130,246,0.1)", color: "#60a5fa", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(59,130,246,0.3)", cursor: "pointer" }}>
+              <Download style={{ width: 13, height: 13 }} />Export Profile
+            </button>
             <button onClick={() => {
               setMobileMenuOpen(false);
               try {
@@ -4761,10 +4879,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           </div>
           <div className={`cpf-sidebar-inner${sidebarOpen ? "" : " sidebar-collapsed"}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <div onClick={() => toggleSection("profile")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("profile"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("profile") ? "rgba(16,185,129,0.06)" : "transparent" }}>
+              <div onClick={() => toggleSection("profile")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("profile"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("profile") ? "rgba(148,163,184,0.08)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <User style={{ width: 14, height: 14, color: "#10b981" }} />
-                  <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-main)" }}>Profile & Balances</span>
+                  <User style={{ width: 14, height: 14, color: "#94a3b8" }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#94a3b8" }}>Profile & Balances</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: saveStatus === "Saving..." ? "rgba(251,191,36,0.1)" : "rgba(16,185,129,0.1)", color: saveStatus === "Saving..." ? "#fbbf24" : "#10b981" }}>
@@ -4952,8 +5070,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </div>
             {/* Mandatory Contribs */}
             <div style={{ background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(251,146,60,0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <div onClick={() => toggleSection("contribs")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("contribs"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("contribs") ? "rgba(52,211,153,0.06)" : "transparent" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#34d399" }}>
+              <div onClick={() => toggleSection("contribs")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("contribs"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("contribs") ? "rgba(251,191,36,0.07)" : "transparent" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#fbbf24" }}>
                   <Briefcase style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>Mandatory Contributions{isSelfEmployed ? " (SEP)" : ""}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
