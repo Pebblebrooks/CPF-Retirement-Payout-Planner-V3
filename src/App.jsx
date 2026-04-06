@@ -4074,7 +4074,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .theme-light [style*="color: \"#818cf8\""],
         .theme-light [style*='color: "#818cf8"'] { color: #4338ca !important; }   /* indigo */
         .theme-light [style*="color: \"#94a3b8\""],
-        .theme-light [style*='color: "#94a3b8"'] { color: #334155 !important; }   /* gray headers (profile) */
+        .theme-light [style*='color: "#94a3b8"'] { color: #334155 !important; }   /* gray (legacy) */
+
+        /* ── Profile & Balances header: sky blue → deep sky in light mode ── */
+        .theme-light [style*="color: \"#38bdf8\""],
+        .theme-light [style*='color: "#38bdf8"'] { color: #0284c7 !important; }
+
+        /* ── Mandatory Contributions header: lime green → dark olive in light mode ── */
+        .theme-light [style*="color: \"#a3e635\""],
+        .theme-light [style*='color: "#a3e635"'] { color: #4d7c0f !important; }
 
         /* ── Sidebar section header gray text: boost in light mode ── */
         .theme-light [style*="color: \"#94a3b8\""] {
@@ -4385,7 +4393,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* Deploy tip */}
             <div style={{ background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 10, padding: "10px 14px" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#fbbf24", marginBottom: 4 }}>🌐 Want a shareable public URL?</div>
-              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>Deploy the ZIP to <strong style={{ color: "var(--text-main)" }}>Vercel</strong> or <strong style={{ color: "var(--text-main)" }}>Netlify</strong> (free, ~2 min). Anyone with the URL can open the app and paste your code to see your exact projection. Use <strong style={{ color: "var(--text-main)" }}>Save Profile</strong> (💾) to back up your full .json file locally.</p>
+              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>Deploy the ZIP to <strong style={{ color: "var(--text-main)" }}>Vercel</strong> or <strong style={{ color: "var(--text-main)" }}>Netlify</strong> (free, ~2 min). Anyone with the URL can open the app and paste your code to see your exact projection. Use <strong style={{ color: "var(--text-main)" }}>Export Profile</strong> (💾) to back up your full .json file locally.</p>
             </div>
           </div>
         </div>
@@ -4593,15 +4601,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ))}
                   </div>
                   <div style={{ background: "var(--bg-base)", padding: 16, borderRadius: 12, border: "1px solid var(--border-subtle)" }}>
-                    <p style={{ fontSize: 12, color: "var(--text-muted)" }}><strong style={{ color: "var(--text-bright)" }}>Data stays on your device.</strong> Use Save Profile to back up your inputs as a JSON file, or Share to generate an encoded profile code you can send to others. Hit <strong style={{ color: "var(--text-bright)" }}>Samples</strong> in the header to load a pre-built profile and explore the tool instantly.</p>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)" }}><strong style={{ color: "var(--text-bright)" }}>Data stays on your device.</strong> Use <strong style={{ color: "var(--text-bright)" }}>Export Profile</strong> to back up your inputs as a JSON file, or Share to generate an encoded profile code you can send to others. Hit <strong style={{ color: "var(--text-bright)" }}>Samples</strong> in the header to load a pre-built profile and explore the tool instantly.</p>
                   </div>
                 </>
               )}
               {welcomeStep === 1 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {[
-                    ["1", "Enter your CPF balances & select gender", "Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio. The progress bars compare against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.", "#3b82f6"],
-                    ["2", "Use Auto-Calc for contributions", "Toggle the Salary Estimator. Enter your gross monthly salary — the tool applies the 2026 OW ceiling ($8,000/month) and AW ceiling ($102,000/yr) to split contributions accurately across OA/SA/MA.", "#10b981"],
+                    ["1", "Enter your CPF balances & select citizenship", "Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio. Select SC or PR — citizenship gates which schemes apply (MRSS/MMSS are SC-only; PR Year 1/2 use lower contribution rates). The progress bars compare against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.", "#3b82f6"],
+                    ["2", "Auto-Calc your contributions", "Click ⚡ Auto-Calc in the Mandatory Contributions panel. Enter OW (Monthly Gross), AW (Annual Bonus), and Salary Growth %, then hit the button. SC uses full rates. PR: select tenure year (1/2/3+) and rate type — G/G (graduated employer, default) or F/G (full employer 17%, requires joint CPF application). The engine advances PR tiers automatically year by year.", "#10b981"],
                     ["3", "Inflows, Outflows & CPF Transfers", "The Inflows panel has: VC3A (single cash lump-sum, auto-split by age-band), RSTU (SA/RA cash top-up, tax-relievable), VHR, gov grants, MRSS (RA top-up, up to $2,000/yr · RA below BRS), MMSS (MA match, up to $1,000/yr), and WIS/Workfare (60% CPF for employees, 90% MA for SEPs). Outflows: Housing Loan (OA), medical, CPFIS. CPF Transfers: OA→MA, OA→SA (pre-55, capped at FRS), and OA→RA (age 55+, capped at ERS).", "#a855f7"],
                     ["4", "Set your life-phase timelines", "Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model real-world cash flow transitions accurately.", "#fbbf24"],
                     ["5", "Set up SRS (optional)", "If you contribute to the Supplementary Retirement Scheme, enter your SRS balance, annual contribution, and drawdown start age in the SRS panel. Contributions are tax-deductible; 50% of withdrawals are taxable from age 63. All funds must be withdrawn within 10 years.", "#10b981"],
@@ -4879,10 +4887,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           </div>
           <div className={`cpf-sidebar-inner${sidebarOpen ? "" : " sidebar-collapsed"}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <div onClick={() => toggleSection("profile")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("profile"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("profile") ? "rgba(148,163,184,0.08)" : "transparent" }}>
+              <div onClick={() => toggleSection("profile")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("profile"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("profile") ? "rgba(56,189,248,0.08)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <User style={{ width: 14, height: 14, color: "#94a3b8" }} />
-                  <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#94a3b8" }}>Profile & Balances</span>
+                  <User style={{ width: 14, height: 14, color: "#38bdf8" }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#38bdf8" }}>Profile & Balances</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: saveStatus === "Saving..." ? "rgba(251,191,36,0.1)" : "rgba(16,185,129,0.1)", color: saveStatus === "Saving..." ? "#fbbf24" : "#10b981" }}>
@@ -5070,8 +5078,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </div>
             {/* Mandatory Contribs */}
             <div style={{ background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(251,146,60,0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <div onClick={() => toggleSection("contribs")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("contribs"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("contribs") ? "rgba(251,191,36,0.07)" : "transparent" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#fbbf24" }}>
+              <div onClick={() => toggleSection("contribs")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("contribs"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("contribs") ? "rgba(163,230,53,0.07)" : "transparent" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#a3e635" }}>
                   <Briefcase style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>Mandatory Contributions{isSelfEmployed ? " (SEP)" : ""}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -6705,7 +6713,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         ))}
                       </div>
                       <div style={{ background: "var(--bg-base)", padding: 14, borderRadius: 10, border: "1px solid var(--border-subtle)", marginTop: 16 }}>
-                        <p style={{ fontSize: 12, color: "var(--text-muted)" }}><strong style={{ color: "var(--text-bright)" }}>Data stays on your device.</strong> Use Save Profile (💾) to back up your inputs as a JSON file, or Share to generate an encoded profile code. No server storage — everything runs locally in your browser. Hit <strong style={{ color: "var(--text-bright)" }}>Samples</strong> in the header to instantly load a pre-built profile and start exploring.</p>
+                        <p style={{ fontSize: 12, color: "var(--text-muted)" }}><strong style={{ color: "var(--text-bright)" }}>Data stays on your device.</strong> Use <strong style={{ color: "var(--text-bright)" }}>Export Profile</strong> to back up your inputs as a JSON file, or Share to generate an encoded profile code. No server storage — everything runs locally in your browser. Hit <strong style={{ color: "var(--text-bright)" }}>Samples</strong> in the header to instantly load a pre-built profile and start exploring.</p>
                       </div>
                     </div>
                   </div>
@@ -8445,7 +8453,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", marginTop: 6, flexShrink: 0 }} />
                           <div><strong style={{ color: "var(--text-highlight)" }}>Property CPF Refund on Sale:</strong> When you sell your HDB or private property, CPF Board requires you to refund the CPF Ordinary Account monies used for housing — including the principal withdrawn and the accrued interest at the OA rate of 2.5%/yr from the time of each withdrawal. The refund is credited back to your OA. If a Property Pledge was active (only BRS held in RA at 55), the refund first restores RA up to FRS; any surplus stays in OA. ERS top-up from OA is always optional. Model this using the <strong>Sell Property at Age</strong> field in Timelines &amp; Property.</div>
-                          <div><strong style={{ color: "var(--text-highlight)" }}>MRSS — Matched Retirement Savings Scheme:</strong> Government matches RSTU cash top-ups to RA dollar-for-dollar up to $2,000/year (lifetime cap $20,000) for Singapore Citizens aged 55 and above with RA below the Basic Retirement Sum (BRS). No upper age cap. Automatically assessed — no application needed. Enter the expected matched amount in the Inflows panel.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>MRSS — Matched Retirement Savings Scheme:</strong> Government matches RSTU cash top-ups to RA dollar-for-dollar up to $2,000/year (lifetime cap $20,000) for Singapore Citizens aged 55 and above (or any age if PwD is enabled) with RA below the Basic Retirement Sum (BRS) and monthly income ≤ $4,000. Automatically assessed — no application needed. <strong>No separate input required</strong>: the engine computes the MRSS match automatically each projection year based on your RSTU entry and eligibility conditions. An MRSS eligibility badge appears under the RSTU field in the Inflows panel showing the auto-credited amount. The $20,000 lifetime cap is tracked cumulatively across all projection years.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#38bdf8", marginTop: 6, flexShrink: 0 }} />
