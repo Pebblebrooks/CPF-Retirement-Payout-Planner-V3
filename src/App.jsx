@@ -1824,13 +1824,20 @@ export default function App() {
     }
     // Property Monetisation validation
     if (inp.propMonetiseEnabled) {
+      const pmScheme = inp.propMonetiseScheme ?? 'downgrade';
       const pmAge = Number(inp.propMonetiseAge) || 65;
       const ca3 = Number(inp.currentAge) || 35;
       if (pmAge < ca3 || pmAge > 95) errs.propMonetiseAge = `${ca3}–95`;
+      // LBS-specific: CPF Board minimum entry age is 65
+      if (pmScheme === 'lbs' && !errs.propMonetiseAge && pmAge < 65) errs.propMonetiseAge = "LBS requires age 65+ (CPF Board eligibility)";
       const pmCash = Number(inp.propMonetiseCashProceeds) || 0;
       if (pmCash < 0 || pmCash > 10000000) errs.propMonetiseCashProceeds = "0 – $10M";
       const pmRA = Number(inp.propMonetiseRaTopup) || 0;
       if (pmRA < 0 || pmRA > 2000000) errs.propMonetiseRaTopup = "0 – $2,000,000";
+      // LBS-specific: HDB pays annuity premium into RA; total RA cannot exceed ERS
+      if (pmScheme === 'lbs' && !errs.propMonetiseRaTopup && pmRA > 440800) errs.propMonetiseRaTopup = "LBS RA top-up capped at ERS ($440,800)";
+      // SHB-specific: bonus is $30k (3-room or smaller) or $15k (2-room Flexi); soft warn if suspiciously high
+      if (pmScheme === 'shb' && !errs.propMonetiseRaTopup && pmRA > 90000) errs.propMonetiseRaTopup = "SHB RA bonus cap is $30,000–$90,000 depending on flat type — verify with CPF Board";
     }
     // SRS validation
     const srsCap = 15300; // SC/PR cap — foreigners not modelled
@@ -6221,7 +6228,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <div>
                         <p style={{ fontSize: 10, fontWeight: 800, color: "#60a5fa", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
                           Property Monetisation
-                          <TooltipBox id="t-prop-mon" text="Model a one-time property monetisation event: downgrading to a smaller home, Lease Buyback Scheme (LBS), or Silver Housing Bonus (SHB). All three schemes apply the same engine logic — net cash proceeds go to private assets and any RA top-up component goes directly to RA. The scheme label is for your reference; enter the actual net figures for your chosen scheme. Note: if you also model a property sale via 'Sell Property at Age', the CPF OA refund on that sale is handled separately." />
+                          <TooltipBox id="t-prop-mon" text="Model a one-time property monetisation event. Choose your scheme — Downgrade (sell and buy smaller), LBS (Lease Buyback — sell tail-end of HDB lease to HDB, stay in flat, from age 65), or SHB (Silver Housing Bonus — downgrade to 3-room or smaller HDB with CPF RA bonus). The field labels, tooltips, and validations update per scheme. The engine credits cash proceeds to private assets and RA top-up directly to RA as a one-time event at your chosen age. Note: if modelling a property sale via 'Sell Property at Age', the CPF OA refund on that sale is handled separately." />
                         </p>
                         <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Downgrade · LBS · Silver Housing Bonus · one-time event</p>
                       </div>
@@ -6229,18 +6236,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                     {inputs.propMonetiseEnabled && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {/* Scheme selector — informational label only; engine logic is identical for all three */}
+                        {/* Scheme selector — labels, tooltips, validation, and guidance text are scheme-specific */}
                         <div>
-                          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", marginBottom: 4 }}>Scheme <span style={{ fontSize: 8, fontWeight: 400, color: "var(--text-muted)", textTransform: "none" }}>(label only — enter net figures below)</span></label>
+                          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", marginBottom: 4 }}>Scheme</label>
                           <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 2 }}>
                             {[["downgrade", "Downgrade"], ["lbs", "LBS"], ["shb", "Silver HB"]].map(([val, label]) => (
                               <button key={val} onClick={() => setInputs(p => ({ ...p, propMonetiseScheme: val }))} style={{ flex: 1, padding: "4px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer", background: (inputs.propMonetiseScheme ?? "downgrade") === val ? "#60a5fa" : "transparent", color: (inputs.propMonetiseScheme ?? "downgrade") === val ? "#020617" : "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</button>
                             ))}
                           </div>
                           <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
-                            {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Downgrade to smaller home — enter net proceeds after CPF OA refund (handled by Sell Property at Age), agent fees, stamp duty, and replacement home cost."}
-                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "HDB Lease Buyback — sell tail-end of lease to HDB; stay in flat. Enter: cash portion below, RA top-up component (annuity premium HDB pays to RA) in the RA field."}
-                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Silver Housing Bonus — downgrade to 3-room or smaller HDB; bonus up to $30k–$90k. Enter: cash bonus below, CPF RA top-up portion in the RA field."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Sell existing home, buy smaller. Enter net cash after CPF OA refund (handled by Sell Property at Age), agent fees, stamp duty, and replacement home cost. Any voluntary RA top-up from proceeds is optional."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "Sell tail-end of HDB lease to HDB; you stay in your flat for life. Available from age 65 (SC only). HDB pays an annuity premium directly into RA (enter in RA field below); you may also receive a smaller cash component. ⚠ Monthly LBS income is not modelled as a cash stream — add it as private income in Goals if needed."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Downgrade to a 3-room or smaller HDB; govt tops up RA as a CPF bonus. Cash bonus (if any) enters private assets; CPF RA bonus enters RA. Bonus amount depends on flat type — verify the exact figures with CPF Board before entering."}
                           </p>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -6251,8 +6258,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>
                           <div>
                             <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", marginBottom: 4 }}>
-                              Net Cash Proceeds ($)
-                              <TooltipBox id="t-pm-cash" text="Net cash received after all deductions. Downgrade: sale price minus CPF OA refund, fees, and new home cost. LBS: cash portion from HDB. SHB: cash bonus amount. This is credited to your private assets / bank account." />
+                              {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Net Cash Proceeds ($)"}
+                              {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "LBS Cash Component ($)"}
+                              {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Cash Bonus ($)"}
+                              {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && <TooltipBox id="t-pm-cash" text="Net cash received into your bank account after all deductions: sale price minus CPF OA refund (the OA refund is handled by 'Sell Property at Age'), agent commissions, stamp duties, and the cost of your replacement home. This amount is credited to your private assets at the event age." />}
+                              {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && <TooltipBox id="t-pm-cash" text="The cash component HDB pays you at LBS completion — typically a small amount after the annuity premium is deducted and routed to RA. Many LBS recipients receive $0 cash (all proceeds go to RA as annuity premium). Enter 0 if your LBS deal has no cash component. Credited to private assets." />}
+                              {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && <TooltipBox id="t-pm-cash" text="Any cash Silver Housing Bonus amount. Note: the SHB bonus is primarily credited to RA (enter in the RA field below), not paid as cash. This field is for any residual cash payout. Enter 0 if no cash component applies to your specific SHB type. Credited to private assets." />}
                             </div>
                             <input type="text" inputMode="decimal" name="propMonetiseCashProceeds" value={inputs.propMonetiseCashProceeds} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseCashProceeds ? "#f87171" : "rgba(96,165,250,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                             {inputErrors.propMonetiseCashProceeds && <p style={{ fontSize: 10, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.propMonetiseCashProceeds}</p>}
@@ -6260,12 +6271,25 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                         <div>
                           <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", marginBottom: 4 }}>
-                            RA Top-up Component ($)
-                            <TooltipBox id="t-pm-ra" text="Amount credited directly to RA. LBS: the annuity premium HDB pays into your RA. SHB: CPF top-up portion (up to $30k). Downgrade: 0 unless you voluntarily top up RA from sale proceeds. Credited to RA and boosts CPF LIFE payouts." />
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "RA Top-up — Voluntary ($)"}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "Annuity Premium to RA ($)"}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "CPF RA Bonus ($)"}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && <TooltipBox id="t-pm-ra" text="Optional: voluntarily top up RA from your net proceeds. This grows at 4%/yr and boosts monthly CPF LIFE payouts. Leave as 0 if you prefer to keep the cash in private assets. Cannot push RA above ERS ($440,800)." />}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && <TooltipBox id="t-pm-ra" text="The annuity premium HDB pays directly into your RA — this is the core LBS mechanism. The amount depends on your flat type, remaining lease, and RA balance. It cannot exceed ERS ($440,800). This directly increases your CPF LIFE monthly payout. Check the CPF Board LBS calculator for your exact figure." />}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && <TooltipBox id="t-pm-ra" text="The CPF RA bonus credited under SHB. Amount varies by flat type: typically $30,000 for 3-room or smaller, or $15,000 for 2-room Flexi. A soft warning fires if you enter more than $90,000. Confirm the exact figure with CPF Board before using this tool for financial decisions." />}
                           </div>
                           <input type="text" inputMode="decimal" name="propMonetiseRaTopup" value={inputs.propMonetiseRaTopup} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseRaTopup ? "#f87171" : "rgba(96,165,250,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.propMonetiseRaTopup && <p style={{ fontSize: 10, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.propMonetiseRaTopup}</p>}
-                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Credited to RA at event age · boosts CPF LIFE payout · reduces property value in projection</p>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Credited to RA at event age · boosts CPF LIFE payout · reduces property value in projection"}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "HDB annuity premium → RA · boosts CPF LIFE payout · capped at ERS ($440,800)"}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "SHB RA bonus → RA · boosts CPF LIFE payout · typically $15,000–$30,000"}
+                          </p>
+                          {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && (
+                            <div style={{ marginTop: 6, background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 8, padding: "8px 10px", fontSize: 10, color: "#93c5fd", lineHeight: 1.5 }}>
+                              💡 <strong>LBS monthly payout not modelled:</strong> After LBS, HDB pays you a monthly income for the duration of the sold lease tail. This stream is not modelled as a recurring cash flow here. To include it, add the estimated annual LBS payout as a recurring private income amount in the <strong>Private Assets &amp; Goals</strong> panel.
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
