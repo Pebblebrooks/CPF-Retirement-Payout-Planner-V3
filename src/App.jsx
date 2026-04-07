@@ -303,14 +303,14 @@ const DEFAULT_INPUTS = {
   oaToSaForLovedOne: false,
   // Frequency toggles — 'annual' (recurring each year) or 'one-time' (applied in first year only)
   vc3aFreq: 'annual', vcSaFreq: 'annual', vcMaFreq: 'annual', vcVhrFreq: 'annual',
-  govGrantFreq: 'annual', mrssFreq: 'annual', wisFreq: 'annual',
+  govGrantFreq: 'annual', wisFreq: 'annual',
   cpfisOaFreq: 'annual', cpfisSaFreq: 'annual', housingFreq: 'annual',
   oaWithdrawalFreq: 'one-time', oaToMaFreq: 'annual', oaToSaFreq: 'annual',
   // Duration for recurring fields (0 = indefinite/∞; N = apply for first N projection years from current age).
   // Ignored when the paired *Freq is 'one-time' — one-time fields already fire only in year 1.
   // SRS excluded — its stop is controlled precisely by srsContribStopAge instead.
   vc3aDur: 0, vcSaDur: 0, vcMaDur: 0, vcVhrDur: 0,
-  govGrantDur: 0, mrssDur: 0, wisDur: 0,
+  govGrantDur: 0, wisDur: 0,
   cpfisOaDur: 0, cpfisSaDur: 0, housingDur: 0,
   oaToMaDur: 0, oaToSaDur: 0, oaEduLoanDur: 0,
   // PR tenure year — 1, 2, or 3+ (3 = full rates). Only shown/relevant when citizenStatus === 'PR'.
@@ -449,7 +449,7 @@ const INPUT_LABELS = {
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
   vc3aDur: "VC3A Duration (yrs)", vcSaDur: "RSTU Duration (yrs)", vcMaDur: "VCMA Duration (yrs)",
   vcVhrDur: "VHR Duration (yrs)", govGrantDur: "Gov Grant Duration (yrs)",
-  mrssDur: "MRSS Duration (yrs)", wisDur: "WIS Duration (yrs)",
+  wisDur: "WIS Duration (yrs)", // mrssDur removed — MRSS frequency mirrors RSTU by CPF policy
   cpfisOaDur: "CPFIS OA Duration (yrs)", cpfisSaDur: "CPFIS SA Duration (yrs)",
   housingDur: "Housing Duration (yrs)", oaToMaDur: "OA-MA Duration (yrs)",
   oaToSaDur: "OA-SA Duration (yrs)", oaEduLoanDur: "OA Edu Loan Duration (yrs)",
@@ -498,7 +498,6 @@ function runProjectionEngine(inputs, {
   const vcMaFreq     = inputs.vcMaFreq     || 'annual';
   const vcVhrFreq    = inputs.vcVhrFreq    || 'annual';
   const govGrantFreq = inputs.govGrantFreq || 'annual';
-  const mrssFreq     = inputs.mrssFreq     || 'annual';
   // mmssFreq removed — MMSS ties to effVcMaFreq, not a separate toggle
   const wisFreq      = inputs.wisFreq      || 'annual';
   const cpfisOaFreq   = inputs.cpfisOaFreq   || 'annual';
@@ -513,7 +512,7 @@ function runProjectionEngine(inputs, {
   const vcMaDur      = Number(inputs.vcMaDur)      || 0;
   const vcVhrDur     = Number(inputs.vcVhrDur)     || 0;
   const govGrantDur  = Number(inputs.govGrantDur)  || 0;
-  const mrssDur      = Number(inputs.mrssDur)      || 0;
+  // mrssDur removed — MRSS frequency mirrors RSTU (vcSaFreq) by CPF policy; no separate freq/dur control needed
   // mmssDur removed — dead field, never read by MMSS engine block
   const wisDur       = Number(inputs.wisDur)       || 0;
   const cpfisOaDur   = Number(inputs.cpfisOaDur)   || 0;
@@ -730,13 +729,22 @@ function runProjectionEngine(inputs, {
     // 3. Drawdown: compute fixed annual draw at drawdown start, then deplete over srsDrawYears
     if (age === srsDrawStart && !srsDrawdownApplied) {
       // Divide balance evenly over the drawdown window — growth continues on remaining balance
-      srsAnnualDraw = srsDrawYears > 0 ? Math.round(srsBalance / srsDrawYears) : srsBalance;
+      // NX5 fix: use PMT annuity formula so the level annual draw exactly depletes the
+      // growing SRS balance over srsDrawYears — avoids the large forced-zero discontinuity
+      // that the old "balance / n" approach produced in the final year.
+      // PMT = PV × r / (1 − (1+r)^−n)  where PV = post-growth balance at drawdown start.
+      srsAnnualDraw = srsDrawYears > 0
+        ? (srsReturn > 0
+            ? Math.round(srsBalance * srsReturn / (1 - Math.pow(1 + srsReturn, -srsDrawYears)))
+            : Math.round(srsBalance / srsDrawYears))
+        : srsBalance;
       srsDrawdownApplied = true;
     }
     if (srsDrawdownApplied && age >= srsDrawStart && age < srsDrawStart + srsDrawYears) {
       srsBalance = Math.max(0, srsBalance - srsAnnualDraw);
     }
-    if (srsDrawdownApplied && age === srsDrawStart + srsDrawYears - 1) srsBalance = 0; // full depletion
+    // PMT formula produces near-zero balance at final year; cleanup handles any float residual
+    if (srsDrawdownApplied && age === srsDrawStart + srsDrawYears - 1) srsBalance = 0;
 
     // Phase 2: Property Downpayment from OA
     if (age === downpaymentAge && plannedDownpaymentOA > 0 && !downpaymentApplied) {
@@ -762,11 +770,22 @@ function runProjectionEngine(inputs, {
 
     // OA withdrawal at 55 — one-time (default: deduct once at 55) or annual (deduct every year from 55+)
     if (oaWithdrawalAt55 > 0) {
+      // NX2 fix: both paths now (a) respect oaDrawdownFloor, (b) credit yearOaDrawOut so the
+      // withdrawal appears in the cashflow ledger OA-draw column, and (c) increment totalOutSpent
+      // so cumulativeOutflow is correct. Previously OA simply shrank silently with no ledger trace.
       if (oaWithdrawalFreq === 'annual') {
-        if (age >= 55) oa = Math.max(0, oa - oaWithdrawalAt55);
+        if (age >= 55) {
+          const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor));
+          oa            -= actualW55;
+          yearOaDrawOut += actualW55;
+          totalOutSpent += actualW55;
+        }
       } else {
         if (age === 55 && !withdrawalApplied) {
-          oa = Math.max(0, oa - oaWithdrawalAt55);
+          const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor));
+          oa            -= actualW55;
+          yearOaDrawOut += actualW55;
+          totalOutSpent += actualW55;
           withdrawalApplied = true;
         }
       }
@@ -880,7 +899,9 @@ function runProjectionEngine(inputs, {
           const actualMmss = Math.min(vcMaThis, 1000, maRoom_mm);
           // Issue 3: store in carry — credited to MA at start of following year, not immediately.
           // Issues 1/C2: yearInflow + totalInjected also updated then, in the carry block above.
-          if (actualMmss > 0) { pendingMmssCarry = actualMmss; }
+          // NX6 fix: use += not = so back-to-back eligible years accumulate correctly
+          // and future refactoring (e.g. moving the MMSS block) can't silently discard a prior carry
+          if (actualMmss > 0) { pendingMmssCarry += actualMmss; }
         }
       }
     }
@@ -1866,6 +1887,11 @@ export default function App() {
     if (oaDrawAmt < 0 || oaDrawAmt > 50000) errs.oaDrawdownMonthly = "0 – $50,000/mo";
     const oaFloor = Number(inp.oaDrawdownFloor) || 0;
     if (oaFloor < 0 || oaFloor > 5000000) errs.oaDrawdownFloor = "0 – $5,000,000";
+    // NX2 fix: warn if annual lump-sum withdrawal and monthly drawdown are both active — they stack
+    if ((Number(inp.oaWithdrawalAt55) || 0) > 0 && inp.oaWithdrawalFreq === 'annual'
+        && (Number(inp.oaDrawdownMonthly) || 0) > 0 && !inp.dieWithZeroEnabled) {
+      errs.oaWithdrawalAt55 = 'Annual OA withdrawal + monthly drawdown both active — these stack and may deplete OA faster than intended.';
+    }
     // Die with Zero age validation
     if (inp.dieWithZeroEnabled) {
       const dwzA = Number(inp.dieWithZeroAge) || 85;
@@ -2716,9 +2742,9 @@ export default function App() {
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
       vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD,
-      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, mrssFreq, wisFreq,
+      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, wisFreq, // mrssFreq removed — mirrors vcSaFreq by CPF policy
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
-      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, mrssDur, wisDur,
+      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, wisDur, // mrssDur removed — no separate MRSS duration control
       cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur,
       dieWithZeroEnabled, dieWithZeroAge
     } = debouncedInputs;
@@ -2743,9 +2769,9 @@ export default function App() {
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
       vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD,
-      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, mrssFreq, wisFreq,
+      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, wisFreq, // mrssFreq removed — mirrors vcSaFreq by CPF policy
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
-      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, mrssDur, wisDur,
+      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, wisDur, // mrssDur removed — no separate MRSS duration control
       cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur,
       dieWithZeroEnabled, dieWithZeroAge
     });
@@ -2762,9 +2788,23 @@ export default function App() {
         ? (rOA > 0 ? Math.round(oaAtPayout * rOA / (1 - Math.pow(1 + rOA, -n)) / 12) : Math.round(oaAtPayout / n / 12))
         : 0;
       const pass2 = runProjectionEngine({ ...debouncedInputs, oaDrawdownMonthly: dwzPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 });
-      pass2._dwzOaMonthly = dwzPmt;
-      pass2._dwzStartAge  = pa;
-      return pass2;
+      // NX3 fix: verify OA actually depletes to ~$0 at dwzAge.
+      // If mandatory contributions or other inflows continue post-payout, OA will retain a residual
+      // that the PMT formula (computed on oaAtPayout alone) did not account for.
+      // Apply a first-order correction: spread the residual evenly over the drawdown window and
+      // run a corrected pass3. Store _dwzResidualOa for UI disclosure.
+      const residualOa = pass2.find(r => r.age === dwzA)?.oa || 0;
+      let finalPmt  = dwzPmt;
+      let finalPass = pass2;
+      if (residualOa > 500 && dwzPmt > 0) {
+        const correctionMonthly = Math.round(residualOa / Math.max(1, n * 12));
+        finalPmt  = dwzPmt + correctionMonthly;
+        finalPass = runProjectionEngine({ ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 });
+      }
+      finalPass._dwzOaMonthly  = finalPmt;
+      finalPass._dwzStartAge   = pa;
+      finalPass._dwzResidualOa = finalPass.find(r => r.age === dwzA)?.oa || 0;
+      return finalPass;
     }
     return runProjectionEngine(debouncedInputs);
   }, [engineKey]); // eslint-disable-line
@@ -2773,15 +2813,17 @@ export default function App() {
   const effectiveOaDrawStartAge = debouncedInputs.dieWithZeroEnabled ? (projection._dwzStartAge || Number(debouncedInputs.payoutAge) || 65) : (Number(debouncedInputs.oaDrawdownStartAge) || 0);
   const effectiveOaDrawFloor    = debouncedInputs.dieWithZeroEnabled ? 0 : (Number(debouncedInputs.oaDrawdownFloor) || 0);
 
-  const raAtPayout = projection.find(d => d.age === (Number(inputs.payoutAge) || 65))?.ra || 0;
+  // NX10 fix: use debouncedInputs.payoutAge to stay in sync with the debounced projection
+  const raAtPayout = projection.find(d => d.age === (Number(debouncedInputs.payoutAge) || 65))?.ra || 0;
 
   // 20% RA-to-OA transfer at payout age (CPF policy):
   // Transfer base = RA at payout − (cumulative cash top-ups to SA/RA + interest earned on SA/RA)
   // Cash top-ups: voluntary SA top-ups, gov grants, MRSS grants credited to SA/RA
   // Interest: interest accruing to SA (pre-55) and RA (post-55) accounts over the full period
   // These deductions are sourced directly from the projection engine's per-row tracking.
-  const payoutAge65 = Number(inputs.payoutAge) || 65;
-  const startAge65 = Number(inputs.currentAge) || 35;
+  // NX10 fix: payoutAge65 reads debouncedInputs so it matches the debounced projection
+  // startAge65 renamed + retained for documentation; previously dead code (NX12 note)
+  const payoutAge65 = Number(debouncedInputs.payoutAge) || 65;
   const payoutRow65 = projection.find(d => d.age === payoutAge65);
   const cumulativeCashTopUps = payoutRow65?.cumRaCashTopUps ?? 0;
   const cumulativeRaInterest = payoutRow65?.cumRaInterest ?? 0;
@@ -2791,8 +2833,9 @@ export default function App() {
   const raAfterTransfer = raAtPayout - raOaTransfer;
 
   const lifePlans = useMemo(() => {
-    const pAge = Number(inputs.payoutAge) || 65;
-    const male = inputs.isMale !== false;
+    // NX10 fix: use debouncedInputs inside useMemos that depend on the debounced projection
+    const pAge = Number(debouncedInputs.payoutAge) || 65;
+    const male = debouncedInputs.isMale !== false;
     // CPF LIFE payout is calculated on RA AFTER the 20% OA transfer.
     // The transfer reduces the RA entering the LIFE pool — payouts are correspondingly lower.
     const raBase = raAfterTransfer;
@@ -2821,11 +2864,11 @@ export default function App() {
       escalating: { name: "Escalating", start: escStartActive,  startM: escStartM, startF: escStartF },
       basic:      { name: "Basic",      start: basStartActive,  startM: basStartM, startF: basStartF }
     };
-  }, [raAfterTransfer, inputs.payoutAge, inputs.isMale, basicPremiumPct]);
+  }, [raAfterTransfer, debouncedInputs.payoutAge, debouncedInputs.isMale, basicPremiumPct]);
 
   const payoutProjection = useMemo(() => {
     let data = [];
-    const pAge = Number(inputs.payoutAge) || 65;
+    const pAge = Number(debouncedInputs.payoutAge) || 65; // NX10 fix: stay in sync with projection
     // initialRA = RA after 20% transfer — this is what enters the CPF LIFE pool
     const initialRA = raAfterTransfer;
     const includeProp = inputs.includeProperty ?? true;
@@ -2916,7 +2959,7 @@ export default function App() {
       });
     }
     return data;
-  }, [projection, lifePlans, inputs.payoutAge, raAtPayout, raAfterTransfer, inputs.includeProperty, basicPremiumPct]);
+  }, [projection, lifePlans, debouncedInputs.payoutAge, raAtPayout, raAfterTransfer, debouncedInputs.includeProperty, basicPremiumPct]);
 
   const applyInflation = (val, age) => {
     if (!isRealDollars || isNaN(val)) return val;
@@ -3050,18 +3093,21 @@ export default function App() {
 
   const whatIfProjection = useMemo(() => {
     if (!showWhatIf) return null;
-    const effPA = whatIfPayoutAge !== null ? whatIfPayoutAge : (Number(inputs.payoutAge) || 65);
-    const effST = whatIfSaTopup !== null ? whatIfSaTopup : (Number(inputs.vcSaTopup) || 0);
-    const effH = whatIfHousing !== null ? whatIfHousing : (Number(inputs.housingOutflow) || 0);
+    // NX8 fix: use debouncedInputs (not live inputs) so the What-If baseline stays in sync
+    // with the main projection — previously the 180ms debounce window caused the What-If
+    // chart to show new input values against a stale main projection baseline.
+    const effPA = whatIfPayoutAge !== null ? whatIfPayoutAge : (Number(debouncedInputs.payoutAge) || 65);
+    const effST = whatIfSaTopup !== null ? whatIfSaTopup : (Number(debouncedInputs.vcSaTopup) || 0);
+    const effH = whatIfHousing !== null ? whatIfHousing : (Number(debouncedInputs.housingOutflow) || 0);
     const effSB = whatIfSalaryBump !== null ? whatIfSalaryBump : 0;
-    const rows = runProjectionEngine(inputs, {
+    const rows = runProjectionEngine(debouncedInputs, {
       maxAge: effPA,
       overrideVcSA: effST,
       overrideHousingOutflow: effH,
       overrideSalaryBump: effSB,
     });
     return { rows, effPA, effST, effH, effSB };
-  }, [showWhatIf, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, inputs]);
+  }, [showWhatIf, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, debouncedInputs]);
 
   const comparisonData = useMemo(() => {
     // Helper: compute net worth series from a scenario object
@@ -3174,7 +3220,9 @@ export default function App() {
   const formatCurrency = val => "$" + Math.round(Number(val) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
   const milestones = useMemo(() => {
-    const alerts = []; const payoutAge = Number(inputs.payoutAge) || 65; const ca = Number(inputs.currentAge) || 35; const cy = Number(inputs.currentYear) || 2026;
+    // NX9 fix: use debouncedInputs for all scalar reads so milestones never compute
+    // against old projection rows mixed with live (180ms-ahead) input scalars.
+    const alerts = []; const payoutAge = Number(debouncedInputs.payoutAge) || 65; const ca = Number(debouncedInputs.currentAge) || 35; const cy = Number(debouncedInputs.currentYear) || 2026;
     if (!projection || projection.length === 0) return alerts;
     const projFRS = age => Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (cy + (age - ca)) - 2026)));
     const projERS = age => Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (cy + (age - ca)) - 2026)));
@@ -3211,23 +3259,23 @@ export default function App() {
     const row55 = projection.find(r => r.age === 55);
     if (row55 && (row55.sa + row55.ra) < projBRS(55)) alerts.push({ age: 55, type: "danger", label: "RA below Basic Retirement Sum at 55", detail: `Projected RA at age 55 is $${Math.round((row55.sa + row55.ra) / 1000)}k, below the BRS of $${Math.round(projBRS(55) / 1000)}k.` });
     // #3 Property sale milestone
-    const sPA = Number(inputs.sellPropertyAge) || 0;
-    if (sPA > 0 && sPA >= Number(inputs.currentAge)) {
+    const sPA = Number(debouncedInputs.sellPropertyAge) || 0;
+    if (sPA > 0 && sPA >= Number(debouncedInputs.currentAge)) {
       const prevRow = projection.find(r => r.age === sPA - 1) || projection[0];
       const cumH = prevRow?.cumulativeOutflow || 0;
       const refundEst = Math.round(cumH * 0.5 * 1.1); // rough: ~half outflows are housing
-      const prevRow2 = projection.find(r => r.age === Math.max(Number(inputs.currentAge) || 35, sPA - 1)) || projection[0];
+      const prevRow2 = projection.find(r => r.age === Math.max(Number(debouncedInputs.currentAge) || 35, sPA - 1)) || projection[0];
       const estHousing2 = Math.min(
-        (Number(inputs.housingOutflow) || 0) * Math.max(0, (Number(inputs.housingStopAge) || 55) - (Number(inputs.currentAge) || 35)),
+        (Number(debouncedInputs.housingOutflow) || 0) * Math.max(0, (Number(debouncedInputs.housingStopAge) || 55) - (Number(debouncedInputs.currentAge) || 35)),
         (prevRow2?.cumulativeOutflow || 0) * 0.7
       );
-      const estYrs2 = Math.max(0, sPA - (Number(inputs.currentAge) || 35));
+      const estYrs2 = Math.max(0, sPA - (Number(debouncedInputs.currentAge) || 35));
       const estRefund2 = Math.round(estHousing2 * (Math.pow(1.025, estYrs2)));
-      const pledgeNote2 = inputs.usePropertyPledge ? " Pledge active: refund restores RA to FRS first; surplus stays in OA." : " Refund stays in OA.";
+      const pledgeNote2 = debouncedInputs.usePropertyPledge ? " Pledge active: refund restores RA to FRS first; surplus stays in OA." : " Refund stays in OA.";
       alerts.push({ age: sPA, type: "teal", label: "Property Sale & CPF Refund", detail: `Property sold at age ${sPA}. Estimated CPF refund ~${formatCurrency(estRefund2)} (OA housing withdrawals + 2.5%/yr interest).${pledgeNote2}` });
     }
     return alerts.sort((a, b) => a.age - b.age);
-  }, [projection, inputs]);
+  }, [projection, debouncedInputs, effectiveOaDrawStartAge, effectiveOaDrawMonthly, effectiveOaDrawFloor]);
 
   // ── XIRR computation (Newton-Raphson) ──────────────────────────────────────
   // cashFlows: array of {t: year_index, v: amount} — negative = outflow, positive = inflow
@@ -3308,7 +3356,13 @@ export default function App() {
     // Pre-compute SRS annual draw from projection (first year of drawdown balance / years)
     const srsRowAtStart = projection.find(r => r.age === srsStart);
     const srsBalAtStart = srsRowAtStart?.srsBalance || 0;
-    const srsAnnualDraw = srsYears > 0 ? Math.round(srsBalAtStart / srsYears) : srsBalAtStart;
+    // NX5 fix: mirror the PMT formula used in the engine so displayed draw matches projection
+    const srsRateDisp = (Number(inputs.srsReturnRate) || 0) / 100;
+    const srsAnnualDraw = srsYears > 0
+      ? (srsRateDisp > 0
+          ? Math.round(srsBalAtStart * srsRateDisp / (1 - Math.pow(1 + srsRateDisp, -srsYears)))
+          : Math.round(srsBalAtStart / srsYears))
+      : srsBalAtStart;
     const srsMonthlyDraw = Math.round(srsAnnualDraw / 12);
 
     const data = [];
@@ -6099,8 +6153,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: inputErrors.oaToSaTransfer ? "#fb923c" : "#fbbf24", textTransform: "uppercase", marginBottom: 4 }}>
                       <span>{is55Plus ? "OA → RA Transfer" : "OA → SA Transfer"}</span> <FreqToggle freqKey="oaToSaFreq" durKey="oaToSaDur" inputs={inputs} setInputs={setInputs} />
                       <TooltipBox id="t-oatosa" text={is55Plus
-                        ? "Transfer OA savings to your RA (or a loved one's RA) to earn 4% instead of 2.5%. Available at age 55 and above. For Self: capped at ERS ($440,800) in RA. Irreversible. No tax relief. For Loved One: OA is simply an outflow — their account is not tracked here."
-                        : "Transfer OA savings to your SA (or a loved one's SA) to earn 4% instead of 2.5%. Only before age 55. For Self: capped at FRS ($220,400) in SA. Irreversible. No tax relief. For Loved One: OA is simply an outflow — their SA is not tracked here."
+                        ? "Transfer OA savings to your RA (or a loved one's RA) to earn 4% instead of 2.5%. Available from age 55. For Self: capped at ERS ($440,800) in RA. Irreversible. No tax relief. For Loved One: OA is simply an outflow — their RA is not tracked here."
+                        : "Transfer OA savings to your SA (or a loved one's SA) to earn 4% instead of 2.5%. Before age 55 this goes to SA; from age 55 the engine automatically redirects the same amount to RA instead (SA is closed at 55). For Self: capped at FRS ($220,400) in SA pre-55, then ERS in RA post-55. Irreversible. No tax relief."
                       } />
                     </div>
                     {/* For Self / For Loved One toggle — matches OA→MA style */}
@@ -6127,8 +6181,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         ? `OA outflow only · loved one's ${is55Plus ? "RA" : "SA"} not tracked · irreversible · no tax relief`
                         : is55Plus
                           ? "Age 55+ · capped at ERS in RA · irreversible · not in Annual Limit · no tax relief"
-                          : "Pre-55 only · capped at FRS in SA · irreversible · not in Annual Limit · no tax relief"}
+                          : "Pre-55 → SA · age 55+ auto-redirects to RA · capped at FRS/ERS · irreversible · no tax relief"}
                     </p>
+                    {/* NX4 fix: clarify SA→RA auto-transition so users entering this field at 40
+                        understand the same amount continues as OA→RA after their 55th birthday */}
+                    {!inputs.oaToSaForLovedOne && !is55Plus && (
+                      <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 2 }}>
+                        ⚙ From age 55 this transfer automatically redirects to RA — SA closes at 55.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>}
@@ -6537,7 +6598,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <input type="text" inputMode="decimal" name="dieWithZeroAge" value={inputs.dieWithZeroAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={e => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${dwzAgeErr ? "#f87171" : "rgba(244,63,94,0.35)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                             {dwzAgeErr
                               ? <p style={{ fontSize: 10, color: "#f87171", marginTop: 2 }}>⚠ {dwzAgeErr}</p>
-                              : <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Age {pa} (payout) → Age {dwzAge} = {n} year drawdown window</p>
+                              : <>
+                                  <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Age {pa} (payout) → Age {dwzAge} = {n} year drawdown window</p>
+                                  {/* NX3 fix: disclose residual OA if correction was needed */}
+                                  {(projection._dwzResidualOa || 0) > 500 && (
+                                    <p style={{ fontSize: 10, color: "#fbbf24", marginTop: 3 }}>
+                                      ⚠ OA projected to retain ~{formatCurrency(Math.round(projection._dwzResidualOa / 1000) * 1000)} at age {dwzAge} due to ongoing contributions — draw auto-corrected upward to compensate.
+                                    </p>
+                                  )}
+                                </>
                             }
                           </div>
                           {/* Auto-applied badge — replaces the old ⚡ Apply button */}
