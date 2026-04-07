@@ -8753,9 +8753,32 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   </section>
 
-                  {/* Actuarial Math */}
+                  {/* Monte Carlo + Actuarial Math */}
                   <section id="doc-montecarlo" style={{ scrollMarginTop: "160px" }}>
-                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "#fb923c", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><PieChart style={{ width: 18, height: 18 }} />Actuarial Math & Depletion Models</h4>
+                    {/* ── Monte Carlo ── */}
+                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "#a78bfa", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 18, height: 18 }} />Monte Carlo Simulation</h4>
+                    <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What it does:</strong> Monte Carlo runs your entire retirement projection <strong style={{ color: "var(--text-bright)" }}>200 times</strong> in parallel. Each run uses the same inputs you entered, but CPF interest rates are randomly varied by <strong style={{ color: "var(--text-bright)" }}>±1%</strong> each year — OA could earn 1.5%–3.5%, SA/RA/MA could earn 3%–5%. This produces a realistic spread of outcomes rather than a single deterministic line.</p>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>How to enable:</strong> Go to the <strong>Accumulation</strong> tab and click the <strong>Show Monte Carlo (200 runs)</strong> button. A purple shaded band appears on the chart alongside three overlay lines.</p>
+                      <p style={{ marginBottom: 12 }}><strong style={{ color: "var(--text-highlight)" }}>Reading the band:</strong></p>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                        {[
+                          ["P90 — Optimistic", "Top edge of the purple band. 90% of simulations fell below this value — only 10% of runs produced an outcome this good or better. Treat as a best-case ceiling.", "#a78bfa"],
+                          ["P50 — Median (dashed)", "The dashed purple line running through the band. Half of all 200 runs landed above this, half below. This is the most likely single-number outcome under rate uncertainty.", "#c4b5fd"],
+                          ["P10 — Pessimistic", "Bottom edge of the band. 90% of simulations did better than this. Only 1 in 10 runs produced an outcome this low. Treat as a stress-test floor.", "#7c3aed"],
+                        ].map(([title, desc, color]) => (
+                          <div key={title} style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(124,58,237,0.07)", border: `1px solid ${color}55` }}>
+                            <p style={{ fontWeight: 700, color, marginBottom: 6, fontSize: 11 }}>{title}</p>
+                            <p style={{ fontSize: 11, lineHeight: 1.5 }}>{desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>Probability of Sufficiency:</strong> Shown as a large percentage badge when Monte Carlo is active. It answers: <em>"What share of my 200 simulated futures reached the projected FRS by payout age?"</em> A result of <strong style={{ color: "#34d399" }}>80%+</strong> suggests a robust plan. Below <strong style={{ color: "#f87171" }}>50%</strong> means more than half your simulated futures fell short — consider increasing top-ups or deferring payout age.</p>
+                      <p style={{ marginBottom: 0 }}><strong style={{ color: "var(--text-highlight)" }}>Limitations:</strong> Only CPF interest rates are randomised. Salary growth, contribution amounts, housing outflows, and SRS returns remain fixed at your inputs. Monte Carlo here measures <em>rate risk only</em> — it does not model job loss, medical crises, or policy changes. For those scenarios, use the What-If Explorer in the Summary tab.</p>
+                    </div>
+
+                    {/* ── Actuarial Math (kept here — content still relevant to CPF LIFE analysis) ── */}
+                    <h4 style={{ fontSize: 15, fontWeight: 800, color: "#fb923c", marginBottom: 10, marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}><PieChart style={{ width: 16, height: 16 }} />Actuarial Math & Depletion Models</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
@@ -8852,6 +8875,28 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>
                         </div>
                       ))}
+                    </div>
+
+                    {/* ── XIRR sub-section ── */}
+                    <h4 style={{ fontSize: 15, fontWeight: 800, color: "#a78bfa", marginBottom: 10, marginTop: 20, display: "flex", alignItems: "center", gap: 8 }}><Percent style={{ width: 16, height: 16 }} />XIRR — Internal Rate of Return</h4>
+                    <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What XIRR measures:</strong> The XIRR column in the Data Table shows the <em>Extended Internal Rate of Return</em> of the highlighted CPF LIFE plan at each projection age. It answers: <em>"If I treat all my CPF contributions as money out and all my payouts + final bequest as money in, what annual return did I earn on the whole strategy?"</em> A positive XIRR above the CPF SA/RA rate (4%) means your overall strategy is generating value faster than simply leaving money in SA/RA.</p>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>How it is computed:</strong> The engine builds a cashflow timeline: contributions made each year are negative (money leaving your pocket), and CPF LIFE payouts received each year plus the terminal bequest value are positive (money coming back). Newton-Raphson iteration then finds the single discount rate that makes the net present value of that entire cashflow stream equal to zero. That rate is the XIRR. Up to 100 iterations per age-point are run; if it fails to converge, the cell shows <strong>—</strong>.</p>
+                      <p style={{ marginBottom: 12 }}><strong style={{ color: "var(--text-highlight)" }}>Colour coding in the Data Table:</strong></p>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                        {[
+                          ["🟢  > 4%", "Beats the SA/RA base rate. Your contributions have compounded at a rate better than what CPF would have earned passively in SA or RA. This is the target zone.", "#34d399", "rgba(52,211,153,0.07)", "rgba(52,211,153,0.3)"],
+                          ["🟡  2% – 4%", "Moderate return — below SA/RA rate but still positive real growth. Typical in early accumulation years before payout compounding kicks in.", "#fbbf24", "rgba(251,191,36,0.07)", "rgba(251,191,36,0.3)"],
+                          ["🔴  < 2%", "Below CPF's floor rates. Common in very early years when contributions have been made but payouts have not yet started, so the numerics are dominated by outflows.", "#f87171", "rgba(248,113,113,0.07)", "rgba(248,113,113,0.3)"],
+                        ].map(([title, desc, color, bg, border]) => (
+                          <div key={title} style={{ padding: "12px 14px", borderRadius: 10, background: bg, border: `1px solid ${border}` }}>
+                            <p style={{ fontWeight: 700, color, marginBottom: 6, fontSize: 11 }}>{title}</p>
+                            <p style={{ fontSize: 11, lineHeight: 1.5 }}>{desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>Why it shows — before payout age:</strong> XIRR requires at least one positive cashflow (a payout or bequest) to produce a meaningful result. Before your payout age, the entire cashflow series is negative contributions with no inflows yet — the IRR is mathematically undefined, so the column shows <strong>—</strong> for all pre-payout rows.</p>
+                      <p style={{ marginBottom: 0 }}><strong style={{ color: "var(--text-highlight)" }}>Display cap ±10%:</strong> To prevent extreme outliers from distorting the table, XIRR results are clamped to a ±10% display range. Any computed value outside this range is pinned at the boundary. This is a display-only cap — the underlying Newton-Raphson result is unchanged.</p>
                     </div>
                   </section>
 
