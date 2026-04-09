@@ -564,7 +564,7 @@ function runProjectionEngine(inputs, {
   // Contributions grow at srsReturnRate. At srsDrawdownStartAge the balance is drawn down
   // evenly over srsDrawdownYears (must deplete within 10 yrs of first withdrawal per IRAS rules).
   // Only 50% of each annual withdrawal is taxable income (statutory retirement age concession).
-  const srsCap = 15300; // SC/PR $15,300/yr — foreigners ($35,700 cap) not modelled in this tool
+  const srsCap = 15300; // SC/PR $15,300/yr; foreigners ($35,700 cap) not modelled in this tool
   const srsContrib = Math.min(Number(inputs.srsAnnualContribution) || 0, srsCap);
   const srsContribStop = Number(inputs.srsContribStopAge) || 63;
   const srsReturn = (Number(inputs.srsReturnRate) || 0) / 100;
@@ -1019,8 +1019,12 @@ function runProjectionEngine(inputs, {
         if (age >= 55) { ra += govGrant_sep + actualMrss_sep; }
         else { sa += govGrant_sep + actualMrss_sep; }
         // B2: yearInflow and yearGovGrants now include WIS (wisToMA_sep = actualToMAWis + wisMASpill)
-        yearInflow = vc3aTotal + vcVhrAmt + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep;
-        totalInjected += yearInflow;
+        // Fix: use a local variable for the contribution-phase inflow so that vcMaCash and
+        // any MMSS carry already accumulated into yearInflow (before this block) are not
+        // overwritten. yearInflow must be += (not =) to preserve those earlier additions.
+        const sepContribInflow = vc3aTotal + vcVhrAmt + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep;
+        yearInflow += sepContribInflow;
+        totalInjected += sepContribInflow;
         cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + govGrant_sep + actualMrss_sep;
         // Cashflow ledger breakdown (SEP)
         yearMandatory += actualMandatoryMA_sep;          // B3: actual amount credited to MA, not nominal
@@ -1139,8 +1143,11 @@ function runProjectionEngine(inputs, {
 
         oa += totalOA;
         ma += actualMA;
-        yearInflow = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + wisSA;
-        totalInjected += yearInflow;
+        // Fix: use a local variable so yearInflow += (not =) preserves vcMaCash and
+        // MMSS carry already accumulated into yearInflow before the contrib block.
+        const empContribInflow = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + wisSA;
+        yearInflow += empContribInflow;
+        totalInjected += empContribInflow;
         // Cashflow ledger breakdown (employed) — B3: use priority-split actuals, not Math.min on raw
         yearMandatory += mandatoryOA_i + mandatorySA_dyn + actualMandatoryMA_emp;
         // N5 fix: replace bare vcSaTopup term with (cappedVcSA - annualGovGrant).
