@@ -670,6 +670,7 @@ function runProjectionEngine(inputs, {
     let yearMandatory = 0;
     let yearVoluntary = 0;
     let yearGovGrants = 0;
+    let yearWisCash = 0;   // BUG-44: WIS cash portion paid directly to member (not in CPF) — for Data Table display only
     let yearOaInterest = 0;
     let yearSaRaInterest = 0;
     let yearMaInterest = 0;
@@ -974,7 +975,8 @@ function runProjectionEngine(inputs, {
         const toMA_vc3a = Math.round(vc3aTotal * (vc3aMaRatio / ratioSum));
         const toSA_vc3a = vc3aTotal - Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) - toMA_vc3a;
         // WIS for SEP: 90% goes to MA (subject to BHS), 10% is cash (not modelled here)
-        const wisToMA_sep = wisAmount > 0 ? Math.round(wisAmount * 0.9) : 0;
+        const wisToMA_sep = wisAmount > 0 ? Math.round(wisAmount * effWisFreq * 0.9) : 0;
+        yearWisCash = wisAmount > 0 ? Math.round(wisAmount * effWisFreq * 0.1) : 0; // BUG-44: cash portion for display
         const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
         const maRoom = Math.max(0, projBHS_i - ma);
         // B3 SEP: priority split — mandatory MA gets first claim on BHS room, vc3a MA gets remainder
@@ -1113,6 +1115,7 @@ function runProjectionEngine(inputs, {
         const ratioSum_emp = vc3aOaRatio + vc3aSaRatio + vc3aMaRatio;
         // WIS: 60% of annual WIS amount goes to CPF via age-band split
         const wisCpf = wisAmount * effWisFreq > 0 ? Math.round(wisAmount * effWisFreq * 0.6) : 0;
+        yearWisCash = Math.round(wisAmount * effWisFreq * 0.4); // BUG-44: cash portion (40%) for Data Table display
         const wisOA = Math.round(wisCpf * (vc3aOaRatio / ratioSum_emp));
         const wisMA = Math.round(wisCpf * (vc3aMaRatio / ratioSum_emp));
         const wisSA = wisCpf - wisOA - wisMA;
@@ -1425,6 +1428,7 @@ function runProjectionEngine(inputs, {
       yearCpfisOut: Math.round(yearCpfisOut),
       yearEduOut: Math.round(yearEduOut),
       yearPrivDrawOut: Math.round(yearPrivDrawOut), // P1-D: private asset DWZ drawdown this year
+      yearWisCash: Math.round(yearWisCash),          // BUG-44: WIS cash portion (not CPF) for Data Table display
     });
   }
   return data;
@@ -1859,13 +1863,16 @@ export default function App() {
       errs.oaEduLoan = "Must be ≥ 0";
     } else if (oaEduLoanVal > 0) {
       const oaBal = Number(inp.oaBalance) || 0;
+      // BUG-21 fix: engine uses cumulative formula (oa + cumEduOut) * 0.40 − cumEduOut, so the cap
+      // grows as prior education withdrawals accumulate. The sidebar check uses oaBal * 0.40 (first-year
+      // cap, cumEduOut = 0). Warning is conservative — engine may allow more in later projection years.
       const eduCap40 = Math.max(0, oaBal * 0.40);
       if (oaBal === 0) {
         errs.oaEduLoan = "OA balance is $0 — no funds available for education loan";
       } else if (oaEduLoanVal > oaBal) {
         errs.oaEduLoan = `Exceeds current OA balance ($${oaBal.toLocaleString()}). Engine will cap to available OA.`;
       } else if (oaEduLoanVal > eduCap40) {
-        errs.oaEduLoan = `Exceeds 40% OA cap ($${Math.round(eduCap40).toLocaleString()}). Engine auto-caps each year.`;
+        errs.oaEduLoan = `Exceeds initial 40% OA cap ($${Math.round(eduCap40).toLocaleString()}). Engine applies cumulative formula — cap may be higher in later years.`;
       }
     }
     // Minor age gate: cash top-ups require the initiator to be age 16+ (CPF policy)
@@ -1994,6 +2001,10 @@ export default function App() {
     if (srsStop < (Number(inp.currentAge) || 35) || srsStop > 95) errs.srsContribStopAge = `${Number(inp.currentAge) || 35}–95`;
     const srsDraw = Number(inp.srsDrawdownStartAge) || 63;
     if (srsDraw < 63 || srsDraw > 95) errs.srsDrawdownStartAge = "Min age 63 (statutory retirement age)";
+    // BUG-17 fix: cross-field check — contributions must stop before or at drawdown start
+    if (!errs.srsContribStopAge && !errs.srsDrawdownStartAge && srsStop > srsDraw) {
+      errs.srsContribStopAge = `Must be ≤ drawdown start age (${srsDraw}). SRS contributions cannot run past the drawdown start.`;
+    }
     const srsYrs = Number(inp.srsDrawdownYears) || 10;
     if (srsYrs < 1 || srsYrs > 10) errs.srsDrawdownYears = "1–10 years";
     setInputErrors(errs);
@@ -3223,12 +3234,18 @@ export default function App() {
       const pa = Number(scenario.inputs?.payoutAge) || 65;
       const raRow = scenario.projection?.find(d => d.age === pa);
       const raAtPa = raRow?.ra || 0;
-      // Approximate monthly payout using CPF Estimator lookup (male baseline)
-      const monthlyEst = interpolateCpfLife(raAtPa, 'std', scenario.inputs?.isMale !== false);
+      // BUG-19 fix: at payout age, CPF Board transfers 20% of RA to OA before LIFE payouts begin.
+      // Ignoring this overstates LIFE payouts (higher raAtPa → higher interpolated monthly).
+      const raForLife = Math.round(raAtPa * 0.8);       // RA remaining after 20% transfer
+      const oaFromTransfer = Math.round(raAtPa * 0.2);  // 20% lump-sum credited to OA
+      // Approximate monthly payout using CPF Estimator lookup (male baseline) on corrected RA
+      const monthlyEst = interpolateCpfLife(raForLife, 'std', scenario.inputs?.isMale !== false);
       // Cumulative payout since payout age
       const yearsInPayout = Math.max(0, age - pa);
       const cumPayout = age >= pa ? monthlyEst * 12 * yearsInPayout : 0;
-      return (am.total || 0) + cumPayout;
+      // Include one-time OA top-up from the 20% transfer in the net worth at and after payout age
+      const oaBonus = age >= pa ? oaFromTransfer : 0;
+      return (am.total || 0) + cumPayout + oaBonus;
     };
 
     let data = [];
@@ -3264,7 +3281,7 @@ export default function App() {
       // 180ms window where live gender toggle + stale RA values produce mismatched CPF LIFE
       // estimates.  isMale added to deps array below.
       const isMaleSens = debouncedInputs.isMale !== false;
-      const bPct2 = (basicPremiumPct || 10) / 100;
+      const bPct2 = (basicPremiumPct || 10) / 100; // BUG-18: bPct2 retained only as readable reference; absorbed into computeBasicPlanParams
       // Use same lookup-table interpolation as lifePlans — deferral gain emerges
       // naturally from larger RA (from projection) + shorter amortisation period
       const stdStart = interpolateCpfLife(raVal, 'std', isMaleSens);
@@ -3274,7 +3291,7 @@ export default function App() {
               phase1aAnnual: basicP1aAnnual, phase2Annual: basicP2Annual,
               phase1bTrigger: phase1bTriggerS, effAnnualFactor: basicEffAFS
             } = computeBasicPlanParams(raVal, pAge, interpolateCpfLife(raVal, 'bas', isMaleSens), basicPremiumPct);
-      void bPct2; // retained — bPct2 absorbed into computeBasicPlanParams
+      void bPct2; // absorbed into computeBasicPlanParams — see comment on declaration above
       let basicRaRem = basicPVS, cumBasicPool = 0, cumStd = 0, cumEsc = 0, cumBas = 0;
       let escVsStd = null, stdVsBasic = null, escVsBasic = null;
 
@@ -3294,8 +3311,7 @@ export default function App() {
             const t = yTotal > 0 ? yLeft / yTotal : 0;
             basPay = basicP2Annual + t * (basicP1aAnnual - basicP2Annual);
           }
-          const raExtraS = (Math.min(basicRaRem,60000)*0.01 + Math.min(basicRaRem,30000)*0.01);
-          void raExtraS; // retained for reference; effective rate used below
+          // BUG-18 fix: raExtraS dead code removed — effective interest rate fully handled inside computeBasicPlanParams via basicEffAFS
           basicRaRem = Math.max(0, (basicRaRem * basicEffAFS) - basPay);
           basBeq = basicRaRem + basicPremS;
         } else {
@@ -3444,22 +3460,23 @@ export default function App() {
 
   // ── Strategy Chart Data (age 65→95, monthly income streams) ────────────────
   const strategyChartData = useMemo(() => {
-    const pa = Number(inputs.payoutAge) || 65;
-    const srsStart = Math.max(Number(inputs.srsDrawdownStartAge) || 63, 63);
-    const srsYears = Math.min(Math.max(Number(inputs.srsDrawdownYears) || 10, 1), 10);
+    // BUG-46 fix: use payoutAge65 (debounced) so chart doesn't stutter during the 180ms debounce window
+    const pa = payoutAge65;
+    const srsStart = Math.max(Number(debouncedInputs.srsDrawdownStartAge) || 63, 63);
+    const srsYears = Math.min(Math.max(Number(debouncedInputs.srsDrawdownYears) || 10, 1), 10);
     const oaDrawStart   = effectiveOaDrawStartAge;
     const oaDrawMonthly = effectiveOaDrawMonthly;
     const oaFloor       = effectiveOaDrawFloor;
-    const propMonAge = Number(inputs.propMonetiseAge) || 65;
-    const propMonCash = Number(inputs.propMonetiseCashProceeds) || 0;
-    const propEnabled = inputs.propMonetiseEnabled === true;
+    const propMonAge = Number(debouncedInputs.propMonetiseAge) || 65;
+    const propMonCash = Number(debouncedInputs.propMonetiseCashProceeds) || 0;
+    const propEnabled = debouncedInputs.propMonetiseEnabled === true;
 
     // Pre-compute SRS annual draw from projection (first year of drawdown balance / years)
     // P2-A fix: use displayAccumulation so Real Dollars toggle is respected
-    const srsRowAtStart = displayAccumulation.find(r => r.age === srsStart);
+    const srsRowAtStart = accumulationByAge.get(srsStart);
     const srsBalAtStart = srsRowAtStart?.srsBalance || 0;
     // NX5 fix: mirror the PMT formula used in the engine so displayed draw matches projection
-    const srsRateDisp = (Number(inputs.srsReturnRate) || 0) / 100;
+    const srsRateDisp = (Number(debouncedInputs.srsReturnRate) || 0) / 100;
     const srsAnnualDraw = srsYears > 0
       ? (srsRateDisp > 0
           ? Math.round(srsBalAtStart * srsRateDisp / (1 - Math.pow(1 + srsRateDisp, -srsYears)))
@@ -3469,9 +3486,10 @@ export default function App() {
 
     const data = [];
     for (let age = pa; age <= 95; age++) {
-      // P2-A fix: use displayProjection/displayAccumulation so Real Dollars toggle is respected
-      const ppRow = displayProjection.find(r => r.age === age) || {};
-      const projRow = displayAccumulation.find(r => r.age === age) || {};
+      // BUG-13 fix: use O(1) Map lookups instead of O(n) .find() inside the loop
+      const ppRow   = payoutByAge.get(age)        || {};
+      const projRow = accumulationByAge.get(age)  || {};
+      const prevProjRow = accumulationByAge.get(age - 1) || {};
 
       // CPF LIFE — use the active highlighted plan
       const cpfLife = ppRow[`${highlightPlan}Monthly`] || 0;
@@ -3491,7 +3509,6 @@ export default function App() {
       }
 
       // Private Assets drawdown delta — month-over-month change (P2-A: use displayAccumulation)
-      const prevProjRow = displayAccumulation.find(r => r.age === age - 1) || {};
       const paPriv = projRow.privateAssets || 0;
       const prevPriv = prevProjRow.privateAssets || paPriv;
       const privateDrawdown = Math.max(0, Math.round((prevPriv - paPriv) / 12));
@@ -3504,11 +3521,13 @@ export default function App() {
       data.push({ age, cpfLife, oaDraw, srs, privateAsset: privateDrawdown, propMon, totalMonthly });
     }
     return data;
-  // P2-A fix: deps updated — payoutProjection→displayProjection, projection→displayAccumulation,
-  // isRealDollars added so toggling Real Dollars correctly re-renders the Strategy Chart.
-  }, [displayProjection, displayAccumulation, isRealDollars, inputs.payoutAge, inputs.srsDrawdownStartAge, inputs.srsDrawdownYears,
+  // BUG-13+46 fix: deps updated — use payoutAge65 (debounced), add accumulationByAge + payoutByAge Maps (O(1) lookups),
+  // replace live inputs.* with debouncedInputs.* for SRS/property fields.
+  }, [displayProjection, displayAccumulation, accumulationByAge, payoutByAge, isRealDollars, payoutAge65,
+    debouncedInputs.srsDrawdownStartAge, debouncedInputs.srsDrawdownYears,
     effectiveOaDrawStartAge, effectiveOaDrawMonthly, effectiveOaDrawFloor,
-    inputs.propMonetiseEnabled, inputs.propMonetiseAge, inputs.propMonetiseCashProceeds, highlightPlan]);
+    debouncedInputs.propMonetiseEnabled, debouncedInputs.propMonetiseAge, debouncedInputs.propMonetiseCashProceeds,
+    debouncedInputs.srsReturnRate, highlightPlan]);
 
   // OA Exhaustion Age: first projection age where OA balance falls to/below the bequest floor
   // during the drawdown window. null = OA sustains to age 95 (or drawdown not active).
@@ -6135,6 +6154,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {(() => {
                     const ca = Number(inputs.currentAge) || 0;
                     const oaBal = Number(inputs.oaBalance) || 0;
+                    // BUG-21 fix: engine uses (oa + cumEduOut) * 0.40 − cumEduOut (cumulative policy formula).
+                    // At input time cumEduOut = 0 (no prior withdrawals yet), so the first-year cap equals oaBal * 0.40.
+                    // However, the engine's cap GROWS as prior education withdrawals accumulate — the sidebar
+                    // was showing this as a hard ceiling, misleading users. We now display it as a "starting cap"
+                    // with a note that the engine applies the correct cumulative formula throughout the projection.
                     const eduCap40 = Math.max(0, oaBal * 0.40);
                     const enteredEdu = Number(inputs.oaEduLoan) || 0;
                     const isOver40 = enteredEdu > eduCap40 && oaBal > 0;
@@ -6168,8 +6192,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         {inputErrors.oaEduLoan
                           ? <p style={{ fontSize: 10, color: "#f87171", marginTop: 2 }}>⚠ {inputErrors.oaEduLoan}</p>
                           : <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                              40% OA cap: <strong style={{ color: eduCap40 === 0 ? "#f87171" : isOver40 ? "#fb923c" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(eduCap40)}</strong>
-                              {isOver40 && <span style={{ color: "#fb923c", fontWeight: 700 }}> · Exceeds cap — engine auto-caps</span>}
+                              Initial 40% OA cap: <strong style={{ color: eduCap40 === 0 ? "#f87171" : isOver40 ? "#fb923c" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(eduCap40)}</strong>
+                              {isOver40 && <span style={{ color: "#fb923c", fontWeight: 700 }}> · Exceeds initial cap — engine auto-caps</span>}
+                              {" "}· <span style={{ color: "var(--text-subtle)" }} title="Engine uses (OA + cumulative prior edu/investment withdrawals) × 40% − prior withdrawals each year — cap rises as education loans accumulate">Cap grows as loans accumulate ⓘ</span>
                               {" "}· OA outflow only · repayment in cash (not modelled)
                             </p>}
                       </div>
@@ -7730,7 +7755,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>Blue = base · Green = what-if · <span style={{ color: "var(--text-subtle)" }}>Hover for account breakdown</span></p>
                             <ResponsiveContainer width="99%" height="100%">
                               <LineChart data={(() => {
-                                const baseData = displayAccumulation.filter(d => d.age <= Math.max(Number(inputs.payoutAge), effPA));
+                                const baseData = displayAccumulation.filter(d => d.age <= Math.max(payoutAge65, effPA)); // BUG-51 fix: use debounced payoutAge65
                                 return baseData.map(d => {
                                   const whatIfRow = whatIfProjection.rows.find(w => w.age === d.age);
                                   return {
@@ -7846,7 +7871,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <div style={{ height: 380 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <AreaChart data={(() => {
-                      const base = displayAccumulation.filter(d => d.age <= inputs.payoutAge).map(row => ({
+                      const base = displayAccumulation.filter(d => d.age <= payoutAge65).map(row => ({ // BUG-51 fix: use debounced payoutAge65
                         ...row,
                         // SA is closed at 55 — zero it out post-55 so the area ends cleanly.
                         // RA only exists post-55 — zero it out pre-55 so it doesn't ghost below the axis.
@@ -7868,7 +7893,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <Tooltip contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 10, padding: "6px 8px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} labelStyle={{ fontSize: 10, color: "var(--tooltip-label)", marginBottom: 2 }} formatter={(v, n) => { if (n === "MC Band") return null; return [formatCurrency(v), n]; }} wrapperStyle={{ pointerEvents: "none" }} />
                       <Legend verticalAlign="top" height={28} iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 600, color: "var(--text-main)" }} />
                       {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="none" fill="#7c3aed" fillOpacity={0.12} name="MC Band" legendType="none" /><Area isAnimationActive={false} type="monotone" dataKey="mcP10" stroke="none" fill="var(--bg-base)" fillOpacity={1} name="" legendType="none" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
-                      {milestones.filter(m => m.age <= Number(inputs.payoutAge)).map((m, idx) => {
+                      {milestones.filter(m => m.age <= payoutAge65).map((m, idx) => { // BUG-51 fix: use debounced payoutAge65
                         const sc = m.type === "success" ? "#10b981" : m.type === "gold" ? "#f59e0b" : m.type === "warning" ? "#f97316" : "#ef4444";
                         return <ReferenceLine key={idx} x={m.age} stroke={sc} strokeWidth={1.5} strokeDasharray="3 3" label={{ position: "insideTopRight", value: `Age ${m.age}`, fill: sc, fontSize: 8, fontWeight: "bold" }} />;
                       })}
@@ -8017,7 +8042,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 </div>
                 <div style={{ height: 350 }}>
                   <ResponsiveContainer width="99%" height="100%">
-                    <LineChart data={displayProjection.filter(d => d.age >= inputs.payoutAge)}>
+                    <LineChart data={displayProjection.filter(d => d.age >= payoutAge65)}> {/* BUG-51 fix: use debounced payoutAge65 */}
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                       <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 9 }} />
                       <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Amount ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
@@ -8139,7 +8164,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <div style={{ flex: 1, marginBottom: 16 }}>
                             <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
-                              {Object.keys(DEFAULT_INPUTS).filter(k => (scenarioA.inputs[k] !== DEFAULT_INPUTS[k] || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => (
+                              {/* BUG-47 fix: use String() coercion — JSON-imported profiles have numeric fields as strings, causing "65" !== 65 false diffs */}
+                              {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenarioA.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => (
                                 <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
                                   <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
                                   <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{typeof scenarioA.inputs[k] === "boolean" ? (scenarioA.inputs[k] ? "Yes" : "No") : scenarioA.inputs[k]}</span>
@@ -8171,7 +8197,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <div style={{ flex: 1, marginBottom: 16 }}>
                             <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
-                              {Object.keys(DEFAULT_INPUTS).filter(k => (scenarioB.inputs[k] !== DEFAULT_INPUTS[k] || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => (
+                              {/* BUG-47 fix: use String() coercion — JSON-imported profiles have numeric fields as strings, causing "65" !== 65 false diffs */}
+                              {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenarioB.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => (
                                 <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
                                   <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
                                   <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{typeof scenarioB.inputs[k] === "boolean" ? (scenarioB.inputs[k] ? "Yes" : "No") : scenarioB.inputs[k]}</span>
@@ -8395,7 +8422,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 {(() => {
                   const lastBase = displayAccumulation[displayAccumulation.length - 1] || {};
                   const lastRow = displayProjection[displayProjection.length - 1] || {};
-                  const totalPayouts = displayProjection.filter(r => r.age >= inputs.payoutAge).reduce((s, r) => s + (r[`${highlightPlan}Annual`] || 0), 0);
+                  const totalPayouts = displayProjection.filter(r => r.age >= payoutAge65).reduce((s, r) => s + (r[`${highlightPlan}Annual`] || 0), 0); // BUG-51 fix: use debounced payoutAge65
                   return (<div style={{ marginBottom: 16, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 16, padding: 16 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                       <h4 style={{ fontSize: 13, fontWeight: 900, display: "flex", alignItems: "center", gap: 8 }}><TableIcon style={{ width: 14, height: 14, color: "#34d399" }} />Lifetime Summary — <span style={{ color: "#34d399" }}>{highlightPlan.toUpperCase()}</span></h4>
@@ -8459,8 +8486,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         {displayProjection.map(row => {
                           const baseRow = accumulationByAge.get(row.age) || {};
                           const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
-                          const isPA = row.age >= inputs.payoutAge;
-                          const isPayoutAge = row.age === Number(inputs.payoutAge);
+                          const isPA = row.age >= payoutAge65;            // BUG-43 fix: use debounced payoutAge65
+                          const isPayoutAge = row.age === payoutAge65;    // BUG-43 fix: use debounced payoutAge65
                           const rowBg = isPayoutAge ? "rgba(16,185,129,0.08)" : "transparent";
                           const c = (v, color = "var(--text-bright)") => <td style={{ padding: "7px 8px", textAlign: "right", color, whiteSpace: "nowrap" }}>{v != null ? formatCurrency(v) : "-"}</td>;
                           return (<tr key={row.age} style={{ borderBottom: "1px solid var(--border-subtle)", background: rowBg }}>
@@ -8472,7 +8499,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <td style={{ padding: "7px 8px", textAlign: "right", color: "#f9a8d4", whiteSpace: "nowrap" }}>-{formatCurrency(baseRow.outflow || 0)}</td>
                             {(Number(inputs.wisAmount) || 0) > 0 && (
                               <td style={{ padding: "7px 8px", textAlign: "right", color: "#fde68a", whiteSpace: "nowrap" }}>
-                                +{formatCurrency(Math.round((Number(inputs.wisAmount) || 0) * (isSelfEmployed ? 0.1 : 0.4)))}
+                                {/* BUG-44 fix: use engine's yearWisCash so wisFreq/wisDur inactive years show $0 */}
+                                +{formatCurrency(accumulationByAge.get(row.age)?.yearWisCash ?? 0)}
                               </td>
                             )}
                             <td style={{ padding: "7px 8px", textAlign: "right", color: "#fb923c", whiteSpace: "nowrap" }}>{isPA ? formatCurrency(row.basicAnnual) : "-"}</td>
@@ -8485,7 +8513,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             {c(row.standardTotal, "#94a3b8")}
                             {c(row.escalatingTotal, "#34d399")}
                             {(() => {
-                              const pa = Number(inputs.payoutAge) || 65;
+                              const pa = payoutAge65; // BUG-43 fix: use debounced payoutAge65
                               if (row.age < pa) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>-</td>;
                               if (row.age < pa + 3) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap", fontSize: 9 }}>settling...</td>;
                               const xirr = xirrByAge[highlightPlan]?.[row.age];
