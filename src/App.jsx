@@ -487,9 +487,8 @@ function runProjectionEngine(inputs, {
   const vc3aCash = Number(inputs.vc3aCash) || 0;
   // VHR (housing refund) goes to OA separately
   const vcVhrAmt = Number(inputs.vcVhr) || 0;
-  // RSTU: cash top-up to SA (pre-55) or RA (post-55) — not split across accounts
-  const vcSA_RSTU = overrideVcSA !== undefined ? overrideVcSA + (Number(inputs.annualGovGrant) || 0)
-    : (Number(inputs.vcSaTopup) || 0) + (Number(inputs.annualGovGrant) || 0);
+  // RSTU: cash top-up to SA (pre-55) or RA (post-55) is handled via cappedVcSA in the employed/SEP
+  // contribution blocks below. vcSA_RSTU was a dead variable here — removed (BUG-06 fix).
   const annualOaToSa = Number(inputs.oaToSaTransfer) || 0;
   const annualOaToMa = Number(inputs.oaToMaTransfer) || 0;
   const oaToMaForLovedOne = inputs.oaToMaForLovedOne === true;
@@ -3057,15 +3056,25 @@ export default function App() {
     return val / Math.pow(1 + infl, yrs);
   };
 
+  // BUG-12 fix: use debouncedInputs for the deflation factor so displayProjection and
+  // displayAccumulation only recompute when their debounced source data also recomputes.
+  // Previously: applyInflation closed over live inputs.inflationRate/currentAge, so the memos
+  // fired immediately on keypress, applying a new rate to stale debounced payouts for ~180ms.
   const displayProjection = useMemo(() => {
     if (!isRealDollars) return payoutProjection;
-    return payoutProjection.map(row => { let n = { ...row }; Object.keys(n).forEach(k => { if (typeof n[k] === "number" && k !== "age") n[k] = Math.round(applyInflation(n[k], row.age)); }); return n; });
-  }, [payoutProjection, isRealDollars, inputs.inflationRate, inputs.currentAge]);
+    const inflD = (Number(debouncedInputs.inflationRate) || 0) / 100;
+    const caD   = Number(debouncedInputs.currentAge) || 35;
+    const deflate = (val, age) => isNaN(val) ? val : Math.round(val / Math.pow(1 + inflD, Math.max(0, age - caD)));
+    return payoutProjection.map(row => { let n = { ...row }; Object.keys(n).forEach(k => { if (typeof n[k] === "number" && k !== "age") n[k] = deflate(n[k], row.age); }); return n; });
+  }, [payoutProjection, isRealDollars, debouncedInputs.inflationRate, debouncedInputs.currentAge]);
 
   const displayAccumulation = useMemo(() => {
     if (!isRealDollars) return projection;
-    return projection.map(row => { let n = { ...row }; Object.keys(n).forEach(k => { if (typeof n[k] === "number" && k !== "age") n[k] = Math.round(applyInflation(n[k], row.age)); }); return n; });
-  }, [projection, isRealDollars, inputs.inflationRate, inputs.currentAge]);
+    const inflD = (Number(debouncedInputs.inflationRate) || 0) / 100;
+    const caD   = Number(debouncedInputs.currentAge) || 35;
+    const deflate = (val, age) => isNaN(val) ? val : Math.round(val / Math.pow(1 + inflD, Math.max(0, age - caD)));
+    return projection.map(row => { let n = { ...row }; Object.keys(n).forEach(k => { if (typeof n[k] === "number" && k !== "age") n[k] = deflate(n[k], row.age); }); return n; });
+  }, [projection, isRealDollars, debouncedInputs.inflationRate, debouncedInputs.currentAge]);
 
   // O(1) age-keyed Maps — replaces O(n²) .find(p => p.age === row.age) in print/export/table render loops
   const accumulationByAge = useMemo(
@@ -3239,10 +3248,12 @@ export default function App() {
     return data;
   }, [scenarioA, scenarioB, highlightPlan]);
 
-  const intersectionEscVsStd = useMemo(() => { const s = Number(inputs.payoutAge) || 65; const m = payoutProjection.find(d => d.age > s && d.escalatingTotal > d.standardTotal); return m ? m.age : null; }, [payoutProjection, inputs.payoutAge]);
-  const intersectionStdVsBasic = useMemo(() => { const s = Number(inputs.payoutAge) || 65; const m = payoutProjection.find(d => d.age > s && d.standardTotal > d.basicTotal); return m ? m.age : null; }, [payoutProjection, inputs.payoutAge]);
-  const intersectionEscVsBasic = useMemo(() => { const s = Number(inputs.payoutAge) || 65; const m = payoutProjection.find(d => d.age > s && d.escalatingTotal > d.basicTotal); return m ? m.age : null; }, [payoutProjection, inputs.payoutAge]);
-  const intersectionEscPayVsStdPay = useMemo(() => { const s = Number(inputs.payoutAge) || 65; const m = payoutProjection.find(d => d.age > s && d.escalatingMonthly > d.standardMonthly); return m ? m.age : null; }, [payoutProjection, inputs.payoutAge]);
+  // BUG-09 fix: use payoutAge65 (debounced) instead of live inputs.payoutAge so intersection
+  // ages are always computed against the same debounced payoutProjection they filter.
+  const intersectionEscVsStd = useMemo(() => { const m = payoutProjection.find(d => d.age > payoutAge65 && d.escalatingTotal > d.standardTotal); return m ? m.age : null; }, [payoutProjection, payoutAge65]);
+  const intersectionStdVsBasic = useMemo(() => { const m = payoutProjection.find(d => d.age > payoutAge65 && d.standardTotal > d.basicTotal); return m ? m.age : null; }, [payoutProjection, payoutAge65]);
+  const intersectionEscVsBasic = useMemo(() => { const m = payoutProjection.find(d => d.age > payoutAge65 && d.escalatingTotal > d.basicTotal); return m ? m.age : null; }, [payoutProjection, payoutAge65]);
+  const intersectionEscPayVsStdPay = useMemo(() => { const m = payoutProjection.find(d => d.age > payoutAge65 && d.escalatingMonthly > d.standardMonthly); return m ? m.age : null; }, [payoutProjection, payoutAge65]);
 
   const sensitivityData = useMemo(() => {
     const pAs = [65, 66, 67, 68, 69, 70];
@@ -3427,7 +3438,8 @@ export default function App() {
     return result;
   }, [activeTab, projection, payoutProjection, inputs.payoutAge, inputs.currentAge]);
 
-  const payoutAgeData = displayAccumulation.find(d => d.age === Number(inputs.payoutAge)) || {};
+  // BUG-10 fix: use payoutAge65 (debounced) so payoutAgeData matches the debounced displayAccumulation.
+  const payoutAgeData = displayAccumulation.find(d => d.age === payoutAge65) || {};
   const totalCpfAtPayout = (payoutAgeData.oa || 0) + (payoutAgeData.sa || 0) + (payoutAgeData.ma || 0) + (payoutAgeData.ra || 0);
 
   // ── Strategy Chart Data (age 65→95, monthly income streams) ────────────────
@@ -8138,7 +8150,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         ) : (
                           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 16 }}>Empty — configure inputs then save</div>
                         )}
-                        <button onClick={() => setScenarioA({ inputs: { ...inputs }, projection: displayAccumulation, payoutProj: displayProjection })} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as A</button>
+                        <button onClick={() => /* BUG-42 fix: always save nominal (non-deflated) engine output so Compare tab comparisons
+                             are consistent regardless of Real Dollars mode. displayAccumulation/displayProjection
+                             may be deflated when isRealDollars is ON — comparing deflated A vs nominal B is wrong. */
+                        setScenarioA({ inputs: { ...inputs }, projection: projection, payoutProj: payoutProjection })} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as A</button>
                       </div>
                     );
                   })()}
@@ -8167,7 +8182,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         ) : (
                           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 16 }}>Empty — configure inputs then save</div>
                         )}
-                        <button onClick={() => setScenarioB({ inputs: { ...inputs }, projection: displayAccumulation, payoutProj: displayProjection })} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as B</button>
+                        <button onClick={() => /* BUG-42 fix: always save nominal engine output (see Scenario A comment above) */
+                        setScenarioB({ inputs: { ...inputs }, projection: projection, payoutProj: payoutProjection })} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as B</button>
                       </div>
                     );
                   })()}
