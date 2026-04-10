@@ -2941,6 +2941,14 @@ export default function App() {
     return runProjectionEngine(debouncedInputs);
   }, [engineKey]); // eslint-disable-line
 
+  // projectionByAge: O(1) lookup for the raw (nominal) engine projection — used wherever
+  // projection.find(r => r.age === X) was called repeatedly in useMemos and render.
+  // IMPORTANT: declared here (immediately after `projection`) to avoid TDZ — the const
+  // was previously positioned ~180 lines later, after payoutRow65 which uses it directly.
+  const projectionByAge = useMemo(
+    () => new Map((projection || []).map(r => [r.age, r])),
+    [projection]);
+
   const effectiveOaDrawMonthly  = debouncedInputs.dieWithZeroEnabled ? (projection._dwzOaMonthly || 0) : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
   const effectiveOaDrawStartAge = debouncedInputs.dieWithZeroEnabled ? (projection._dwzStartAge || Number(debouncedInputs.payoutAge) || 65) : (Number(debouncedInputs.oaDrawdownStartAge) || 0);
   const effectiveOaDrawFloor    = debouncedInputs.dieWithZeroEnabled ? 0 : (Number(debouncedInputs.oaDrawdownFloor) || 0);
@@ -3117,12 +3125,6 @@ export default function App() {
   const payoutByAge = useMemo(
     () => new Map((payoutProjection || []).map(r => [r.age, r])),
     [payoutProjection]);
-  // projectionByAge: O(1) lookup for the raw (nominal) engine projection — used wherever
-  // projection.find(r => r.age === X) was called repeatedly in useMemos and render.
-  const projectionByAge = useMemo(
-    () => new Map((projection || []).map(r => [r.age, r])),
-    [projection]);
-
   // ── Gap Alert computation (shared by summary banner + RSTU inline card) ──
   // Returns null when no gap exists (member meets or exceeds FRS, or after top-up).
   // Both render sites simply show nothing when null — reactive disappearance is automatic.
