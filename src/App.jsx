@@ -5500,6 +5500,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                     )}
                   </div>{/* /position:relative gate — overlay is contained here */}
+                </div>{/* /flex column L5279 */}
               </div>}{/* /openSections profile body */}
             </div>{/* /profile section outer */}
             {/* Mandatory Contribs */}
@@ -9625,3 +9626,5 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
   );
 }
 
+
+    
