@@ -2953,6 +2953,10 @@ export default function App() {
   const effectiveOaDrawStartAge = debouncedInputs.dieWithZeroEnabled ? (projection._dwzStartAge || Number(debouncedInputs.payoutAge) || 65) : (Number(debouncedInputs.oaDrawdownStartAge) || 0);
   const effectiveOaDrawFloor    = debouncedInputs.dieWithZeroEnabled ? 0 : (Number(debouncedInputs.oaDrawdownFloor) || 0);
 
+  // NX10 fix: payoutAge65 reads debouncedInputs so it matches the debounced projection
+  // Declared HERE (before raAtPayout) to avoid TDZ — raAtPayout references it directly.
+  const payoutAge65 = Number(debouncedInputs.payoutAge) || 65;
+
   // CQ-2 perf: use projectionByAge Map (O(1)) instead of projection.find() (O(n))
   const raAtPayout = projectionByAge.get(payoutAge65)?.ra || 0;
 
@@ -2961,9 +2965,6 @@ export default function App() {
   // Cash top-ups: voluntary SA top-ups, gov grants, MRSS grants credited to SA/RA
   // Interest: interest accruing to SA (pre-55) and RA (post-55) accounts over the full period
   // These deductions are sourced directly from the projection engine's per-row tracking.
-  // NX10 fix: payoutAge65 reads debouncedInputs so it matches the debounced projection
-  // startAge65 renamed + retained for documentation; previously dead code (NX12 note)
-  const payoutAge65 = Number(debouncedInputs.payoutAge) || 65;
   const payoutRow65 = projectionByAge.get(payoutAge65);
   const cumulativeCashTopUps = payoutRow65?.cumRaCashTopUps ?? 0;
   const cumulativeRaInterest = payoutRow65?.cumRaInterest ?? 0;
