@@ -5209,10 +5209,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <input type="text" name="name" placeholder="e.g. John Doe" onFocus={(e) => e.target.select()} value={inputs.name} onChange={handleInputChange} aria-label="Member name" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} /></div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, alignItems: "flex-end" }}>
                     {[["currentYear", "Curr Year"], ["currentAge", "Curr Age"]].map(([n, l]) => (
-                      <div key={n}>
+                      <div key={n} style={{ minWidth: 0 }}>{/* minWidth:0 lets 1fr cells shrink below content width */}
                         <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: inputErrors[n] ? "#f87171" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 9, color: "#f87171" }}>⚠</span>}</label>
                         <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: `1px solid ${inputErrors[n] ? "#f87171" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
-                        {inputErrors[n] && <p style={{ fontSize: 10, color: "#f87171", marginTop: 4, marginBottom: 0, lineHeight: 1.4 }}>⚠ {inputErrors[n]}</p>}
+                        {/* Short errors (e.g. currentYear) stay inline; currentAge long errors rendered below the grid */}
+                        {inputErrors[n] && n !== "currentAge" && <p style={{ fontSize: 10, color: "#f87171", marginTop: 4, marginBottom: 0, lineHeight: 1.4, wordBreak: "break-word" }}>⚠ {inputErrors[n]}</p>}
                       </div>
                     ))}
                     <div><div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>Payout At</div>
@@ -5221,6 +5222,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </select>
                     </div>
                   </div>
+                  {/* currentAge error shown full-width below the grid — message is too long for a 1fr column */}
+                  {inputErrors.currentAge && (
+                    <p style={{ fontSize: 10, color: "#f87171", margin: "2px 0 0", lineHeight: 1.5 }}>⚠ {inputErrors.currentAge}</p>
+                  )}
                   {/* A9: Age-conditional info banners for minors */}
                   {(Number(inputs.currentAge) || 0) < 16 && (Number(inputs.currentAge) || 0) >= 0 && (
                     <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.35)", fontSize: 10, color: "#fbbf24", lineHeight: 1.5 }}>
