@@ -5494,7 +5494,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                     )}
                   </div>{/* /position:relative wrapper */}
-            </div>
+              </div>}{/* /openSections profile body */}
+            </div>{/* /profile section outer */}
             {/* Mandatory Contribs */}
             <div style={{ position: "relative" }}>
             {isForeigner && (
