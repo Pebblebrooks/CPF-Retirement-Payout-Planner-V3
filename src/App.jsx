@@ -2974,19 +2974,35 @@ export default function App() {
       // so the chart and ledger reflect actual depletion rather than endless growth.
       const rPriv = Math.max(0, (Number(debouncedInputs.privateAssetGrowthRate) || 0) / 100);
       const privAtPayout = finalPass.find(r => r.age === pa)?.privateAssets || 0;
-      const pmtPrivAnnual = privAtPayout > 0
+      let pmtPrivAnnual = privAtPayout > 0
         ? (rPriv > 0
             ? Math.round(privAtPayout * rPriv / (1 - Math.pow(1 + rPriv, -n)))
             : Math.round(privAtPayout / n))
         : 0;
       if (pmtPrivAnnual > 0) {
-        finalPass = runProjectionEngine(
+        let privPass = runProjectionEngine(
           { ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
           { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa }
         );
-        finalPass._dwzOaMonthly  = finalPmt;
-        finalPass._dwzStartAge   = pa;
-        finalPass._dwzResidualOa = finalPass.find(r => r.age === dwzA)?.oa || 0;
+        // BUG-9 fix: the PMT formula is computed on privAtPayout alone and assumes no further
+        // inflows. However, the engine unconditionally adds privateSaving every year — including
+        // during the DWZ drawdown window — leaving a residual of ~privateSaving × n at dwzAge.
+        // Mirror the OA residual-correction pass: measure the overshoot, spread it evenly over
+        // the drawdown window, increment pmtPrivAnnual, and re-run once to correct depletion.
+        const residualPriv = privPass.find(r => r.age === dwzA)?.privateAssets || 0;
+        if (residualPriv > 500 && pmtPrivAnnual > 0) {
+          const correctionAnnual = Math.round(residualPriv / Math.max(1, n));
+          pmtPrivAnnual += correctionAnnual;
+          privPass = runProjectionEngine(
+            { ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
+            { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa }
+          );
+        }
+        finalPass = privPass;
+        finalPass._dwzOaMonthly   = finalPmt;
+        finalPass._dwzStartAge    = pa;
+        finalPass._dwzResidualOa  = finalPass.find(r => r.age === dwzA)?.oa || 0;
+        finalPass._dwzResidualPriv = finalPass.find(r => r.age === dwzA)?.privateAssets || 0;
       }
       finalPass._dwzPrivMonthly = Math.round(pmtPrivAnnual / 12); // monthly draw for UI display
       return finalPass;
