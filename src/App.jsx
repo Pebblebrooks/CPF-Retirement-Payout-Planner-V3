@@ -2294,6 +2294,23 @@ export default function App() {
     });
   };
 
+  // BUG-11 fix: cache the focusable-element list outside the keydown handler so it is
+  // built once per mount rather than on every Enter keypress (was an O(n) DOM scan
+  // on every keystroke in a ~60-field form).  Rebuilt on any input/select mount/unmount
+  // via a MutationObserver attached below.
+  const focusableListRef = useRef([]);
+  useEffect(() => {
+    const rebuild = () => {
+      focusableListRef.current = Array.from(
+        document.querySelectorAll('input:not([type="hidden"]):not([readonly]), select')
+      );
+    };
+    rebuild();
+    const obs = new MutationObserver(rebuild);
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['readonly', 'disabled'] });
+    return () => obs.disconnect();
+  }, []);
+
   // Move to next input on Enter, set 0 if blank
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -2304,7 +2321,7 @@ export default function App() {
       } else {
         setInputs(prev => ({ ...prev, [name]: Number(value) }));
       }
-      const formElements = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([readonly]), select'));
+      const formElements = focusableListRef.current;
       const index = formElements.indexOf(e.target);
       if (index > -1 && index < formElements.length - 1) {
         formElements[index + 1].focus();
@@ -2442,10 +2459,14 @@ export default function App() {
   };
 
   const handleReset = () => {
-    lastSavedRef.current = JSON.stringify(DEFAULT_INPUTS);
     setConfirmModal({
       message: "Reset all inputs and clear all scenarios, What-If, and comparison data?",
       onConfirm: () => {
+        // R3 fix: stamp lastSavedRef INSIDE onConfirm, not before the dialog opens.
+        // Previously it was stamped before setConfirmModal — if the user cancelled,
+        // lastSavedRef was already overwritten with DEFAULT_INPUTS, falsely marking
+        // their real inputs as "unsaved" and triggering spurious beforeunload warnings.
+        lastSavedRef.current = JSON.stringify(DEFAULT_INPUTS);
         setInputs({ ...DEFAULT_INPUTS });
         setInputErrors({});
         setScenarioA(null);
@@ -3344,7 +3365,6 @@ export default function App() {
       // 180ms window where live gender toggle + stale RA values produce mismatched CPF LIFE
       // estimates.  isMale added to deps array below.
       const isMaleSens = debouncedInputs.isMale !== false;
-      const bPct2 = (basicPremiumPct || 10) / 100; // BUG-18: bPct2 retained only as readable reference; absorbed into computeBasicPlanParams
       // Use same lookup-table interpolation as lifePlans — deferral gain emerges
       // naturally from larger RA (from projection) + shorter amortisation period
       const stdStart = interpolateCpfLife(raVal, 'std', isMaleSens);
@@ -3354,7 +3374,8 @@ export default function App() {
               phase1aAnnual: basicP1aAnnual, phase2Annual: basicP2Annual,
               phase1bTrigger: phase1bTriggerS, effAnnualFactor: basicEffAFS
             } = computeBasicPlanParams(raVal, pAge, interpolateCpfLife(raVal, 'bas', isMaleSens), basicPremiumPct);
-      void bPct2; // absorbed into computeBasicPlanParams — see comment on declaration above
+      // bPct2 removed — was declared then immediately void-discarded (dead code).
+      // basicPremiumPct is now passed directly into computeBasicPlanParams above.
       let basicRaRem = basicPVS, cumBasicPool = 0, cumStd = 0, cumEsc = 0, cumBas = 0;
       let escVsStd = null, stdVsBasic = null, escVsBasic = null;
 
@@ -4845,7 +4866,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <div style={{ padding: "16px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
               {PRESET_PROFILES.map(p => (
                 <button key={p.id} onClick={() => {
-                  setInputs({ ...DEFAULT_INPUTS, ...p.inputs });
+                  const merged = { ...DEFAULT_INPUTS, ...p.inputs };
+                  setInputs(merged);
+                  // BUG-12 fix: stamp lastSavedRef so the beforeunload "unsaved changes"
+                  // guard doesn't fire the moment a user navigates away after loading a
+                  // preset — the profile was just loaded fresh, nothing has changed yet.
+                  lastSavedRef.current = JSON.stringify(merged);
                   setInputErrors({});
                   setShowPresets(false);
                   showToast(`✓ Loaded: ${p.label}`);
@@ -5824,15 +5850,27 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     {/* Read-only breakdown of how lump-sum is auto-split */}
                     {(Number(inputs.vc3aCash) || 0) > 0 && (() => {
                       const age = Number(inputs.currentAge) || 35;
+                      const _isPR_vc3a  = (inputs.citizenStatus || 'SC') === 'PR';
+                      const _prYr_vc3a  = Number(inputs.prYear) || 3;
+                      const _rtType_vc3a = (inputs.prRateType || 'GG');
                       let oaR, saR, maR;
-                      if (age <= 35) { oaR = 0.23; saR = 0.06; maR = 0.08; }
-                      else if (age <= 45) { oaR = 0.21; saR = 0.07; maR = 0.09; }
-                      else if (age <= 50) { oaR = 0.19; saR = 0.08; maR = 0.10; }
-                      else if (age <= 55) { oaR = 0.15; saR = 0.115; maR = 0.105; }
-                      else if (age <= 60) { oaR = 0.12; saR = 0.115; maR = 0.105; }
-                      else if (age <= 65) { oaR = 0.035; saR = 0.11; maR = 0.105; }
-                      else if (age <= 70) { oaR = 0.01; saR = 0.05; maR = 0.105; }
-                      else { oaR = 0.01; saR = 0.01; maR = 0.105; }
+                      // BUG-13 fix: for PR Year 1 or 2 members use the PR rate table so the
+                      // displayed OA/SA/MA split matches what the engine actually applies.
+                      // Previously SC/PR3+ constants were hardcoded here regardless of PR status,
+                      // showing wrong allocations to PR Year 1/2 members.
+                      if (_isPR_vc3a && _prYr_vc3a < 3) {
+                        const prR = getPRRates(_prYr_vc3a, age, _rtType_vc3a);
+                        oaR = prR.oa; saR = prR.sa; maR = prR.ma;
+                      } else {
+                        if (age <= 35) { oaR = 0.23; saR = 0.06; maR = 0.08; }
+                        else if (age <= 45) { oaR = 0.21; saR = 0.07; maR = 0.09; }
+                        else if (age <= 50) { oaR = 0.19; saR = 0.08; maR = 0.10; }
+                        else if (age <= 55) { oaR = 0.15; saR = 0.115; maR = 0.105; }
+                        else if (age <= 60) { oaR = 0.12; saR = 0.115; maR = 0.105; }
+                        else if (age <= 65) { oaR = 0.035; saR = 0.11; maR = 0.105; }
+                        else if (age <= 70) { oaR = 0.01; saR = 0.05; maR = 0.105; }
+                        else { oaR = 0.01; saR = 0.01; maR = 0.105; }
+                      }
                       const total = oaR + saR + maR;
                       const v = Number(inputs.vc3aCash) || 0;
                       const oaAmt = Math.round(v * (oaR / total));
@@ -5929,7 +5967,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     const _oa = Number(inputs.oaBalance) || 0;
                     const _sa = Number(inputs.saBalance) || 0;
                     const _mrssBalOk = _ca >= 55 ? _sa < _brsNow : (_oa + _sa) < _brsNow;
-                    const _income = inputs.isSelfEmployed ? Math.round((Number(inputs.netTradeIncome) || 0) / 12) : (Number(inputs.salaryGross) || 0);
+                    // BUG-6 fix: mirror engine income gate (lines 1216–1220) — include AW/bonus
+                    // in the monthly gross figure.  Previously only salaryGross (OW) was used,
+                    // so a member with $3,800/mo OW + $40k bonus (≈ $7,133/mo gross) was
+                    // incorrectly shown as eligible when the engine would deny the grant.
+                    const _owAnnual = Math.min((Number(inputs.salaryGross) || 0) * 12, 96000);
+                    const _awCeil   = Math.max(0, 102000 - _owAnnual);
+                    const _bonus    = Math.min(Number(inputs.salaryBonus) || 0, _awCeil);
+                    const _income   = inputs.isSelfEmployed
+                      ? Math.round((Number(inputs.netTradeIncome) || 0) / 12)
+                      : Math.round((_owAnnual + _bonus) / 12);
                     const _mrssIncomeOk = _income <= 4000;
                     const _rstu = Number(inputs.vcSaTopup) || 0;
                     const _mrssMatch = Math.min(_rstu, 2000);
@@ -6006,7 +6053,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     const _bhsNow = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, _baseYear - 2026)));
                     const _halfBhs = Math.round(_bhsNow / 2);
                     const _maBal = Number(inputs.maBalance) || 0;
-                    const _income = inputs.isSelfEmployed ? Math.round((Number(inputs.netTradeIncome) || 0) / 12) : (Number(inputs.salaryGross) || 0);
+                    // BUG-6 (MMSS): mirror engine income gate — include AW/bonus in monthly gross.
+                    // Previously only salaryGross (OW) was checked, matching the MRSS badge error.
+                    const _owAnnual_mm = Math.min((Number(inputs.salaryGross) || 0) * 12, 96000);
+                    const _awCeil_mm   = Math.max(0, 102000 - _owAnnual_mm);
+                    const _bonus_mm    = Math.min(Number(inputs.salaryBonus) || 0, _awCeil_mm);
+                    const _income = inputs.isSelfEmployed
+                      ? Math.round((Number(inputs.netTradeIncome) || 0) / 12)
+                      : Math.round((_owAnnual_mm + _bonus_mm) / 12);
                     const _vcMa = Number(inputs.vcMaCash) || 0;
                     const _mmssMatch = Math.min(_vcMa, 1000);
                     if (_maBal >= _halfBhs) {
