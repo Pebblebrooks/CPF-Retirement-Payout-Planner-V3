@@ -595,6 +595,10 @@ function runProjectionEngine(inputs, {
   // Only 50% of each annual withdrawal is taxable income (statutory retirement age concession).
   // POL-3 fix: foreigners have a higher SRS cap ($35,700/yr) than SC/PR ($15,300/yr).
   // citizenStatus 'foreigner' → $35,700; 'SC' or 'PR' (or undefined/legacy) → $15,300.
+  // Q1 note: `inputs` here is the runProjectionEngine function parameter (line 495),
+  // NOT the React component's live inputs state. validateInputs uses `inp` for the
+  // same cap — both correctly read from their own function parameter; the naming
+  // difference (inputs vs inp) is stylistic only and carries no runtime risk.
   const srsCap = (inputs.citizenStatus === 'foreigner') ? 35700 : 15300;
   const srsContrib = Math.min(Number(inputs.srsAnnualContribution) || 0, srsCap);
   const srsContribStop = Number(inputs.srsContribStopAge) || 63;
@@ -2074,7 +2078,13 @@ export default function App() {
           Object.keys(DEFAULT_INPUTS).forEach(k => {
             if (fullState.inputs[k] !== undefined) safeInputs[k] = fullState.inputs[k];
           });
-          setInputs({ ...DEFAULT_INPUTS, ...safeInputs });
+          const mergedInputs = { ...DEFAULT_INPUTS, ...safeInputs };
+          setInputs(mergedInputs);
+          // R1 fix: stamp lastSavedRef with the merged object so the beforeunload
+          // "unsaved changes" guard doesn't fire on every navigation after a share-link load.
+          // setInputs() is async — inputs won't reflect the new value until next render —
+          // so we must use the locally-built mergedInputs, not the stale inputs state.
+          lastSavedRef.current = JSON.stringify(mergedInputs);
         }
         if (fullState.activeTab) setActiveTab(fullState.activeTab);
         if (fullState.highlightPlan) setHighlightPlan(fullState.highlightPlan);
@@ -2103,14 +2113,20 @@ export default function App() {
         // Whitelist only known keys from DEFAULT_INPUTS to prevent unknown key injection
         const safeDecoded = {};
         Object.keys(DEFAULT_INPUTS).forEach(k => { if (decoded[k] !== undefined) safeDecoded[k] = decoded[k]; });
-        setInputs(prev => ({ ...prev, ...safeDecoded }));
+        const mergedLegacy = { ...DEFAULT_INPUTS, ...safeDecoded };
+        setInputs(mergedLegacy);
+        // R1 fix: stamp lastSavedRef so the beforeunload guard doesn't fire after a legacy share-link load.
+        lastSavedRef.current = JSON.stringify(mergedLegacy);
       } else if (stateParam) {
         // Legacy plain format
         const decoded = JSON.parse(decodeURIComponent(stateParam));
         // Whitelist only known keys from DEFAULT_INPUTS to prevent unknown key injection
         const safeDecoded = {};
         Object.keys(DEFAULT_INPUTS).forEach(k => { if (decoded[k] !== undefined) safeDecoded[k] = decoded[k]; });
-        setInputs(prev => ({ ...prev, ...safeDecoded }));
+        const mergedPlain = { ...DEFAULT_INPUTS, ...safeDecoded };
+        setInputs(mergedPlain);
+        // R1 fix: stamp lastSavedRef so the beforeunload guard doesn't fire after a legacy plain share-link load.
+        lastSavedRef.current = JSON.stringify(mergedPlain);
       } else {
         // Always show welcome modal on fresh load
         setShowWelcome(true);
@@ -2765,9 +2781,12 @@ export default function App() {
   };
 
   const handlePrintTable = () => {
-    const memberName = inputs.name || "Member";
-    const startAge = Number(inputs.currentAge) || 35;
-    const pa = Number(inputs.payoutAge) || 65;
+    const memberName = debouncedInputs.name || "Member";
+    const startAge = Number(debouncedInputs.currentAge) || 35;
+    // R2 fix: use payoutAge65 (debounced) so the pa guard and row highlighting
+    // match the debounced displayProjection data. Using live inputs.payoutAge caused
+    // the wrong row to be highlighted green during the 180ms debounce window.
+    const pa = payoutAge65;
     const fmt = v => v != null ? `$${Number(v).toLocaleString()}` : "-";
 
     // Build HTML table for print
@@ -2822,7 +2841,10 @@ export default function App() {
       }
     } catch (e) {
       // Fallback to text modal
-      const headers = ["Age", "OA", "MA", is55Plus ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield"].join("\t");
+      // R2 fix: derive is55Plus from debouncedInputs so the SA/RA column label
+      // matches the same data source as the rest of the print function.
+      const is55PlusAtPrint = (Number(debouncedInputs.currentAge) || 0) >= 55;
+      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield"].join("\t");
       const textRows = displayProjection.map(row => {
         const baseRow = accumulationByAge.get(row.age) || {};
         const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
@@ -3636,17 +3658,18 @@ export default function App() {
         return last ? last.total : 0;
       };
       const baseTotal = calcTotalAtPA(baseH, baseSATopup);
-      // Compute 25 sensitivity cells in 5 batches of 5, yielding between each batch.
-      // Each yield (setTimeout 0) gives the browser a paint opportunity, preventing
-      // a 500ms+ UI freeze on mobile during PDF generation.
+      // Q3 fix: yield after EVERY sensitivity cell (batch size 1) so the browser
+      // gets a paint opportunity between each of the 25 engine calls. Previously
+      // SENS_BATCH=5 meant 5 synchronous engine calls (~100-150ms) before each yield,
+      // causing perceptible jank on mobile. With batch=1 the UI stays responsive.
       showToast("⏳ Building PDF — computing sensitivity tables...");
       const sensCache = new Map();
       const allParams = [...hRows.flatMap(h => saTopupCols.map(s => [h, s]))];
-      const SENS_BATCH = 5;
+      const SENS_BATCH = 1; // Q3 fix: was 5 — yield after every single cell
       for (let _bi = 0; _bi < allParams.length; _bi += SENS_BATCH) {
         const batch = allParams.slice(_bi, _bi + SENS_BATCH);
         batch.forEach(([h, s]) => { const key = `${h}_${s}`; if (!sensCache.has(key)) sensCache.set(key, calcTotalAtPA(h, s)); });
-        await new Promise(r => setTimeout(r, 0)); // yield to browser between batches
+        await new Promise(r => setTimeout(r, 0)); // yield to browser after every cell
       }
       const sensRows = hRows.map(h => {
         const cells = saTopupCols.map(s => {
@@ -3660,7 +3683,7 @@ export default function App() {
       // Milestone rows
       const msRows = milestones.map(m => `<tr><td style="padding:5px 8px;font-weight:700">${m.age}</td><td style="padding:5px 8px">${m.label}</td><td style="padding:5px 8px;color:#475569">${m.detail}</td></tr>`).join("");
 
-      // Payout-age sensitivity: 6 engine runs pre-computed here (async, with yields every 2 calls)
+      // Payout-age sensitivity: 6 engine runs pre-computed here (async, yielding after every call)
       // so the template literal below can simply reference payAgeSensHtml as a plain string.
       const isMalePdf = inputs.isMale !== false;
       let payAgeSensRows = '';
@@ -3675,7 +3698,7 @@ export default function App() {
         const basM = Math.round(interpolateCpfLife(ra, 'bas', isMalePdf));
         const isCurrent = testPA === pa;
         payAgeSensRows += `<tr style="background:${isCurrent ? "#dcfce7" : ""}"><td style="font-weight:${isCurrent ? "900" : "400"};color:${isCurrent ? "#166534" : ""}">${testPA}${isCurrent ? " ◄" : ""}</td><td style="text-align:right">${fc(stdM)}/mo</td><td style="text-align:right;color:#059669">${fc(escM)}/mo</td><td style="text-align:right;color:#b45309">${fc(basM)}/mo</td></tr>`;
-        if (_pi % 2 === 1) await new Promise(r => setTimeout(r, 0)); // yield every 2 calls
+        await new Promise(r => setTimeout(r, 0)); // Q3 fix: yield after every call (was every 2)
       }
       const payAgeSensHtml = `
 <h2 style="margin-top:12px">Payout Age Sensitivity — Monthly Starting Payouts</h2>
@@ -8041,6 +8064,25 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ))}
                     <span style={{ fontSize: 9, color: "var(--text-subtle)", alignSelf: "center" }}>Projections assume enrolment. Members below $60k RA may not auto-enrol but can apply.</span>
                   </div>
+                  {/* P1 fix: Foreigner gate — CPF LIFE is SC/PR only. Show a prominent warning when
+                      citizenStatus === 'foreigner' so the user knows the payout estimates below do not apply.
+                      The chart is not suppressed — foreigners may be exploring what-if SC/PR scenarios. */}
+                  {isForeigner && (
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(251,191,36,0.08)", border: "2px solid rgba(251,191,36,0.45)" }}>
+                      <AlertTriangle style={{ width: 18, height: 18, color: "#f59e0b", flexShrink: 0, marginTop: 1 }} />
+                      <div style={{ fontSize: 11, lineHeight: 1.65, color: "var(--text-muted)" }}>
+                        <span style={{ fontWeight: 800, color: "#f59e0b", fontSize: 12 }}>CPF LIFE is not available to foreigners.</span>
+                        {" "}CPF LIFE is restricted to <strong>Singapore Citizens and Permanent Residents</strong> born in <strong>1958 or after</strong>.
+                        As a foreigner, you have no CPF account and are not eligible for CPF LIFE, RA top-ups, RSTU, MRSS, or MMSS.
+                        <br />
+                        <span style={{ color: "var(--text-subtle)", fontSize: 10, marginTop: 4, display: "block" }}>
+                          💡 The payout estimates and chart below reflect an SC/PR profile and are shown for reference only — they do not apply to your situation.
+                          Your primary tax-deferred retirement vehicle is <strong>SRS</strong> (Supplementary Retirement Scheme) — contributions up to <strong>$35,700/yr</strong> are tax-deductible.
+                          Update your citizenship in the <strong>Profile</strong> sidebar panel if this is incorrect.
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   {/* LIFE tab intro — collapsible via native <details> (no hooks) */}
                   <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
                     <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
