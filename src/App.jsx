@@ -5440,52 +5440,58 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </button>
                     </div>
                   )}
-                  {/* CPF Balances — locked for foreigners */}
+                  {/* CPF Balances + Goal Trackers — locked for foreigners.
+                      Structure: position:relative gate → opacity/pointer-events dim → content
+                                              → overlay (absolute, inside gate) → gate closes.
+                      The overlay MUST be inside position:relative before it closes so
+                      inset:0 is contained to this block and does not cover the whole sidebar. */}
                   <div style={{ position: "relative" }}>
+                    {/* Single opacity wrapper covers BOTH balance inputs AND goal trackers */}
                     <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto" }}>
-                  {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
-                    <div key={n}><div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
-                      <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l + ' balance'} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
-                  ))}
-                </div>
-                {/* Goal Trackers */}
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-subtle)" }}>
-
-                  {/* SA/RA Goal */}
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
-                      <span>{is55Plus ? "RA" : "SA"} Goal <TooltipBox id="t-ers" text={`Basic Retirement Sum (BRS): ${formatCurrency(currentBRS)} · Full Retirement Sum (FRS): ${formatCurrency(currentFRS)} · Enhanced Retirement Sum (ERS): ${formatCurrency(currentERS)}`} /></span>
-                      <span style={{ color: currentSaRa >= currentFRS ? "var(--clr-sky)" : "#fbbf24", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
-                        {Math.round((currentSaRa / currentFRS) * 100)}%{currentSaRa >= currentFRS ? " ✓" : ""}
-                      </span>
-                    </div>
-                    <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
-                      {[25, 50].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
-                      <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#3b82f6,#06b6d4)", width: `${saRaVisualWidth}%`, transition: "width 0.8s" }} />
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
-                      <span>0</span><span>BRS</span><span>FRS</span><span>ERS</span>
-                    </div>
-                  </div>
-
-                  {/* MA Goal */}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
-                      <span>MA Goal <TooltipBox id="t-bhs" text={`Basic Healthcare Sum (BHS): ${formatCurrency(currentBHS)}. MA cap — excess flows to SA (before 55) or RA (after 55).`} /></span>
-                      <span style={{ color: currentMa >= currentBHS ? "var(--clr-sky)" : "#60a5fa", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
-                        {Math.round(Number(bhsPercentText))}%{currentMa >= currentBHS ? " ✓" : ""}
-                      </span>
-                    </div>
-                    <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
-                      {[25, 50, 75].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
-                      <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#8b5cf6,#6366f1)", width: `${bhsVisualWidth}%`, transition: "width 0.8s" }} />
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
-                      <span>0</span><span>25%</span><span>50%</span><span>75%</span><span>MAX</span>
-                    </div>
-                  </div>
-                </div>
-                    </div>{/* /opacity wrapper */}
+                      {/* Balance inputs */}
+                      {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
+                        <div key={n}>
+                          <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
+                          <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l + ' balance'} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                        </div>
+                      ))}
+                      {/* Goal Trackers */}
+                      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-subtle)" }}>
+                        {/* SA/RA Goal */}
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
+                            <span>{is55Plus ? "RA" : "SA"} Goal <TooltipBox id="t-ers" text={`Basic Retirement Sum (BRS): ${formatCurrency(currentBRS)} · Full Retirement Sum (FRS): ${formatCurrency(currentFRS)} · Enhanced Retirement Sum (ERS): ${formatCurrency(currentERS)}`} /></span>
+                            <span style={{ color: currentSaRa >= currentFRS ? "var(--clr-sky)" : "#fbbf24", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
+                              {Math.round((currentSaRa / currentFRS) * 100)}%{currentSaRa >= currentFRS ? " ✓" : ""}
+                            </span>
+                          </div>
+                          <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
+                            {[25, 50].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
+                            <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#3b82f6,#06b6d4)", width: `${saRaVisualWidth}%`, transition: "width 0.8s" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
+                            <span>0</span><span>BRS</span><span>FRS</span><span>ERS</span>
+                          </div>
+                        </div>
+                        {/* MA Goal */}
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
+                            <span>MA Goal <TooltipBox id="t-bhs" text={`Basic Healthcare Sum (BHS): ${formatCurrency(currentBHS)}. MA cap — excess flows to SA (before 55) or RA (after 55).`} /></span>
+                            <span style={{ color: currentMa >= currentBHS ? "var(--clr-sky)" : "#60a5fa", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
+                              {Math.round(Number(bhsPercentText))}%{currentMa >= currentBHS ? " ✓" : ""}
+                            </span>
+                          </div>
+                          <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
+                            {[25, 50, 75].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
+                            <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#8b5cf6,#6366f1)", width: `${bhsVisualWidth}%`, transition: "width 0.8s" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
+                            <span>0</span><span>25%</span><span>50%</span><span>75%</span><span>MAX</span>
+                          </div>
+                        </div>
+                      </div>{/* /Goal Trackers */}
+                    </div>{/* /opacity+pointerEvents dim wrapper — closes before overlay */}
+                    {/* Overlay: position:absolute is contained by position:relative parent above */}
                     {isForeigner && (
                       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 10, zIndex: 10, pointerEvents: "all" }}>
                         <div style={{ background: "rgba(15,23,42,0.82)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 10, padding: "8px 16px", fontSize: 10, color: "#fbbf24", fontWeight: 700, textAlign: "center" }}>
@@ -5493,7 +5499,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                       </div>
                     )}
-                  </div>{/* /position:relative wrapper */}
+                  </div>{/* /position:relative gate — overlay is contained here */}
               </div>}{/* /openSections profile body */}
             </div>{/* /profile section outer */}
             {/* Mandatory Contribs */}
