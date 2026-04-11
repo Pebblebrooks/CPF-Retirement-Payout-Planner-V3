@@ -687,6 +687,7 @@ function runProjectionEngine(inputs, {
   //   B. startPrYear < 3, currentPrYear >= 3 → SC/PR3+ rates × gross salary [graduated]
   //   C. SC or PR3+ from start → baseOA_Emp * gf          [standard]
   const isPR = (inputs.citizenStatus || 'SC') === 'PR';
+  const isForeigner = (inputs.citizenStatus || 'SC') === 'foreigner'; // B1: foreigners have no CPF — gates all contributions, voluntary top-ups, and transfers
   const startPrYear = Math.min(3, Math.max(1, Number(inputs.prYear) || 3));
   const annualGrossSalary = owMonthly * 12; // already capped at $8,000/mo above
   let currentPrYear = startPrYear;
@@ -851,7 +852,7 @@ function runProjectionEngine(inputs, {
     // OA→SA transfer (annual/one-time, before 55 only)
     // Policy: capped at (1) OA balance and (2) FRS headroom in SA (self only).
     // For loved one: OA is simply an outflow; SA/RA of the loved one is not tracked here.
-    if (age < 55 && annualOaToSa > 0 && effOaToSaFreq > 0) {
+    if (age < 55 && annualOaToSa > 0 && effOaToSaFreq > 0 && !isForeigner) { // B1: foreigners have no CPF
       const actualTransfer = oaToSaForLovedOne
         ? Math.min(annualOaToSa, oa)
         : (() => {
@@ -869,7 +870,7 @@ function runProjectionEngine(inputs, {
     }
     // OA→RA transfer (annual/one-time, age 55 and above only)
     // Policy: voluntary transfers to loved one's RA = OA outflow only (no internal RA credit).
-    if (age >= 55 && annualOaToSa > 0 && effOaToSaFreq > 0) {
+    if (age >= 55 && annualOaToSa > 0 && effOaToSaFreq > 0 && !isForeigner) { // B1: foreigners have no CPF
       const actualTransferRA = oaToSaForLovedOne
         ? Math.min(annualOaToSa, oa)
         : (() => {
@@ -889,7 +890,7 @@ function runProjectionEngine(inputs, {
 
     // OA→MA transfer: CPF policy requires age 55+, FRS or BRS+property already set aside.
     // For self: internal move OA→MA (both accounts change). For loved one: OA outflow only.
-    if (age >= 55 && annualOaToMa > 0 && effOaToMaFreq > 0) {
+    if (age >= 55 && annualOaToMa > 0 && effOaToMaFreq > 0 && !isForeigner) { // B1: foreigners have no CPF
       const projBHS_tr = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
       const maRoom_tr = oaToMaForLovedOne ? annualOaToMa : Math.max(0, projBHS_tr - ma);
       const actualOaToMa = Math.min(annualOaToMa, oa, maRoom_tr);
@@ -906,7 +907,7 @@ function runProjectionEngine(inputs, {
     // maBeforeVcMa: saved here for MMSS eligibility check — policy assesses MA balance
     // before the current year's VCMA top-up (Issue 5 fix).
     const maBeforeVcMa = ma;
-    if (vcMaCash * effVcMaFreq > 0) {
+    if (vcMaCash * effVcMaFreq > 0 && !isForeigner) { // B1: foreigners cannot top up CPF
       const projBHS_vcma = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, (baseYear + (age - startAge)) - 2026)));
       const maRoom_vcma = Math.max(0, projBHS_vcma - ma);
       const actualVcMa = Math.min(vcMaCash * effVcMaFreq, maRoom_vcma);
@@ -953,7 +954,7 @@ function runProjectionEngine(inputs, {
     }
 
     // CPFIS — OA tranche: only OA savings ABOVE $20,000 are investible; age 18+ required.
-    if (cpfisOaAmount * effCpfisOaFreq > 0 && age >= 18) {
+    if (cpfisOaAmount * effCpfisOaFreq > 0 && age >= 18 && !isForeigner) { // B1: foreigners have no CPF
       const cpfisOaInvestible = Math.max(0, oa - 20000);
       const actualCpfisOa = Math.min(cpfisOaAmount * effCpfisOaFreq, cpfisOaInvestible);
       oa -= actualCpfisOa;
@@ -962,7 +963,7 @@ function runProjectionEngine(inputs, {
     }
     // CPFIS — SA tranche: only SA savings ABOVE $40,000 are investible; SA is open pre-55 only; age 18+ required.
     // Post-55 SA is closed (merged to RA) so SA CPFIS is silently skipped after age 55.
-    if (cpfisSaAmount * effCpfisSaFreq > 0 && age < 55 && age >= 18) {
+    if (cpfisSaAmount * effCpfisSaFreq > 0 && age < 55 && age >= 18 && !isForeigner) { // B1: foreigners have no CPF
       const cpfisSaInvestible = Math.max(0, sa - 40000);
       const actualCpfisSa = Math.min(cpfisSaAmount * effCpfisSaFreq, cpfisSaInvestible);
       sa -= actualCpfisSa;
@@ -970,7 +971,7 @@ function runProjectionEngine(inputs, {
       totalOutSpent += actualCpfisSa;
     }
 
-    if (age < contribStop) {
+    if (age < contribStop && !isForeigner) { // B1: foreigners have no CPF obligations
       const gf = Math.pow(1 + salaryGrowth, Math.max(0, age - startAge)) * (1 + salaryBump);
       // mandatorySA_base: used by SEP branch (always from user-entered baseSA_Emp).
       // Non-SEP branch computes its own mandatorySA_dyn below, which may come from
@@ -1834,6 +1835,14 @@ export default function App() {
       const totalPct  = prYrLabel === 1 ? '9%' : '~24%';
       const rateType  = (inp.prRateType || 'GG') === 'FG' ? 'F/G (Full ER)' : 'G/G (Graduated)';
       errs.salaryGross = `PR Year ${prYrLabel} ${rateType}: contributions are computed from your salary (${totalPct} total). Enter your monthly gross then click ⚡ Auto-Calc — otherwise the engine projects zero mandatory contributions.`;
+    }
+    // B1: Foreigner — zero out effect warning. Salary, contributions and voluntary
+    // top-up fields have no effect because the engine gates all CPF flows for foreigners.
+    if ((inp.citizenStatus || 'SC') === 'foreigner') {
+      if (!errs.salaryGross && ((Number(inp.salaryGross) || 0) > 0 || (Number(inp.empOaCont) || 0) > 0))
+        errs.salaryGross = "Foreigners are not subject to mandatory CPF contributions — salary and contribution fields have no effect on the CPF projection. Only SRS and private assets are modelled.";
+      if ((Number(inp.vcSaTopup) || 0) > 0 || (Number(inp.vc3aCash) || 0) > 0 || (Number(inp.vcMaCash) || 0) > 0)
+        errs.vc3aCash = "Foreigners cannot make voluntary CPF top-ups — VC3A, RSTU, and VCMA fields have no effect on the projection.";
     }
     const sb = Number(inp.salaryBonus) || 0;
     if (sb < 0 || sb > 2000000) errs.salaryBonus = "0 – $2,000,000";
