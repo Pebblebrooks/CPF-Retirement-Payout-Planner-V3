@@ -2431,6 +2431,7 @@ export default function App() {
       message: "Reset all inputs and clear all scenarios, What-If, and comparison data?",
       onConfirm: () => {
         setInputs({ ...DEFAULT_INPUTS });
+        setInputErrors({});
         setScenarioA(null);
         setScenarioB(null);
         setScenarioLabelA("");
@@ -2674,7 +2675,7 @@ export default function App() {
         lr.basicAnnual || "", lr.standardAnnual || "", lr.escalatingAnnual || "",
         // Yield XIRR % — pre-computed Newton-Raphson XIRR for each plan
         ...(["standard", "escalating", "basic"].map(plan => {
-          const pa = Number(inputs.payoutAge) || 65;
+          const pa = payoutAge65; // use debounced value — matches xirrByAge which is keyed on debounced pa
           if (row.age < pa) return "";
           const xirr = xirrByAge[plan]?.[row.age];
           return xirr != null ? xirr.toFixed(2) + "%" : "";
@@ -3021,7 +3022,7 @@ export default function App() {
     const pAge = Number(debouncedInputs.payoutAge) || 65; // NX10 fix: stay in sync with projection
     // initialRA = RA after 20% transfer — this is what enters the CPF LIFE pool
     const initialRA = raAfterTransfer;
-    const includeProp = inputs.includeProperty ?? true;
+    const includeProp = debouncedInputs.includeProperty ?? true; // use debounced — deps already list debouncedInputs.includeProperty
     let cumPayoutStandard = 0, cumPayoutEscalating = 0, cumPayoutBasic = 0;
 
     // ── BASIC PLAN MATH ────────────────────────────────────────────────────────
@@ -3103,8 +3104,8 @@ export default function App() {
 
   const applyInflation = (val, age) => {
     if (!isRealDollars || isNaN(val)) return val;
-    const ca = Number(inputs.currentAge) || 35; const yrs = Math.max(0, age - ca);
-    const infl = (Number(inputs.inflationRate) || 0) / 100;
+    const ca = Number(debouncedInputs.currentAge) || 35; const yrs = Math.max(0, age - ca); // use debounced — mirrors displayProjection/displayAccumulation deflation source
+    const infl = (Number(debouncedInputs.inflationRate) || 0) / 100;
     return val / Math.pow(1 + infl, yrs);
   };
 
@@ -3454,8 +3455,8 @@ export default function App() {
   // is always populated when the user clicks Download CSV.
   const xirrByAge = useMemo(() => {
     if (activeTab !== "table") return {}; // bail immediately on all other tabs
-    const pa = Number(inputs.payoutAge) || 65;
-    const ca = Number(inputs.currentAge) || 35;
+    const pa = payoutAge65; // use debounced value — matches projection/payoutProjection which are also debounced
+    const ca = Number(debouncedInputs.currentAge) || 35;
     const result = { standard: {}, escalating: {}, basic: {} };
     // Pre-build contribution outflows once
     const contribFlows = projection
@@ -3485,7 +3486,7 @@ export default function App() {
       }
     }
     return result;
-  }, [activeTab, projection, payoutProjection, inputs.payoutAge, inputs.currentAge]);
+  }, [activeTab, projection, payoutProjection, payoutAge65, debouncedInputs.currentAge]);
 
   // BUG-10 fix: use payoutAge65 (debounced) so payoutAgeData matches the debounced displayAccumulation.
   const payoutAgeData = displayAccumulation.find(d => d.age === payoutAge65) || {};
@@ -4822,6 +4823,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               {PRESET_PROFILES.map(p => (
                 <button key={p.id} onClick={() => {
                   setInputs({ ...DEFAULT_INPUTS, ...p.inputs });
+                  setInputErrors({});
                   setShowPresets(false);
                   showToast(`✓ Loaded: ${p.label}`);
                 }} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%", transition: "border-color 0.15s" }}
@@ -5207,8 +5209,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <input type="text" name="name" placeholder="e.g. John Doe" onFocus={(e) => e.target.select()} value={inputs.name} onChange={handleInputChange} aria-label="Member name" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} /></div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, alignItems: "flex-end" }}>
                     {[["currentYear", "Curr Year"], ["currentAge", "Curr Age"]].map(([n, l]) => (
-                      <div key={n}><label style={{ display: "block", fontSize: 11, fontWeight: 700, color: inputErrors[n] ? "#f87171" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 9, color: "#f87171" }}>⚠ {inputErrors[n]}</span>}</label>
-                        <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: `1px solid ${inputErrors[n] ? "#f87171" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }} /></div>
+                      <div key={n}>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: inputErrors[n] ? "#f87171" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 9, color: "#f87171" }}>⚠</span>}</label>
+                        <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l} aria-invalid={!!inputErrors[n]} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: `1px solid ${inputErrors[n] ? "#f87171" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                        {inputErrors[n] && <p style={{ fontSize: 10, color: "#f87171", marginTop: 4, marginBottom: 0, lineHeight: 1.4 }}>⚠ {inputErrors[n]}</p>}
+                      </div>
                     ))}
                     <div><div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>Payout At</div>
                       <select name="payoutAge" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }}>
