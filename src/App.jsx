@@ -2226,9 +2226,16 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const is55Plus  = (Number(inputs.currentAge) || 0) >= 55;
-  const isUnder16 = (Number(inputs.currentAge) || 0) < 16;   // CPF minor gate: cash top-ups require age 16+
+  const is55Plus     = (Number(inputs.currentAge) || 0) >= 55;
+  const isUnder16    = (Number(inputs.currentAge) || 0) < 16;   // CPF minor gate: cash top-ups require age 16+
   const isSelfEmployed = inputs.isSelfEmployed === true;
+  // BUG-NEW-1 fix: isForeigner must be declared at component scope so JSX references in the
+  // LIFE tab (line ~8140) and elsewhere resolve correctly. Previously only existed inside a
+  // local IIFE (line ~6994) and inside runProjectionEngine — both out of component render scope.
+  // Accessing an undeclared identifier in JSX throws ReferenceError, crashing the LIFE tab
+  // for every user who navigates to it. reads live `inputs` (not debounced) — intentional,
+  // as this gates UI display only, not projection computation.
+  const isForeigner  = (inputs.citizenStatus || 'SC') === 'foreigner';
 
   // FreqToggle is now a top-level component (defined before App) — receives inputs+setInputs as props.
   // This prevents it from being recreated on every App render, which was causing sidebar section flicker.
@@ -5315,25 +5322,49 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   </div>
 
-                  {/* Citizenship status — global gate for MRSS, MMSS, PR tenure warnings */}
-                  <div style={{ padding: "10px 12px", borderRadius: 10, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-                    {/* Row 1: SC / PR toggle */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (inputs.citizenStatus || 'SC') === 'PR' ? 8 : 0 }}>
+                  {/* Citizenship status — global gate for MRSS, MMSS, PR tenure warnings, and foreigner CPF lock */}
+                  <div style={{ padding: "10px 12px", borderRadius: 10, background: isForeigner ? "rgba(251,191,36,0.06)" : "var(--bg-muted)", border: `1px solid ${isForeigner ? "rgba(251,191,36,0.35)" : "var(--border-subtle)"}` }}>
+                    {/* Row 1: SC / PR / Foreigner toggle */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (inputs.citizenStatus || 'SC') === 'PR' || isForeigner ? 8 : 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", textTransform: "uppercase" }}>Citizenship</span>
-                        <TooltipBox id="t-citizenship" text="Select SC (Singapore Citizen) or PR (Permanent Resident). MRSS and MMSS grants are available to Singapore Citizens only. PR members in Year 1 or Year 2 have lower CPF contribution rates — select your tenure year when PR is selected. Foreigners are not modelled as they have no CPF entitlements." />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: isForeigner ? "#fbbf24" : "var(--text-highlight)", textTransform: "uppercase" }}>Citizenship</span>
+                        <TooltipBox id="t-citizenship" text="Select SC (Singapore Citizen), PR (Permanent Resident), or Foreigner. SC/PR have CPF accounts — all CPF schemes, contributions, and top-ups apply. Foreigners have no CPF — all CPF sections are locked. Foreigners can use SRS (up to $35,700/yr), Property, and Private Assets. MRSS and MMSS are SC-only." />
                       </div>
                       <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 7, gap: 2 }}>
                         <button onClick={() => setInputs(p => ({ ...p, citizenStatus: 'SC' }))}
-                          style={{ padding: "4px 14px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
+                          style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: (inputs.citizenStatus || 'SC') === 'SC' ? "var(--clr-sky)" : "transparent",
                             color: (inputs.citizenStatus || 'SC') === 'SC' ? "#020617" : "var(--text-muted)" }}>SC</button>
                         <button onClick={() => setInputs(p => ({ ...p, citizenStatus: 'PR', mrssGrant: 0, mmssGrant: 0 }))}
-                          style={{ padding: "4px 14px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
+                          style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: (inputs.citizenStatus || 'SC') === 'PR' ? "#fbbf24" : "transparent",
                             color: (inputs.citizenStatus || 'SC') === 'PR' ? "#020617" : "var(--text-muted)" }}>PR</button>
+                        <button onClick={() => setInputs(p => ({ ...p,
+                            citizenStatus: 'foreigner',
+                            // Clear all CPF fields — foreigners have no CPF account
+                            oaBalance: 0, saBalance: 0, maBalance: 0,
+                            empOaCont: 0, empSaCont: 0, empMaCont: 0,
+                            vc3aCash: 0, vcSaTopup: 0, vcMaCash: 0, vcVhr: 0,
+                            annualGovGrant: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
+                            cpfisOaAmount: 0, cpfisSaAmount: 0,
+                            oaToSaTransfer: 0, oaToMaTransfer: 0,
+                            housingOutflow: 0, oaEduLoan: 0, oaWithdrawalAt55: 0,
+                            oaDrawdownMonthly: 0, oaDrawdownStartAge: 0, oaDrawdownFloor: 0,
+                            dieWithZeroEnabled: false,
+                          }))}
+                          style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
+                            background: isForeigner ? "#f59e0b" : "transparent",
+                            color: isForeigner ? "#020617" : "var(--text-muted)" }}>Foreigner</button>
                       </div>
                     </div>
+                    {/* Foreigner info banner */}
+                    {isForeigner && (
+                      <div style={{ fontSize: 10, color: "#fde68a", lineHeight: 1.6, background: "rgba(251,191,36,0.08)", borderRadius: 7, padding: "6px 10px" }}>
+                        🌐 <strong style={{ color: "#fbbf24" }}>No CPF account.</strong> All CPF sections are locked below.
+                        Your primary tax-deferred vehicle is <strong>SRS</strong> (up to $35,700/yr).
+                        Property and Private Assets remain fully active.
+                      </div>
+                    )}
                     {/* Row 2: PR Tenure — only shown when PR is selected */}
                     {(inputs.citizenStatus || 'SC') === 'PR' && (
                       <div>
@@ -5409,52 +5440,76 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </button>
                     </div>
                   )}
-                  {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
-                    <div key={n}><div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
-                      <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l + ' balance'} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
-                  ))}
-                </div>
-                {/* Goal Trackers */}
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-subtle)" }}>
-
-                  {/* SA/RA Goal */}
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
-                      <span>{is55Plus ? "RA" : "SA"} Goal <TooltipBox id="t-ers" text={`Basic Retirement Sum (BRS): ${formatCurrency(currentBRS)} · Full Retirement Sum (FRS): ${formatCurrency(currentFRS)} · Enhanced Retirement Sum (ERS): ${formatCurrency(currentERS)}`} /></span>
-                      <span style={{ color: currentSaRa >= currentFRS ? "var(--clr-sky)" : "#fbbf24", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
-                        {Math.round((currentSaRa / currentFRS) * 100)}%{currentSaRa >= currentFRS ? " ✓" : ""}
-                      </span>
-                    </div>
-                    <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
-                      {[25, 50].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
-                      <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#3b82f6,#06b6d4)", width: `${saRaVisualWidth}%`, transition: "width 0.8s" }} />
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
-                      <span>0</span><span>BRS</span><span>FRS</span><span>ERS</span>
-                    </div>
-                  </div>
-
-                  {/* MA Goal */}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
-                      <span>MA Goal <TooltipBox id="t-bhs" text={`Basic Healthcare Sum (BHS): ${formatCurrency(currentBHS)}. MA cap — excess flows to SA (before 55) or RA (after 55).`} /></span>
-                      <span style={{ color: currentMa >= currentBHS ? "var(--clr-sky)" : "#60a5fa", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
-                        {Math.round(Number(bhsPercentText))}%{currentMa >= currentBHS ? " ✓" : ""}
-                      </span>
-                    </div>
-                    <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
-                      {[25, 50, 75].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
-                      <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#8b5cf6,#6366f1)", width: `${bhsVisualWidth}%`, transition: "width 0.8s" }} />
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
-                      <span>0</span><span>25%</span><span>50%</span><span>75%</span><span>MAX</span>
-                    </div>
-                  </div>
-                </div>
-              </div>}
-            </div>
+                  {/* CPF Balances + Goal Trackers — locked for foreigners.
+                      Structure: position:relative gate → opacity/pointer-events dim → content
+                                              → overlay (absolute, inside gate) → gate closes.
+                      The overlay MUST be inside position:relative before it closes so
+                      inset:0 is contained to this block and does not cover the whole sidebar. */}
+                  <div style={{ position: "relative" }}>
+                    {/* Single opacity wrapper covers BOTH balance inputs AND goal trackers */}
+                    <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto" }}>
+                      {/* Balance inputs */}
+                      {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
+                        <div key={n}>
+                          <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
+                          <input type="text" inputMode="decimal" name={n} value={inputs[n]} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={l + ' balance'} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                        </div>
+                      ))}
+                      {/* Goal Trackers */}
+                      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-subtle)" }}>
+                        {/* SA/RA Goal */}
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
+                            <span>{is55Plus ? "RA" : "SA"} Goal <TooltipBox id="t-ers" text={`Basic Retirement Sum (BRS): ${formatCurrency(currentBRS)} · Full Retirement Sum (FRS): ${formatCurrency(currentFRS)} · Enhanced Retirement Sum (ERS): ${formatCurrency(currentERS)}`} /></span>
+                            <span style={{ color: currentSaRa >= currentFRS ? "var(--clr-sky)" : "#fbbf24", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
+                              {Math.round((currentSaRa / currentFRS) * 100)}%{currentSaRa >= currentFRS ? " ✓" : ""}
+                            </span>
+                          </div>
+                          <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
+                            {[25, 50].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
+                            <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#3b82f6,#06b6d4)", width: `${saRaVisualWidth}%`, transition: "width 0.8s" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
+                            <span>0</span><span>BRS</span><span>FRS</span><span>ERS</span>
+                          </div>
+                        </div>
+                        {/* MA Goal */}
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
+                            <span>MA Goal <TooltipBox id="t-bhs" text={`Basic Healthcare Sum (BHS): ${formatCurrency(currentBHS)}. MA cap — excess flows to SA (before 55) or RA (after 55).`} /></span>
+                            <span style={{ color: currentMa >= currentBHS ? "var(--clr-sky)" : "#60a5fa", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
+                              {Math.round(Number(bhsPercentText))}%{currentMa >= currentBHS ? " ✓" : ""}
+                            </span>
+                          </div>
+                          <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
+                            {[25, 50, 75].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
+                            <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#8b5cf6,#6366f1)", width: `${bhsVisualWidth}%`, transition: "width 0.8s" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
+                            <span>0</span><span>25%</span><span>50%</span><span>75%</span><span>MAX</span>
+                          </div>
+                        </div>
+                      </div>{/* /Goal Trackers */}
+                    </div>{/* /opacity+pointerEvents dim wrapper — closes before overlay */}
+                    {/* Overlay: position:absolute is contained by position:relative parent above */}
+                    {isForeigner && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 10, zIndex: 10, pointerEvents: "all" }}>
+                        <div style={{ background: "rgba(15,23,42,0.82)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 10, padding: "8px 16px", fontSize: 10, color: "#fbbf24", fontWeight: 700, textAlign: "center" }}>
+                          🔒 No CPF account — balances &amp; goals not applicable
+                        </div>
+                      </div>
+                    )}
+                  </div>{/* /position:relative gate — overlay is contained here */}
+              </div>}{/* /openSections profile body */}
+            </div>{/* /profile section outer */}
             {/* Mandatory Contribs */}
-            <div style={{ background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(251,146,60,0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ position: "relative" }}>
+            {isForeigner && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 10, color: "#fbbf24", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
+              </div>
+            )}
+            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(251,146,60,0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
               <div onClick={() => toggleSection("contribs")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("contribs"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("contribs") ? "rgba(163,230,53,0.07)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--clr-lime)" }}>
                   <Briefcase style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>Mandatory Contributions{isSelfEmployed ? " (SEP)" : ""}</span>
@@ -5826,9 +5881,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   })()}
                 </div>}
               </div>}
-            </div>
+            </div>{/* /contribs inner */}
+            </div>{/* /contribs gate wrapper */}
             {/* Inflows */}
-            <div style={{ background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit ? "#f97316" : isSelfEmployed ? "rgba(251,146,60,0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ position: "relative" }}>
+            {isForeigner && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 10, color: "#fbbf24", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
+              </div>
+            )}
+            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit ? "#f97316" : isSelfEmployed ? "rgba(251,146,60,0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
               <div onClick={() => toggleSection("topups")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("topups"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("topups") ? (isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)") : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: isVcOverLimit ? "#fb923c" : "#34d399" }}>
                   <Gift style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>Inflows ($/yr)</span>
@@ -6197,10 +6259,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                 </div>
               </div>}
-            </div>
+            </div>{/* /topups inner */}
+            </div>{/* /topups gate wrapper */}
 
             {/* Outflows */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ position: "relative" }}>
+            {isForeigner && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 10, color: "#fbbf24", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
+              </div>
+            )}
+            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <div onClick={() => toggleSection("outflows")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("outflows"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("outflows") ? "rgba(244,63,94,0.06)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#f472b6" }}>
                   <MinusCircle style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>Outflows ($/yr)</span>
@@ -6351,10 +6420,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <input type="text" inputMode="decimal" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" aria-label="Medical inflation rate" style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
                 </div>
               </div>}
-            </div>
+            </div>{/* /outflows inner */}
+            </div>{/* /outflows gate wrapper */}
 
             {/* CPF Transfers */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ position: "relative" }}>
+            {isForeigner && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 10, color: "#fbbf24", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
+              </div>
+            )}
+            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <div onClick={() => toggleSection("transfers")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("transfers"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("transfers") ? "rgba(251,191,36,0.06)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#fbbf24" }}>
                   <ArrowRightLeft style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>CPF Transfers ($/yr)</span>
@@ -6474,7 +6550,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
                 </div>
               </div>}
-            </div>
+            </div>{/* /transfers inner */}
+            </div>{/* /transfers gate wrapper */}
 
             {/* Property — consolidated section */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
@@ -6716,8 +6793,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <input type="text" inputMode="decimal" name="targetMonthlyIncome" value={inputs.targetMonthlyIncome} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} aria-label="Target monthly income" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "monospace", fontWeight: 700 }} />
                   </div>
 
-                  {/* OA Drawdown */}
-                  <div style={{ paddingTop: 8, borderTop: "1px solid rgba(168,85,247,0.15)", marginTop: 4 }}>
+                  {/* OA Drawdown — locked for foreigners (no OA account) */}
+                  <div style={{ position: "relative" }}>
+                  {isForeigner && (
+                    <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                      <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 10, color: "#fbbf24", fontWeight: 700 }}>🔒 OA Drawdown — no CPF account for foreigners</div>
+                    </div>
+                  )}
+                  <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", paddingTop: 8, borderTop: "1px solid rgba(168,85,247,0.15)", marginTop: 4 }}>
                     {/* Change 5: DwZ-managed state */}
                     {(() => {
                       const dwzOn = !!inputs.dieWithZeroEnabled;
@@ -6848,7 +6931,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </>
                       );
                     })()}
-                  </div>{/* /OA Drawdown section */}
+                  </div>{/* /OA Drawdown inner */}
+                  </div>{/* /OA Drawdown gate wrapper */}
 
                   {/* ── Die with Zero ── */}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.2)", marginTop: 4 }}>
@@ -7050,7 +7134,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       {/* Live SRS projection summary */}
                       {(Number(inputs.srsBalance) > 0 || Number(inputs.srsAnnualContribution) > 0) && (() => {
                         const bal = Number(inputs.srsBalance) || 0;
-                        const contrib = Math.min(Number(inputs.srsAnnualContribution) || 0, 15300); // SC/PR cap — foreigners not modelled
+                        const contrib = Math.min(Number(inputs.srsAnnualContribution) || 0, isForeigner ? 35700 : 15300); // BUG-NEW-2 fix: foreigner cap $35,700; SC/PR cap $15,300 — mirrors engine srsCap at line 602
                         const rate = (Number(inputs.srsReturnRate) || 0) / 100;
                         const stopAge = Number(inputs.srsContribStopAge) || 63;
                         const drawAge = Math.max(Number(inputs.srsDrawdownStartAge) || 63, 63);
@@ -9540,3 +9624,4 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
     </TooltipContext.Provider>
   );
 }
+
