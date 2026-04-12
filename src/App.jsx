@@ -6816,7 +6816,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   </div>
 
-                </div>
                   {/* SRS — Supplementary Retirement Scheme */}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(14,165,233,0.2)", marginTop: 4 }}>
                     <div style={{ background: "rgba(14,165,233,0.06)", border: "1px solid rgba(14,165,233,0.2)", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
