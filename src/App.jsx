@@ -4743,7 +4743,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-mobile-menu-row { display: flex; gap: 8px; flex-wrap: wrap; }
           .cpf-logo-text { font-size: 13px !important; }
           .cpf-logo-sub  { display: none !important; }
-          .sidebar-toggle-btn { display: flex !important; position: sticky; top: 48px; z-index: 40; background: var(--bg-panel); }
+          /* Show toggle btn on mobile — no positioning here (handled per-context below) */
+          .sidebar-toggle-btn { display: flex !important; z-index: 40; background: var(--bg-panel); }
+          /* The sidebar INPUT PARAMETERS bar: fixed just below the fixed header */
+          .cpf-sidebar-wrap .sidebar-toggle-btn { position: fixed !important; top: 48px; left: 0; right: 0; z-index: 48; }
+          /* Push sidebar sections below the fixed toggle bar (~44px tall) */
+          .cpf-sidebar-wrap { padding-top: 44px; }
           .desktop-only { display: none !important; }
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
         }
