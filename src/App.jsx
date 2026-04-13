@@ -20,29 +20,10 @@ const TableIcon = AlignJustify;
 const BarChart3 = BarChart2;
 const ArrowDownToLine = Download;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CPF POLICY CONSTANTS — UPDATE EACH JANUARY WHEN CPF BOARD PUBLISHES NEW VALUES
-// ───────────────────────────────────────────────────────────────────────────────
-// Checklist of values that change annually:
-//   [ ] RETIREMENT_SUMS_2026  — BRS / FRS / ERS / BHS (CPF Board circular, ~Aug–Sep)
-//   [ ] ANNUAL_LIMIT          — CPF Annual Contribution Limit (Budget announcement)
-//   [ ] CPF_RATES             — OA / SA / MA / RA interest rates (usually stable)
-//   [ ] MMSS_PILOT_END_YEAR   — if CPF Board extends the MediSave Matched Savings Scheme
-//   [ ] PR_CONTRIBUTION_RATES — G/G rate tables (below) if CPF Board revises PR rates
-//   [ ] PR_FG_CONTRIBUTION_RATES — F/G rate tables (below) if revised
-// After updating, do a global search for the old year (e.g. "2026") to catch any
-// prose references in UI strings that also need bumping.
-// ═══════════════════════════════════════════════════════════════════════════════
-
 const CPF_RATES = { OA: 0.025, SA: 0.04, MA: 0.04, RA: 0.04, EXTRA_1: 0.01, EXTRA_2: 0.01 };
 const RETIREMENT_SUMS_2026 = { BRS: 110200, FRS: 220400, ERS: 440800, BHS: 79000 };
 const ANNUAL_LIMIT = 37740;
 const ASSUMED_TARGET_GROWTH = 0.03;
-
-// MMSS pilot window — update MMSS_PILOT_END_YEAR if CPF Board extends the scheme.
-// Engine uses these constants at the simYear gate (search MMSS_PILOT_START_YEAR to find it).
-const MMSS_PILOT_START_YEAR = 2026;
-const MMSS_PILOT_END_YEAR   = 2030;
 
 // CPF contribution rates for PR members in Year 1 and Year 2.
 // Source: CPF Board Tables 2 & 3, Graduated Employer / Graduated Employee (G/G) rates, 1 Jan 2026.
@@ -276,66 +257,6 @@ const computeBasicPlanYearPayout = (age, phase1bTrigger, phase1aAnnual, phase2An
     // Phase 2 (age ≥ 90): lower constant payout from communal annuity pool
     return { basPay: phase2Annual, newRaRem: 0 };
   }
-};
-
-// CQ-2: Pure helper that computes one sensitivity-table row for a given payout age.
-// Extracted from the sensitivityData useMemo so the per-pAge accumulation loop is no
-// longer duplicated alongside the payoutProjection loop — it lives here once.
-//
-// Params:
-//   pAge             — payout age to evaluate (e.g. 65–70)
-//   raAfterTransfer  — RA balance at pAge after the standard 20% OA transfer deduction
-//   isMale           — gender flag (same as debouncedInputs.isMale)
-//   basicPremiumPct  — premium percentage for Basic Plan (usually ~10)
-//
-// Returns: { pAge, stdMonthly, escMonthly, basMonthly, escVsStd, stdVsBasic, escVsBasic }
-const computeSensitivityRow = (pAge, raAfterTransfer, isMale, basicPremiumPct) => {
-  const stdStart = interpolateCpfLife(raAfterTransfer, 'std', isMale);
-  const escStart = interpolateCpfLife(raAfterTransfer, 'esc', isMale);
-
-  const { premium: basicPremS, pv: basicPVS,
-          phase1aAnnual: basicP1aAnnual, phase2Annual: basicP2Annual,
-          phase1bTrigger: phase1bTriggerS, effAnnualFactor: basicEffAFS
-        } = computeBasicPlanParams(raAfterTransfer, pAge, interpolateCpfLife(raAfterTransfer, 'bas', isMale), basicPremiumPct);
-
-  let basicRaRem = basicPVS, cumStd = 0, cumEsc = 0, cumBas = 0;
-  let escVsStd = null, stdVsBasic = null, escVsBasic = null;
-
-  for (let age = pAge; age <= 95; age++) {
-    const yr = age - pAge;
-    const stdPay = stdStart * 12;
-    const escPay = (escStart * Math.pow(1.02, yr)) * 12;
-    cumStd += stdPay; cumEsc += escPay;
-
-    const { basPay, newRaRem } = computeBasicPlanYearPayout(
-      age, phase1bTriggerS, basicP1aAnnual, basicP2Annual, basicRaRem, basicEffAFS
-    );
-    let basBeq = 0;
-    if (age < 90) {
-      basicRaRem = newRaRem;
-      basBeq = basicRaRem + basicPremS;
-    } else {
-      basicRaRem = 0;
-      basBeq = Math.max(0, basicPremS - cumBas);
-    }
-    cumBas += basPay;
-
-    // E2 fix: bequest pool uses post-transfer RA
-    const stdBeq = Math.max(0, raAfterTransfer - cumStd);
-    const escBeq = Math.max(0, raAfterTransfer - cumEsc);
-    const stdT = cumStd + stdBeq, escT = cumEsc + escBeq, basT = cumBas + basBeq;
-    if (!escVsStd   && age > pAge && escT > stdT)  escVsStd   = age;
-    if (!stdVsBasic && age > pAge && stdT > basT)  stdVsBasic = age;
-    if (!escVsBasic && age > pAge && escT > basT)  escVsBasic = age;
-  }
-
-  return {
-    pAge,
-    stdMonthly: Math.round(stdStart),
-    escMonthly: Math.round(escStart),
-    basMonthly: Math.round(interpolateCpfLife(raAfterTransfer, 'bas', isMale)),
-    escVsStd, stdVsBasic, escVsBasic
-  };
 };
 
 const LEGAL_DISCLAIMER = "DISCLAIMER: This application is a prototype simulation tool intended strictly for informational, educational, and testing purposes only. This app and its underlying mathematical models are completely independent and are neither supported, approved, nor sanctioned by the Central Provident Fund (CPF) Board or any government agency. All projections, calculations, and inferences generated by this tool are entirely hypothetical and should not be construed or relied upon as professional financial advice. The author(s) and creator(s) of this application shall not be held liable for any direct, indirect, incidental, consequential damages, losses, or legal repercussions arising from the use or misuse of this tool. Please consult a certified financial advisor before making any financial decisions.";
@@ -1011,7 +932,7 @@ function runProjectionEngine(inputs, {
     // currentYear < 2026 don't have their MMSS pilot window suppressed.  The MMSS scheme
     // launched in 2026; any simulation year computed from an earlier baseYear would fail
     // the >= 2026 gate even when the user is clearly projecting into 2026+ territory.
-    const effectiveBaseYear_mmss = Math.max(MMSS_PILOT_START_YEAR, baseYear);
+    const effectiveBaseYear_mmss = Math.max(2026, baseYear);
     const simYear_mmss = effectiveBaseYear_mmss + (age - startAge);
     // P1 fix: MMSS income gate must include AW/bonus in monthly gross, mirroring the MRSS N4 fix
     // (lines 1216-1219) and the MMSS UI badge (BUG-6 comment, lines 6154-6162).
@@ -1025,7 +946,7 @@ function runProjectionEngine(inputs, {
       ? ((Number(inputs.netTradeIncome) || 0) / 12)
       : Math.round((owAnnualScaled_mmss + bonusMmss) / 12); // OW + AW/12; 0 post-retirement
     if (isSC && age >= 55 && age <= 70 &&
-        simYear_mmss >= MMSS_PILOT_START_YEAR && simYear_mmss <= MMSS_PILOT_END_YEAR &&
+        simYear_mmss >= 2026 && simYear_mmss <= 2030 &&
         mmssMonthlyIncome <= 4000) {
       const projBHS_mm = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + ASSUMED_TARGET_GROWTH, Math.max(0, simYear_mmss - 2026)));
       if (maBeforeVcMa < projBHS_mm / 2) { // Issue 5: pre-VCMA balance for eligibility
@@ -1777,94 +1698,6 @@ const computeXIRR = (cashFlows, guess = 0.05) => {
   return isFinite(rate) ? rate : null;
 };
 
-// ─── Item 27: React Error Boundary ───────────────────────────────────────────
-// Catches runtime errors anywhere in the render tree (engine NaN cascades, bad
-// imports, unexpected null access) and surfaces a friendly recovery UI instead
-// of a blank screen. Class component is required — React only supports error
-// boundaries via getDerivedStateFromError / componentDidCatch on class components.
-//
-// Placement: wraps the inner content div *inside* TooltipContext.Provider so the
-// context is available if we ever need it in the fallback, and so context itself
-// is never the thing that crashes.
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, errorMessage: '' };
-    this.handleReset = this.handleReset.bind(this);
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, errorMessage: error?.message || 'Unknown error' };
-  }
-
-  componentDidCatch(error, info) {
-    // Log to console for debugging — swap to a real error-reporting service if needed
-    console.error('[CPF Planner] Render error caught by ErrorBoundary:', error, info?.componentStack);
-  }
-
-  handleReset() {
-    // Clear profile data from localStorage so a corrupt import can't cause a
-    // boot-loop. Section-state and theme prefs are left intact.
-    try { localStorage.removeItem('cpf_planner_profile'); } catch { /* ignore */ }
-    this.setState({ hasError: false, errorMessage: '' });
-  }
-
-  render() {
-    if (!this.state.hasError) return this.props.children;
-
-    // Fallback UI — deliberately minimal so it can never itself throw
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: '#0d1117', color: '#e6edf3', fontFamily: 'system-ui, sans-serif', padding: 32
-      }}>
-        <div style={{
-          maxWidth: 480, textAlign: 'center', background: '#161b22',
-          border: '1px solid #30363d', borderRadius: 16, padding: 40
-        }}>
-          <div style={{ fontSize: 40, marginBottom: 16 }}>⚠️</div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: '#f0f6fc' }}>
-            Something went wrong
-          </h2>
-          <p style={{ fontSize: 14, color: '#8b949e', marginBottom: 8, lineHeight: 1.6 }}>
-            The planner encountered an unexpected error and could not render.
-            This is usually caused by a malformed imported profile or an engine edge-case.
-          </p>
-          <p style={{ fontSize: 12, color: '#6e7681', marginBottom: 24,
-            fontFamily: 'monospace', background: '#0d1117', borderRadius: 8,
-            padding: '8px 12px', wordBreak: 'break-all' }}>
-            {this.state.errorMessage}
-          </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button
-              onClick={this.handleReset}
-              style={{
-                background: '#238636', color: '#fff', border: 'none', borderRadius: 8,
-                padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer'
-              }}
-            >
-              ↺ Reset &amp; Retry
-            </button>
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d',
-                borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer'
-              }}
-            >
-              ⟳ Reload Page
-            </button>
-          </div>
-          <p style={{ fontSize: 11, color: '#6e7681', marginTop: 20 }}>
-            Your exported profiles are safe — re-import them after resetting.
-          </p>
-        </div>
-      </div>
-    );
-  }
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
@@ -1912,30 +1745,27 @@ export default function App() {
   // Sidebar accordion — supports multiple open sections simultaneously
   // All section IDs — used for expand-all default and expandAllSections helper
   const ALL_SECTION_IDS = ["profile", "contribs", "topups", "outflows", "transfers", "property", "privateAssets", "decumulation"];
-  // Item 28: use localStorage (persists across tab closes) with a versioned key so
-  // a future schema change can bump to 'cpf_planner_v2_sections' without reading stale data.
-  const SECTIONS_STORAGE_KEY = 'cpf_planner_v1_sections';
   const [openSections, setOpenSections] = useState(() => {
     try {
-      const saved = localStorage.getItem(SECTIONS_STORAGE_KEY);
-      // No saved state: default to ALL sections open so the sidebar is immediately usable
+      const saved = sessionStorage.getItem('cpf_sections');
+      // Fresh session (no saved state): default to ALL sections open so the sidebar is immediately usable
       return saved ? new Set(JSON.parse(saved)) : new Set(ALL_SECTION_IDS);
     } catch { return new Set(ALL_SECTION_IDS); } // also default open on parse error
   });
   const toggleSection = (id) => setOpenSections(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
-    try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([...next])); } catch { }
+    try { sessionStorage.setItem('cpf_sections', JSON.stringify([...next])); } catch { }
     return next;
   });
   const expandAllSections = () => {
     const all = new Set(ALL_SECTION_IDS);
     setOpenSections(all);
-    try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify(ALL_SECTION_IDS)); } catch { }
+    try { sessionStorage.setItem('cpf_sections', JSON.stringify(ALL_SECTION_IDS)); } catch { }
   };
   const collapseAllSections = () => {
     setOpenSections(new Set());
-    try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([])); } catch { }
+    try { sessionStorage.setItem('cpf_sections', JSON.stringify([])); } catch { }
   };
 
   // Welcome Modal, Share Modal & Toast State
@@ -3663,21 +3493,64 @@ export default function App() {
   const intersectionEscPayVsStdPay = useMemo(() => { const m = payoutProjection.find(d => d.age > payoutAge65 && d.escalatingMonthly > d.standardMonthly); return m ? m.age : null; }, [payoutProjection, payoutAge65]);
 
   const sensitivityData = useMemo(() => {
-    // CQ-2: loop logic extracted to module-level computeSensitivityRow — see its definition
-    // above computeBasicPlanYearPayout. Each pAge row: look up projected RA, apply the
-    // standard 20% OA-transfer deduction (mirrors payoutProjection lines ~3047–3052),
-    // then delegate to the pure helper. deps unchanged.
     const pAs = [65, 66, 67, 68, 69, 70];
-    const isMaleSens = debouncedInputs.isMale !== false; // N6 fix: use debouncedInputs.isMale
     return pAs.map(pAge => {
-      const raRow = projectionByAge.get(pAge);
-      if (!raRow) return { pAge, stdMonthly: 0, escMonthly: 0, basMonthly: 0, escVsStd: null, stdVsBasic: null, escVsBasic: null };
+      const raRow = projectionByAge.get(pAge); if (!raRow) return { pAge, stdMonthly: 0, escMonthly: 0, basMonthly: 0, escVsStd: null, stdVsBasic: null, escVsBasic: null };
       const raVal = raRow.ra || 0;
-      // E2 fix: apply the same 20% RA-to-OA transfer deduction used by lifePlans and payoutProjection.
+      // E2 fix: apply the same 20% RA-to-OA transfer deduction used by lifePlans and
+      // payoutProjection. Previously raVal (pre-transfer) was passed to interpolateCpfLife,
+      // causing the sensitivity table to overstate payouts vs the chart for all payout ages.
+      // Mirrors lines 3047-3052: raTransferBase = raVal - cumRaCashTopUps - cumRaInterest; x 20%.
       const raTransferBaseSens  = Math.max(0, raVal - (raRow.cumRaCashTopUps || 0) - (raRow.cumRaInterest || 0));
       const raOaTransferSens    = Math.round(raTransferBaseSens * 0.20);
       const raAfterTransferSens = Math.max(0, raVal - raOaTransferSens);
-      return computeSensitivityRow(pAge, raAfterTransferSens, isMaleSens, basicPremiumPct);
+      // N6 fix: use debouncedInputs.isMale (same data source as projection) to avoid a
+      // 180ms window where live gender toggle + stale RA values produce mismatched CPF LIFE
+      // estimates.  isMale added to deps array below.
+      const isMaleSens = debouncedInputs.isMale !== false;
+      // Use same lookup-table interpolation as lifePlans — deferral gain emerges
+      // naturally from larger RA (from projection) + shorter amortisation period
+      const stdStart = interpolateCpfLife(raAfterTransferSens, 'std', isMaleSens);
+      const escStart = interpolateCpfLife(raAfterTransferSens, 'esc', isMaleSens);
+
+      const { premium: basicPremS, pv: basicPVS,
+              phase1aAnnual: basicP1aAnnual, phase2Annual: basicP2Annual,
+              phase1bTrigger: phase1bTriggerS, effAnnualFactor: basicEffAFS
+            } = computeBasicPlanParams(raAfterTransferSens, pAge, interpolateCpfLife(raAfterTransferSens, 'bas', isMaleSens), basicPremiumPct);
+      // bPct2 removed — was declared then immediately void-discarded (dead code).
+      // basicPremiumPct is now passed directly into computeBasicPlanParams above.
+      let basicRaRem = basicPVS, cumBasicPool = 0, cumStd = 0, cumEsc = 0, cumBas = 0;
+      let escVsStd = null, stdVsBasic = null, escVsBasic = null;
+
+      for (let age = pAge; age <= 95; age++) {
+        const yr = age - pAge;
+        const stdPay = stdStart * 12;
+        const escPay = (escStart * Math.pow(1.02, yr)) * 12;
+        cumStd += stdPay; cumEsc += escPay;
+
+        // CQ-1: use shared helper — eliminates duplicated Phase 1A/1B/2 decision tree
+        const { basPay, newRaRem } = computeBasicPlanYearPayout(
+          age, phase1bTriggerS, basicP1aAnnual, basicP2Annual, basicRaRem, basicEffAFS
+        );
+        let basBeq = 0;
+        if (age < 90) {
+          basicRaRem = newRaRem;
+          basBeq = basicRaRem + basicPremS;
+        } else {
+          basicRaRem = 0;
+          cumBasicPool += basPay;
+          basBeq = Math.max(0, basicPremS - cumBasicPool);
+        }
+        cumBas += basPay;
+
+        const stdBeq = Math.max(0, raAfterTransferSens - cumStd), escBeq = Math.max(0, raAfterTransferSens - cumEsc); // E2 fix: bequest pool is post-transfer RA
+        const stdT = cumStd + stdBeq, escT = cumEsc + escBeq, basT = cumBas + basBeq;
+        if (!escVsStd && age > pAge && escT > stdT) escVsStd = age;
+        if (!stdVsBasic && age > pAge && stdT > basT) stdVsBasic = age;
+        if (!escVsBasic && age > pAge && escT > basT) escVsBasic = age;
+      }
+      const basMonthlyInterp = interpolateCpfLife(raAfterTransferSens, 'bas', isMaleSens); // E2 fix: use post-transfer RA
+      return { pAge, stdMonthly: Math.round(stdStart), escMonthly: Math.round(escStart), basMonthly: Math.round(basMonthlyInterp), escVsStd, stdVsBasic, escVsBasic };
     });
   }, [projection, projectionByAge, basicPremiumPct, debouncedInputs.isMale]);
 
@@ -4351,7 +4224,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
   };
   return (
     <TooltipContext.Provider value={{ show: showTooltipId, set: setShowTooltipId }}>
-      <ErrorBoundary>
       <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{ width: "100%", display: "flex", flexDirection: "column", background: "var(--bg-base)", color: "var(--text-main)", fontFamily: "system-ui,sans-serif" }}>
       <style>{`
         /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
@@ -5643,7 +5515,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           setOpenSections(prev => {
                             const next = new Set(prev);
                             ['contribs', 'topups', 'outflows', 'transfers'].forEach(id => next.delete(id));
-                            try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([...next])); } catch {}
+                            try { sessionStorage.setItem('cpf_sections', JSON.stringify([...next])); } catch {}
                             return next;
                           });
                         }}
@@ -7551,7 +7423,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     setOpenSections(prev => {
                       const next = new Set(prev);
                       next.add("topups");
-                      try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([...next])); } catch { }
+                      try { sessionStorage.setItem('cpf_sections', JSON.stringify([...next])); } catch { }
                       return next;
                     });
                     setTimeout(() => rstuRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
@@ -10060,11 +9932,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           </div>{/* /tab content panels */}
         </section>
       </div>
-      </ErrorBoundary>
 
 
     </div>
     </TooltipContext.Provider>
   );
 }
-
