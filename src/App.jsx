@@ -8892,9 +8892,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <Activity style={{ width: 13, height: 13 }} />{showMonteCarlo ? "Hide" : "Show"} Monte Carlo (200 runs)
                     </button>
                   </div>
+                </div>
                   {/* Rev #MC: variance preset buttons — only shown when MC is active */}
                   {showMonteCarlo && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: -12, marginBottom: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>Rate variance:</span>
                       {[["Mild ±0.5%", 0.5, "#60a5fa"], ["Base ±1%", 1, "#a78bfa"], ["Stress ±2%", 2, "#f87171"]].map(([lbl, val, clr]) => {
                         const active = (Number(inputs.mcVariancePct) || 1) === val;
