@@ -8799,30 +8799,70 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 </div>
                 )} {/* end !isForeigner CPF LIFE Starting Payouts */}
                 {/* Goal Tracking Card — hidden for foreigners (CPF LIFE plan basis is irrelevant) */}
+                {/* FIX: Previously only CPF LIFE was included in "Projected" — OA draw, SRS, and private
+                    assets were ignored, so Fill Gap had no visible effect on this card.
+                    Now totalProjected = CPF LIFE + OA Draw + SRS + Private, matching the Strategy tab. */}
                 {!isForeigner && (() => {
                   const target = Number(inputs.targetMonthlyIncome) || 0;
                   if (target > 0) {
+                    // ── CPF LIFE payout for the highlighted plan (inflation-adjusted when Real $ mode is on) ──
                     const planPayout = lifePlans[highlightPlan]?.[inputs.isMale !== false ? 'startM' : 'startF'] || 0;
                     const realPlanPayout = applyInflation(planPayout, inputs.payoutAge);
-                    const gap = realPlanPayout - target;
+
+                    // ── OA Drawdown contribution (only counted if draw starts at or before payout age) ──
+                    const oaDraw = (effectiveOaDrawStartAge > 0 && effectiveOaDrawStartAge <= payoutAge65)
+                      ? effectiveOaDrawMonthly : 0;
+
+                    // ── SRS monthly income at drawdown start age (same formula as Fill Gap button) ──
+                    const srsStart  = Math.max(Number(inputs.srsDrawdownStartAge) || 63, 63);
+                    const srsYears  = Math.min(Math.max(Number(inputs.srsDrawdownYears) || 10, 1), 10);
+                    const srsBal    = projectionByAge.get(srsStart)?.srsBalance || 0;
+                    const srsRate   = Math.max(0, (Number(inputs.srsReturnRate) || 0) / 100);
+                    const srsMo     = srsYears > 0
+                      ? Math.round((srsRate > 0
+                          ? srsBal * srsRate / (1 - Math.pow(1 + srsRate, -srsYears))
+                          : srsBal / srsYears) / 12)
+                      : 0;
+
+                    // ── Private asset drawdown: annual decrease in private assets at payout age ÷ 12 ──
+                    const privMo = Math.max(0, Math.round(
+                      ((projectionByAge.get(payoutAge65 - 1)?.privateAssets || 0) -
+                       (projectionByAge.get(payoutAge65)?.privateAssets || 0)) / 12));
+
+                    // ── Total projected income across all streams ──
+                    const totalProjected = realPlanPayout + oaDraw + srsMo + privMo;
+                    const gap = totalProjected - target;
                     const isShortfall = gap < 0;
+                    const hasOtherSources = oaDraw > 0 || srsMo > 0 || privMo > 0;
+
                     return (
                       <div style={{ background: isShortfall ? "rgba(244,63,94,0.08)" : "rgba(16,185,129,0.08)", border: `1px solid ${isShortfall ? "rgba(244,63,94,0.3)" : "rgba(16,185,129,0.3)"}`, borderRadius: 16, padding: "16px 20px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div>
-                            <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: isShortfall ? "#f472b6" : "#34d399", margin: "0 0 6px 0" }}>Retirement Income Goal vs {highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} Plan</p>
+                            <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: isShortfall ? "#f472b6" : "#34d399", margin: "0 0 6px 0" }}>
+                              Retirement Income Goal — Total Projected Income
+                            </p>
                             <p style={{ fontSize: 24, fontWeight: 900, color: isShortfall ? "#f43f5e" : "#10b981", margin: 0, fontFamily: "monospace" }}>
                               {isShortfall ? "-" : "+"}{formatCurrency(Math.abs(gap))} <span style={{ fontSize: 13, color: "var(--text-muted)", fontFamily: "sans-serif" }}>/ mo {isShortfall ? "shortfall" : "surplus"}</span>
                             </p>
                           </div>
                           <div style={{ textAlign: "right" }}>
                             <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px 0", textTransform: "uppercase", fontWeight: 700 }}>Target: {formatCurrency(target)}/mo</p>
-                            <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0, textTransform: "uppercase", fontWeight: 700 }}>Projected: {formatCurrency(realPlanPayout)}/mo</p>
+                            <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 3px 0", textTransform: "uppercase", fontWeight: 700 }}>Projected: {formatCurrency(totalProjected)}/mo</p>
+                            {/* Breakdown line — only shown when supplementary sources are active */}
+                            {hasOtherSources && (
+                              <p style={{ fontSize: 9, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+                                {highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} Plan {formatCurrency(realPlanPayout)}
+                                {oaDraw > 0  && ` + OA Draw ${formatCurrency(oaDraw)}`}
+                                {srsMo > 0   && ` + SRS ${formatCurrency(srsMo)}`}
+                                {privMo > 0  && ` + Private ${formatCurrency(privMo)}`}
+                              </p>
+                            )}
                           </div>
                         </div>
                         {isShortfall && (
                           <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid rgba(244,63,94,0.15)`, fontSize: 11, color: "#fda4af", lineHeight: 1.5 }}>
-                            <strong>Actionable Insight:</strong> To close this gap of {formatCurrency(Math.abs(gap))}/mo, you could increase voluntary RSTU top-ups to your SA/RA, delay your Payout Age to allow RA to grow further (larger RA → higher payouts), or build up your <strong>Private Assets</strong> portfolio to generate supplementary income.
+                            <strong>Actionable Insight:</strong> To close this gap of {formatCurrency(Math.abs(gap))}/mo, you could use <strong>⚡ Fill Gap</strong> in the OA Drawdown panel to auto-set the exact OA draw needed, increase voluntary RSTU top-ups to your SA/RA, delay your Payout Age to allow RA to grow further, or build up your <strong>Private Assets</strong> portfolio to generate supplementary income.
                           </div>
                         )}
                       </div>
