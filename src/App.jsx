@@ -2089,10 +2089,20 @@ export default function App() {
   const [tableSubTab, setTableSubTab] = useState("projection");
   const [showDataTableGuide, setShowDataTableGuide] = useState(false);
   const [showWisEligibility, setShowWisEligibility] = useState(false); // WIS eligibility panel toggle — must be top-level (Rules of Hooks)
+  // BUG-2 fix: Life Events panel state hoisted from IIFE to top-level useState.
+  // Calling React.useState inside an IIFE embedded in JSX violates Rules of Hooks:
+  // the hook call count changes when the IIFE is conditionally skipped, React's
+  // identity checks break under Strict Mode double-invocation, and the state is
+  // re-created from scratch on every render rather than being stable across renders.
+  // Renamed with "le" prefix to avoid collision with any future same-named locals.
+  const [leEditingId, setLeEditingId] = useState(null); // null = closed; 'new' = adding new
+  const [leFormState, setLeFormState] = useState({});
 
   // Sidebar accordion — supports multiple open sections simultaneously
   // All section IDs — used for expand-all default and expandAllSections helper
-  const ALL_SECTION_IDS = ["profile", "contribs", "topups", "outflows", "transfers", "property", "privateAssets", "decumulation"];
+  // BUG-2b fix: "lifeevents" was missing — section never opened on fresh load, was excluded
+  // from Expand All, and its open/closed state was not persisted in localStorage.
+  const ALL_SECTION_IDS = ["profile", "contribs", "topups", "outflows", "transfers", "property", "privateAssets", "lifeevents", "decumulation"];
   // Item 28: use localStorage (persists across tab closes) with a versioned key so
   // a future schema change can bump to 'cpf_planner_v2_sections' without reading stale data.
   const SECTIONS_STORAGE_KEY = 'cpf_planner_v1_sections';
@@ -3159,27 +3169,24 @@ export default function App() {
           try {
             if (p.scenarioA && p.scenarioA.inputs && Array.isArray(p.scenarioA.projection) && p.scenarioA.projection.length > 0) {
               const safeScenAInputs = sanitiseInputs(p.scenarioA.inputs);
-              if (p.scenarioA.payoutProj?.length > 0) {
-                // Modern format: payoutProj present — restore as-is
-                setScenarioA({ ...p.scenarioA, inputs: safeScenAInputs });
-              } else {
-                // Old format: payoutProj missing — regenerate projection from inputs
-                const freshProjA = runProjectionEngine(safeScenAInputs);
-                setScenarioA({ inputs: safeScenAInputs, projection: freshProjA, payoutProj: null, label: p.scenarioA.label });
-                scenariosRefreshed = true;
-              }
+              // BUG-6 fix: always regenerate projection from sanitised inputs rather than restoring
+              // the stored projection rows. Stored rows from older exports may be missing fields
+              // added since export (e.g. yearEventsIn / yearEventsOut), causing those columns to
+              // silently read as zero in the ledger and Compare chart.
+              // The payoutProj branch previously restored as-is — dropped. payoutProj: null is
+              // handled correctly by the getNetWorth fallback (same as share-link restore path).
+              const freshProjA = runProjectionEngine(safeScenAInputs);
+              setScenarioA({ inputs: safeScenAInputs, projection: freshProjA, payoutProj: null, label: p.scenarioA.label });
+              scenariosRefreshed = true;
             } else { setScenarioA(null); }
           } catch { setScenarioA(null); }
           try {
             if (p.scenarioB && p.scenarioB.inputs && Array.isArray(p.scenarioB.projection) && p.scenarioB.projection.length > 0) {
               const safeScenBInputs = sanitiseInputs(p.scenarioB.inputs);
-              if (p.scenarioB.payoutProj?.length > 0) {
-                setScenarioB({ ...p.scenarioB, inputs: safeScenBInputs });
-              } else {
-                const freshProjB = runProjectionEngine(safeScenBInputs);
-                setScenarioB({ inputs: safeScenBInputs, projection: freshProjB, payoutProj: null, label: p.scenarioB.label });
-                scenariosRefreshed = true;
-              }
+              // BUG-6 fix: same as Scenario A — always regenerate, never restore stale rows.
+              const freshProjB = runProjectionEngine(safeScenBInputs);
+              setScenarioB({ inputs: safeScenBInputs, projection: freshProjB, payoutProj: null, label: p.scenarioB.label });
+              scenariosRefreshed = true;
             } else { setScenarioB(null); }
           } catch { setScenarioB(null); }
           setMobileMenuOpen(false);
@@ -3210,13 +3217,17 @@ export default function App() {
       // Fix 2: include scenario INPUTS only (not projection arrays) so the recipient
       // can restore Compare slots from the share link. Projections are recalculated on load.
       // scenarioAInputs: null means no scenario saved; absent key = old link format.
+      // BUG-4 fix: whatIfContribStop / OaDrawdown / SrsContrib / PrivGrowth were restored
+      // on decode (lines ~2567-2570) but were never written into fullState, so they were
+      // silently dropped from every share link. All 8 What-If fields now included.
       const fullState = {
         inputs, activeTab, highlightPlan, viewMode, basicPremiumPct,
         scenarioLabelA, scenarioLabelB,
         scenarioAInputs: scenarioA?.inputs ?? null,
         scenarioBInputs: scenarioB?.inputs ?? null,
-        whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf,
-        isRealDollars, pdfOrientation, appVersion: "V4-2026"
+        whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump,
+        whatIfContribStop, whatIfOaDrawdown, whatIfSrsContrib, whatIfPrivGrowth,
+        showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026"
       };
       const compressed = lzCompress(JSON.stringify(fullState));
       setShareUrl(compressed);
@@ -5372,10 +5383,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         scenariosRestored = true;
                       } else { setScenarioA(null); } // explicit null = no scenario in this code
                     } else if (parsed.scenarioA && parsed.scenarioA.inputs && parsed.scenarioA.projection) {
-                      // Backward compat: old-format code with full projection embedded
-                      const sA = { ...parsed.scenarioA, inputs: { ...DEFAULT_INPUTS } };
-                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioA.inputs[k] !== undefined) sA.inputs[k] = parsed.scenarioA.inputs[k]; });
-                      setScenarioA(sA);
+                      // BUG-6 fix: old-format code with embedded projection — was restored as-is
+                      // (stale rows, missing newer fields). Now regenerate from sanitised inputs.
+                      const safeOldScenA = { ...DEFAULT_INPUTS };
+                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioA.inputs[k] !== undefined) safeOldScenA[k] = parsed.scenarioA.inputs[k]; });
+                      setScenarioA({ inputs: safeOldScenA, projection: runProjectionEngine(safeOldScenA), payoutProj: null, label: parsed.scenarioA.label });
                       scenariosRestored = true;
                     } else { setScenarioA(null); }
                     if ('scenarioBInputs' in parsed) {
@@ -5386,9 +5398,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         scenariosRestored = true;
                       } else { setScenarioB(null); }
                     } else if (parsed.scenarioB && parsed.scenarioB.inputs && parsed.scenarioB.projection) {
-                      const sB = { ...parsed.scenarioB, inputs: { ...DEFAULT_INPUTS } };
-                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioB.inputs[k] !== undefined) sB.inputs[k] = parsed.scenarioB.inputs[k]; });
-                      setScenarioB(sB);
+                      // BUG-6 fix: same as Scenario A — regenerate from sanitised inputs.
+                      const safeOldScenB = { ...DEFAULT_INPUTS };
+                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioB.inputs[k] !== undefined) safeOldScenB[k] = parsed.scenarioB.inputs[k]; });
+                      setScenarioB({ inputs: safeOldScenB, projection: runProjectionEngine(safeOldScenB), payoutProj: null, label: parsed.scenarioB.label });
                       scenariosRestored = true;
                     } else { setScenarioB(null); }
                     setShowShareModal(false);
@@ -7903,30 +7916,39 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {(() => {
               const lifeEvents = Array.isArray(inputs.lifeEvents) ? inputs.lifeEvents : [];
               const enabledCount = lifeEvents.filter(e => e.enabled !== false).length;
-              const [editingId, setEditingId] = React.useState(null); // null = closed; 'new' = adding new
-              const [formState, setFormState] = React.useState({});
+              // leEditingId / leFormState are top-level component state (hoisted from here — BUG-2 fix).
               const leErrors = (inputErrors.lifeEvents || []);
               const getEvErr = (id, field) => {
                 const idx = lifeEvents.findIndex(e => e.id === id);
                 const evErr = leErrors.find(e => e.idx === idx);
                 return evErr ? evErr[field] : null;
               };
-              const startEdit = (ev) => { setFormState({ ...ev }); setEditingId(ev.id); };
+              const startEdit = (ev) => { setLeFormState({ ...ev }); setLeEditingId(ev.id); };
               const startNew = () => {
                 const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `le-${Date.now()}`;
-                setFormState({ id, type: 'retrenchment', label: 'Retrenchment', startAge: Number(inputs.currentAge) || 35, endAge: (Number(inputs.currentAge) || 35) + 1, magnitude: 0, enabled: true, drawSource: 'oa_then_private', destination: 'private' });
-                setEditingId('new');
+                setLeFormState({ id, type: 'retrenchment', label: 'Retrenchment', startAge: Number(inputs.currentAge) || 35, endAge: (Number(inputs.currentAge) || 35) + 1, magnitude: 0, enabled: true, drawSource: 'oa_then_private', destination: 'private' });
+                setLeEditingId('new');
               };
               const saveEvent = () => {
-                if (!formState.type || !formState.startAge) return;
-                const isPoint = formState.type === 'windfall' || formState.type === 'early_retirement';
-                const ev = { ...formState, endAge: isPoint ? formState.startAge : formState.endAge };
-                if (editingId === 'new') {
+                if (!leFormState.type || leFormState.startAge === "" || leFormState.startAge === undefined || leFormState.startAge === null) return;
+                const isPoint = leFormState.type === 'windfall' || leFormState.type === 'early_retirement';
+                // BUG-LOW fix: block saving range events with endAge < startAge or missing endAge.
+                // validateInputs already shows the UI error; without this guard the bad event
+                // was committed to inputs.lifeEvents and then silently skipped by the engine
+                // (the age filter never matched), giving the user no indication it was inactive.
+                if (!isPoint) {
+                  const sa = Number(leFormState.startAge);
+                  const ea = leFormState.endAge === "" || leFormState.endAge === null || leFormState.endAge === undefined
+                    ? NaN : Number(leFormState.endAge);
+                  if (isNaN(ea) || ea < sa) return; // error already visible in validateInputs UI
+                }
+                const ev = { ...leFormState, endAge: isPoint ? leFormState.startAge : leFormState.endAge };
+                if (leEditingId === 'new') {
                   setInputs(p => ({ ...p, lifeEvents: [...(p.lifeEvents || []), ev] }));
                 } else {
                   setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).map(e => e.id === ev.id ? ev : e) }));
                 }
-                setEditingId(null); setFormState({});
+                setLeEditingId(null); setLeFormState({});
               };
               const deleteEvent = (id) => setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).filter(e => e.id !== id) }));
               const toggleEvent = (id) => setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).map(e => e.id === id ? { ...e, enabled: e.enabled === false } : e) }));
@@ -7934,7 +7956,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 const anyEnabled = lifeEvents.some(e => e.enabled !== false);
                 setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).map(e => ({ ...e, enabled: !anyEnabled })) }));
               };
-              const isPoint = formState.type === 'windfall' || formState.type === 'early_retirement';
+              const isPoint = leFormState.type === 'windfall' || leFormState.type === 'early_retirement';
               return (
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible", marginTop: 12, marginBottom: 12 }}>
                   {/* Header */}
@@ -7964,7 +7986,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
 
                       {/* Event list */}
-                      {lifeEvents.length === 0 && editingId === null && (
+                      {lifeEvents.length === 0 && leEditingId === null && (
                         <div style={{ padding: "14px 0", textAlign: "center", color: "var(--text-subtle)", fontSize: 11 }}>No events yet — click Add Event to get started.</div>
                       )}
                       {lifeEvents.map(ev => {
@@ -7993,28 +8015,28 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       })}
 
                       {/* Add/Edit inline form */}
-                      {editingId !== null && (
+                      {leEditingId !== null && (
                         <div style={{ marginTop: 8, padding: "12px 12px", borderRadius: 12, background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.25)" }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: "#ef4444", textTransform: "uppercase", marginBottom: 10 }}>{editingId === 'new' ? "Add Event" : "Edit Event"}</div>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "#ef4444", textTransform: "uppercase", marginBottom: 10 }}>{leEditingId === 'new' ? "Add Event" : "Edit Event"}</div>
 
                           {/* Type selector */}
                           <div style={{ marginBottom: 8 }}>
                             <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Event Type</label>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
                               {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => (
-                                <button key={key} onClick={() => setFormState(p => ({ ...p, type: key, label: meta.label, endAge: (meta.isPoint ? p.startAge : p.endAge) || p.startAge }))}
-                                  style={{ padding: "5px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, textAlign: "left", border: `1px solid ${formState.type === key ? meta.color : "var(--border-strong)"}`, background: formState.type === key ? `${meta.color}18` : "transparent", color: formState.type === key ? meta.color : "var(--text-muted)", cursor: "pointer" }}>
+                                <button key={key} onClick={() => setLeFormState(p => ({ ...p, type: key, label: meta.label, endAge: (meta.isPoint ? p.startAge : p.endAge) || p.startAge }))}
+                                  style={{ padding: "5px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, textAlign: "left", border: `1px solid ${leFormState.type === key ? meta.color : "var(--border-strong)"}`, background: leFormState.type === key ? `${meta.color}18` : "transparent", color: leFormState.type === key ? meta.color : "var(--text-muted)", cursor: "pointer" }}>
                                   {meta.icon} {meta.label}
                                 </button>
                               ))}
                             </div>
-                            {formState.type && <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 5 }}>{LIFE_EVENT_TYPES[formState.type]?.description}</p>}
+                            {leFormState.type && <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 5 }}>{LIFE_EVENT_TYPES[leFormState.type]?.description}</p>}
                           </div>
 
                           {/* Label */}
                           <div style={{ marginBottom: 8 }}>
                             <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>Label</label>
-                            <input type="text" value={formState.label || ""} onChange={e => setFormState(p => ({ ...p, label: e.target.value }))}
+                            <input type="text" value={leFormState.label || ""} onChange={e => setLeFormState(p => ({ ...p, label: e.target.value }))}
                               style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
                           </div>
 
@@ -8022,46 +8044,46 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <div style={{ display: "grid", gridTemplateColumns: isPoint ? "1fr 1fr" : "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
                             <div>
                               <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>Start Age</label>
-                              <input type="text" inputMode="decimal" value={formState.startAge ?? ""} onChange={e => setFormState(p => ({ ...p, startAge: e.target.value === "" ? "" : Number(e.target.value) }))}
+                              <input type="text" inputMode="decimal" value={leFormState.startAge ?? ""} onChange={e => setLeFormState(p => ({ ...p, startAge: e.target.value === "" ? "" : Number(e.target.value) }))}
                                 style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
                             </div>
                             {!isPoint && (
                               <div>
                                 <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>End Age</label>
-                                <input type="text" inputMode="decimal" value={formState.endAge ?? ""} onChange={e => setFormState(p => ({ ...p, endAge: e.target.value === "" ? "" : Number(e.target.value) }))}
+                                <input type="text" inputMode="decimal" value={leFormState.endAge ?? ""} onChange={e => setLeFormState(p => ({ ...p, endAge: e.target.value === "" ? "" : Number(e.target.value) }))}
                                   style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
                               </div>
                             )}
                             <div>
                               <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>
-                                {formState.type === 'hyperinflation' ? "Rate (%)" : formState.type === 'windfall' ? "Amount ($)" : "$/yr"}
+                                {leFormState.type === 'hyperinflation' ? "Rate (%)" : leFormState.type === 'windfall' ? "Amount ($)" : "$/yr"}
                               </label>
-                              <input type="text" inputMode="decimal" value={formState.magnitude ?? ""} onChange={e => setFormState(p => ({ ...p, magnitude: e.target.value === "" ? "" : Number(e.target.value) }))}
+                              <input type="text" inputMode="decimal" value={leFormState.magnitude ?? ""} onChange={e => setLeFormState(p => ({ ...p, magnitude: e.target.value === "" ? "" : Number(e.target.value) }))}
                                 style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
                             </div>
                           </div>
 
                           {/* Draw Source — medical_crisis only */}
-                          {formState.type === 'medical_crisis' && (
+                          {leFormState.type === 'medical_crisis' && (
                             <div style={{ marginBottom: 8 }}>
                               <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Draw From</label>
                               <div style={{ display: "flex", gap: 4 }}>
                                 {Object.entries(DRAW_SOURCE_LABELS).map(([key, lbl]) => (
-                                  <button key={key} onClick={() => setFormState(p => ({ ...p, drawSource: key }))}
-                                    style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 9, fontWeight: 700, border: `1px solid ${formState.drawSource === key ? "#a855f7" : "var(--border-strong)"}`, background: formState.drawSource === key ? "rgba(168,85,247,0.15)" : "transparent", color: formState.drawSource === key ? "#a855f7" : "var(--text-muted)", cursor: "pointer" }}>{lbl}</button>
+                                  <button key={key} onClick={() => setLeFormState(p => ({ ...p, drawSource: key }))}
+                                    style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 9, fontWeight: 700, border: `1px solid ${leFormState.drawSource === key ? "#a855f7" : "var(--border-strong)"}`, background: leFormState.drawSource === key ? "rgba(168,85,247,0.15)" : "transparent", color: leFormState.drawSource === key ? "#a855f7" : "var(--text-muted)", cursor: "pointer" }}>{lbl}</button>
                                 ))}
                               </div>
                             </div>
                           )}
 
                           {/* Destination — windfall only */}
-                          {formState.type === 'windfall' && (
+                          {leFormState.type === 'windfall' && (
                             <div style={{ marginBottom: 8 }}>
                               <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Deposit To</label>
                               <div style={{ display: "flex", gap: 4 }}>
                                 {Object.entries(WINDFALL_DEST_LABELS).map(([key, lbl]) => (
-                                  <button key={key} onClick={() => setFormState(p => ({ ...p, destination: key }))}
-                                    style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 9, fontWeight: 700, border: `1px solid ${formState.destination === key ? "#10b981" : "var(--border-strong)"}`, background: formState.destination === key ? "rgba(16,185,129,0.15)" : "transparent", color: formState.destination === key ? "#10b981" : "var(--text-muted)", cursor: "pointer" }}>{lbl}</button>
+                                  <button key={key} onClick={() => setLeFormState(p => ({ ...p, destination: key }))}
+                                    style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 9, fontWeight: 700, border: `1px solid ${leFormState.destination === key ? "#10b981" : "var(--border-strong)"}`, background: leFormState.destination === key ? "rgba(16,185,129,0.15)" : "transparent", color: leFormState.destination === key ? "#10b981" : "var(--text-muted)", cursor: "pointer" }}>{lbl}</button>
                                 ))}
                               </div>
                             </div>
@@ -8070,13 +8092,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {/* Save / Cancel */}
                           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                             <button onClick={saveEvent} style={{ flex: 1, padding: "7px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "none", background: "#ef4444", color: "#fff", cursor: "pointer" }}>Save Event</button>
-                            <button onClick={() => { setEditingId(null); setFormState({}); }} style={{ padding: "7px 14px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}>Cancel</button>
+                            <button onClick={() => { setLeEditingId(null); setLeFormState({}); }} style={{ padding: "7px 14px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}>Cancel</button>
                           </div>
                         </div>
                       )}
 
                       {/* Add button */}
-                      {editingId === null && (
+                      {leEditingId === null && (
                         <button onClick={startNew} style={{ width: "100%", marginTop: 8, padding: "7px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1px dashed rgba(239,68,68,0.5)", background: "transparent", color: "#ef4444", cursor: "pointer" }}>
                           + Add Life Event
                         </button>
@@ -9828,21 +9850,40 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
                               {/* BUG-47 fix: use String() coercion — JSON-imported profiles have numeric fields as strings, causing "65" !== 65 false diffs */}
-                              {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenarioA.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => (
+                              {/* BUG-1 fix: guard against array/object values (e.g. lifeEvents) being passed as raw React children,
+                                  which throws "Objects are not valid as a React child" and crashes the Compare tab.
+                                  Arrays → show count; booleans → Yes/No; objects → JSON; primitives → as-is. */}
+                              {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenarioA.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => {
+                                const rawVal = scenarioA.inputs[k];
+                                const displayVal = Array.isArray(rawVal)
+                                  ? `${rawVal.length} event${rawVal.length !== 1 ? 's' : ''}`
+                                  : typeof rawVal === 'boolean'
+                                    ? (rawVal ? 'Yes' : 'No')
+                                    : (rawVal !== null && typeof rawVal === 'object')
+                                      ? JSON.stringify(rawVal)
+                                      : rawVal;
+                                return (
                                 <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
                                   <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{typeof scenarioA.inputs[k] === "boolean" ? (scenarioA.inputs[k] ? "Yes" : "No") : scenarioA.inputs[k]}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{displayVal}</span>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         ) : (
                           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 16 }}>Empty — configure inputs then save</div>
                         )}
-                        <button onClick={() => /* BUG-42 fix: always save nominal (non-deflated) engine output so Compare tab comparisons
-                             are consistent regardless of Real Dollars mode. displayAccumulation/displayProjection
-                             may be deflated when isRealDollars is ON — comparing deflated A vs nominal B is wrong. */
-                        setScenarioA({ inputs: { ...inputs }, projection: projection, payoutProj: payoutProjection })} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as A</button>
+                        <button onClick={() => {
+                          // BUG-42 fix: always save nominal (non-deflated) engine output — see original comment.
+                          // BUG-3 fix: compute projection from live `inputs`, not the debounce-lagged `projection`
+                          // variable. If the user clicks Save within the 180ms debounce window the stored
+                          // projection would be one step behind the stored inputs, causing the Compare chart
+                          // to show mismatched lines. runProjectionEngine is module-level — safe to call here.
+                          // payoutProj set to null: the Compare tab's getNetWorth fallback handles it correctly.
+                          const freshProj = runProjectionEngine({ ...inputs });
+                          setScenarioA({ inputs: { ...inputs }, projection: freshProj, payoutProj: null });
+                        }} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as A</button>
                       </div>
                     );
                   })()}
@@ -9861,19 +9902,34 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
                               {/* BUG-47 fix: use String() coercion — JSON-imported profiles have numeric fields as strings, causing "65" !== 65 false diffs */}
-                              {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenarioB.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => (
+                              {/* BUG-1 fix: same array/object guard as Scenario A — prevents crash when lifeEvents (or any future array field) is in scenarioB.inputs */}
+                              {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenarioB.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => {
+                                const rawVal = scenarioB.inputs[k];
+                                const displayVal = Array.isArray(rawVal)
+                                  ? `${rawVal.length} event${rawVal.length !== 1 ? 's' : ''}`
+                                  : typeof rawVal === 'boolean'
+                                    ? (rawVal ? 'Yes' : 'No')
+                                    : (rawVal !== null && typeof rawVal === 'object')
+                                      ? JSON.stringify(rawVal)
+                                      : rawVal;
+                                return (
                                 <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
                                   <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{typeof scenarioB.inputs[k] === "boolean" ? (scenarioB.inputs[k] ? "Yes" : "No") : scenarioB.inputs[k]}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{displayVal}</span>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         ) : (
                           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 16 }}>Empty — configure inputs then save</div>
                         )}
-                        <button onClick={() => /* BUG-42 fix: always save nominal engine output (see Scenario A comment above) */
-                        setScenarioB({ inputs: { ...inputs }, projection: projection, payoutProj: payoutProjection })} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as B</button>
+                        <button onClick={() => {
+                          // BUG-42 fix: always save nominal engine output (see Scenario A comment above).
+                          // BUG-3 fix: compute fresh projection from live inputs — same reason as Scenario A.
+                          const freshProj = runProjectionEngine({ ...inputs });
+                          setScenarioB({ inputs: { ...inputs }, projection: freshProj, payoutProj: null });
+                        }} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as B</button>
                       </div>
                     );
                   })()}
