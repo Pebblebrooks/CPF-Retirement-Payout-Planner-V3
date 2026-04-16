@@ -9211,11 +9211,19 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     const effPG  = whatIfPrivGrowth  !== null ? whatIfPrivGrowth  : (Number(debouncedInputs.privateAssetGrowthRate) || 0);
                     // Bug-WI1 fix: engine row.total = oa+sa+ma+ra only — privateAssets and srsBalance
                     // are separate fields. Add them explicitly for accurate summary totals.
-                    const basePARow   = projectionByAge.get(payoutAge65);
+                    // Fix-SumAge: read base at effPA (not payoutAge65) so both sides compare the same age.
+                    // Fix-RD: accumulationByAge is already deflated when isRealDollars=true; apply the same
+                    // deflation to whatIfTotal so summary card and chart are on the same scale.
+                    const basePARow   = accumulationByAge.get(effPA);
                     const baseTotal   = (basePARow?.total || 0) + (basePARow?.privateAssets || 0) + (basePARow?.srsBalance || 0);
                     const wiLastRow   = whatIfProjection?.rows[whatIfProjection.rows.length - 1];
+                    const _wiSumInflD = isRealDollars ? (Number(debouncedInputs.inflationRate) || 0) / 100 : 0;
+                    const _wiSumCaD   = Number(debouncedInputs.currentAge) || 35;
+                    const _wiSumDeflate = (val) => (isRealDollars && val)
+                      ? Math.round(val / Math.pow(1 + _wiSumInflD, Math.max(0, effPA - _wiSumCaD)))
+                      : val;
                     const whatIfTotal = wiLastRow
-                      ? ((wiLastRow.oa + wiLastRow.sa + wiLastRow.ma + wiLastRow.ra) + (wiLastRow.privateAssets || 0) + (wiLastRow.srsBalance || 0))
+                      ? _wiSumDeflate((wiLastRow.oa + wiLastRow.sa + wiLastRow.ma + wiLastRow.ra) + (wiLastRow.privateAssets || 0) + (wiLastRow.srsBalance || 0))
                       : 0;
                     const delta = whatIfTotal - baseTotal;
                     return (
@@ -9299,13 +9307,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             </p>
                           </div>
 
-                          {/* Rev #12 — OA Monthly Drawdown (shown only when drawdown is configured) */}
-                          {(Number(inputs.oaDrawdownStartAge) || 0) > 0 ? (
-                            <div>
+                          {/* Rev #12 — OA Monthly Drawdown (always shown; engine injects effPA as start age when sidebar is 0) */}
+                          <div>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                                 <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>
                                   OA Monthly Drawdown
-                                  <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(from age {Number(inputs.oaDrawdownStartAge)})</span>
+                                  {(Number(inputs.oaDrawdownStartAge) || 0) > 0
+                                    ? <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(from age {Number(inputs.oaDrawdownStartAge)})</span>
+                                    : <span style={{ fontSize: 9, color: "#fbbf24", fontWeight: 400, marginLeft: 4 }}>(start age defaults to payout age {effPA})</span>
+                                  }
                                 </label>
                                 <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "#f87171" }}>${effOAD}/mo</span>
                               </div>
@@ -9319,16 +9329,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               </div>
                               <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 3 }}>
                                 Sidebar value: <strong>${Number(inputs.oaDrawdownMonthly) || 0}/mo</strong>
+                                {(Number(inputs.oaDrawdownStartAge) || 0) === 0 && (
+                                  <span style={{ color: "#fbbf24", marginLeft: 4 }}>· Set OA Drawdown Start Age in sidebar to fix the start age.</span>
+                                )}
                               </p>
                             </div>
-                          ) : (
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "12px 10px", borderRadius: 10, border: "1px dashed var(--border-subtle)", background: "var(--bg-base)" }}>
-                              <p style={{ fontSize: 9, color: "var(--text-subtle)", textAlign: "center", lineHeight: 1.5 }}>
-                                <strong style={{ color: "var(--text-muted)" }}>OA Monthly Drawdown</strong><br />
-                                Set an OA Drawdown Start Age in the sidebar to enable this slider.
-                              </p>
-                            </div>
-                          )}
 
                           {/* Rev #12 — SRS Annual Contribution */}
                           {!isForeigner && (
@@ -9374,6 +9379,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 3 }}>
                               Sidebar value: <strong>{Number(inputs.privateAssetGrowthRate) || 0}%</strong>
                             </p>
+                            {(Number(inputs.currentPrivateAssets) || 0) === 0 && (Number(inputs.annualPrivateSaving) || 0) === 0 && (
+                              <p style={{ fontSize: 9, color: "#fbbf24", marginTop: 4, lineHeight: 1.5 }}>
+                                ⚠ No private asset balance or annual saving configured — this slider has no effect. Add a current balance or annual saving in the <strong>Private Assets</strong> sidebar section first.
+                              </p>
+                            )}
                           </div>
 
                         </div>
@@ -9402,10 +9412,26 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 const wiRowMap  = new Map((whatIfProjection?.rows || []).map(r => [r.age, r]));
                                 const startAge  = displayAccumulation[0]?.age ?? (Number(debouncedInputs.currentAge) || 35);
                                 const endAge    = Math.max(payoutAge65, effPA);
+                                // Fix-RD: base line reads from accumulationByAge (already deflated when
+                                // isRealDollars=true). What-if rows are raw nominal engine output — apply
+                                // the identical per-age deflation factor so both lines share the same scale.
+                                const _wiChartInflD = isRealDollars ? (Number(debouncedInputs.inflationRate) || 0) / 100 : 0;
+                                const _wiChartCaD   = Number(debouncedInputs.currentAge) || 35;
+                                const _wiChartDefl  = (val, age) =>
+                                  (isRealDollars && val != null)
+                                    ? Math.round(val / Math.pow(1 + _wiChartInflD, Math.max(0, age - _wiChartCaD)))
+                                    : val;
                                 const chartRows = [];
                                 for (let age = startAge; age <= endAge; age++) {
                                   const b = accumulationByAge.get(age);
                                   const w = wiRowMap.get(age);
+                                  // Deflate each what-if field individually so tooltip breakdown is also correct
+                                  const wOA  = w ? _wiChartDefl(w.oa,  age) : null;
+                                  const wSA  = w ? _wiChartDefl(w.sa,  age) : null;
+                                  const wMA  = w ? _wiChartDefl(w.ma,  age) : null;
+                                  const wRA  = w ? _wiChartDefl(w.ra,  age) : null;
+                                  const wPrv = w ? _wiChartDefl(w.privateAssets || 0, age) : null;
+                                  const wSRS = w ? _wiChartDefl(w.srsBalance    || 0, age) : null;
                                   chartRows.push({
                                     age,
                                     // Base line: null beyond payoutAge65 so the line terminates there
@@ -9413,11 +9439,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                     baseOA:  b?.oa  ?? null, baseSA: b?.sa ?? null,
                                     baseMA:  b?.ma  ?? null, baseRA: b?.ra ?? null,
                                     basePrv: b?.privateAssets ?? null, baseSRS: b?.srsBalance ?? null,
-                                    // What-if line: runs its full range (currentAge → effPA)
-                                    whatIfTotal: w ? ((w.oa + w.sa + w.ma + w.ra) + (w.privateAssets || 0) + (w.srsBalance || 0)) : null,
-                                    whatIfOA:  w?.oa  ?? null, whatIfSA: w?.sa ?? null,
-                                    whatIfMA:  w?.ma  ?? null, whatIfRA: w?.ra ?? null,
-                                    whatIfPrv: w?.privateAssets ?? null, whatIfSRS: w?.srsBalance ?? null,
+                                    // What-if line: deflated to match base scale when isRealDollars=true
+                                    whatIfTotal: w ? ((wOA + wSA + wMA + wRA) + wPrv + wSRS) : null,
+                                    whatIfOA: wOA, whatIfSA: wSA,
+                                    whatIfMA: wMA, whatIfRA: wRA,
+                                    whatIfPrv: wPrv, whatIfSRS: wSRS,
                                   });
                                 }
                                 return chartRows;
