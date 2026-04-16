@@ -3985,7 +3985,14 @@ export default function App() {
     const effOAD = whatIfOaDrawdown  !== null ? whatIfOaDrawdown  : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
     const effSRS = whatIfSrsContrib  !== null ? whatIfSrsContrib  : (Number(debouncedInputs.srsAnnualContribution) || 0);
     const effPG  = whatIfPrivGrowth  !== null ? whatIfPrivGrowth  : (Number(debouncedInputs.privateAssetGrowthRate) || 0);
-    const rows = runProjectionEngine(debouncedInputs, {
+    // Bug-WI2 fix: engine gate is oaDrawdownActive = (oaDrawdownStartAge > 0 && monthly > 0).
+    // If the sidebar oaDrawdownStartAge is 0 (disabled) but the What-If slider is non-zero,
+    // the gate suppresses the drawdown entirely — the slider has no visible effect.
+    // Inject effPA as a sensible start age so the drawdown activates in the what-if run only.
+    const wiInputs = (effOAD > 0 && (Number(debouncedInputs.oaDrawdownStartAge) || 0) === 0)
+      ? { ...debouncedInputs, oaDrawdownStartAge: effPA }
+      : debouncedInputs;
+    const rows = runProjectionEngine(wiInputs, {
       maxAge: effPA,
       overrideVcSA: effST,
       overrideHousingOutflow: effH,
@@ -9192,16 +9199,24 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
                   <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 16 }}>Drag sliders to explore how changes affect your total CPF balance — without modifying saved inputs.</p>
                   {showWhatIf && (() => {
-                    const effPA  = whatIfPayoutAge   !== null ? whatIfPayoutAge   : Number(inputs.payoutAge);
-                    const effST  = whatIfSaTopup     !== null ? whatIfSaTopup     : (Number(inputs.vcSaTopup) || 0);
-                    const effH   = whatIfHousing     !== null ? whatIfHousing     : (Number(inputs.housingOutflow) || 0);
+                    // Bug-WI5 fix: use debouncedInputs (not live inputs) for all fallback values
+                    // so the UI effXX variables stay consistent with whatIfProjection useMemo.
+                    const effPA  = whatIfPayoutAge   !== null ? whatIfPayoutAge   : (Number(debouncedInputs.payoutAge) || 65);
+                    const effST  = whatIfSaTopup     !== null ? whatIfSaTopup     : (Number(debouncedInputs.vcSaTopup) || 0);
+                    const effH   = whatIfHousing     !== null ? whatIfHousing     : (Number(debouncedInputs.housingOutflow) || 0);
                     const effSB  = whatIfSalaryBump  !== null ? whatIfSalaryBump  : 0;
-                    const effCS  = whatIfContribStop !== null ? whatIfContribStop : (Number(inputs.contributionStopAge) || 65);
-                    const effOAD = whatIfOaDrawdown  !== null ? whatIfOaDrawdown  : (Number(inputs.oaDrawdownMonthly) || 0);
-                    const effSRS = whatIfSrsContrib  !== null ? whatIfSrsContrib  : (Number(inputs.srsAnnualContribution) || 0);
-                    const effPG  = whatIfPrivGrowth  !== null ? whatIfPrivGrowth  : (Number(inputs.privateAssetGrowthRate) || 0);
-                    const baseTotal = projectionByAge.get(payoutAge65)?.total || 0; // debounced
-                    const whatIfTotal = whatIfProjection?.rows[whatIfProjection.rows.length - 1]?.total || 0;
+                    const effCS  = whatIfContribStop !== null ? whatIfContribStop : (Number(debouncedInputs.contributionStopAge) || 65);
+                    const effOAD = whatIfOaDrawdown  !== null ? whatIfOaDrawdown  : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
+                    const effSRS = whatIfSrsContrib  !== null ? whatIfSrsContrib  : (Number(debouncedInputs.srsAnnualContribution) || 0);
+                    const effPG  = whatIfPrivGrowth  !== null ? whatIfPrivGrowth  : (Number(debouncedInputs.privateAssetGrowthRate) || 0);
+                    // Bug-WI1 fix: engine row.total = oa+sa+ma+ra only — privateAssets and srsBalance
+                    // are separate fields. Add them explicitly for accurate summary totals.
+                    const basePARow   = projectionByAge.get(payoutAge65);
+                    const baseTotal   = (basePARow?.total || 0) + (basePARow?.privateAssets || 0) + (basePARow?.srsBalance || 0);
+                    const wiLastRow   = whatIfProjection?.rows[whatIfProjection.rows.length - 1];
+                    const whatIfTotal = wiLastRow
+                      ? ((wiLastRow.oa + wiLastRow.sa + wiLastRow.ma + wiLastRow.ra) + (wiLastRow.privateAssets || 0) + (wiLastRow.srsBalance || 0))
+                      : 0;
                     const delta = whatIfTotal - baseTotal;
                     return (
                       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -9377,17 +9392,35 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>Blue = base · Green = what-if · <span style={{ color: "var(--text-subtle)" }}>Hover for account breakdown</span></p>
                             <ResponsiveContainer width="99%" height="100%">
                               <LineChart data={(() => {
-                                const baseData = displayAccumulation.filter(d => d.age <= Math.max(payoutAge65, effPA)); // BUG-51 fix: use debounced payoutAge65
-                                return baseData.map(d => {
-                                  const whatIfRow = whatIfProjection.rows.find(w => w.age === d.age);
-                                  return {
-                                    age: d.age,
-                                    baseTotal: d.total, baseOA: d.oa, baseSA: d.sa, baseMA: d.ma, baseRA: d.ra,
-                                    whatIfTotal: whatIfRow ? (whatIfRow.oa + whatIfRow.sa + whatIfRow.ma + whatIfRow.ra) : null,
-                                    whatIfOA: whatIfRow?.oa ?? null, whatIfSA: whatIfRow?.sa ?? null,
-                                    whatIfMA: whatIfRow?.ma ?? null, whatIfRA: whatIfRow?.ra ?? null,
-                                  };
-                                });
+                                // Bug-WI3 fix: base line must terminate at payoutAge65 — the what-if
+                                // line then visibly extends beyond it when effPA > payoutAge65.
+                                // Previously both lines shared the same age range (max of the two),
+                                // making the what-if extension invisible since the base line overlapped it.
+                                // Bug-WI4 fix: O(1) Map lookups replace O(n²) .find() per chart row.
+                                // Bug-WI1 fix: privateAssets + srsBalance included in both line totals
+                                // and exposed as separate fields for the breakdown tooltip.
+                                const wiRowMap  = new Map((whatIfProjection?.rows || []).map(r => [r.age, r]));
+                                const startAge  = displayAccumulation[0]?.age ?? (Number(debouncedInputs.currentAge) || 35);
+                                const endAge    = Math.max(payoutAge65, effPA);
+                                const chartRows = [];
+                                for (let age = startAge; age <= endAge; age++) {
+                                  const b = accumulationByAge.get(age);
+                                  const w = wiRowMap.get(age);
+                                  chartRows.push({
+                                    age,
+                                    // Base line: null beyond payoutAge65 so the line terminates there
+                                    baseTotal: (b && age <= payoutAge65) ? ((b.total || 0) + (b.privateAssets || 0) + (b.srsBalance || 0)) : null,
+                                    baseOA:  b?.oa  ?? null, baseSA: b?.sa ?? null,
+                                    baseMA:  b?.ma  ?? null, baseRA: b?.ra ?? null,
+                                    basePrv: b?.privateAssets ?? null, baseSRS: b?.srsBalance ?? null,
+                                    // What-if line: runs its full range (currentAge → effPA)
+                                    whatIfTotal: w ? ((w.oa + w.sa + w.ma + w.ra) + (w.privateAssets || 0) + (w.srsBalance || 0)) : null,
+                                    whatIfOA:  w?.oa  ?? null, whatIfSA: w?.sa ?? null,
+                                    whatIfMA:  w?.ma  ?? null, whatIfRA: w?.ra ?? null,
+                                    whatIfPrv: w?.privateAssets ?? null, whatIfSRS: w?.srsBalance ?? null,
+                                  });
+                                }
+                                return chartRows;
                               })()}
                                 margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
@@ -9409,7 +9442,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                           <span style={{ color: "#64748b", fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}></span>
                                           <span style={{ color: "#3b82f6", fontSize: 9, fontWeight: 800, textAlign: "right" }}>BASE</span>
                                           <span style={{ color: "#10b981", fontSize: 9, fontWeight: 800, textAlign: "right" }}>WHAT-IF</span>
-                                          {[["OA", d.baseOA, d.whatIfOA, "#60a5fa"], ["SA/RA", (d.baseSA||0)+(d.baseRA||0), (d.whatIfSA||0)+(d.whatIfRA||0), "#34d399"], ["MA", d.baseMA, d.whatIfMA, "#a78bfa"]].map(([lbl, bv, wv, c]) => (
+                                          {[["OA", d.baseOA, d.whatIfOA, "#60a5fa"], ["SA/RA", (d.baseSA||0)+(d.baseRA||0), (d.whatIfSA||0)+(d.whatIfRA||0), "#34d399"], ["MA", d.baseMA, d.whatIfMA, "#a78bfa"], ["Private", d.basePrv, d.whatIfPrv, "#fb923c"], ["SRS", d.baseSRS, d.whatIfSRS, "#fbbf24"]].map(([lbl, bv, wv, c]) => (
                                             <>
                                               <span style={{ color: c, fontWeight: 700 }}>{lbl}</span>
                                               <span style={{ color: "#e2e8f0", fontFamily: "monospace", textAlign: "right" }}>{formatCurrency(bv ?? 0)}</span>
