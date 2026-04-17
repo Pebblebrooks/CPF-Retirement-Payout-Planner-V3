@@ -573,7 +573,7 @@ const INPUT_LABELS = {
   careerBreakStartAge: "Career Break Start Age", careerBreakEndAge: "Career Break End Age",
   empOaCont: "Emp OA Contrib", empSaCont: "Emp SA Contrib", empMaCont: "Emp MA Contrib",
   vc3aCash: "VC3A Cash (Annual)", vcSaTopup: "RSTU SA/RA Top-up", vcVhr: "Housing Refund (VHR)",
-  annualGovGrant: "Annual Gov Grant", mrssGrant: "MRSS Grant", mmssGrant: "MMSS Grant",
+  annualGovGrant: "Annual Gov Grant", // BUG-E fix: removed dead mrssGrant/mmssGrant labels
   wisAmount: "WIS (Workfare)", oaToSaTransfer: "OA→SA Transfer",
   oaToMaTransfer: "OA→MA Transfer", oaWithdrawalAt55: "OA Withdrawal at 55",
   usePropertyPledge: "Property Pledge", cpfisOaAmount: "CPFIS OA Invested", cpfisSaAmount: "CPFIS SA Invested",
@@ -1120,7 +1120,11 @@ function runProjectionEngine(inputs, {
     // (lines 1216-1219) and the MMSS UI badge (BUG-6 comment, lines 6154-6162).
     // gf_mmss is computed locally — this block runs outside the contribStop gate so the
     // top-level gf (line 979) is not yet in scope. salaryGrowth and salaryBump are pre-loop.
-    const gf_mmss             = computeGF(age, salaryBump);
+    // BUG-G fix: zero gf_mmss during retrenchment/career_break so mmssMonthlyIncome correctly
+    // reflects $0 income during that year, preventing the <=4000 income gate from misfiring.
+    // Note: mmssMonthlyIncome is also reused by the MRSS income gate (line ~1248) so this
+    // fix simultaneously prevents incorrect MRSS credits during paused-contribution years.
+    const gf_mmss             = leContribPaused ? 0 : computeGF(age, salaryBump);
     const owAnnualScaled_mmss = Math.min(owMonthly * 12 * gf_mmss, 96000);
     const awCeilingMmss       = Math.max(0, 102000 - owAnnualScaled_mmss);
     const bonusMmss           = Math.min((Number(inputs.salaryBonus) || 0) * gf_mmss, awCeilingMmss);
@@ -2418,10 +2422,12 @@ export default function App() {
     else if (vc3a < 0 || vc3a > ANNUAL_LIMIT) errs.vc3aCash = `0 – $${ANNUAL_LIMIT.toLocaleString()} (Annual Limit)`;
     else if (!errs.vc3aCash && vc3a > _maxVC3A && _maxVC3A < ANNUAL_LIMIT)
       errs.vc3aCash = `Exceeds available Annual Limit room ($${_maxVC3A.toLocaleString()}) after mandatory contributions of $${_mandatoryVC.toLocaleString()}. Engine will scale down.`;
-    // RSTU SA top-up: 0 – ERS
+    // RSTU SA top-up: 0 – current projected ERS (BUG-B fix: was hardcoded $500,000 which exceeds legal ERS ceiling)
     const rstu = Number(inp.vcSaTopup) || 0;
+    const _rstuYearsFrom2026 = Math.max(0, (Number(inp.currentYear) || 2026) - 2026);
+    const _ersForRstu = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + (Number(inp.retirementSumGrowth)||3)/100, _rstuYearsFrom2026));
     if (_under16 && rstu > 0) errs.vcSaTopup = "Cash top-ups require age 16+. A parent/guardian may action this on the member's behalf.";
-    else if (rstu < 0 || rstu > 500000) errs.vcSaTopup = "0 – $500,000";
+    else if (rstu < 0 || rstu > _ersForRstu) errs.vcSaTopup = `0 – $${_ersForRstu.toLocaleString()} (current ERS ceiling)`;
     // Cash MA top-up validation
     const vcMaCashVal = Number(inp.vcMaCash) || 0;
     if (_under16 && vcMaCashVal > 0) {
@@ -2778,14 +2784,14 @@ export default function App() {
     'housingOutflow','medicalUsage','medishieldIP','elderCareShield',
     'propertyValue',
     'vc3aCash','vcSaTopup','vcVhr','vcMaCash',
-    'annualGovGrant','mrssGrant','mmssGrant','wisAmount',
+    'annualGovGrant','wisAmount',                  // BUG-E fix: removed dead mrssGrant/mmssGrant (engine ignores them; always 0)
     'oaToSaTransfer','oaToMaTransfer','oaWithdrawalAt55',
-    'oaMonthlyDraw','oaBequestFloor',
+    'oaDrawdownMonthly','oaDrawdownFloor',        // BUG-A fix: corrected from oaMonthlyDraw / oaBequestFloor
     'srsBalance','srsAnnualContribution',
     'currentPrivateAssets','annualPrivateSaving',
     'propMonetiseCashProceeds','propMonetiseRaTopup',
     'targetMonthlyIncome',
-    'oaEduLoanAnnual',
+    'oaEduLoan',                                  // BUG-H fix: corrected from oaEduLoanAnnual
     'cpfisOaAmount','cpfisSaAmount',
   ]);
   // Returns formatted display value: $X,XXX when not focused, raw number string when focused.
