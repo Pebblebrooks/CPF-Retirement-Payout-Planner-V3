@@ -1209,6 +1209,12 @@ function runRSSEngine(inputs, {
     cumRaInterest += yearRaInterest;
     oa += oaAvg * rOA; sa += saAvg * rSA; ra += raAvg * rRA; ma += maAvg * rMA;
     if (age < 55) { sa += b1ToSA; ma += b1ToMA; } else { ra += b1ToRA + b2ToRA; ma += b1ToMA + b2ToMA; }
+    // RSS depletion clamp: once RA has been fully drawn down (rssDepletionHit), it must
+    // stay at $0. The extra 1%/2% bonus interest on OA balances (b1ToRA + b2ToRA) is
+    // computed from the OA pool and was just credited to RA — redirect it to OA instead,
+    // which is the correct CPF destination when there is no longer an active RA.
+    // raAvg = 0 at this point so raAvg*rRA = 0; only the OA-sourced bonus causes the rise.
+    if (rssDepletionHit) { oa += b1ToRA + b2ToRA; ra = 0; }
 
     // Outflows: housing
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
@@ -7311,21 +7317,21 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <button
                                 onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: 0 }))}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
-                                  background: (inputs.lifeMigrationAge || 0) === 0 ? "#60a5fa" : "transparent",
-                                  color: (inputs.lifeMigrationAge || 0) === 0 ? "#020617" : "var(--text-muted)" }}>
+                                  background: inputs.lifeMigrationAge === 0 ? "#60a5fa" : "transparent",
+                                  color: inputs.lifeMigrationAge === 0 ? "#020617" : "var(--text-muted)" }}>
                                 📋 Stay on RSS
                               </button>
                               <button
                                 onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: p.lifeMigrationAge > 0 ? p.lifeMigrationAge : (Number(p.currentAge) || 65) + 1 }))}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
-                                  background: (inputs.lifeMigrationAge || 0) > 0 ? "#a855f7" : "transparent",
-                                  color: (inputs.lifeMigrationAge || 0) > 0 ? "#020617" : "var(--text-muted)" }}>
+                                  background: inputs.lifeMigrationAge !== 0 ? "#a855f7" : "transparent",
+                                  color: inputs.lifeMigrationAge !== 0 ? "#020617" : "var(--text-muted)" }}>
                                 🔄 Migrate to CPF LIFE
                               </button>
                             </div>
 
                             {/* Stay on RSS: informational note about depletion */}
-                            {(inputs.lifeMigrationAge || 0) === 0 && (
+                            {inputs.lifeMigrationAge === 0 && (
                               <div style={{ background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 6, padding: "6px 9px" }}>
                                 <p style={{ fontSize: 9, color: "#93c5fd", margin: 0, lineHeight: 1.6 }}>
                                   📋 RA will be drawn down at <strong>{formatCurrency(Number(inputs.rssMonthlyPayout) || 0)}/mo</strong> until balance reaches $0 — payouts stop at depletion. See the <strong>RSS tab</strong> for your projected depletion age.
@@ -7334,7 +7340,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             )}
 
                             {/* Migrate to CPF LIFE: age input + plan selector */}
-                            {(inputs.lifeMigrationAge || 0) > 0 && (
+                            {/* Use !== 0 (not || 0 > 0) so an empty string during mid-edit
+                                does not collapse the section — handleBlur recovers "" → 0. */}
+                            {inputs.lifeMigrationAge !== 0 && (
                               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                 {/* Migration age input */}
                                 <div>
