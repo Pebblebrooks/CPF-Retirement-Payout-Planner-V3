@@ -4978,7 +4978,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --hero-right-bg: #e2eaf4;
           --hero-border: #a0b8cc;
           --hero-text: #0a1c2e;
-          --hero-label: rgba(10,28,46,0.65);
+          --hero-label: rgba(10,28,46,0.85);
           --hero-card-bg: rgba(10,28,46,0.07);
           --hero-acct-bg: rgba(10,28,46,0.05);
           --hero-acct-border: rgba(10,28,46,0.16);
@@ -5085,7 +5085,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .theme-light .gap-alert-box {
           background: rgba(254,243,199,0.85) !important;
           border-color: #d4a017 !important;
+          color: #5c2d00 !important;
         }
+        /* Force readable dark text on ALL spans / strongs inside gap alert,
+           overriding the dark-mode light-colour inline styles */
+        .theme-light .gap-alert-box span,
+        .theme-light .gap-alert-box strong,
+        .theme-light .gap-alert-box p { color: #5c2d00 !important; }
+        /* "FIX IN INFLOWS" button inside gap alert keeps its border/bg but
+           gets dark text */
+        .theme-light .gap-alert-box button { color: #78350f !important; }
 
         /* ── Bottom badge pills ── */
         .theme-light .info-badge {
@@ -5304,8 +5313,95 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
              so they are not matched by these selectors and remain unchanged.
              Gantt range-bar labels have overflow:hidden so any minor size
              increase is safely clipped. ── */
-        .theme-light [style*="font-size: 7px"] { font-size: 9px !important; }
-        .theme-light [style*="font-size: 8px"] { font-size: 9px !important; }
+        .theme-light [style*="font-size: 7px"] { font-size: 10px !important; }
+        .theme-light [style*="font-size: 8px"] { font-size: 10px !important; }
+        .theme-light [style*="font-size: 9px"] { font-size: 10px !important; }
+
+        /* ══════════════════════════════════════════════════════════════
+           PASS 1 CRITICAL CONTRAST FIXES
+           ══════════════════════════════════════════════════════════════ */
+
+        /* ── Fix G: Near-invisible pale colours in gap alerts, ledger, etc.
+             Attribute selectors cover both hex (Firefox/Safari) and
+             rgb() (Chrome) serialisation forms, with and without spaces. ── */
+
+        /* #fca5a5 pale pink → #9b1c1c dark red  (gap alert urgent text, ledger loved-one) */
+        .theme-light [style*="color: #fca5a5"],
+        .theme-light [style*="color: rgb(252, 165, 165)"],
+        .theme-light [style*="color: rgb(252,165,165)"] { color: #9b1c1c !important; }
+
+        /* #fcd34d pale yellow → #78350f dark amber  (gap alert non-urgent values) */
+        .theme-light [style*="color: #fcd34d"],
+        .theme-light [style*="color: rgb(252, 211, 77)"],
+        .theme-light [style*="color: rgb(252,211,77)"] { color: #78350f !important; }
+
+        /* #6ee7b7 very light mint green → #065f46 dark forest green  (voluntary col) */
+        .theme-light [style*="color: #6ee7b7"],
+        .theme-light [style*="color: rgb(110, 231, 183)"],
+        .theme-light [style*="color: rgb(110,231,183)"] { color: #065f46 !important; }
+
+        /* #f472b6 light pink → #9d174d dark rose  (housing out, total out) */
+        .theme-light [style*="color: #f472b6"],
+        .theme-light [style*="color: rgb(244, 114, 182)"],
+        .theme-light [style*="color: rgb(244,114,182)"] { color: #9d174d !important; }
+
+        /* #fb7185 light rose → #be123c crimson  (medical out) */
+        .theme-light [style*="color: #fb7185"],
+        .theme-light [style*="color: rgb(251, 113, 133)"],
+        .theme-light [style*="color: rgb(251,113,133)"] { color: #be123c !important; }
+
+        /* #818cf8 light indigo → #4338ca dark indigo  (SA/RA interest) */
+        .theme-light [style*="color: #818cf8"],
+        .theme-light [style*="color: rgb(129, 140, 248)"],
+        .theme-light [style*="color: rgb(129,140,248)"] { color: #4338ca !important; }
+
+        /* #c084fc light purple → #7c3aed dark violet  (MA interest, RA) */
+        .theme-light [style*="color: #c084fc"],
+        .theme-light [style*="color: rgb(192, 132, 252)"],
+        .theme-light [style*="color: rgb(192,132,252)"] { color: #7c3aed !important; }
+
+        /* ── Fix H: Cashflow Ledger per-column colour overrides ──
+             Attribute selectors are unreliable across browsers because Chrome
+             normalises hex → rgb() in the style attribute while Firefox keeps
+             hex. A className + nth-child approach is fully browser-reliable.
+             The table gets className="cpf-ledger-table" in JSX. ── */
+        .theme-light .cpf-ledger-table td:nth-child(2)  { color: #065f46 !important; } /* Mandatory  — was #34d399 */
+        .theme-light .cpf-ledger-table td:nth-child(3)  { color: #065f46 !important; } /* Voluntary  — was #6ee7b7 (near-invisible mint) */
+        .theme-light .cpf-ledger-table td:nth-child(4)  { color: #6d28d9 !important; } /* Grants/WIS — was #a78bfa */
+        .theme-light .cpf-ledger-table td:nth-child(5)  { color: #1d4ed8 !important; } /* OA Int.    — was #60a5fa */
+        .theme-light .cpf-ledger-table td:nth-child(6)  { color: #4338ca !important; } /* SA/RA Int. — was #818cf8 */
+        .theme-light .cpf-ledger-table td:nth-child(7)  { color: #7c3aed !important; } /* MA Int.    — was #c084fc */
+        .theme-light .cpf-ledger-table td:nth-child(8)  { color: #065f46 !important; } /* ▶ Total In — was #34d399 */
+        .theme-light .cpf-ledger-table td:nth-child(9)  { color: #9d174d !important; } /* Housing    — was #f472b6 */
+        .theme-light .cpf-ledger-table td:nth-child(10) { color: #be123c !important; } /* Medical    — was #fb7185 */
+        .theme-light .cpf-ledger-table td:nth-child(11) { color: #b91c1c !important; } /* OA Draw   — was #f87171 */
+        .theme-light .cpf-ledger-table td:nth-child(12) { color: #c2410c !important; } /* Edu Loan  — was #fb923c */
+        .theme-light .cpf-ledger-table td:nth-child(13) { color: #9b1c1c !important; } /* Loved One — was #fca5a5 (near-invisible) */
+        .theme-light .cpf-ledger-table td:nth-child(14) { color: #c2410c !important; } /* CPFIS Out — was #fb923c */
+        .theme-light .cpf-ledger-table td:nth-child(15) { color: #065f46 !important; } /* Events In — was #10b981 */
+        .theme-light .cpf-ledger-table td:nth-child(16) { color: #6d28d9 !important; } /* Events Out— was #a855f7 */
+        .theme-light .cpf-ledger-table td:nth-child(17) { color: #9d174d !important; } /* ▶ Total Out— was #f472b6 */
+        /* col 18 Net Flow: conditional green/red — handled by global #34d399 / #f87171 overrides */
+        /* Ledger column headers: boost Events In / Events Out */
+        .theme-light .cpf-ledger-table th:nth-child(15) { color: #065f46 !important; } /* was #10b981 */
+        .theme-light .cpf-ledger-table th:nth-child(16) { color: #6d28d9 !important; } /* was #a855f7 */
+        /* tfoot TOTAL row: same column colours */
+        .theme-light .cpf-ledger-table tfoot td:nth-child(2)  { color: #065f46 !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(3)  { color: #065f46 !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(4)  { color: #6d28d9 !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(5)  { color: #1d4ed8 !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(6)  { color: #4338ca !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(7)  { color: #7c3aed !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(8)  { color: #065f46 !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(9)  { color: #9d174d !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(10) { color: #be123c !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(11) { color: #b91c1c !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(12) { color: #c2410c !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(13) { color: #9b1c1c !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(14) { color: #c2410c !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(15) { color: #065f46 !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(16) { color: #6d28d9 !important; }
+        .theme-light .cpf-ledger-table tfoot td:nth-child(17) { color: #9d174d !important; }
 
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
@@ -8610,7 +8706,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* Gap Alert — compact summary banner; full detail card lives under RSTU in Inflows.
                 Hidden for foreigners: no CPF account means no RA, no FRS, no gap concept. */}
             {gapAlert && !isForeigner && (
-              <div style={{ borderRadius: 10, padding: "9px 12px", border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.3)" : "rgba(245,158,11,0.3)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.07)" : "rgba(245,158,11,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+              <div className="gap-alert-box" style={{ borderRadius: 10, padding: "9px 12px", border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.3)" : "rgba(245,158,11,0.3)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.07)" : "rgba(245,158,11,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                   <AlertTriangle style={{ width: 12, height: 12, color: gapAlert.isUrgent ? "#f87171" : "#fbbf24", flexShrink: 0 }} />
                   <span style={{ fontSize: 9, fontWeight: 700, color: gapAlert.isUrgent ? "#fca5a5" : "#fcd34d", lineHeight: 1.3 }}>
@@ -10346,7 +10442,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           because the thead's scroll parent becomes the inner div which loses its
                           fixed height context when the page reflows to height:auto on small screens. */}
                       <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 540, borderRadius: 16, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", WebkitOverflowScrolling: "touch" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, fontFamily: "monospace" }}>
+                        <table className="cpf-ledger-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, fontFamily: "monospace" }}>
                           <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                             <tr style={{ background: "var(--bg-base)", borderBottom: "2px solid var(--border-strong)" }}>
                               {["Age", "Mandatory", "Voluntary", "Grants/WIS", "OA Int.", is55Plus ? "RA Int." : "SA Int.", "MA Int.", "▶ Total In", "Housing Out", "Medical Out", "OA Draw", "Edu Loan Out", "Loved One Out", "CPFIS Out", "Events In", "Events Out", "▶ Total Out", "Net Flow"].map((h, i) => (
