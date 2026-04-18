@@ -4968,11 +4968,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --text-bright: #08111e;
           --text-highlight: #0d2a4a;
           --text-muted: #2e4560;
-          --text-subtle: #3d5875;
+          --text-subtle: #2a4565;
           --header-bg: rgba(228,234,244,0.98);
           /* ── Charts: readable gridlines and labels ── */
-          --chart-grid: #c0cedd;
-          --chart-text: #2e4560;
+          --chart-grid: #b0c2d4;
+          --chart-text: #1e3350;
           /* ── Hero / KPI panel ── */
           --hero-left-bg: #c4d4e4;
           --hero-right-bg: #e2eaf4;
@@ -5035,7 +5035,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           background: #d4dde9 !important;
         }
         .theme-light table tbody tr:nth-child(even) {
-          background: rgba(180,198,220,0.18) !important;
+          background: rgba(180,198,220,0.32) !important;
         }
         .theme-light table tbody td {
           color: #1e3350;
@@ -5057,28 +5057,28 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* ── KPI strip inactive values ── */
         .theme-light .kpi-inactive-val {
-          color: #2e4560 !important;
+          color: #1e3248 !important;
         }
 
         /* ── Panel/card borders ── */
         .theme-light .panel-card {
           border-color: #adbcce !important;
-          background: #f2f5f9 !important;
+          background: #f8fafc !important;
         }
 
         /* ── Lifetime Summary card labels ── */
         .theme-light .lifetime-label {
-          color: #2e4560 !important;
-          font-size: 10px !important;
+          color: #1e3248 !important;
+          font-size: 11px !important;
         }
 
         /* ── Chart legend & axis text ── */
         .theme-light .recharts-legend-item-text {
-          color: #2e4560 !important;
+          color: #1e3350 !important;
           font-weight: 600 !important;
         }
         .theme-light .recharts-cartesian-axis-tick-value {
-          fill: #2e4560 !important;
+          fill: #1e3350 !important;
         }
 
         /* ── Sidebar gap alert box ── */
@@ -5166,6 +5166,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           color: #2e4560 !important;
           font-weight: 600 !important;
         }
+
+        /* ── Light-mode scrollbar: visible thumb + tinted track ── */
+        .theme-light .cpf-sidebar-wrap,
+        .theme-light .cpf-tab-content {
+          scrollbar-color: #4f6e88 #d4dde8 !important;
+        }
+        .theme-light .cpf-sidebar-wrap::-webkit-scrollbar-track,
+        .theme-light .cpf-tab-content::-webkit-scrollbar-track  { background: #d4dde8 !important; }
+        .theme-light .cpf-sidebar-wrap::-webkit-scrollbar-thumb,
+        .theme-light .cpf-tab-content::-webkit-scrollbar-thumb  { background: #4f6e88 !important; border-radius: 4px; }
+        .theme-light .cpf-sidebar-wrap::-webkit-scrollbar-thumb:hover,
+        .theme-light .cpf-tab-content::-webkit-scrollbar-thumb:hover { background: #3a5570 !important; }
 
         /* ── Toast notification: was near-invisible on light bg ── */
         .theme-light .cpf-toast {
@@ -5402,6 +5414,65 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .theme-light .cpf-ledger-table tfoot td:nth-child(15) { color: #065f46 !important; }
         .theme-light .cpf-ledger-table tfoot td:nth-child(16) { color: #6d28d9 !important; }
         .theme-light .cpf-ledger-table tfoot td:nth-child(17) { color: #9d174d !important; }
+
+        /* ══════════════════════════════════════════════════════════════
+           PASS 2 POLISH FIXES
+           ══════════════════════════════════════════════════════════════ */
+
+        /* ── Fix I: LIFE tab eligibility info strip ──
+             The purple-tinted strip uses rgba(168,85,247,0.06) background,
+             which is virtually invisible on the light panel. Boost contrast,
+             add a more visible border, and ensure label/value colours are dark. ── */
+        .theme-light .life-eligibility-strip {
+          background: rgba(109,40,217,0.07) !important;
+          border-color: rgba(109,40,217,0.28) !important;
+        }
+        .theme-light .life-eligibility-strip span { color: #1e3350 !important; }
+        /* Keep value spans slightly darker/bolder than label spans */
+        .theme-light .life-eligibility-strip span[style*="fontWeight: 700"],
+        .theme-light .life-eligibility-strip span[style*="font-weight: 700"] {
+          color: #0d2a4a !important;
+        }
+        /* Separator pipe: was near-invisible rgba purple — use solid border-subtle */
+        .theme-light .life-eligibility-strip span[style*="rgba(168,85,247"] {
+          color: var(--border-strong) !important;
+          opacity: 0.6;
+        }
+
+        /* ── Fix J: Compare tab Scenario A / B config value colours ──
+             Both boxes use #10b981 (→ #065f46 in light) for all config values,
+             but they sit on blue-tint (A) and orange-tint (B) backgrounds.
+             Colour-match each box's values to its heading accent for clarity. ── */
+        .theme-light .scenario-a-box .cpf-scenario-val { color: #1d4ed8 !important; } /* dark blue  */
+        .theme-light .scenario-b-box .cpf-scenario-val { color: #c2410c !important; } /* dark orange */
+        /* Scenario A tint: was rgba(59,130,246,0.08) — almost invisible. Raise opacity. */
+        .theme-light .scenario-a-box {
+          background: rgba(29,78,216,0.10) !important;
+          border-color: rgba(29,78,216,0.30) !important;
+        }
+        /* Scenario B tint: was rgba(249,115,22,0.08) — ditto. */
+        .theme-light .scenario-b-box {
+          background: rgba(194,65,12,0.10) !important;
+          border-color: rgba(194,65,12,0.30) !important;
+        }
+        /* "Save Current as A/B" buttons: colour-matched to box accent */
+        .theme-light .scenario-a-box > button:last-of-type {
+          background: rgba(29,78,216,0.15) !important;
+          color: #1d4ed8 !important;
+        }
+        .theme-light .scenario-b-box > button:last-of-type {
+          background: rgba(194,65,12,0.15) !important;
+          color: #c2410c !important;
+        }
+
+        /* ── Fix K: table tbody td base colour — ensure non-coloured cells
+             are dark enough (the CSS rule sets only even-row stripe, not all td) ── */
+        .theme-light table tbody td { color: #162033 !important; }
+
+        /* ── Fix L: sidebar field-label colour boost ──
+             --text-subtle shifted to #2a4565 but labels that fall through to
+             var(--text-subtle) in JSX benefit from an explicit boost here. ── */
+        .theme-light .sidebar-field-label { color: #1e3248 !important; }
 
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
@@ -10010,7 +10081,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <div className="life-chart-header" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
                   {/* B6: CPF LIFE eligibility info bar */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(168,85,247,0.06)", border: "1px solid rgba(168,85,247,0.2)", fontSize: 10, color: "var(--text-muted)" }}>
+                  <div className="life-eligibility-strip" style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(168,85,247,0.06)", border: "1px solid rgba(168,85,247,0.2)", fontSize: 10, color: "var(--text-muted)" }}>
                     {[
                       ["🏛 Eligibility", "SC & PR only"],
                       ["📅 Born", "1958 or after"],
@@ -10257,7 +10328,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {(() => {
                     const color = "#3b82f6", bg = "rgba(59,130,246,0.08)", border = "rgba(59,130,246,0.2)";
                     return (
-                      <div style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
+                      <div className="scenario-a-box" style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                           <h4 style={{ fontWeight: 700, color, fontSize: 14 }}>Scenario A</h4>
                           {scenarioA && <button onClick={() => { setScenarioA(null); setScenarioLabelA(""); }} style={{ fontSize: 10, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
@@ -10283,7 +10354,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 return (
                                 <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
                                   <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{displayVal}</span>
+                                  <span className="cpf-scenario-val" style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{displayVal}</span>
                                 </div>
                                 );
                               })}
@@ -10309,7 +10380,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {(() => {
                     const color = "#f97316", bg = "rgba(249,115,22,0.08)", border = "rgba(249,115,22,0.2)";
                     return (
-                      <div style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
+                      <div className="scenario-b-box" style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                           <h4 style={{ fontWeight: 700, color, fontSize: 14 }}>Scenario B</h4>
                           {scenarioB && <button onClick={() => { setScenarioB(null); setScenarioLabelB(""); }} style={{ fontSize: 10, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
@@ -10333,7 +10404,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 return (
                                 <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
                                   <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{displayVal}</span>
+                                  <span className="cpf-scenario-val" style={{ fontSize: 10, fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>{displayVal}</span>
                                 </div>
                                 );
                               })}
