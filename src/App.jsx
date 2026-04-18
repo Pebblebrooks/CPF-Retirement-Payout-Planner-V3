@@ -493,8 +493,13 @@ const DEFAULT_INPUTS = {
   // rssMonthlyPayout: fixed monthly RSS payout amount as per CPF statement ($/month).
   rssMonthlyPayout: 0,
   // lifeMigrationAge: age to voluntarily migrate from RSS to CPF LIFE (0 = no migration).
+  // lifePlanAtMigration: CPF LIFE plan chosen at the point of migration.
+  //   'std' = Standard (fixed payout for life — CPF Board default)
+  //   'esc' = Escalating (starts ~20% lower, rises 2%/yr — best long-run value)
+  //   'bas' = Basic (lowest payout; RA retains a cash-refundable reserve)
   // Must be > currentAge and ≤ 80 (CPF policy deadline for migration).
   lifeMigrationAge: 0,
+  lifePlanAtMigration: 'std',  // 'std' | 'esc' | 'bas' — CPF LIFE plan chosen at migration
 };
 
 const PRESET_PROFILES = [
@@ -642,6 +647,7 @@ const INPUT_LABELS = {
   // RSS field labels
   cpfScheme: "CPF Scheme", rssPayoutStartAge: "RSS Payout Start Age",
   rssMonthlyPayout: "RSS Monthly Payout ($)", lifeMigrationAge: "Migrate to CPF LIFE Age",
+  lifePlanAtMigration: "CPF LIFE Plan at Migration",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
@@ -691,12 +697,15 @@ function runRSSEngine(inputs, {
   let   rssDepletionHit = false;  // persistent guard so depletion is only recorded once
   // ── CPF LIFE migration (PR-3) ────────────────────────────────────────────────
   const migrationAge       = Math.max(0, Number(inputs.lifeMigrationAge) || 0);
+  // lifePlanKey: which CPF LIFE plan the member chooses at migration.
+  // 'std' = Standard (fixed for life), 'esc' = Escalating (2%/yr), 'bas' = Basic (two-phase).
+  const lifePlanKey        = (['std','esc','bas'].includes(inputs.lifePlanAtMigration))
+                               ? inputs.lifePlanAtMigration : 'std';
   const isMaleRSS          = inputs.isMale !== false;
   let   migrationActivated = false;  // flips true on the year age === migrationAge
-  let   postMigrationMonthly = 0;   // CPF LIFE Standard monthly payout after migration
-  // CPF LIFE Basic Plan state variables — used post-migration if member wants Basic plan.
-  // For PR-3 we model Standard plan (highest payout, simplest) as the default.
-  // The RSS tab shows estimated monthly; full plan comparison is a PR-4 enhancement.
+  let   postMigrationMonthly = 0;   // CPF LIFE monthly payout at migration age (plan-specific)
+  let   migYearsSince      = 0;     // escalating plan: years elapsed since migration (for 2%/yr compounding)
+  // CPF LIFE Basic Plan state variables — used post-migration when lifePlanKey === 'bas'.
   let   migRaRem           = 0;     // RA_Retained tracker for Basic Plan post-migration
   let   migPhase1bTrigger  = 0;
   let   migPhase1aAnnual   = 0;
@@ -1296,17 +1305,21 @@ function runRSSEngine(inputs, {
         const migRaOaTransfer   = Math.round(migRaTransferBase * 0.20);
         oa += migRaOaTransfer;
         ra -= migRaOaTransfer;
-        // Step 2: Compute CPF LIFE Standard monthly payout from remaining RA at current age
-        // Uses the same interpolateCpfLife pure function used by the main engine.
-        postMigrationMonthly = Math.round(interpolateCpfLife(ra, 'std', isMaleRSS));
-        // Step 3: Initialise Basic Plan state (for RSS tab comparison display — PR-4 full use)
-        const migPhase1aMonthly = interpolateCpfLife(ra, 'bas', isMaleRSS);
-        const migParams = computeBasicPlanParams(ra, age, migPhase1aMonthly, 10);
-        migRaRem          = migParams.pv;
-        migPhase1bTrigger = migParams.phase1bTrigger;
-        migPhase1aAnnual  = migParams.phase1aAnnual;
-        migPhase2Annual   = migParams.phase2Annual;
-        migEffAnnualFactor = migParams.effAnnualFactor;
+        // Step 2: Compute CPF LIFE payout for the chosen plan from remaining RA at current age.
+        // interpolateCpfLife supports 'std', 'esc', and 'bas' — lifePlanKey selects the correct table.
+        postMigrationMonthly = Math.round(interpolateCpfLife(ra, lifePlanKey, isMaleRSS));
+        // Step 3: Initialise Basic Plan state — only needed when lifePlanKey === 'bas'.
+        // Gated to avoid wasteful computation for Standard and Escalating migrations.
+        if (lifePlanKey === 'bas') {
+          const migPhase1aMonthly = postMigrationMonthly; // already 'bas' lookup above
+          const migParams = computeBasicPlanParams(ra, age, migPhase1aMonthly, 10);
+          migRaRem          = migParams.pv;
+          migPhase1bTrigger = migParams.phase1bTrigger;
+          migPhase1aAnnual  = migParams.phase1aAnnual;
+          migPhase2Annual   = migParams.phase2Annual;
+          migEffAnnualFactor = migParams.effAnnualFactor;
+        }
+        migYearsSince      = 0; // escalating plan counter starts at migration year
         migrationActivated = true;
       } else {
         // RA < $60,000: CPF LIFE requires at least $60k — migration deferred/skipped.
@@ -1317,17 +1330,27 @@ function runRSSEngine(inputs, {
 
     // ── PAYOUT DEBIT — RSS drawdown OR CPF LIFE post-migration ───────────────
     if (migrationActivated && age >= migrationAge) {
-      // ── POST-MIGRATION: CPF LIFE Standard payout (fixed, for life) ───────────
-      // Standard plan: fixed annual payout based on postMigrationMonthly.
-      // RA does NOT deplete (pool annuity — longevity risk shared); no depletion tracking.
-      const annualLifePayout = postMigrationMonthly * 12;
+      // ── POST-MIGRATION: CPF LIFE payout — plan-specific mechanics ─────────
+      // RA does NOT deplete for Standard and Escalating (pool annuity — longevity risk shared).
+      // Basic plan retains a portion of RA (migRaRem) that self-funds Phase 1A/1B payouts.
+      let annualLifePayout;
+      if (lifePlanKey === 'esc') {
+        // Escalating: 2%/yr compounding from the migration year (CPF LIFE Escalating plan)
+        annualLifePayout = Math.round(postMigrationMonthly * 12 * Math.pow(1.02, migYearsSince));
+        migYearsSince++;
+      } else if (lifePlanKey === 'bas') {
+        // Basic: two-phase payout — Phase 1A (higher), Phase 2 (lower after RA_Retained depletes)
+        const { basPay, newRaRem } = computeBasicPlanYearPayout(
+          age, migPhase1bTrigger, migPhase1aAnnual, migPhase2Annual, migRaRem, migEffAnnualFactor
+        );
+        annualLifePayout = basPay;
+        migRaRem = newRaRem;
+      } else {
+        // Standard: fixed monthly for life (CPF Board default)
+        annualLifePayout = postMigrationMonthly * 12;
+      }
       rssPayoutThisYear = annualLifePayout;   // reuse field — labelled in tab as "CPF LIFE payout"
       totalOutSpent += annualLifePayout;
-      // RA_Retained for Basic Plan tracker (not debited from `ra` — CPF LIFE pool manages it)
-      if (migRaRem > 0) {
-        const { newRaRem } = computeBasicPlanYearPayout(age, migPhase1bTrigger, migPhase1aAnnual, migPhase2Annual, migRaRem, migEffAnnualFactor);
-        migRaRem = newRaRem;
-      }
     } else if (rssAnnualPayout > 0 && age >= rssPayoutStart && !rssDepletionHit) {
       // ── PRE-MIGRATION (or no migration): RSS fixed drawdown from RA ──────────
       const actualPayout = Math.min(rssAnnualPayout, Math.max(0, ra));
@@ -2989,7 +3012,8 @@ export default function App() {
     // D3: age 16–17 info note — nominations OK, CPFIS still locked
     if (!errs.currentAge && ca >= 16 && ca < 18) errs.currentAge = "CPF nominations are available from age 16. CPFIS requires age 18+ and is locked in the Outflows section.";
     // A7: soft warning when current age is at or beyond payout age (no hard block)
-    if (!errs.currentAge && ca > 0 && ca >= pa) errs.currentAge = `Age ${ca} ≥ payout age ${pa} — CPF LIFE has likely started. Most contribution fields will have no effect.`;
+    // RSS guard: RSS members use rssPayoutStartAge, not payoutAge — this warning is CPF LIFE-only.
+    if (inp.cpfScheme !== 'rss' && !errs.currentAge && ca > 0 && ca >= pa) errs.currentAge = `Age ${ca} ≥ payout age ${pa} — CPF LIFE has likely started. Most contribution fields will have no effect.`;
     // RSS isolation: payoutAge 65–70 rule only applies to CPF LIFE members.
     // RSS members use rssPayoutStartAge instead — validated in the RSS block below.
     if (inp.cpfScheme !== 'rss' && (pa < 65 || pa > 70)) errs.payoutAge = "Payout age must be 65–70";
@@ -4430,7 +4454,7 @@ export default function App() {
       retirementSumGrowth, // Rev #5: changing this rate changes all FRS/BHS/BRS/ERS projections
       salaryPhaseAge, salaryGrowthRate2, careerBreakStartAge, careerBreakEndAge, // Rev #22
       lifeEvents, // Rev #D2
-      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, // RSS fields
+      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, // RSS fields
     } = debouncedInputs;
     return JSON.stringify({
       currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
@@ -4461,7 +4485,7 @@ export default function App() {
       retirementSumGrowth, // Rev #5
       salaryPhaseAge, salaryGrowthRate2, careerBreakStartAge, careerBreakEndAge, // Rev #22
       lifeEvents, // Rev #D2
-      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, // RSS fields
+      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, // RSS fields
     });
   }, [debouncedInputs]);
   const projection = useMemo(() => {
@@ -7020,14 +7044,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                     ))}
                     <div>
-                      <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>
+                      <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: inputs.cpfScheme === 'rss' ? "var(--text-muted)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>
                         Payout At {isForeigner && <span style={{ fontSize: 9, color: "#f59e0b", marginLeft: 4 }}>🔒 CPF LIFE N/A</span>}
+                        {inputs.cpfScheme === 'rss' && <span style={{ fontSize: 9, color: "#f59e0b", marginLeft: 4 }}>🔒 RSS only</span>}
                       </div>
-                      <div style={{ opacity: isForeigner ? 0.3 : 1, pointerEvents: isForeigner ? "none" : "auto" }}>
-                        <select name="payoutAge" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }}>
+                      <div style={{ opacity: (isForeigner || inputs.cpfScheme === 'rss') ? 0.3 : 1, pointerEvents: (isForeigner || inputs.cpfScheme === 'rss') ? "none" : "auto", position: "relative" }}>
+                        <select name="payoutAge" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" disabled={inputs.cpfScheme === 'rss'} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }}>
                           {[65, 66, 67, 68, 69, 70].map(a => <option key={a} value={a}>{a}</option>)}
                         </select>
                       </div>
+                      {inputs.cpfScheme === 'rss' && (
+                        <p style={{ fontSize: 9, color: "#93c5fd", margin: "3px 0 0", lineHeight: 1.5 }}>Uses RSS Payout Start Age below</p>
+                      )}
                     </div>
                   </div>
                   {/* currentAge error shown full-width below the grid — message is too long for a 1fr column */}
@@ -7272,24 +7300,102 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             })()}
                           </div>
 
-                          {/* Migrate to CPF LIFE Age */}
+                          {/* ── Migration choice: Stay on RSS vs Migrate to CPF LIFE ── */}
                           <div>
-                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", marginBottom: 3 }}>
-                              Migrate to CPF LIFE at Age <span style={{ fontWeight: 400, textTransform: "none", color: "var(--text-muted)" }}>(0 = no migration)</span>
-                              <TooltipBox id="t-migrate" text="RSS members may voluntarily migrate to CPF LIFE at any age up to 80. Upon migration: your remaining RA becomes the CPF LIFE premium; CPF Board recomputes your monthly payout (typically lower than RSS but guaranteed for life). RA must be ≥ $60,000 at migration. Set to 0 to model staying on RSS until RA depletes." />
-                            </label>
-                            <input type="text" inputMode="numeric" name="lifeMigrationAge"
-                              value={inputs.lifeMigrationAge ?? 0}
-                              onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                              placeholder="0 = stay on RSS"
-                              style={{ width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: `1px solid ${inputErrors.lifeMigrationAge ? "#f87171" : "var(--border-strong)"}`, borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                            {inputErrors.lifeMigrationAge && <p style={{ fontSize: 9, color: "#f87171", margin: "2px 0 0" }}>{inputErrors.lifeMigrationAge}</p>}
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: "#93c5fd", textTransform: "uppercase" }}>At Payout Age</span>
+                              <TooltipBox id="t-migrate" text="RSS members may voluntarily migrate to CPF LIFE at any age up to 80. Upon migration: your remaining RA becomes the CPF LIFE premium and CPF Board recomputes your monthly payout (guaranteed for life regardless of how long you live). RA must be ≥ $60,000 at migration. Staying on RSS means the fixed monthly payout continues until RA depletes — after which payouts stop." />
+                            </div>
+                            {/* Binary Stay / Migrate toggle */}
+                            <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 7, gap: 2, marginBottom: 8 }}>
+                              <button
+                                onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: 0 }))}
+                                style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
+                                  background: (inputs.lifeMigrationAge || 0) === 0 ? "#60a5fa" : "transparent",
+                                  color: (inputs.lifeMigrationAge || 0) === 0 ? "#020617" : "var(--text-muted)" }}>
+                                📋 Stay on RSS
+                              </button>
+                              <button
+                                onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: p.lifeMigrationAge > 0 ? p.lifeMigrationAge : (Number(p.currentAge) || 65) + 1 }))}
+                                style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
+                                  background: (inputs.lifeMigrationAge || 0) > 0 ? "#a855f7" : "transparent",
+                                  color: (inputs.lifeMigrationAge || 0) > 0 ? "#020617" : "var(--text-muted)" }}>
+                                🔄 Migrate to CPF LIFE
+                              </button>
+                            </div>
+
+                            {/* Stay on RSS: informational note about depletion */}
+                            {(inputs.lifeMigrationAge || 0) === 0 && (
+                              <div style={{ background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 6, padding: "6px 9px" }}>
+                                <p style={{ fontSize: 9, color: "#93c5fd", margin: 0, lineHeight: 1.6 }}>
+                                  📋 RA will be drawn down at <strong>{formatCurrency(Number(inputs.rssMonthlyPayout) || 0)}/mo</strong> until balance reaches $0 — payouts stop at depletion. See the <strong>RSS tab</strong> for your projected depletion age.
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Migrate to CPF LIFE: age input + plan selector */}
+                            {(inputs.lifeMigrationAge || 0) > 0 && (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                {/* Migration age input */}
+                                <div>
+                                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#c4b5fd", textTransform: "uppercase", marginBottom: 3 }}>
+                                    Migrate at Age <span style={{ fontWeight: 400, textTransform: "none", color: "var(--text-muted)" }}>(must be &gt; current age, ≤ 80)</span>
+                                  </label>
+                                  <input type="text" inputMode="numeric" name="lifeMigrationAge"
+                                    value={inputs.lifeMigrationAge ?? ""}
+                                    onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                                    placeholder="e.g. 72"
+                                    style={{ width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: `1px solid ${inputErrors.lifeMigrationAge ? "#f87171" : "var(--border-strong)"}`, borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                                  {inputErrors.lifeMigrationAge && <p style={{ fontSize: 9, color: "#f87171", margin: "2px 0 0" }}>{inputErrors.lifeMigrationAge}</p>}
+                                </div>
+
+                                {/* CPF LIFE plan selector at migration */}
+                                <div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: "#c4b5fd", textTransform: "uppercase" }}>CPF LIFE Plan</span>
+                                    <TooltipBox id="t-lifePlanMig" text="Standard: fixed monthly payout for life — highest immediate income, simplest. Escalating: starts ~20% lower than Standard, rises 2%/yr — best long-run value if you live past ~80. Basic: lowest payout; a portion of RA is retained as a cash-refundable reserve (for your estate) until it depletes, then a lower pool annuity kicks in." />
+                                  </div>
+                                  <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 7, gap: 2 }}>
+                                    {[
+                                      { key: 'bas', label: 'Basic', desc: 'Lower · RA reserve' },
+                                      { key: 'std', label: 'Standard', desc: 'Fixed · CPF default' },
+                                      { key: 'esc', label: 'Escalating', desc: '2%/yr · Best long-run' },
+                                    ].map(({ key, label, desc }) => (
+                                      <button key={key}
+                                        onClick={() => setInputs(p => ({ ...p, lifePlanAtMigration: key }))}
+                                        title={desc}
+                                        style={{ flex: 1, padding: "5px 4px", borderRadius: 5, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer", lineHeight: 1.3,
+                                          background: (inputs.lifePlanAtMigration || 'std') === key ? "#a855f7" : "transparent",
+                                          color: (inputs.lifePlanAtMigration || 'std') === key ? "#ffffff" : "var(--text-muted)" }}>
+                                        {label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <p style={{ fontSize: 9, color: "#c4b5fd", margin: "4px 0 0", lineHeight: 1.5 }}>
+                                    {{bas: "💼 Basic — lowest payout; RA reserve refundable to estate until depleted, then pool phase.", std: "📌 Standard — fixed payout for life. CPF Board default at migration.", esc: "📈 Escalating — starts lower, rises 2%/yr. Maximises long-run income if you live past ~80."}[inputs.lifePlanAtMigration || 'std']}
+                                  </p>
+                                </div>
+
+                                {/* Informational note on migration outcome */}
+                                {(() => {
+                                  const planNames = { bas: 'Basic', std: 'Standard', esc: 'Escalating' };
+                                  const planName = planNames[inputs.lifePlanAtMigration || 'std'];
+                                  return (
+                                    <div style={{ background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.25)", borderRadius: 6, padding: "6px 9px" }}>
+                                      <p style={{ fontSize: 9, color: "#c4b5fd", margin: 0, lineHeight: 1.6 }}>
+                                        🔄 At age <strong>{inputs.lifeMigrationAge}</strong>, remaining RA becomes your CPF LIFE premium. RSS drawdown stops. <strong>{planName}</strong> plan payouts begin — guaranteed for life. See the <strong>RSS tab</strong> for projected amounts.
+                                      </p>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
                           </div>
 
-                          {/* Info note about what PR-2 will enable */}
+                          {/* Info note */}
                           <div style={{ background: "rgba(96,165,250,0.07)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 6, padding: "5px 8px" }}>
                             <p style={{ fontSize: 9, color: "#93c5fd", margin: 0, lineHeight: 1.6 }}>
-                              📋 <strong>RSS mode active.</strong> The RSS tab will show your drawdown curve and depletion age. Full engine in next update — RA currently still uses CPF LIFE mechanics as a placeholder.
+                              📋 <strong>RSS mode active.</strong> The RSS tab shows your drawdown curve, depletion age, and migration payout comparison. Switching to "Migrate to CPF LIFE" above unlocks Basic, Standard, and Escalating plan projections.
                             </p>
                           </div>
                         </div>
@@ -9618,7 +9724,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     { label: "RSS Payout", value: inputs.rssMonthlyPayout > 0 ? formatCurrency(Number(inputs.rssMonthlyPayout)) + "/mo" : "Not set", color: inputs.rssMonthlyPayout > 0 ? "#34d399" : "#f87171", tip: "Your fixed CPF Board monthly payout under RSS" },
                     { label: "Annual Draw", value: rssAnnual > 0 ? formatCurrency(rssAnnual) + "/yr" : "—", color: "#60a5fa", tip: "Total annual RSS drawdown from RA (monthly × 12)" },
                     { label: "Est. Depletion", value: rssDepEst ? `Age ${rssDepEst}` : "—", color: rssDepEst && typeof rssDepEst === "number" && rssDepEst < 85 ? "#f87171" : "#34d399", tip: "Estimated age when RA balance reaches $0 under RSS (PMT approximation — full engine in PR-2)" },
-                    { label: "Migration", value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge}` : "None", color: inputs.lifeMigrationAge > 0 ? "#a855f7" : "var(--text-muted)", tip: "Age at which you plan to migrate from RSS to CPF LIFE (0 = no migration)" },
+                    { label: "Migration", value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge} · ${{ bas: 'Basic', std: 'Std', esc: 'Esc' }[inputs.lifePlanAtMigration || 'std']}` : "None", color: inputs.lifeMigrationAge > 0 ? "#a855f7" : "var(--text-muted)", tip: inputs.lifeMigrationAge > 0 ? `Migrating to CPF LIFE ${{ bas: 'Basic', std: 'Standard', esc: 'Escalating' }[inputs.lifePlanAtMigration || 'std']} plan at age ${inputs.lifeMigrationAge}` : "Staying on RSS until RA depletes — no CPF LIFE migration planned" },
                     { label: "Payout Start", value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "#fbbf24", tip: "Age when CPF Board began your RSS monthly payouts" },
                   ] : [
                     { label: "At Payout", value: formatCurrency(dispTotal), color: "#60a5fa", tip: "Total CPF balance (OA+MA+RA) at your chosen payout age" },
