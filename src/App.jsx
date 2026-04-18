@@ -4978,7 +4978,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --hero-right-bg: #e2eaf4;
           --hero-border: #a0b8cc;
           --hero-text: #0a1c2e;
-          --hero-label: rgba(10,28,46,0.85);
+          --hero-label: #263849;
           --hero-card-bg: rgba(10,28,46,0.07);
           --hero-acct-bg: rgba(10,28,46,0.05);
           --hero-acct-border: rgba(10,28,46,0.16);
@@ -5558,6 +5558,94 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         /* ── Fix S: Warning banner (VC over-limit) ──
              Already has .cpf-warning-banner override. Confirm #fdba74 inside
              it is caught by Fix G → #9a3412. No additional rule needed. ── */
+
+        /* ══════════════════════════════════════════════════════════════
+           PASS 4 FIXES — Hero panel, green-on-green, missing tc colours
+           ══════════════════════════════════════════════════════════════ */
+
+        /* ── Fix T: Mint/green tinted backgrounds not caught by Fix P ──
+             rgba(16,185,129,…) covers the 20% RA-to-OA Transfer notice,
+             the Retirement Income Goal surplus card, and Gantt RSTU bars.
+             Both no-space and space-after-comma browser serialisations. ── */
+        .theme-light [style*="background: rgba(16,185,129,0.08"],
+        .theme-light [style*="background: rgba(16, 185, 129, 0.08"] {
+          background: rgba(6,95,70,0.07) !important;
+          border-color: rgba(6,95,70,0.22) !important;
+        }
+        .theme-light [style*="background: rgba(16,185,129,0.10"],
+        .theme-light [style*="background: rgba(16, 185, 129, 0.10"],
+        .theme-light [style*="background: rgba(16,185,129,0.12"],
+        .theme-light [style*="background: rgba(16, 185, 129, 0.12"] {
+          background: rgba(6,95,70,0.09) !important;
+          border-color: rgba(6,95,70,0.26) !important;
+        }
+        .theme-light [style*="background: rgba(16,185,129,0.15"],
+        .theme-light [style*="background: rgba(16, 185, 129, 0.15"] {
+          background: rgba(6,95,70,0.11) !important;
+          border-color: rgba(6,95,70,0.30) !important;
+        }
+
+        /* ── Fix U: Pink/rose goal-tracking shortfall card background ──
+             rgba(244,63,94,0.08) is the shortfall variant of the goal card.
+             Without this, dark-rose text sits on a pink-tinted bg. ── */
+        .theme-light [style*="background: rgba(244,63,94,0.08"],
+        .theme-light [style*="background: rgba(244, 63, 94, 0.08"] {
+          background: rgba(190,18,60,0.07) !important;
+          border-color: rgba(190,18,60,0.22) !important;
+        }
+
+        /* ── Fix V: Hero account box tc colours — OA and RA ──
+             OA value text uses #93c5fd (blue-200), RA uses #c4b5fd (violet-200).
+             Both are nearly invisible on the hero right panel's light bg.
+             MA uses #6ee7b7 → already overridden to #065f46 in Fix G.
+             Both hex and Chrome rgb() forms covered. ── */
+        .theme-light [style*="color: #93c5fd"],
+        .theme-light [style*='color: "#93c5fd"'],
+        .theme-light [style*="color: rgb(147, 197, 253)"],
+        .theme-light [style*="color: rgb(147,197,253)"] { color: #1d4ed8 !important; }
+
+        .theme-light [style*="color: #c4b5fd"],
+        .theme-light [style*='color: "#c4b5fd"'],
+        .theme-light [style*="color: rgb(196, 181, 253)"],
+        .theme-light [style*="color: rgb(196,181,253)"] { color: #7c3aed !important; }
+
+        /* ── Fix W: #fda4af — light rose shortfall insight text ──
+             Used in the "Actionable Insight" shortfall paragraph.
+             No existing override; catches both hex and Chrome rgb(). ── */
+        .theme-light [style*="color: #fda4af"],
+        .theme-light [style*='color: "#fda4af"'],
+        .theme-light [style*="color: rgb(253, 164, 175)"],
+        .theme-light [style*="color: rgb(253,164,175)"] { color: #9f1239 !important; }
+
+        /* ── Fix X: SVG percentage text in hero account donut rings ──
+             fill={tc} is an SVG attribute set inline on <text> elements.
+             CSS attribute selectors can't match SVG fill attributes.
+             Target the text elements inside the hero-acct-grid SVGs directly
+             with the CSS fill property, which overrides SVG presentation attrs. ── */
+        .theme-light .hero-acct-grid svg text {
+          fill: #1e3248 !important;
+        }
+
+        /* ── Fix Y: #f43f5e (rose-500) — used for shortfall dollar amount ──
+             The ±$X shortfall value uses color: "#f43f5e". In light mode this
+             medium-rose on an already pink-tinted card needs boosting. ── */
+        .theme-light [style*="color: #f43f5e"],
+        .theme-light [style*='color: "#f43f5e"'],
+        .theme-light [style*="color: rgb(244, 63, 94)"],
+        .theme-light [style*="color: rgb(244,63,94)"] { color: #be123c !important; }
+
+        /* ── Fix Z: rgba(52,211,153,0.10) and rgba(52,211,153,0.15) ──
+             Extend Fix P to cover higher-opacity mint bg variants used in
+             Gantt bars and other accent blocks. ── */
+        .theme-light [style*="background: rgba(52,211,153,0.10"],
+        .theme-light [style*="background: rgba(52, 211, 153, 0.10"],
+        .theme-light [style*="background: rgba(52,211,153,0.12"],
+        .theme-light [style*="background: rgba(52, 211, 153, 0.12"],
+        .theme-light [style*="background: rgba(52,211,153,0.15"],
+        .theme-light [style*="background: rgba(52, 211, 153, 0.15"] {
+          background: rgba(6,95,70,0.09) !important;
+          border-color: rgba(6,95,70,0.26) !important;
+        }
 
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
