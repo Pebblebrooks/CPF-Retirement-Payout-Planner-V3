@@ -5474,6 +5474,91 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
              var(--text-subtle) in JSX benefit from an explicit boost here. ── */
         .theme-light .sidebar-field-label { color: #1e3248 !important; }
 
+        /* ══════════════════════════════════════════════════════════════
+           PASS 3 FIXES — Disclaimer, same-hue text/bg pairs, padding
+           ══════════════════════════════════════════════════════════════ */
+
+        /* ── Fix M: Legal Disclaimer box ──
+             In dark mode: amber text (#fbbf24) on amber-tint bg works because
+             the app bg is very dark — the faint tint adds warmth.
+             In light mode: the tan panel bg + amber tint creates an indistinct
+             blob. Swap to a clean white card with a bold left amber border and
+             neutral dark text so it reads like a formal notice. ── */
+        .theme-light .cpf-disclaimer-box {
+          background: #fefce8 !important;        /* very pale lemon — warm but clearly distinct */
+          border: 1px solid #d97706 !important;  /* amber-600, visible border */
+          border-left: 4px solid #b45309 !important; /* amber-700 accent bar */
+        }
+        .theme-light .cpf-disclaimer-box p,
+        .theme-light .cpf-disclaimer-box strong {
+          color: #3d1a00 !important;             /* very dark amber-brown, ~10:1 on #fefce8 */
+        }
+
+        /* ── Fix N: #fde68a (amber-200, near-invisible pale yellow) ──
+             Covers both hex and Chrome rgb() form. No existing override existed.
+             Used in: foreigner notice, PR tenure warning, property sell box,
+             Die with Zero warning, Education Loan note, career-break note. ── */
+        .theme-light [style*="color: #fde68a"],
+        .theme-light [style*='color: "#fde68a"'],
+        .theme-light [style*="color: rgb(253, 230, 138)"],
+        .theme-light [style*="color: rgb(253,230,138)"] { color: #78350f !important; }
+
+        /* ── Fix O: Low-opacity amber backgrounds (0.04–0.07) missed by Fix B ──
+             Fix B already handles 0.08+. These very-low-opacity cases also need
+             flipping to a neutral in light mode so text contrast remains valid.
+             Uses the same dark-amber tint as Fix B for visual consistency. ── */
+        .theme-light [style*="background: rgba(251,191,36,0.04"],
+        .theme-light [style*="background: rgba(251, 191, 36, 0.04"],
+        .theme-light [style*="background: rgba(251,191,36,0.05"],
+        .theme-light [style*="background: rgba(251, 191, 36, 0.05"],
+        .theme-light [style*="background: rgba(251,191,36,0.06"],
+        .theme-light [style*="background: rgba(251, 191, 36, 0.06"],
+        .theme-light [style*="background: rgba(251,191,36,0.07"],
+        .theme-light [style*="background: rgba(251, 191, 36, 0.07"],
+        .theme-light [style*="background: rgba(245,158,11,0.06"],
+        .theme-light [style*="background: rgba(245, 158, 11, 0.06"],
+        .theme-light [style*="background: rgba(245,158,11,0.07"],
+        .theme-light [style*="background: rgba(245, 158, 11, 0.07"],
+        .theme-light [style*="background: rgba(245,158,11,0.08"],
+        .theme-light [style*="background: rgba(245, 158, 11, 0.08"] {
+          background: rgba(146,64,14,0.07) !important;
+          border-color: rgba(146,64,14,0.22) !important;
+        }
+
+        /* ── Fix P: Mint/green same-hue problem ──
+             rgba(52,211,153,0.07) is used for ROI hint blocks (RSTU/VC3A tooltips).
+             In light mode: #34d399 → #065f46 (dark green) via existing rule,
+             but the mint tint bg makes the box look like green-on-green.
+             Swap to a very faint neutral for these informational hint divs. ── */
+        .theme-light [style*="background: rgba(52,211,153,0.07"],
+        .theme-light [style*="background: rgba(52, 211, 153, 0.07"] {
+          background: rgba(6,95,70,0.06) !important;
+          border-color: rgba(6,95,70,0.22) !important;
+        }
+
+        /* ── Fix Q: SEP info block and VC over-limit block ──
+             rgba(251,146,60,0.08) and rgba(249,115,22,0.15) are the SEP notice
+             and VC over-limit banner. #fdba74 text is caught by Fix G → #9a3412.
+             But the orangey bg still clashes. Convert to neutral warm-gray. ── */
+        .theme-light [style*="background: rgba(249,115,22,0.15"],
+        .theme-light [style*="background: rgba(249, 115, 22, 0.15"] {
+          background: rgba(154,51,18,0.09) !important;
+          border-color: rgba(154,51,18,0.28) !important;
+        }
+
+        /* ── Fix R: Amber row-highlight in contribution rate tables ──
+             Contribution band tables use rgba(251,191,36,0.06) row bg with
+             #fbbf24 header text. Already patched above for bg; ensure
+             the table header div (#fbbf24 on amber) is also dark enough. ── */
+        .theme-light [style*="background: rgba(251,191,36,0.08)"][style*="color: \"#fbbf24\""],
+        .theme-light [style*="background: rgba(251,191,36,0.08)"][style*='color: "#fbbf24"'] {
+          color: #78350f !important;
+        }
+
+        /* ── Fix S: Warning banner (VC over-limit) ──
+             Already has .cpf-warning-banner override. Confirm #fdba74 inside
+             it is caught by Fix G → #9a3412. No additional rule needed. ── */
+
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
           to   { transform: translate(-50%, 0);     opacity: 1; }
@@ -6132,7 +6217,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                     ))}
                   </div>
-                  <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", padding: "12px 14px", borderRadius: "10px" }}>
+                  <div className="cpf-disclaimer-box" style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", padding: "12px 14px", borderRadius: "10px" }}>
                     <p style={{ fontSize: 10, color: "#fbbf24", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER} By using this tool, you acknowledge and accept that you are using the information provided at your own risk.</p>
                   </div>
                 </div>
@@ -8878,7 +8963,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
                   {/* Page 1 */}
                   <div style={{ background: "var(--bg-muted)", borderRadius: 16, border: "1px solid var(--border-strong)", overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(135deg,#064e3b,#065f46)", padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ background: "linear-gradient(135deg,#064e3b,#065f46)", padding: "10px 24px", display: "flex", alignItems: "center", gap: 16 }}>
                       <div style={{ background: "#10b98122", padding: 12, borderRadius: 12 }}><Calculator style={{ width: 24, height: 24, color: "#10b981" }} /></div>
                       <div><h4 style={{ fontSize: 18, fontWeight: 900, color: "#ecfdf5", marginBottom: 2 }}>Welcome to CPF Planner Pro</h4><p style={{ fontSize: 12, color: "#6ee7b7" }}>Your end-to-end Singapore retirement simulation engine</p></div>
                     </div>
@@ -8899,7 +8984,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
                   {/* Page 2 */}
                   <div style={{ background: "var(--bg-muted)", borderRadius: 16, border: "1px solid var(--border-strong)", overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(135deg,#1e3a5f,#1e40af)", padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ background: "linear-gradient(135deg,#1e3a5f,#1e40af)", padding: "10px 24px", display: "flex", alignItems: "center", gap: 16 }}>
                       <div style={{ background: "#3b82f622", padding: 12, borderRadius: 12 }}><User style={{ width: 24, height: 24, color: "#60a5fa" }} /></div>
                       <div><h4 style={{ fontSize: 18, fontWeight: 900, color: "#eff6ff", marginBottom: 2 }}>Setting Up Your Profile</h4><p style={{ fontSize: 12, color: "#93c5fd" }}>Step 1 — The Input Engine (left panel)</p></div>
                     </div>
@@ -8914,7 +8999,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
                   {/* Page 3 */}
                   <div style={{ background: "var(--bg-muted)", borderRadius: 16, border: "1px solid var(--border-strong)", overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(135deg,#3b0764,#6b21a8)", padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ background: "linear-gradient(135deg,#3b0764,#6b21a8)", padding: "10px 24px", display: "flex", alignItems: "center", gap: 16 }}>
                       <div style={{ background: "#a855f722", padding: 12, borderRadius: 12 }}><LayoutDashboard style={{ width: 24, height: 24, color: "#c084fc" }} /></div>
                       <div><h4 style={{ fontSize: 18, fontWeight: 900, color: "#faf5ff", marginBottom: 2 }}>Exploring the Dashboard</h4><p style={{ fontSize: 12, color: "#d8b4fe" }}>Step 2 — The right panel tabs</p></div>
                     </div>
@@ -8932,7 +9017,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
                   {/* Page 4 */}
                   <div style={{ background: "var(--bg-muted)", borderRadius: 16, border: "1px solid var(--border-strong)", overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(135deg,#78350f,#92400e)", padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ background: "linear-gradient(135deg,#78350f,#92400e)", padding: "10px 24px", display: "flex", alignItems: "center", gap: 16 }}>
                       <div style={{ background: "#fbbf2422", padding: 12, borderRadius: 12 }}><Lightbulb style={{ width: 24, height: 24, color: "#fbbf24" }} /></div>
                       <div><h4 style={{ fontSize: 18, fontWeight: 900, color: "#fffbeb", marginBottom: 2 }}>Advanced Features & Disclaimer</h4><p style={{ fontSize: 12, color: "#fde68a" }}>Step 3 — Power tools and legal notice</p></div>
                     </div>
@@ -8948,7 +9033,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>
                         ))}
                       </div>
-                      <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", padding: "14px", borderRadius: "10px" }}>
+                      <div className="cpf-disclaimer-box" style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", padding: "14px", borderRadius: "10px" }}>
                         <p style={{ fontSize: 10, color: "#fbbf24", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER}</p>
                       </div>
                     </div>
