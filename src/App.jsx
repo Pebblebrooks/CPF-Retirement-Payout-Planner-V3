@@ -12437,7 +12437,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {activeTab === "notes" && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Sticky wrapper: title + anchor nav scroll together as one bar */}
-                <div style={{ position: "sticky", top: -20, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 24, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
+                <div id="docs-sticky-nav" style={{ position: "sticky", top: -20, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 24, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
                   <h3 style={{ fontSize: 20, fontWeight: 900, marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}><BookOpen style={{ width: 22, height: 22, color: "var(--clr-green)" }} />User Guide & Financial Analysis</h3>
                   {/* Anchor navigation */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10 }}>
@@ -12459,7 +12459,27 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ["#doc-lifeevents", "⚡ Life Events"],
                   ].map(([href, label]) => (
                     <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--bg-input)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", textDecoration: "none", cursor: "pointer" }}
-                      onClick={e => { e.preventDefault(); document.querySelector(href)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
+                      onClick={e => {
+                        e.preventDefault();
+                        const target = document.querySelector(href);
+                        if (!target) return;
+                        // Dynamically measure the sticky nav bar's actual rendered bottom so the
+                        // scroll offset is always correct regardless of how many button rows wrap
+                        // at the current viewport width. scrollIntoView({ block:'start' }) with a
+                        // fixed scrollMarginTop fails when the bar wraps to 3+ rows (bar bottom ~176px
+                        // but old scrollMarginTop was only 160px, hiding the section heading).
+                        const stickyBar = document.getElementById('docs-sticky-nav');
+                        const scrollEl = target.closest('.cpf-tab-content');
+                        if (scrollEl && stickyBar) {
+                          // delta = how far to scroll so target top lands just below sticky bar bottom
+                          const delta = target.getBoundingClientRect().top
+                                      - stickyBar.getBoundingClientRect().bottom
+                                      - 8; // 8px breathing room below the bar
+                          scrollEl.scrollBy({ top: delta, behavior: 'smooth' });
+                        } else {
+                          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                      }}>
                       {label}
                     </a>
                   ))}
@@ -12468,7 +12488,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <div style={{ display: "flex", flexDirection: "column", gap: 32, fontSize: 13, lineHeight: 1.7, color: "var(--text-muted)" }}>
 
                   {/* User Guide */}
-                  <section id="doc-guide" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-guide">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-blue)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><LayoutDashboard style={{ width: 18, height: 18 }} />Step-by-Step User Guide</h4>
                     {[
                       ["1", "Setup Your Profile", "var(--clr-blue)", "rgba(var(--clr-blue2-rgb),0.08)", "rgba(var(--clr-blue2-rgb),0.2)", "Enter your current OA, SA, and MA balances. Select Male/Female (affects CPF LIFE payout ratio). Select SC or PR — PR members select their tenure year (1 / 2 / 3+) and rate type (G/G default or F/G). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates each projection year. Progress bars compare balances against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones."],
@@ -12491,7 +12511,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* ── Projection Engine ── */}
-                  <section id="doc-engine" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-engine">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-green)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 18, height: 18 }} />Projection Engine — How the Numbers Are Computed</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12540,7 +12560,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* CPF Policy Reference */}
-                  <section id="doc-policy" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-policy">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#2dd4bf", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><ShieldCheck style={{ width: 18, height: 18 }} />CPF 2026 Policy Reference</h4>
 
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", marginBottom: 16, overflowX: "auto" }}>
@@ -12620,7 +12640,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* New Planning Tools Policy Reference */}
-                  <section id="doc-planning" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-planning">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-blue)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Target style={{ width: 18, height: 18 }} />Planning Tools — Policy Reference <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)", marginLeft: 8 }}>(Assumptions)</span></h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12693,7 +12713,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* SRS */}
-                  <section id="doc-srs" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-srs">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#0ea5e9", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><BookOpen style={{ width: 18, height: 18 }} />Supplementary Retirement Scheme (SRS)</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12726,7 +12746,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Property Monetisation */}
-                  <section id="doc-propmon" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-propmon">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-orange)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Home style={{ width: 18, height: 18 }} />Property Monetisation</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12755,7 +12775,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Die with Zero */}
-                  <section id="doc-dwz" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-dwz">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#f43f5e", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Clock style={{ width: 18, height: 18 }} />Die with Zero Mode</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12784,7 +12804,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Self-Employed Policy */}
-                  <section id="doc-sep" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-sep">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-orange)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Briefcase style={{ width: 18, height: 18 }} />Self-Employed Person (SEP) — VC3A Rules</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12813,7 +12833,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Monte Carlo + Actuarial Math */}
-                  <section id="doc-montecarlo" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-montecarlo">
                     {/* ── Monte Carlo ── */}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-violet)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 18, height: 18 }} />Monte Carlo Simulation</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
@@ -12862,7 +12882,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Minor Members & PwD */}
-                  <section id="doc-minor" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-minor">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-green)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Users style={{ width: 18, height: 18 }} />Minor Members &amp; Person with Disabilities (PwD)</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12887,7 +12907,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Education Loan */}
-                  <section id="doc-eduloan" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-eduloan">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-indigo)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><BookOpen style={{ width: 18, height: 18 }} />OA Education Loan Scheme</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12916,7 +12936,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* ── Retirement Sum Growth ── */}
-                  <section id="doc-rsgrowth" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-rsgrowth">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-green)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><TrendingUp style={{ width: 18, height: 18 }} />Retirement Sum Growth Rate</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12937,7 +12957,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* ── Phased Salary & Career Break ── */}
-                  <section id="doc-phasedsalary" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-phasedsalary">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-orange)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Briefcase style={{ width: 18, height: 18 }} />Phased Salary &amp; Career Break</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -12962,7 +12982,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* ── Life Events / Stress Testing ── */}
-                  <section id="doc-lifeevents" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-lifeevents">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#ef4444", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 18, height: 18 }} />Life Events &amp; Stress Testing</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
                       <p style={{ marginBottom: 12 }}>The Life Events panel (between Timelines and Decumulation in the left sidebar) lets you overlay named stress-test scenarios onto your projection. Events are processed by the engine each year and appear as coloured markers on the Accumulation chart and a dedicated row in the Strategy Gantt timeline.</p>
@@ -13000,7 +13020,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </section>
 
                   {/* Yield Math */}
-                  <section id="doc-yield" style={{ scrollMarginTop: "160px" }}>
+                  <section id="doc-yield">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-amber)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Scale style={{ width: 18, height: 18 }} />Yield Intersections & "The Flatline"</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
                       <p><strong style={{ color: "var(--text-highlight)" }}>The Flatline:</strong> Total Yield = Payouts Received + Remaining Bequest. Since Bequest = Initial Premium − Payouts, the formula nets out to exactly your Initial Premium. Total Yield flatlines until your Bequest hits $0 (~late 70s), then every payout becomes "pure profit" drawn from the mortality pool.</p>
