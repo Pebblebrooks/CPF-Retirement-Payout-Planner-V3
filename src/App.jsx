@@ -2981,8 +2981,6 @@ export default function App() {
   const [exportModal, setExportModal] = useState(null); // {type:'csv'|'json'|'print'|'pdf', content:string}
   // In-app confirm dialog (replaces window.confirm which is blocked in sandbox)
   const [confirmModal, setConfirmModal] = useState(null); // {message, onConfirm}
-  // RSS switch action pending — decoupled from closure to always read latest inputs
-  const [rssActionPending, setRssActionPending] = useState(null); // null | 'keep' | 'reset'
   // Rev #13 — tracks the currently focused sidebar input so currency fields show raw value while editing
   const [focusedField, setFocusedField] = useState(null);
 
@@ -3905,6 +3903,7 @@ export default function App() {
   //                   private assets, SRS and salary are all preserved)
   const handleSwitchToRSS = () => {
     if (inputs.cpfScheme === 'rss') return; // already RSS — no-op
+    const ca = Number(inputs.currentAge) || 65;
     setConfirmModal({
       title: "Switch to RSS Mode",
       message:
@@ -3915,11 +3914,35 @@ export default function App() {
         "Or keep them as-is?",
       // Secondary: switch to RSS, keep all fields unchanged
       secondaryLabel: "Keep Existing",
-      onSecondary: () => { setRssActionPending('keep'); },
+      onSecondary: () => {
+        setInputs(p => ({ ...p, cpfScheme: 'rss' }));
+      },
       // Primary (confirm): switch to RSS and reset CPF LIFE-specific fields
       confirmLabel: "Reset Fields",
       confirmColor: "#2563eb",
-      onConfirm: () => { setRssActionPending('reset'); },
+      onConfirm: () => {
+        setInputs(p => ({
+          ...p,
+          cpfScheme: 'rss',
+          // ── RSS payout defaults ──────────────────────────────────────────
+          rssPayoutStartAge: ca,      // default to current age (user should check CPF statement)
+          rssMonthlyPayout:  0,       // must be entered from CPF statement
+          lifeMigrationAge:  0,       // no migration configured
+          lifePlanAtMigration: 'std', // reset to standard for cleanliness
+          // ── CPF LIFE-specific top-ups (SA is closed for 68+ members) ────
+          vcSaTopup: 0, vcSaFreq: 'annual', vcSaDur: 0,
+          // ── VC3A (rarely applicable at 68+) ─────────────────────────────
+          vc3aCash: 0, vc3aFreq: 'annual', vc3aDur: 0,
+          // ── OA→SA transfer (SA closed) ───────────────────────────────────
+          oaToSaTransfer: 0, oaToSaForLovedOne: false,
+          oaToSaFreq: 'annual', oaToSaDur: 0,
+          // ── CPFIS (SA investments) ───────────────────────────────────────
+          cpfisOaAmount: 0, cpfisOaFreq: 'annual', cpfisOaDur: 0,
+          cpfisSaAmount: 0, cpfisSaFreq: 'annual', cpfisSaDur: 0,
+          // ── Payout age (CPF LIFE only) ───────────────────────────────────
+          payoutAge: 65,
+        }));
+      },
     });
   };
 
@@ -3953,42 +3976,6 @@ export default function App() {
     });
   };
   handleResetRef.current = handleReset; // keep ref current for keyboard shortcut handler
-
-  // ── RSS switch: decoupled useEffect so we always read latest inputs state ──────────
-  // The modal's onSecondary/onConfirm now just set a string flag (rssActionPending).
-  // This effect fires AFTER React has committed all state, guaranteeing inputs is fresh.
-  useEffect(() => {
-    if (!rssActionPending) return;
-    const ca = Number(inputs.currentAge) || 65;
-    if (rssActionPending === 'keep') {
-      setInputs(p => ({ ...p, cpfScheme: 'rss' }));
-      showToast('✓ Switched to RSS — all existing fields kept.');
-    } else if (rssActionPending === 'reset') {
-      setInputs(p => ({
-        ...p,
-        cpfScheme: 'rss',
-        // ── RSS payout defaults ──────────────────────────────────────────
-        rssPayoutStartAge: ca,       // default to current age (user should check CPF statement)
-        rssMonthlyPayout:  0,        // must be entered from CPF statement
-        lifeMigrationAge:  0,        // no migration configured
-        lifePlanAtMigration: 'std',  // reset to standard for cleanliness
-        // ── CPF LIFE-specific top-ups (SA is closed for 68+ members) ────
-        vcSaTopup: 0, vcSaFreq: 'annual', vcSaDur: 0,
-        // ── VC3A (rarely applicable at 68+) ─────────────────────────────
-        vc3aCash: 0, vc3aFreq: 'annual', vc3aDur: 0,
-        // ── OA→SA transfer (SA closed) ───────────────────────────────────
-        oaToSaTransfer: 0, oaToSaForLovedOne: false,
-        oaToSaFreq: 'annual', oaToSaDur: 0,
-        // ── CPFIS (SA investments) ───────────────────────────────────────
-        cpfisOaAmount: 0, cpfisOaFreq: 'annual', cpfisOaDur: 0,
-        cpfisSaAmount: 0, cpfisSaFreq: 'annual', cpfisSaDur: 0,
-        // ── Payout age (CPF LIFE only) ───────────────────────────────────
-        payoutAge: 65,
-      }));
-      showToast('✓ Switched to RSS — contribution & top-up fields reset.');
-    }
-    setRssActionPending(null); // clear the flag
-  }, [rssActionPending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sandbox-safe file download — tries Blob URL, always falls back to copy modal ──
   const triggerDownload = (content, filename, mimeType) => {
