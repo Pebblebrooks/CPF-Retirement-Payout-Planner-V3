@@ -5009,13 +5009,18 @@ export default function App() {
     const RUNS = 200; // reduced from 500 — still robust for P10/P50/P90
     const pa = Number(debouncedInputs.payoutAge) || 65;
     const ca = Number(debouncedInputs.currentAge) || 35;
+    // RSS fix: RSS members are already past payoutAge — simulate to 95 so the
+    // full drawdown window (currentAge → 95) has MC data. For CPF LIFE members
+    // keep the existing behaviour (accumulation window: currentAge → payoutAge).
+    const isRSSMC = debouncedInputs.cpfScheme === 'rss';
+    const endAge = isRSSMC ? 95 : pa;
     const ageTotals = {};
-    for (let age = ca; age <= pa; age++) ageTotals[age] = [];
+    for (let age = ca; age <= endAge; age++) ageTotals[age] = [];
     const mcVar = Math.max(0.1, Number(debouncedInputs.mcVariancePct) || 1); // Rev #MC: user-controlled band
     for (let run = 0; run < RUNS; run++) {
       const _inflBand = (mcVar / 100) / 2;
       const mcInflRate = (Number(debouncedInputs.inflationRate) || 2) / 100 + (Math.random() * _inflBand * 2 - _inflBand);
-      const mcRows = runProjectionEngine(debouncedInputs, { maxAge: pa, randomiseRates: true, mcVariance: mcVar });
+      const mcRows = runProjectionEngine(debouncedInputs, { maxAge: endAge, randomiseRates: true, mcVariance: mcVar });
       for (const row of mcRows) {
         if (ageTotals[row.age] !== undefined) {
           // Deflate by this run's inflation so MC bands reflect real-dollar uncertainty
@@ -5029,6 +5034,11 @@ export default function App() {
       const p = pct => vals[Math.floor(pct * vals.length)] || 0;
       return { age: Number(age), p10: p(0.10), p50: p(0.50), p90: p(0.90), allVals: vals };
     });
+    // RSS: probSufficiency is not meaningful (member is already past payoutAge and drawing down).
+    // Skip the FRS comparison entirely — return null so the Probability of Sufficiency badge is hidden.
+    if (isRSSMC) {
+      return { rows: rows.map(({ allVals: _, ...r }) => r), probSufficiency: null, frsAtPayout: null };
+    }
     const payoutRow = rows.find(r => r.age === pa);
     const yrsToPFRS = Math.max(0, pa - ca);
     // C3 fix: use debouncedInputs.retirementSumGrowth (not live inputs) — monteCarloData
@@ -6587,7 +6597,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-welcome-body { max-height: 50vh !important; overflow-y: auto !important; }
           .welcome-step3-grid { grid-template-columns: 1fr !important; }
           .kpi-strip { grid-template-columns: 1fr 1fr !important; }
-          .kpi-strip > div { min-width: 0 !important; padding: 8px 8px !important; }
+          .kpi-strip > div { min-width: 0 !important; padding: 4px 8px !important; }
           .cpf-kpi-value { font-size: 12px !important; }
           .cpf-kpi-label { font-size: 8px !important; }
           body { overflow-x: hidden !important; }
@@ -10061,8 +10071,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     { label: "Payout Age", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts. Estimates based on 2026 CPF Board data." },
                   ];
                 })().map(({ label, value, color, tip }, i) => (
-                  <div key={i} title={tip || ""} style={{ padding: "16px 20px", borderRight: "1px solid var(--border-subtle)", flex: "1 1 0", minWidth: 100, textAlign: "center", boxSizing: "border-box", cursor: "help", background: i === 0 ? "rgba(var(--clr-blue-rgb),0.08)" : i > 0 && i < 4 ? "rgba(var(--clr-emerald-rgb),0.04)" : "transparent" }}>
-                    <div className="cpf-kpi-label" style={{ fontSize: 11, fontWeight: 800, color: i === 0 ? "var(--clr-blue)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+                  <div key={i} title={tip || ""} style={{ padding: "4px 20px", borderRight: "1px solid var(--border-subtle)", flex: "1 1 0", minWidth: 100, textAlign: "center", boxSizing: "border-box", cursor: "help", background: i === 0 ? "rgba(var(--clr-blue-rgb),0.08)" : i > 0 && i < 4 ? "rgba(var(--clr-emerald-rgb),0.04)" : "transparent" }}>
+                    <div className="cpf-kpi-label" style={{ fontSize: 11, fontWeight: 800, color: i === 0 ? "var(--clr-blue)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
                     <div className="cpf-kpi-value" style={{ fontSize: 22, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)" }}>{value}</div>
                   </div>
                 ))}
@@ -11323,7 +11333,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "CPF Balance ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
                       <Tooltip contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 10, padding: "6px 8px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} labelStyle={{ fontSize: 10, color: "var(--tooltip-label)", marginBottom: 2 }} formatter={(v, n) => { if (n === "MC Band") return null; return [formatCurrency(v), n]; }} wrapperStyle={{ pointerEvents: "none" }} />
                       <Legend verticalAlign="top" height={28} iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 600, color: "var(--text-main)" }} />
-                      {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="none" fill="var(--clr-purple2)" fillOpacity={0.12} name="MC Band" legendType="none" /><Area isAnimationActive={false} type="monotone" dataKey="mcP10" stroke="none" fill="var(--bg-base)" fillOpacity={1} name="" legendType="none" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
                       {milestones.filter(m => m.age <= (debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)).map((m, idx) => { // S1: RSS shows milestones to 95
                         const sc = m.type === "success" ? "var(--clr-emerald)" : m.type === "gold" ? "var(--clr-amber3)" : m.type === "warning" ? "#f97316" : "#ef4444";
                         return <ReferenceLine key={idx} x={m.age} stroke={sc} strokeWidth={1.5} strokeDasharray="3 3" label={{ position: "insideTopRight", value: `Age ${m.age}`, fill: sc, fontSize: 8, fontWeight: "bold" }} />;
@@ -11348,6 +11357,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="SA (pre-55)" />
                       <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" fill="#059669" fillOpacity={0.85} name="MA" />
                       <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="var(--clr-purple2)" fill="var(--clr-purple2)" fillOpacity={0.85} name="RA (from 55)" />
+                      {/* MC band rendered AFTER stacked areas so it overlays on top without
+                          hiding the account breakdown. P90 = semi-transparent upper bound fill;
+                          no bg-base "eraser" (the old eraser covered the stacked areas entirely).
+                          P50 dashed median line sits on top of everything. */}
+                      {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="var(--clr-violet2)" strokeWidth={0.5} strokeDasharray="2 2" fill="var(--clr-purple2)" fillOpacity={0.18} name="MC Band (P10–P90)" legendType="square" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
                       {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
                     </AreaChart>
                   </ResponsiveContainer>
