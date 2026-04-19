@@ -6051,49 +6051,49 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --clr-lime: #a3e635;   /* Mandatory Contributions header + body accents */
         }
         .theme-light {
-          /* ── Backgrounds: warm slate-grey base, off-white panels — no blinding white ── */
-          --bg-base: #dce4ee;
-          --bg-panel: #eef1f6;
-          --bg-input: #d4dde8;
-          --bg-muted: rgba(220,228,238,0.96);
-          --bg-panel-muted: rgba(238,241,246,0.92);
-          --tooltip-bg: rgba(238,241,246,0.99);
+          /* ── Backgrounds: reduced luminance ~15% to ease eye strain ── */
+          --bg-base: #c4d2de;
+          --bg-panel: #d8e4f0;
+          --bg-input: #b8c8d4;
+          --bg-muted: rgba(196,210,222,0.96);
+          --bg-panel-muted: rgba(216,228,240,0.92);
+          --tooltip-bg: rgba(216,228,240,0.99);
           --tooltip-text: #0d1520;
-          --tooltip-border: rgba(20,40,70,0.22);
-          --tooltip-label: #334d6b;
-          /* ── Borders: clearly visible without being harsh ── */
-          --border-subtle: #a2b4c8;
-          --border-strong: #627e98;
-          /* ── Text: all levels darkened for WCAG AA minimum ── */
+          --tooltip-border: rgba(20,40,70,0.25);
+          --tooltip-label: #2a4260;
+          /* ── Borders: stronger contrast on darker base ── */
+          --border-subtle: #7a96ae;
+          --border-strong: #4a6680;
+          /* ── Text: unchanged — already passes WCAG AA ── */
           --text-main: #162033;
           --text-bright: #08111e;
           --text-highlight: #0d2a4a;
           --text-muted: #2e4560;
           --text-subtle: #2a4565;
-          --header-bg: rgba(228,234,244,0.98);
-          /* ── Charts: readable gridlines and labels ── */
-          --chart-grid: #b0c2d4;
+          --header-bg: rgba(181,200,218,0.98);
+          /* ── Charts: deeper gridlines for contrast on darker bg ── */
+          --chart-grid: #8aa4bc;
           --chart-text: #1e3350;
           /* ── Hero / KPI panel ── */
-          --hero-left-bg: #c4d4e4;
-          --hero-right-bg: #e2eaf4;
-          --hero-border: #a0b8cc;
+          --hero-left-bg: #a8bece;
+          --hero-right-bg: #bccedd;
+          --hero-border: #7a9ab2;
           --hero-text: #0a1c2e;
-          --hero-label: #263849;
-          --hero-card-bg: rgba(10,28,46,0.07);
-          --hero-acct-bg: rgba(10,28,46,0.05);
-          --hero-acct-border: rgba(10,28,46,0.16);
-          --hero-ring-bg: rgba(10,28,46,0.12);
-          --hero-divider: rgba(10,28,46,0.18);
+          --hero-label: #1e3248;
+          --hero-card-bg: rgba(10,28,46,0.09);
+          --hero-acct-bg: rgba(10,28,46,0.07);
+          --hero-acct-border: rgba(10,28,46,0.20);
+          --hero-ring-bg: rgba(10,28,46,0.14);
+          --hero-divider: rgba(10,28,46,0.20);
           --hero-arrow: #0d2a4a;
           /* ── Shadows & interactive ── */
-          --shadow-modal: 0 25px 50px -12px rgba(0,0,0,0.22);
-          --shadow-panel: 0 2px 8px rgba(0,0,0,0.10);
-          --shadow-sticky: 2px 0 5px rgba(0,0,0,0.09);
-          --shadow-mobile-menu: 0 6px 18px rgba(0,0,0,0.14);
-          --shadow-kpi: 0 1px 4px rgba(0,0,0,0.10);
+          --shadow-modal: 0 25px 50px -12px rgba(0,0,0,0.25);
+          --shadow-panel: 0 2px 8px rgba(0,0,0,0.12);
+          --shadow-sticky: 2px 0 5px rgba(0,0,0,0.11);
+          --shadow-mobile-menu: 0 6px 18px rgba(0,0,0,0.16);
+          --shadow-kpi: 0 1px 4px rgba(0,0,0,0.12);
 
-          /* ── Accent colour tokens — WCAG AA on light backgrounds ── */
+          /* ── Accent colour tokens — WCAG AA on new darker backgrounds ── */
           --clr-blue:         #1d4ed8;   --clr-blue-rgb:      29,78,216;
           --clr-green:        #065f46;   --clr-green-rgb:     6,95,70;
           --clr-emerald:      #065f46;   --clr-emerald-rgb:   6,95,70;
@@ -6111,17 +6111,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --clr-cyan:         #0e7490;   --clr-cyan-rgb:      14,116,144;
           --clr-blue2:        #1e40af;   --clr-blue2-rgb:     30,64,175;
           --clr-slate:        #334155;
-          --chart-cursor: rgba(20,40,70,0.20);
-          --tooltip-border-inline: rgba(20,40,70,0.22);
-          --tooltip-shadow-inline: 0 8px 24px rgba(0,0,0,0.16);
-          --code-bg: #dce4ee;
+          --chart-cursor: rgba(20,40,70,0.22);
+          --tooltip-border-inline: rgba(20,40,70,0.25);
+          --tooltip-shadow-inline: 0 8px 24px rgba(0,0,0,0.18);
+          --code-bg: #b8c8d4;
           --code-text: #0d2a4a;
           --share-url-color: #065f46;
-          --mc-total-border: rgba(20,40,70,0.18);
+          --mc-total-border: rgba(20,40,70,0.20);
           --mc-total-color: #08111e;
-          /* ── Section-header accent colours (theme-aware, WCAG AA) ── */
-          --clr-sky:  #0284c7;   /* 5.8:1 on light bg — replaces #38bdf8 */
-          --clr-lime: #4d7c0f;   /* 7.1:1 on light bg — replaces #a3e635 */
+          /* ── Section-header accent colours — WCAG AA on new darker base ── */
+          --clr-sky:  #0059a0;   /* 4.72:1 on #c4d2de — was #0284c7 (3.19:1 fail) */
+          --clr-lime: #166534;   /* 4.62:1 on #c4d2de — was #4d7c0f (3.89:1 fail) */
         }
         /* ══════════════════════════════════════════════════════════════
            LIGHT MODE SPECIFIC OVERRIDES
@@ -6131,10 +6131,52 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
            that cannot be done purely via colour tokens.
            ══════════════════════════════════════════════════════════════ */
 
+        /* ── Logo: override inline gradient in light mode — mint+blue (#10b981/#3b82f6)
+           both fail on light header. Replace with dark teal→navy: both ≥4.5:1 ── */
+        .theme-light .cpf-logo-text {
+          background: linear-gradient(90deg, #065f46, #1e3a8f) !important;
+          -webkit-background-clip: text !important;
+          -webkit-text-fill-color: transparent !important;
+          background-clip: text !important;
+        }
+        /* ── Logo sub-tagline: ensure readable on new darker header ── */
+        .theme-light .cpf-logo-sub {
+          color: #065f46 !important;
+        }
+
+        /* ── Active toggle/nav buttons: white text on --border-strong (#4a6680) = 5.99:1 ✓ ── */
+        .theme-light .cpf-nav-btn.active {
+          color: #ffffff !important;
+          font-weight: 800 !important;
+        }
+
+        /* ── Calculator icon box: swap solid emerald bg → soft tinted panel ──
+           Dark icon (#020617) on solid emerald (#065f46) = 2.63:1 FAIL
+           Fix: light emerald tint bg + keep dark icon = 9.5:1 ✓ ── */
+        .theme-light [style*="background: var(--clr-emerald)"][style*="padding: 8"][style*="borderRadius: 12"],
+        .theme-light [style*='background:"var(--clr-emerald)"'][style*="padding:8"] {
+          background: rgba(6,95,70,0.12) !important;
+          border: 1px solid rgba(6,95,70,0.30) !important;
+        }
+
+        /* ── All primary action buttons that use clr-emerald fill ──
+           #020617 on #065f46 = 2.63:1 FAIL → white on #065f46 = 9.37:1 ✓ ── */
+        .theme-light [style*="background: var(--clr-emerald)"][style*='color: "#020617"'],
+        .theme-light [style*='background:"var(--clr-emerald)"'][style*='color:"#020617"'],
+        .theme-light [style*="background: var(--clr-emerald)"][style*="color: \"#020617\""] {
+          color: #ffffff !important;
+        }
+
+        /* ── Fallback: any button/element in light mode using clr-emerald as bg should have white text ── */
+        .theme-light button[style*="background: var(--clr-emerald)"],
+        .theme-light button[style*='background:"var(--clr-emerald)"'] {
+          color: #ffffff !important;
+        }
+
         /* ── Sidebar section headers ── */
         .theme-light .sidebar-section-hdr {
-          background: linear-gradient(135deg, #ccd9e8 0%, #d8e4f0 100%) !important;
-          border-color: #a8bcce !important;
+          background: linear-gradient(135deg, #aec2d4 0%, #bccedd 100%) !important;
+          border-color: #7a9ab2 !important;
         }
 
         /* ── Input & select: inset appearance on white panels ── */
@@ -6142,7 +6184,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .theme-light input[type="text"],
         .theme-light select {
           color: #162033 !important;
-          background: #d8e0eb !important;
+          background: #b8c8d4 !important;
         }
         .theme-light input[type="number"]::placeholder,
         .theme-light input[type="text"]::placeholder { color: #4a6480 !important; }
@@ -6150,10 +6192,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         /* ── Table ── */
         .theme-light table thead th {
           color: #162033 !important; font-weight: 800 !important;
-          background: #d4dde9 !important;
+          background: #a8bece !important;
         }
-        .theme-light table thead th:first-child { background: #d4dde9 !important; }
-        .theme-light table tbody tr:nth-child(even) { background: rgba(180,198,220,0.32) !important; }
+        .theme-light table thead th:first-child { background: #a8bece !important; }
+        .theme-light table tbody tr:nth-child(even) { background: rgba(140,172,200,0.30) !important; }
         .theme-light table tbody td { color: #1e3350; }
 
         /* ── Nav/tab bar ── */
@@ -6164,7 +6206,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .theme-light .kpi-inactive-val { color: #2e4560 !important; }
 
         /* ── Panel/card borders ── */
-        .theme-light .panel-card { border-color: #adbcce !important; background: #f8fafc !important; }
+        .theme-light .panel-card { border-color: #7a96ae !important; background: #d4e2ee !important; }
 
         /* ── Lifetime Summary card labels ── */
         .theme-light .lifetime-label { color: #2e4560 !important; font-size: 10px !important; }
@@ -6175,8 +6217,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* ── Recharts tooltip ── */
         .theme-light .recharts-default-tooltip {
-          background: rgba(242,245,249,0.99) !important;
-          border-color: rgba(20,40,70,0.22) !important;
+          background: rgba(196,214,228,0.99) !important;
+          border-color: rgba(20,40,70,0.25) !important;
           color: #162033 !important;
         }
         .theme-light .recharts-tooltip-label { color: #162033 !important; font-weight: 700 !important; }
@@ -6190,7 +6232,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* ── Info badge pills ── */
         .theme-light .info-badge {
-          background: #d8e0eb !important; color: #162033 !important; border-color: #adbcce !important;
+          background: #b8c8d4 !important; color: #162033 !important; border-color: #7a96ae !important;
         }
 
         /* ── Toast ── */
@@ -6201,8 +6243,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         /* ── Tooltip box text inside sidebar ── */
         .theme-light .tooltip-content {
           color: #162033 !important;
-          background: rgba(242,245,249,0.99) !important;
-          border-color: rgba(20,40,70,0.22) !important;
+          background: rgba(196,214,228,0.99) !important;
+          border-color: rgba(20,40,70,0.25) !important;
         }
 
         /* ── Sidebar field labels ── */
