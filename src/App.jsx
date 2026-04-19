@@ -3366,8 +3366,16 @@ export default function App() {
     // Die with Zero age validation
     if (inp.dieWithZeroEnabled) {
       const dwzA = Number(inp.dieWithZeroAge) || 85;
-      const pa3  = Number(inp.payoutAge) || 65;
-      if (dwzA <= pa3) errs.dieWithZeroAge = `Must be after payout age (${pa3})`;
+      // Q3 fix: for RSS members the drawdown window starts at currentAge, not payoutAge.
+      // Comparing dwzA against payoutAge (65) for a 68-year-old always passes silently
+      // while the engine uses the wrong reference — no error shown, DWZ does nothing.
+      const isRSSdwz = inp.cpfScheme === 'rss';
+      const dwzFloor = isRSSdwz
+        ? (Number(inp.currentAge) || 68)   // RSS: must be after current age
+        : (Number(inp.payoutAge) || 65);   // LIFE: must be after payout age
+      if (dwzA <= dwzFloor) errs.dieWithZeroAge = isRSSdwz
+        ? `Must be after current age (${dwzFloor})`
+        : `Must be after payout age (${dwzFloor})`;
       else if (dwzA > 95) errs.dieWithZeroAge = "Must be ≤ 95";
     }
     // Property Monetisation validation — Q1: LBS and SHB are HDB/CPF schemes, SC/PR only; foreigners cannot use them
@@ -4624,7 +4632,15 @@ export default function App() {
     const isRSS = debouncedInputs.cpfScheme === 'rss';
     const engineFn = isRSS ? runRSSEngine : runProjectionEngine;
     if (debouncedInputs.dieWithZeroEnabled) {
-      const pa   = Number(debouncedInputs.payoutAge) || 65;
+      // Q3 fix: for RSS members, the CPF LIFE "payout age" concept does not apply.
+      // DWZ should drain OA starting from currentAge (the earliest usable reference point
+      // within the simulation window), not from payoutAge (65) which is OUTSIDE the
+      // projection window for members already aged 68+.
+      // pass1ByAge.get(65) returns undefined for an RSS member aged 68 → oaAtPayout = 0
+      // → dwzPmt = 0 → DWZ has zero effect. Using currentAge fixes the Map lookup.
+      const pa   = isRSS
+        ? (Number(debouncedInputs.currentAge) || 68)   // RSS: start OA drawdown now
+        : (Number(debouncedInputs.payoutAge) || 65);    // LIFE: start at CPF LIFE payout age
       const dwzA = Number(debouncedInputs.dieWithZeroAge) || 85;
       const n    = Math.max(1, dwzA - pa);
       const rOA  = 0.025;
@@ -12139,7 +12155,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>);
                 })()}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Year-by-year projection · <span style={{ color: "var(--text-bright)", fontWeight: 700 }}>{highlightPlan.toUpperCase()}</span> plan</p>
+                  {/* Q2 fix: RSS members have no CPF LIFE plan — suppress "STANDARD plan" label */}
+                  <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Year-by-year projection · <span style={{ color: isRSSMode ? "#60a5fa" : "var(--text-bright)", fontWeight: 700 }}>{isRSSMode ? "RSS" : highlightPlan.toUpperCase()}</span> {isRSSMode ? "drawdown" : "plan"}</p>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={handlePrintTable} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: "rgba(30,41,59,0.6)", color: "#94a3b8", border: "1px solid var(--border-strong)", cursor: "pointer" }}>
                       <Printer style={{ width: 11, height: 11 }} />Print
