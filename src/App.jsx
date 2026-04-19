@@ -4149,14 +4149,19 @@ export default function App() {
           try { if (p.basicPremiumPct != null) setBasicPremiumPct(p.basicPremiumPct); } catch {}
           try { if (p.scenarioLabelA != null) setScenarioLabelA(p.scenarioLabelA); } catch {}
           try { if (p.scenarioLabelB != null) setScenarioLabelB(p.scenarioLabelB); } catch {}
-          try { if (p.whatIfPayoutAge != null) setWhatIfPayoutAge(p.whatIfPayoutAge); } catch {}
-          try { if (p.whatIfSaTopup != null) setWhatIfSaTopup(p.whatIfSaTopup); } catch {}
-          try { if (p.whatIfHousing != null) setWhatIfHousing(p.whatIfHousing); } catch {}
-          try { if (p.whatIfSalaryBump != null) setWhatIfSalaryBump(p.whatIfSalaryBump); } catch {}
-          try { if (p.whatIfContribStop != null) setWhatIfContribStop(p.whatIfContribStop); } catch {}
-          try { if (p.whatIfOaDrawdown != null) setWhatIfOaDrawdown(p.whatIfOaDrawdown); } catch {}
-          try { if (p.whatIfSrsContrib != null) setWhatIfSrsContrib(p.whatIfSrsContrib); } catch {}
-          try { if (p.whatIfPrivGrowth != null) setWhatIfPrivGrowth(p.whatIfPrivGrowth); } catch {}
+          // IMP-1: Changed != null → !== undefined for all What-If fields.
+          // Previously, exported null values (meaning "no override active") were
+          // silently skipped, leaving stale overrides from a prior profile in place.
+          // undefined means the key is absent from the file (pre-dates the field) —
+          // in that case we correctly leave the current state untouched.
+          try { if (p.whatIfPayoutAge !== undefined) setWhatIfPayoutAge(p.whatIfPayoutAge); } catch {}
+          try { if (p.whatIfSaTopup !== undefined) setWhatIfSaTopup(p.whatIfSaTopup); } catch {}
+          try { if (p.whatIfHousing !== undefined) setWhatIfHousing(p.whatIfHousing); } catch {}
+          try { if (p.whatIfSalaryBump !== undefined) setWhatIfSalaryBump(p.whatIfSalaryBump); } catch {}
+          try { if (p.whatIfContribStop !== undefined) setWhatIfContribStop(p.whatIfContribStop); } catch {}
+          try { if (p.whatIfOaDrawdown !== undefined) setWhatIfOaDrawdown(p.whatIfOaDrawdown); } catch {}
+          try { if (p.whatIfSrsContrib !== undefined) setWhatIfSrsContrib(p.whatIfSrsContrib); } catch {}
+          try { if (p.whatIfPrivGrowth !== undefined) setWhatIfPrivGrowth(p.whatIfPrivGrowth); } catch {}
           try { if (p.showWhatIf != null) setShowWhatIf(p.showWhatIf); } catch {}
           try { if (p.isRealDollars != null) setIsRealDollars(p.isRealDollars); } catch {}
           try { if (p.pdfOrientation) setPdfOrientation(p.pdfOrientation); } catch {}
@@ -4165,23 +4170,31 @@ export default function App() {
           // uses current-format engine output rather than stale stored rows.
           // runProjectionEngine is a module-level function — safe to call synchronously here.
           let scenariosRefreshed = false;
+          // IMP-2: cpfScheme-aware engine dispatch for scenario regeneration.
+          // Previously always called runProjectionEngine regardless of scheme, so RSS
+          // scenarios would silently use the wrong engine once PR-2 (full RSS engine)
+          // is merged. Now routes correctly: RSS → runRSSEngine, LIFE → runProjectionEngine.
+          const scenarioEngineFn = (inp) =>
+            inp.cpfScheme === 'rss' ? runRSSEngine(inp) : runProjectionEngine(inp);
           try {
             // Fix 1: dual-format detection for Scenario A.
             // — Flat key (scenarioAInputs): used by share-link exports; future-proofs JSON export if aligned.
             // — Nested key (scenarioA.inputs): used by current JSON file export format.
-            // Explicit p.scenarioA.projection === undefined replaces !p.scenarioA.projection,
-            // which evaluated to false for empty arrays ([]) and silently dropped valid scenarios.
+            // IMP-3: Projection validity check simplified.
+            // Old:  projection === undefined || (Array.isArray && length > 0)
+            //   → empty array [] failed both conditions and silently dropped the scenario.
+            // New:  projection == null (covers undefined + null) || Array.isArray (covers [] and [rows])
+            //   → all valid cases proceed to regeneration; only non-array garbage is rejected.
             const scenAInputsRaw =
               ('scenarioAInputs' in p && p.scenarioAInputs && typeof p.scenarioAInputs === 'object')
                 ? p.scenarioAInputs
                 : (p.scenarioA && p.scenarioA.inputs && typeof p.scenarioA.inputs === 'object' &&
-                   (p.scenarioA.projection === undefined ||
-                    (Array.isArray(p.scenarioA.projection) && p.scenarioA.projection.length > 0))
+                   (p.scenarioA.projection == null || Array.isArray(p.scenarioA.projection))
                    ? p.scenarioA.inputs : null);
             if (scenAInputsRaw) {
               const safeScenAInputs = sanitiseInputs(scenAInputsRaw);
               // Always regenerate projection from sanitised inputs — never restore stale stored rows.
-              const freshProjA = runProjectionEngine(safeScenAInputs);
+              const freshProjA = scenarioEngineFn(safeScenAInputs);
               setScenarioA({ inputs: safeScenAInputs, projection: freshProjA, payoutProj: null, label: p.scenarioA?.label });
               scenariosRefreshed = true;
             } else { setScenarioA(null); }
@@ -4192,13 +4205,12 @@ export default function App() {
               ('scenarioBInputs' in p && p.scenarioBInputs && typeof p.scenarioBInputs === 'object')
                 ? p.scenarioBInputs
                 : (p.scenarioB && p.scenarioB.inputs && typeof p.scenarioB.inputs === 'object' &&
-                   (p.scenarioB.projection === undefined ||
-                    (Array.isArray(p.scenarioB.projection) && p.scenarioB.projection.length > 0))
+                   (p.scenarioB.projection == null || Array.isArray(p.scenarioB.projection))
                    ? p.scenarioB.inputs : null);
             if (scenBInputsRaw) {
               const safeScenBInputs = sanitiseInputs(scenBInputsRaw);
               // Always regenerate projection from sanitised inputs — never restore stale stored rows.
-              const freshProjB = runProjectionEngine(safeScenBInputs);
+              const freshProjB = scenarioEngineFn(safeScenBInputs);
               setScenarioB({ inputs: safeScenBInputs, projection: freshProjB, payoutProj: null, label: p.scenarioB?.label });
               scenariosRefreshed = true;
             } else { setScenarioB(null); }
