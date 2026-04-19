@@ -9095,7 +9095,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                       <label style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase" }}>Include Property in Net Worth</label>
-                      <button onClick={() => setInputs(p => ({ ...p, includeProperty: !p.includeProperty }))} aria-pressed={!!inputs.includeProperty} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.includeProperty ? "var(--clr-emerald)" : "var(--border-strong)", color: inputs.includeProperty ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>{inputs.includeProperty ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, includeProperty: !p.includeProperty }))} aria-pressed={!!inputs.includeProperty} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.includeProperty ? "var(--clr-emerald)" : "var(--bg-input)", color: inputs.includeProperty ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>{inputs.includeProperty ? "ON" : "OFF"}</button>
                     </div>
                     <div style={{ opacity: inputs.includeProperty ? 1 : 0.4, pointerEvents: inputs.includeProperty ? "auto" : "none", display: "flex", flexDirection: "column", gap: 8 }}>
                       <div>
@@ -9172,7 +9172,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                         <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Only BRS needed in RA at 55 · pledged sum stays in RA at 4% · withdraw as cash via CPF application</p>
                       </div>
-                      <button onClick={() => setInputs(p => ({ ...p, usePropertyPledge: !p.usePropertyPledge }))} aria-pressed={!!inputs.usePropertyPledge} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.usePropertyPledge ? "var(--clr-emerald)" : "var(--border-strong)", color: inputs.usePropertyPledge ? "var(--ctrl-on-text)" : "var(--text-muted)", flexShrink: 0, marginTop: 2 }}>{inputs.usePropertyPledge ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, usePropertyPledge: !p.usePropertyPledge }))} aria-pressed={!!inputs.usePropertyPledge} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.usePropertyPledge ? "var(--clr-emerald)" : "var(--bg-input)", color: inputs.usePropertyPledge ? "var(--ctrl-on-text)" : "var(--text-muted)", flexShrink: 0, marginTop: 2 }}>{inputs.usePropertyPledge ? "ON" : "OFF"}</button>
                     </div>
                     {inputs.usePropertyPledge && (() => {
                       const ca = Number(inputs.currentAge) || 35;
@@ -9216,7 +9216,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </p>
                         <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Downgrade · LBS · Silver Housing Bonus · one-time event</p>
                       </div>
-                      <button onClick={() => setInputs(p => ({ ...p, propMonetiseEnabled: !p.propMonetiseEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.propMonetiseEnabled ? "var(--clr-blue)" : "var(--border-strong)", color: inputs.propMonetiseEnabled ? "var(--ctrl-on-text)" : "var(--text-muted)", flexShrink: 0 }}>{inputs.propMonetiseEnabled ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, propMonetiseEnabled: !p.propMonetiseEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.propMonetiseEnabled ? "var(--clr-blue)" : "var(--bg-input)", color: inputs.propMonetiseEnabled ? "var(--ctrl-on-text)" : "var(--text-muted)", flexShrink: 0 }}>{inputs.propMonetiseEnabled ? "ON" : "OFF"}</button>
                     </div>
                     {inputs.propMonetiseEnabled && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -9808,7 +9808,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </p>
                         <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Deplete OA + Private Assets by a target age · RA/MA excluded (CPF rules)</p>
                       </div>
-                      <button onClick={() => setInputs(p => ({ ...p, dieWithZeroEnabled: !p.dieWithZeroEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.dieWithZeroEnabled ? "#f43f5e" : "var(--border-strong)", color: inputs.dieWithZeroEnabled ? "#fff" : "var(--text-muted)", flexShrink: 0 }}>{inputs.dieWithZeroEnabled ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, dieWithZeroEnabled: !p.dieWithZeroEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.dieWithZeroEnabled ? "#f43f5e" : "var(--bg-input)", color: inputs.dieWithZeroEnabled ? "#fff" : "var(--text-muted)", flexShrink: 0 }}>{inputs.dieWithZeroEnabled ? "ON" : "OFF"}</button>
                     </div>
                     {inputs.dieWithZeroEnabled && (() => {
                       // Change 4: pmtOA is now sourced directly from the two-pass projection.
