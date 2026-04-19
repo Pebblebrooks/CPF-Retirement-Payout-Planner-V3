@@ -1209,6 +1209,18 @@ function runRSSEngine(inputs, {
     cumRaInterest += yearRaInterest;
     oa += oaAvg * rOA; sa += saAvg * rSA; ra += raAvg * rRA; ma += maAvg * rMA;
     if (age < 55) { sa += b1ToSA; ma += b1ToMA; } else { ra += b1ToRA + b2ToRA; ma += b1ToMA + b2ToMA; }
+    // ── Post-depletion / post-migration RA clamp ──────────────────────────────
+    // (1) RSS depletion: ra = 0, redirect OA-sourced extra interest back to OA.
+    // (2) CPF LIFE migration (years AFTER the migration year): RA premium is now with
+    //     CPF Board. Standard/Escalating: member holds no personal RA, set ra = 0.
+    //     Basic: ra mirrors the depleting migRaRem retained reserve.
+    //     In all cases, redirect OA-sourced bonus interest (b1ToRA/b2ToRA) to OA.
+    if (rssDepletionHit) {
+      oa += b1ToRA + b2ToRA; ra = 0;
+    } else if (migrationActivated) {
+      oa += b1ToRA + b2ToRA;
+      ra = lifePlanKey === 'bas' ? Math.max(0, migRaRem) : 0;
+    }
 
     // Outflows: housing
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
@@ -1321,6 +1333,12 @@ function runRSSEngine(inputs, {
         }
         migYearsSince      = 0; // escalating plan counter starts at migration year
         migrationActivated = true;
+        // RA has just become the CPF LIFE premium. Set ra immediately so the migration
+        // year's data.push() records the correct post-migration RA balance, not the
+        // pre-migration balance that has already had interest added.
+        // Standard/Escalating: premium is pooled — member holds $0 personal RA.
+        // Basic: RA_Retained reserve (migRaRem) remains accessible to the member.
+        ra = lifePlanKey === 'bas' ? Math.max(0, migRaRem) : 0;
       } else {
         // RA < $60,000: CPF LIFE requires at least $60k — migration deferred/skipped.
         // Flag is set so the UI can surface this as a warning.
@@ -1351,6 +1369,10 @@ function runRSSEngine(inputs, {
       }
       rssPayoutThisYear = annualLifePayout;   // reuse field — labelled in tab as "CPF LIFE payout"
       totalOutSpent += annualLifePayout;
+      // Sync ra to post-payout reality. migRaRem is freshly updated for Basic;
+      // Standard/Escalating remain at 0 (defensive — the clamp above handles interest years,
+      // but this ensures the payout year row is also correct).
+      ra = lifePlanKey === 'bas' ? Math.max(0, migRaRem) : 0;
     } else if (rssAnnualPayout > 0 && age >= rssPayoutStart && !rssDepletionHit) {
       // ── PRE-MIGRATION (or no migration): RSS fixed drawdown from RA ──────────
       const actualPayout = Math.min(rssAnnualPayout, Math.max(0, ra));
@@ -2959,6 +2981,8 @@ export default function App() {
   const [exportModal, setExportModal] = useState(null); // {type:'csv'|'json'|'print'|'pdf', content:string}
   // In-app confirm dialog (replaces window.confirm which is blocked in sandbox)
   const [confirmModal, setConfirmModal] = useState(null); // {message, onConfirm}
+  // RSS switch action pending — decoupled from closure to always read latest inputs
+  const [rssActionPending, setRssActionPending] = useState(null); // null | 'keep' | 'reset'
   // Rev #13 — tracks the currently focused sidebar input so currency fields show raw value while editing
   const [focusedField, setFocusedField] = useState(null);
 
@@ -3729,6 +3753,11 @@ export default function App() {
       } else {
         setInputs(prev => ({ ...prev, [name]: Number(value) }));
       }
+      // Clear focus tracking so the committed field renders in currency format
+      // immediately. Without this, if focus moves to an element without an
+      // onFocus:setFocusedField handler (e.g. a collapsed section's toggle button),
+      // focusedField stays set and getDisplayValue returns the raw number string.
+      setFocusedField(null);
       const formElements = focusableListRef.current;
       const index = formElements.indexOf(e.target);
       if (index > -1 && index < formElements.length - 1) {
@@ -3866,6 +3895,34 @@ export default function App() {
     }
   };
 
+  // ── RSS scheme switch handler ─────────────────────────────────────────────
+  // Called when the user clicks the RSS button while currently on CPF LIFE.
+  // Shows a three-option modal:
+  //   Cancel        — do nothing, stay on CPF LIFE
+  //   Keep Existing — switch to RSS but leave all fields intact
+  //   Reset Fields  — switch to RSS and zero out CPF LIFE-specific fields
+  //                   (balances, personal profile, medical, housing, property,
+  //                   private assets, SRS and salary are all preserved)
+  const handleSwitchToRSS = () => {
+    if (inputs.cpfScheme === 'rss') return; // already RSS — no-op
+    setConfirmModal({
+      title: "Switch to RSS Mode",
+      message:
+        "RSS (Retirement Sum Scheme) applies to members born before 1958. " +
+        "Your balances, personal details, medical, housing, and private assets will always be kept.\n\n" +
+        "Do you want to reset contribution top-up fields that don't apply to RSS members " +
+        "(RSTU, VC3A, CPFIS, OA→SA transfer)? " +
+        "Or keep them as-is?",
+      // Secondary: switch to RSS, keep all fields unchanged
+      secondaryLabel: "Keep Existing",
+      onSecondary: () => { setRssActionPending('keep'); },
+      // Primary (confirm): switch to RSS and reset CPF LIFE-specific fields
+      confirmLabel: "Reset Fields",
+      confirmColor: "#2563eb",
+      onConfirm: () => { setRssActionPending('reset'); },
+    });
+  };
+
   const handleReset = () => {
     setConfirmModal({
       message: "Reset all inputs and clear all scenarios, What-If, and comparison data?",
@@ -3896,6 +3953,42 @@ export default function App() {
     });
   };
   handleResetRef.current = handleReset; // keep ref current for keyboard shortcut handler
+
+  // ── RSS switch: decoupled useEffect so we always read latest inputs state ──────────
+  // The modal's onSecondary/onConfirm now just set a string flag (rssActionPending).
+  // This effect fires AFTER React has committed all state, guaranteeing inputs is fresh.
+  useEffect(() => {
+    if (!rssActionPending) return;
+    const ca = Number(inputs.currentAge) || 65;
+    if (rssActionPending === 'keep') {
+      setInputs(p => ({ ...p, cpfScheme: 'rss' }));
+      showToast('✓ Switched to RSS — all existing fields kept.');
+    } else if (rssActionPending === 'reset') {
+      setInputs(p => ({
+        ...p,
+        cpfScheme: 'rss',
+        // ── RSS payout defaults ──────────────────────────────────────────
+        rssPayoutStartAge: ca,       // default to current age (user should check CPF statement)
+        rssMonthlyPayout:  0,        // must be entered from CPF statement
+        lifeMigrationAge:  0,        // no migration configured
+        lifePlanAtMigration: 'std',  // reset to standard for cleanliness
+        // ── CPF LIFE-specific top-ups (SA is closed for 68+ members) ────
+        vcSaTopup: 0, vcSaFreq: 'annual', vcSaDur: 0,
+        // ── VC3A (rarely applicable at 68+) ─────────────────────────────
+        vc3aCash: 0, vc3aFreq: 'annual', vc3aDur: 0,
+        // ── OA→SA transfer (SA closed) ───────────────────────────────────
+        oaToSaTransfer: 0, oaToSaForLovedOne: false,
+        oaToSaFreq: 'annual', oaToSaDur: 0,
+        // ── CPFIS (SA investments) ───────────────────────────────────────
+        cpfisOaAmount: 0, cpfisOaFreq: 'annual', cpfisOaDur: 0,
+        cpfisSaAmount: 0, cpfisSaFreq: 'annual', cpfisSaDur: 0,
+        // ── Payout age (CPF LIFE only) ───────────────────────────────────
+        payoutAge: 65,
+      }));
+      showToast('✓ Switched to RSS — contribution & top-up fields reset.');
+    }
+    setRssActionPending(null); // clear the flag
+  }, [rssActionPending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sandbox-safe file download — tries Blob URL, always falls back to copy modal ──
   const triggerDownload = (content, filename, mimeType) => {
@@ -6365,15 +6458,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       {/* IN-APP CONFIRM DIALOG — replaces window.confirm (blocked in sandbox) */}
       {confirmModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.88)", backdropFilter: "blur(6px)", zIndex: 999999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 16, width: "100%", maxWidth: 400, padding: 28, boxShadow: "var(--shadow-modal)" }}>
+          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 16, width: "100%", maxWidth: 420, padding: 28, boxShadow: "var(--shadow-modal)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
               <AlertTriangle style={{ width: 22, height: 22, color: "#f59e0b", flexShrink: 0 }} />
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>Confirm Action</h3>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>{confirmModal.title || "Confirm Action"}</h3>
             </div>
             <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24, lineHeight: 1.6 }}>{confirmModal.message}</p>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setConfirmModal(null)} style={{ flex: 1, padding: "11px", borderRadius: 10, background: "var(--bg-input)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>Cancel</button>
-              <button onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }} style={{ flex: 1, padding: "11px", borderRadius: 10, background: "#ef4444", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 13 }}>Reset</button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button onClick={() => setConfirmModal(null)} style={{ flex: 1, minWidth: 80, padding: "11px", borderRadius: 10, background: "var(--bg-input)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>Cancel</button>
+              {confirmModal.secondaryLabel && (
+                <button onClick={() => { confirmModal.onSecondary(); setConfirmModal(null); }} style={{ flex: 1, minWidth: 100, padding: "11px", borderRadius: 10, background: "var(--bg-muted)", color: "var(--text-bright)", border: "1px solid var(--border-strong)", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>{confirmModal.secondaryLabel}</button>
+              )}
+              <button onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }} style={{ flex: 1, minWidth: 80, padding: "11px", borderRadius: 10, background: confirmModal.confirmColor || "#ef4444", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 13 }}>{confirmModal.confirmLabel || "Reset"}</button>
             </div>
           </div>
         </div>
@@ -7247,7 +7343,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             CPF LIFE
                           </button>
                           <button
-                            onClick={() => setInputs(p => ({ ...p, cpfScheme: 'rss' }))}
+                            onClick={handleSwitchToRSS}
                             style={{ padding: "4px 14px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                               background: inputs.cpfScheme === 'rss' ? "#60a5fa" : "transparent",
                               color: inputs.cpfScheme === 'rss' ? "#020617" : "var(--text-muted)" }}>
@@ -7311,21 +7407,21 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <button
                                 onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: 0 }))}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
-                                  background: (inputs.lifeMigrationAge || 0) === 0 ? "#60a5fa" : "transparent",
-                                  color: (inputs.lifeMigrationAge || 0) === 0 ? "#020617" : "var(--text-muted)" }}>
+                                  background: inputs.lifeMigrationAge === 0 ? "#60a5fa" : "transparent",
+                                  color: inputs.lifeMigrationAge === 0 ? "#020617" : "var(--text-muted)" }}>
                                 📋 Stay on RSS
                               </button>
                               <button
                                 onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: p.lifeMigrationAge > 0 ? p.lifeMigrationAge : (Number(p.currentAge) || 65) + 1 }))}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
-                                  background: (inputs.lifeMigrationAge || 0) > 0 ? "#a855f7" : "transparent",
-                                  color: (inputs.lifeMigrationAge || 0) > 0 ? "#020617" : "var(--text-muted)" }}>
+                                  background: inputs.lifeMigrationAge !== 0 ? "#a855f7" : "transparent",
+                                  color: inputs.lifeMigrationAge !== 0 ? "#020617" : "var(--text-muted)" }}>
                                 🔄 Migrate to CPF LIFE
                               </button>
                             </div>
 
                             {/* Stay on RSS: informational note about depletion */}
-                            {(inputs.lifeMigrationAge || 0) === 0 && (
+                            {inputs.lifeMigrationAge === 0 && (
                               <div style={{ background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 6, padding: "6px 9px" }}>
                                 <p style={{ fontSize: 9, color: "#93c5fd", margin: 0, lineHeight: 1.6 }}>
                                   📋 RA will be drawn down at <strong>{formatCurrency(Number(inputs.rssMonthlyPayout) || 0)}/mo</strong> until balance reaches $0 — payouts stop at depletion. See the <strong>RSS tab</strong> for your projected depletion age.
@@ -7334,7 +7430,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             )}
 
                             {/* Migrate to CPF LIFE: age input + plan selector */}
-                            {(inputs.lifeMigrationAge || 0) > 0 && (
+                            {/* Use !== 0 (not || 0 > 0) so an empty string during mid-edit
+                                does not collapse the section — handleBlur recovers "" → 0. */}
+                            {inputs.lifeMigrationAge !== 0 && (
                               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                 {/* Migration age input */}
                                 <div>
