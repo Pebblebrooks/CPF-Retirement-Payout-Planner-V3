@@ -5020,7 +5020,9 @@ export default function App() {
     for (let run = 0; run < RUNS; run++) {
       const _inflBand = (mcVar / 100) / 2;
       const mcInflRate = (Number(debouncedInputs.inflationRate) || 2) / 100 + (Math.random() * _inflBand * 2 - _inflBand);
-      const mcRows = runProjectionEngine(debouncedInputs, { maxAge: endAge, randomiseRates: true, mcVariance: mcVar });
+      const mcRows = isRSSMC
+        ? runRSSEngine(debouncedInputs, { maxAge: endAge, randomiseRates: true, mcVariance: mcVar })
+        : runProjectionEngine(debouncedInputs, { maxAge: endAge, randomiseRates: true, mcVariance: mcVar });
       for (const row of mcRows) {
         if (ageTotals[row.age] !== undefined) {
           // Deflate by this run's inflation so MC bands reflect real-dollar uncertainty
