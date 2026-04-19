@@ -4246,8 +4246,13 @@ export default function App() {
       // BUG-4 fix: whatIfContribStop / OaDrawdown / SrsContrib / PrivGrowth were restored
       // on decode (lines ~2567-2570) but were never written into fullState, so they were
       // silently dropped from every share link. All 8 What-If fields now included.
+      // Bug5-SL fix: use debouncedInputs (not live inputs) so the share link encodes exactly
+      // the same input state that drove the visible projection on screen. If a user typed a
+      // value and immediately pressed Ctrl+S before the 180ms debounce fired, the previous
+      // code serialised the new keystroke value while the chart still showed the old projection.
+      // debouncedInputs is always in sync with the displayed projection.
       const fullState = {
-        inputs, activeTab, highlightPlan, viewMode, basicPremiumPct,
+        inputs: debouncedInputs, activeTab, highlightPlan, viewMode, basicPremiumPct,
         scenarioLabelA, scenarioLabelB,
         scenarioAInputs: scenarioA?.inputs ?? null,
         scenarioBInputs: scenarioB?.inputs ?? null,
@@ -5071,7 +5076,15 @@ export default function App() {
       // Zero OA drawdown (decumulation strategy irrelevant for baseline)
       oaDrawdownMonthly: 0,
     };
-    const rows = runProjectionEngine(baselineInputs, { maxAge: pa });
+    // Bug1-BL fix: RSS members must use runRSSEngine (so the RSS drawdown is included in
+    // the baseline) with maxAge:95 (the full drawdown window). runProjectionEngine with
+    // maxAge:pa=65 produced an empty array for members already aged 68+ and ignored the
+    // RSS depletion entirely. The baseline ghostline now shows mandatory-only CPF flows
+    // including the RSS payout — voluntary top-ups are still zeroed as before.
+    const isRSSBaseline = debouncedInputs.cpfScheme === 'rss';
+    const rows = isRSSBaseline
+      ? runRSSEngine(baselineInputs, { maxAge: 95 })
+      : runProjectionEngine(baselineInputs, { maxAge: pa });
     if (isRealDollars) {
       const ca = Number(debouncedInputs.currentAge) || 35;
       const inflRate = (Number(debouncedInputs.inflationRate) || 2) / 100;
@@ -5100,16 +5113,33 @@ export default function App() {
     const wiInputs = (effOAD > 0 && (Number(debouncedInputs.oaDrawdownStartAge) || 0) === 0)
       ? { ...debouncedInputs, oaDrawdownStartAge: effPA }
       : debouncedInputs;
-    const rows = runProjectionEngine(wiInputs, {
-      maxAge: effPA,
-      overrideVcSA: effST,
-      overrideHousingOutflow: effH,
-      overrideSalaryBump: effSB,
-      overrideContribStop: effCS,
-      overrideOaDrawdownMonthly: effOAD,
-      overrideSrsContrib: effSRS,
-      overridePrivGrowthRate: effPG,
-    });
+    // Bug2-WI fix: RSS members must use runRSSEngine so the RSS drawdown is modelled in
+    // the What-If run. runProjectionEngine with maxAge:effPA=65 produced an empty array
+    // for RSS members already aged 68+ (loop runs 0 iterations), making the What-If chart
+    // entirely blank. Use maxAge:95 for RSS (full drawdown window) as with the main projection.
+    const isRSSWI = debouncedInputs.cpfScheme === 'rss';
+    const wiMaxAge = isRSSWI ? 95 : effPA;
+    const rows = isRSSWI
+      ? runRSSEngine(wiInputs, {
+          maxAge: wiMaxAge,
+          overrideVcSA: effST,
+          overrideHousingOutflow: effH,
+          overrideSalaryBump: effSB,
+          overrideContribStop: effCS,
+          overrideOaDrawdownMonthly: effOAD,
+          overrideSrsContrib: effSRS,
+          overridePrivGrowthRate: effPG,
+        })
+      : runProjectionEngine(wiInputs, {
+          maxAge: wiMaxAge,
+          overrideVcSA: effST,
+          overrideHousingOutflow: effH,
+          overrideSalaryBump: effSB,
+          overrideContribStop: effCS,
+          overrideOaDrawdownMonthly: effOAD,
+          overrideSrsContrib: effSRS,
+          overridePrivGrowthRate: effPG,
+        });
     return { rows, effPA, effST, effH, effSB, effCS, effOAD, effSRS, effPG };
   }, [showWhatIf, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump,
       whatIfContribStop, whatIfOaDrawdown, whatIfSrsContrib, whatIfPrivGrowth,
@@ -7187,15 +7217,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </button>
             <button onClick={() => {
               try {
-                const fullState = { inputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, scenarioAInputs: scenarioA?.inputs ?? null, scenarioBInputs: scenarioB?.inputs ?? null, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" }; // Fix 2: scenario inputs included
-                const code = lzCompress(JSON.stringify(fullState));
-                const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
-                const shareURL = `${base}?p=${code}`;
-                if (navigator?.clipboard?.writeText) {
-                  navigator.clipboard.writeText(shareURL)
-                    .then(() => showToast("✓ Share link copied — opens app with your exact inputs!"))
-                    .catch(() => { prompt("Copy & share this link:", shareURL); });
-                } else { prompt("Copy & share this link:", shareURL); }
+                const fullState = { inputs: debouncedInputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, scenarioAInputs: scenarioA?.inputs ?? null, scenarioBInputs: scenarioB?.inputs ?? null, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" }; // Fix 2: scenario inputs included; Bug5-SL: debouncedInputs so link matches visible projection
               } catch (e) { showToast("Could not generate share link: " + e.message); }
             }} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Copy a shareable URL encoding all inputs, active tab, and Compare scenario slots A &amp; B. Anyone opening this link sees your exact projection. Use Export Profile for a JSON backup.">
               <Link style={{ width: 12, height: 12 }} />Share Link
@@ -7270,7 +7292,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={() => {
               setMobileMenuOpen(false);
               try {
-                const fullState = { inputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, scenarioAInputs: scenarioA?.inputs ?? null, scenarioBInputs: scenarioB?.inputs ?? null, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" }; // Fix 2: scenario inputs included
+                const fullState = { inputs: debouncedInputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, scenarioAInputs: scenarioA?.inputs ?? null, scenarioBInputs: scenarioB?.inputs ?? null, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" }; // Fix 2: scenario inputs included; Bug5-SL: debouncedInputs so link matches visible projection
                 const code = lzCompress(JSON.stringify(fullState));
                 const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
                 const shareURL = `${base}?p=${code}`;
@@ -10032,24 +10054,22 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   const isRSSKpi = debouncedInputs.cpfScheme === 'rss';
                   const rssCurrentRa = (accumulationByAge.get(ca2) || displayAccumulation[0])?.ra || Number(inputs.saBalance) || 0;
                   const rssAnnual = (Number(inputs.rssMonthlyPayout) || 0) * 12;
-                  // Simple PMT-depletion estimate for KPI strip (engine does the real calculation in PR-2)
+                  // Bug6-KPI fix: replaced simplified flat-4% depletion loop with a direct
+                  // read from the engine projection. The old formula used only CPF_RATES.RA (4%)
+                  // and ignored the 1% extra on first $60k and 1% extra on first $30k, producing
+                  // a depletion age 2–5 years earlier than the RSS tab for typical balances.
+                  // The engine already computes the authoritative answer — read rssDepletionAge
+                  // from the last row that carries it (same pattern as milestones at line ~5300).
                   const rssDepEst = (() => {
-                    if (!isRSSKpi || rssAnnual <= 0 || rssCurrentRa <= 0) return null;
-                    // Bug 1 fix: loop must start from currentAge (ca2), not rssPayoutStartAge.
-                    // rssCurrentRa is seeded from the RA at currentAge — iterating from
-                    // rssPayoutStartAge runs phantom years before the current position and
-                    // returns a depletion age that is (currentAge − rssPayoutStartAge) years too early.
-                    let bal = rssCurrentRa; const start = ca2;
-                    for (let age = start; age <= 95; age++) {
-                      bal = bal * (1 + CPF_RATES.RA) - rssAnnual;
-                      if (bal <= 0) return age;
+                    if (!isRSSKpi || rssAnnual <= 0) return null;
+                    for (let i = projection.length - 1; i >= 0; i--) {
+                      if (projection[i]?.rssDepletionAge != null) return projection[i].rssDepletionAge;
                     }
                     return ">95";
                   })();
-                  // R8 fix: distinguish "RA growing forever" from "RA lasts to 95".
-                  // When rssDepEst === ">95" AND annual payout < RA × 4% base rate,
-                  // the RA can never deplete — show amber (not green) so the user
-                  // understands ">95" means "growing" not "just surviving".
+                  // rssIsGrowing: RA can never deplete when annual draw < RA interest at current balance.
+                  // Use the live rssCurrentRa for the interest estimate (same logic as before, but
+                  // the payout display now matches the RSS tab exactly).
                   const rssIsGrowing = rssDepEst === ">95" && rssAnnual > 0 && rssAnnual < rssCurrentRa * CPF_RATES.RA;
                   return isRSSKpi ? [
                     { label: "Current RA", value: formatCurrency(rssCurrentRa), color: "var(--clr-blue)", tip: "Current Retirement Account balance — this is drawn down each month under RSS" },
@@ -10061,7 +10081,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                            : (rssDepEst && typeof rssDepEst === "number" && rssDepEst < 85 ? "var(--clr-red)" : "var(--clr-green)"),
                       tip: rssIsGrowing
                         ? `RA is growing — your annual payout (${formatCurrency(rssAnnual)}/yr) is less than the 4% base interest your RA earns (~${formatCurrency(Math.round(rssCurrentRa * CPF_RATES.RA))}/yr). Increase your monthly payout above ~${formatCurrency(Math.ceil(rssCurrentRa * CPF_RATES.RA / 12))}/mo to project a depletion date.`
-                        : `Estimated age when RA reaches $0 under RSS. This KPI uses a flat 4% rate — the RSS tab uses the full engine (4% base + 1% extra on first $60k + 1% extra on first $30k), so the RSS tab depletion age may differ slightly. The RSS tab figure is more accurate.` },
+                        : `Projected age when RA reaches $0 under RSS — read directly from the engine projection (4% base + 1% extra on first $60k + 1% extra on first $30k). Matches the RSS tab depletion age exactly.` },
                     { label: "Migration", value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge} · ${{ bas: 'Basic', std: 'Std', esc: 'Esc' }[inputs.lifePlanAtMigration || 'std']}` : "None", color: inputs.lifeMigrationAge > 0 ? "var(--clr-purple)" : "var(--text-muted)", tip: inputs.lifeMigrationAge > 0 ? `Migrating to CPF LIFE ${{ bas: 'Basic', std: 'Standard', esc: 'Escalating' }[inputs.lifePlanAtMigration || 'std']} plan at age ${inputs.lifeMigrationAge}` : "Staying on RSS until RA depletes — no CPF LIFE migration planned" },
                     { label: "Payout Start", value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "var(--clr-amber)", tip: "Age when CPF Board began your RSS monthly payouts" },
                   ] : [
