@@ -6005,6 +6005,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --hero-left-bg: #1e3a5f;
           --hero-right-bg: #162032;
           --hero-border: #2d4a6e;
+          --ctrl-on-text: #c8d8f0;   /* active toggle btn text on --border-strong bg */
           --hero-text: #ffffff;
           --hero-label: rgba(255,255,255,0.55);
           --hero-card-bg: rgba(255,255,255,0.08);
@@ -6078,6 +6079,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --hero-left-bg: #a8bece;
           --hero-right-bg: #bccedd;
           --hero-border: #7a9ab2;
+          --ctrl-on-text: #ffffff;   /* active toggle btn text on --border-strong (#4a6680) = 5.99:1 ✓ */
           --hero-text: #0a1c2e;
           --hero-label: #1e3248;
           --hero-card-bg: rgba(10,28,46,0.09);
@@ -6150,26 +6152,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           font-weight: 800 !important;
         }
 
-        /* ── Calculator icon box: swap solid emerald bg → soft tinted panel ──
-           Dark icon (#020617) on solid emerald (#065f46) = 2.63:1 FAIL
-           Fix: light emerald tint bg + keep dark icon = 9.5:1 ✓ ── */
-        .theme-light [style*="background: var(--clr-emerald)"][style*="padding: 8"][style*="borderRadius: 12"],
-        .theme-light [style*='background:"var(--clr-emerald)"'][style*="padding:8"] {
-          background: rgba(6,95,70,0.12) !important;
-          border: 1px solid rgba(6,95,70,0.30) !important;
+        /* ── Calculator icon box: soft tinted bg in light mode ──
+           Dark icon (#020617) on solid emerald (#065f46) = 2.63:1 FAIL — fixed in JSX (white icon).
+           This rule keeps the bg tinted so the box reads as a light-mode element. ── */
+        .theme-light .cpf-calc-icon-box {
+          background: rgba(6,95,70,0.18) !important;
+          border: 1px solid rgba(6,95,70,0.35) !important;
         }
 
-        /* ── All primary action buttons that use clr-emerald fill ──
-           #020617 on #065f46 = 2.63:1 FAIL → white on #065f46 = 9.37:1 ✓ ── */
-        .theme-light [style*="background: var(--clr-emerald)"][style*='color: "#020617"'],
-        .theme-light [style*='background:"var(--clr-emerald)"'][style*='color:"#020617"'],
-        .theme-light [style*="background: var(--clr-emerald)"][style*="color: \"#020617\""] {
-          color: #ffffff !important;
-        }
-
-        /* ── Fallback: any button/element in light mode using clr-emerald as bg should have white text ── */
-        .theme-light button[style*="background: var(--clr-emerald)"],
-        .theme-light button[style*='background:"var(--clr-emerald)"'] {
+        /* ── All primary action buttons: white text on emerald bg ──
+           #020617 on #065f46 = 2.63:1 FAIL → white on #065f46 = 9.37:1 ✓ — fixed in JSX.
+           CSS class as belt-and-suspenders backup. ── */
+        .theme-light .cpf-btn-primary {
           color: #ffffff !important;
         }
 
@@ -6643,7 +6637,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
       {/* TOAST NOTIFICATION */}
       {toastMessage && (
-        <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 99999, background: "var(--clr-emerald)", color: "#020617", padding: "12px 24px", borderRadius: 12, fontWeight: 800, boxShadow: "0 10px 25px rgba(var(--clr-emerald-rgb),0.3)", display: "flex", alignItems: "center", gap: 8, animation: "slideDown 0.3s ease-out" }}>
+        <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 99999, background: "var(--clr-emerald)", color: "#ffffff", padding: "12px 24px", borderRadius: 12, fontWeight: 800, boxShadow: "0 10px 25px rgba(var(--clr-emerald-rgb),0.3)", display: "flex", alignItems: "center", gap: 8, animation: "slideDown 0.3s ease-out" }}>
           <CheckCircle2 style={{ width: 18, height: 18 }} /> {toastMessage}
         </div>
       )}
@@ -6687,7 +6681,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <label style={{ display: "block", fontSize: 10, fontWeight: 800, color: "var(--clr-emerald)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>📋 Your Encoded Profile Code</label>
               <textarea readOnly value={shareUrl} rows={4} onFocus={e => e.target.select()} style={{ width: "100%", padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 10, color: "var(--share-url-color)", fontSize: 10, outline: "none", resize: "none", fontFamily: "monospace", boxSizing: "border-box", lineBreak: "anywhere" }} />
             </div>
-            <button onClick={executeCopy} style={{ width: "100%", padding: "11px", borderRadius: 12, background: "var(--clr-emerald)", color: "#020617", fontWeight: 800, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, marginBottom: 18 }}>
+            <button onClick={executeCopy} className="cpf-btn-primary" style={{ width: "100%", padding: "11px", borderRadius: 12, background: "var(--clr-emerald)", color: "#ffffff", fontWeight: 800, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, marginBottom: 18 }}>
               <Copy style={{ width: 15, height: 15 }} />Copy Code to Clipboard
             </button>
 
@@ -6826,7 +6820,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     if (win) { win.onload = () => { setTimeout(() => { win.focus(); win.print(); URL.revokeObjectURL(url); }, 600); }; showToast("📄 Print dialog opening"); }
                     else { URL.revokeObjectURL(url); showToast("⚠️ Allow pop-ups then try again"); }
                   }
-                }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 8, background: "var(--clr-emerald)", color: "#020617", fontWeight: 800, border: "none", cursor: "pointer", fontSize: 12 }}>
+                }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 8, background: "var(--clr-emerald)", color: "#ffffff", fontWeight: 800, border: "none", cursor: "pointer", fontSize: 12 }}>
                   <Printer style={{ width: 14, height: 14 }} />Print / Save as PDF
                 </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 8, background: "rgba(var(--clr-blue-rgb),0.08)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", fontSize: 10, color: "var(--text-muted)" }}>
@@ -6847,7 +6841,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
                     showToast(`✓ Downloading ${fname}`);
                   } catch (e) { showToast("Download blocked — select all text below and paste into a new file"); }
-                }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 8, background: "var(--clr-emerald)", color: "#020617", fontWeight: 800, border: "none", cursor: "pointer", fontSize: 12 }}>
+                }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 8, background: "var(--clr-emerald)", color: "#ffffff", fontWeight: 800, border: "none", cursor: "pointer", fontSize: 12 }}>
                   <Download style={{ width: 14, height: 14 }} />Download {exportModal.type === "csv" ? "CSV" : "JSON"} File
                 </button>
                 <button onClick={() => {
@@ -6863,7 +6857,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <button onClick={() => {
                   const el = document.getElementById("export-modal-content");
                   if (el) { el.select(); try { document.execCommand("copy"); showToast("✓ Copied — paste into any app and print"); } catch (e) { showToast("Press Ctrl+A then Ctrl+C to copy"); } }
-                }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 8, background: "var(--clr-emerald)", color: "#020617", fontWeight: 800, border: "none", cursor: "pointer", fontSize: 12 }}>
+                }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 8, background: "var(--clr-emerald)", color: "#ffffff", fontWeight: 800, border: "none", cursor: "pointer", fontSize: 12 }}>
                   <Copy style={{ width: 13, height: 13 }} />Select All &amp; Copy
                 </button>
               )}
@@ -7097,9 +7091,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 {welcomeStep > 0 && <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Back</button>}
                 {welcomeStep < 3 ? (
-                  <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700, background: "var(--clr-emerald)", color: "#020617", border: "none", cursor: "pointer" }}>Next &rarr;</button>
+                  <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Next &rarr;</button>
                 ) : (
-                  <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700, background: "var(--clr-emerald)", color: "#020617", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
+                  <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
                 )}
                 <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip</button>
               </div>
@@ -7112,8 +7106,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       <header style={{ background: "var(--header-bg)", borderBottom: "1px solid var(--border-subtle)", flexShrink: 0, zIndex: 50, backdropFilter: "blur(8px)" }}>
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <div style={{ background: "var(--clr-emerald)", padding: 8, borderRadius: 12 }}>
-              <Calculator style={{ color: "#020617", width: 18, height: 18 }} />
+            <div className="cpf-calc-icon-box" style={{ background: "var(--clr-emerald)", padding: 8, borderRadius: 12 }}>
+              <Calculator style={{ color: "#ffffff", width: 18, height: 18 }} />
             </div>
             <div>
               <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>CPF Planner Pro</div>
@@ -7132,7 +7126,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </button>
             {/* Real vs Nominal Toggle */}
             <div style={{ display: "flex", background: "var(--bg-panel)", padding: 4, borderRadius: 8, border: "1px solid var(--border-strong)" }}>
-              <button onClick={() => setIsRealDollars(false)} style={{ padding: "4px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--border-strong)" : "transparent", color: !isRealDollars ? "var(--text-bright)" : "var(--text-muted)" }}>Nom.</button>
+              <button onClick={() => setIsRealDollars(false)} style={{ padding: "4px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--border-strong)" : "transparent", color: !isRealDollars ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Nom.</button>
               <button onClick={() => setIsRealDollars(true)} style={{ padding: "4px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "#2563eb" : "transparent", color: isRealDollars ? "#fff" : "var(--text-muted)" }}>Real</button>
             </div>
 
@@ -7176,7 +7170,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* Desktop Viewport Mode: FHD / HD / Auto — hidden on mobile via .desktop-only */}
             <div className="desktop-only" style={{ display: "flex", background: "var(--bg-panel)", padding: 4, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 0 }}>
               {[["fhd", "FHD", "1920px"], ["hd", "HD", "1440px"], ["auto", "Auto", ""]].map(([mode, label, sub]) => (
-                <button key={mode} onClick={() => setDesktopMode(mode)} title={sub || "Follow screen width"} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3px 9px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", lineHeight: 1.3, background: desktopMode === mode ? "var(--border-strong)" : "transparent", color: desktopMode === mode ? "var(--text-bright)" : "var(--text-muted)" }}>
+                <button key={mode} onClick={() => setDesktopMode(mode)} title={sub || "Follow screen width"} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3px 9px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", lineHeight: 1.3, background: desktopMode === mode ? "var(--border-strong)" : "transparent", color: desktopMode === mode ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                   <span>{label}</span>
                   {sub && <span style={{ fontSize: 7, opacity: 0.55, fontWeight: 500 }}>{sub}</span>}
                 </button>
@@ -7185,13 +7179,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
             {/* Theme Toggle */}
             <div style={{ display: "flex", background: "var(--bg-panel)", padding: 4, borderRadius: 8, border: "1px solid var(--border-strong)" }}>
-              <button onClick={() => setThemeMode('dark')} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'dark' ? "var(--border-strong)" : "transparent", color: themeMode === 'dark' ? "var(--text-bright)" : "var(--text-muted)" }}>
+              <button onClick={() => setThemeMode('dark')} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'dark' ? "var(--border-strong)" : "transparent", color: themeMode === 'dark' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                 <Moon style={{ width: 11, height: 11 }} />Dark
               </button>
-              <button onClick={() => setThemeMode('light')} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'light' ? "var(--border-strong)" : "transparent", color: themeMode === 'light' ? "var(--text-bright)" : "var(--text-muted)" }}>
+              <button onClick={() => setThemeMode('light')} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'light' ? "var(--border-strong)" : "transparent", color: themeMode === 'light' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                 <Sun style={{ width: 11, height: 11 }} />Light
               </button>
-              <button onClick={() => setThemeMode('system')} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'system' ? "var(--border-strong)" : "transparent", color: themeMode === 'system' ? "var(--text-bright)" : "var(--text-muted)" }}>
+              <button onClick={() => setThemeMode('system')} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'system' ? "var(--border-strong)" : "transparent", color: themeMode === 'system' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                 <Monitor style={{ width: 11, height: 11 }} />System
               </button>
             </div>
@@ -7204,12 +7198,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         <div className="cpf-mobile-menu">
           <div className="cpf-mobile-menu-row">
             <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 8, border: "1px solid var(--border-strong)" }}>
-              <button onClick={() => setIsRealDollars(false)} style={{ padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--border-strong)" : "transparent", color: !isRealDollars ? "var(--text-bright)" : "var(--text-muted)" }}>Nominal</button>
+              <button onClick={() => setIsRealDollars(false)} style={{ padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--border-strong)" : "transparent", color: !isRealDollars ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Nominal</button>
               <button onClick={() => setIsRealDollars(true)} style={{ padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "#2563eb" : "transparent", color: isRealDollars ? "#fff" : "var(--text-muted)" }}>Real $</button>
             </div>
             <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 8, border: "1px solid var(--border-strong)" }}>
-              <button onClick={() => setThemeMode('dark')} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'dark' ? "var(--border-strong)" : "transparent", color: themeMode === 'dark' ? "var(--text-bright)" : "var(--text-muted)" }}>● Dark</button>
-              <button onClick={() => setThemeMode('light')} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'light' ? "var(--border-strong)" : "transparent", color: themeMode === 'light' ? "var(--text-bright)" : "var(--text-muted)" }}>○ Light</button>
+              <button onClick={() => setThemeMode('dark')} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'dark' ? "var(--border-strong)" : "transparent", color: themeMode === 'dark' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>● Dark</button>
+              <button onClick={() => setThemeMode('light')} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'light' ? "var(--border-strong)" : "transparent", color: themeMode === 'light' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>○ Light</button>
             </div>
             {/* Sidebar toggle shortcut in mobile dropdown */}
             <button onClick={() => { setSidebarOpen(v => !v); setMobileMenuOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: `1px solid ${sidebarOpen ? "rgba(var(--clr-emerald-rgb),0.4)" : "var(--border-strong)"}`, background: sidebarOpen ? "rgba(var(--clr-emerald-rgb),0.1)" : "rgba(100,116,139,0.15)", color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)", cursor: "pointer" }}>
@@ -7372,8 +7366,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       {isForeigner && <span style={{ fontSize: 9, color: "var(--clr-amber3)", marginLeft: 2 }}>🔒 CPF LIFE N/A</span>}
                     </div>
                     <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 7, gap: 2 }}>
-                      <button onClick={() => setInputs(p => ({ ...p, isMale: true }))} aria-pressed={inputs.isMale !== false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale !== false ? "var(--clr-sky)" : "transparent", color: inputs.isMale !== false ? "#020617" : "var(--text-muted)" }}>Male</button>
-                      <button onClick={() => setInputs(p => ({ ...p, isMale: false }))} aria-pressed={inputs.isMale === false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale === false ? "var(--clr-blue)" : "transparent", color: inputs.isMale === false ? "#020617" : "var(--text-muted)" }}>Female</button>
+                      <button onClick={() => setInputs(p => ({ ...p, isMale: true }))} aria-pressed={inputs.isMale !== false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale !== false ? "var(--clr-sky)" : "transparent", color: inputs.isMale !== false ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Male</button>
+                      <button onClick={() => setInputs(p => ({ ...p, isMale: false }))} aria-pressed={inputs.isMale === false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale === false ? "var(--clr-blue)" : "transparent", color: inputs.isMale === false ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Female</button>
                     </div>
                   </div>
                   </div>
@@ -7390,11 +7384,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <button onClick={() => setInputs(p => ({ ...p, citizenStatus: 'SC' }))}
                           style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: (inputs.citizenStatus || 'SC') === 'SC' ? "var(--clr-sky)" : "transparent",
-                            color: (inputs.citizenStatus || 'SC') === 'SC' ? "#020617" : "var(--text-muted)" }}>SC</button>
+                            color: (inputs.citizenStatus || 'SC') === 'SC' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>SC</button>
                         <button onClick={() => setInputs(p => ({ ...p, citizenStatus: 'PR', mrssGrant: 0, mmssGrant: 0 }))}
                           style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: (inputs.citizenStatus || 'SC') === 'PR' ? "var(--clr-amber)" : "transparent",
-                            color: (inputs.citizenStatus || 'SC') === 'PR' ? "#020617" : "var(--text-muted)" }}>PR</button>
+                            color: (inputs.citizenStatus || 'SC') === 'PR' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>PR</button>
                         <button onClick={() => {
                           setInputs(p => ({ ...p,
                             citizenStatus: 'foreigner',
@@ -7420,7 +7414,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         }}
                           style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: isForeigner ? "var(--clr-amber3)" : "transparent",
-                            color: isForeigner ? "#020617" : "var(--text-muted)" }}>Foreigner</button>
+                            color: isForeigner ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Foreigner</button>
                       </div>
                     </div>
                     {/* Foreigner info banner */}
@@ -7442,7 +7436,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <button key={val} onClick={() => setInputs(p => ({ ...p, prYear: val }))}
                                 style={{ padding: "3px 10px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                   background: (inputs.prYear || 3) === val ? "var(--clr-amber)" : "transparent",
-                                  color: (inputs.prYear || 3) === val ? "#020617" : "var(--text-muted)" }}>
+                                  color: (inputs.prYear || 3) === val ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                                 {label}
                               </button>
                             ))}
@@ -7461,7 +7455,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   <button key={val} onClick={() => setInputs(p => ({ ...p, prRateType: val }))}
                                     style={{ padding: "3px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                       background: (inputs.prRateType || 'GG') === val ? "var(--clr-amber)" : "transparent",
-                                      color: (inputs.prRateType || 'GG') === val ? "#020617" : "var(--text-muted)" }}>
+                                      color: (inputs.prRateType || 'GG') === val ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                                     {label}
                                   </button>
                                 ))}
@@ -7499,7 +7493,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                       <button
                         onClick={() => setInputs(p => ({ ...p, isPwD: !p.isPwD }))}
-                        style={{ padding: "3px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isPwD ? "var(--clr-violet2)" : "var(--bg-panel)", color: inputs.isPwD ? "#020617" : "var(--text-muted)" }}>
+                        style={{ padding: "3px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isPwD ? "var(--clr-violet2)" : "var(--bg-panel)", color: inputs.isPwD ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                         {inputs.isPwD ? "ON" : "OFF"}
                       </button>
                     </div>
@@ -7532,14 +7526,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             onClick={() => setInputs(p => ({ ...p, cpfScheme: 'cpf_life' }))}
                             style={{ padding: "4px 10px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                               background: (inputs.cpfScheme || 'cpf_life') === 'cpf_life' ? "var(--clr-sky)" : "transparent",
-                              color: (inputs.cpfScheme || 'cpf_life') === 'cpf_life' ? "#020617" : "var(--text-muted)" }}>
+                              color: (inputs.cpfScheme || 'cpf_life') === 'cpf_life' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                             CPF LIFE
                           </button>
                           <button
                             onClick={handleSwitchToRSS}
                             style={{ padding: "4px 14px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                               background: inputs.cpfScheme === 'rss' ? "var(--clr-blue)" : "transparent",
-                              color: inputs.cpfScheme === 'rss' ? "#020617" : "var(--text-muted)" }}>
+                              color: inputs.cpfScheme === 'rss' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                             RSS
                           </button>
                         </div>
@@ -7602,14 +7596,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: 0 }))}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                   background: inputs.lifeMigrationAge === 0 ? "var(--clr-blue)" : "transparent",
-                                  color: inputs.lifeMigrationAge === 0 ? "#020617" : "var(--text-muted)" }}>
+                                  color: inputs.lifeMigrationAge === 0 ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                                 📋 Stay on RSS
                               </button>
                               <button
                                 onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: p.lifeMigrationAge > 0 ? p.lifeMigrationAge : (Number(p.currentAge) || 65) + 1 }))}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                   background: inputs.lifeMigrationAge !== 0 ? "var(--clr-purple)" : "transparent",
-                                  color: inputs.lifeMigrationAge !== 0 ? "#020617" : "var(--text-muted)" }}>
+                                  color: inputs.lifeMigrationAge !== 0 ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                                 🔄 Migrate to CPF LIFE
                               </button>
                             </div>
@@ -7910,7 +7904,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                       );
                     })()}
-                    <button onClick={handleAutoCalc} style={{ width: "100%", background: "var(--clr-lime)", color: "#020617", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 11, border: "none", cursor: "pointer" }}>⚡ Auto-Calc CPF Contributions</button>
+                    <button onClick={handleAutoCalc} style={{ width: "100%", background: "var(--clr-lime)", color: "var(--ctrl-on-text)", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 11, border: "none", cursor: "pointer" }}>⚡ Auto-Calc CPF Contributions</button>
                   </div>
                 )}
                 {inputs.showSalaryCalc && !isSelfEmployed && (() => {
@@ -9101,7 +9095,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                       <label style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase" }}>Include Property in Net Worth</label>
-                      <button onClick={() => setInputs(p => ({ ...p, includeProperty: !p.includeProperty }))} aria-pressed={!!inputs.includeProperty} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.includeProperty ? "var(--clr-emerald)" : "var(--border-strong)", color: inputs.includeProperty ? "#020617" : "var(--text-muted)" }}>{inputs.includeProperty ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, includeProperty: !p.includeProperty }))} aria-pressed={!!inputs.includeProperty} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.includeProperty ? "var(--clr-emerald)" : "var(--border-strong)", color: inputs.includeProperty ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>{inputs.includeProperty ? "ON" : "OFF"}</button>
                     </div>
                     <div style={{ opacity: inputs.includeProperty ? 1 : 0.4, pointerEvents: inputs.includeProperty ? "auto" : "none", display: "flex", flexDirection: "column", gap: 8 }}>
                       <div>
@@ -9178,7 +9172,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                         <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Only BRS needed in RA at 55 · pledged sum stays in RA at 4% · withdraw as cash via CPF application</p>
                       </div>
-                      <button onClick={() => setInputs(p => ({ ...p, usePropertyPledge: !p.usePropertyPledge }))} aria-pressed={!!inputs.usePropertyPledge} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.usePropertyPledge ? "var(--clr-emerald)" : "var(--border-strong)", color: inputs.usePropertyPledge ? "#020617" : "var(--text-muted)", flexShrink: 0, marginTop: 2 }}>{inputs.usePropertyPledge ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, usePropertyPledge: !p.usePropertyPledge }))} aria-pressed={!!inputs.usePropertyPledge} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.usePropertyPledge ? "var(--clr-emerald)" : "var(--border-strong)", color: inputs.usePropertyPledge ? "var(--ctrl-on-text)" : "var(--text-muted)", flexShrink: 0, marginTop: 2 }}>{inputs.usePropertyPledge ? "ON" : "OFF"}</button>
                     </div>
                     {inputs.usePropertyPledge && (() => {
                       const ca = Number(inputs.currentAge) || 35;
@@ -9222,7 +9216,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </p>
                         <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Downgrade · LBS · Silver Housing Bonus · one-time event</p>
                       </div>
-                      <button onClick={() => setInputs(p => ({ ...p, propMonetiseEnabled: !p.propMonetiseEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.propMonetiseEnabled ? "var(--clr-blue)" : "var(--border-strong)", color: inputs.propMonetiseEnabled ? "#020617" : "var(--text-muted)", flexShrink: 0 }}>{inputs.propMonetiseEnabled ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, propMonetiseEnabled: !p.propMonetiseEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.propMonetiseEnabled ? "var(--clr-blue)" : "var(--border-strong)", color: inputs.propMonetiseEnabled ? "var(--ctrl-on-text)" : "var(--text-muted)", flexShrink: 0 }}>{inputs.propMonetiseEnabled ? "ON" : "OFF"}</button>
                     </div>
                     {inputs.propMonetiseEnabled && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -9231,7 +9225,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Scheme</label>
                           <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 2 }}>
                             {[["downgrade", "Downgrade"], ["lbs", "LBS"], ["shb", "Silver HB"]].map(([val, label]) => (
-                              <button key={val} onClick={() => setInputs(p => ({ ...p, propMonetiseScheme: val }))} style={{ flex: 1, padding: "4px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer", background: (inputs.propMonetiseScheme ?? "downgrade") === val ? "var(--clr-blue)" : "transparent", color: (inputs.propMonetiseScheme ?? "downgrade") === val ? "#020617" : "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</button>
+                              <button key={val} onClick={() => setInputs(p => ({ ...p, propMonetiseScheme: val }))} style={{ flex: 1, padding: "4px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer", background: (inputs.propMonetiseScheme ?? "downgrade") === val ? "var(--clr-blue)" : "transparent", color: (inputs.propMonetiseScheme ?? "downgrade") === val ? "var(--ctrl-on-text)" : "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</button>
                             ))}
                           </div>
                           <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
@@ -9749,7 +9743,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   // payoutAge (e.g. 55 when pa=65) is corrected, not silently preserved.
                                   oaDrawdownStartAge: Math.max(pa, p.oaDrawdownStartAge > 0 ? p.oaDrawdownStartAge : pa)
                                 }))}
-                                style={{ flex: 1, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : "#020617", fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 10, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
+                                style={{ flex: 1, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : "var(--ctrl-on-text)", fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 10, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
                               >
                                 ⚡ Fill Gap — Set Draw to {formatCurrency(requiredOADraw)}/mo
                               </button>
@@ -11783,7 +11777,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </details>
                   <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 10, gap: 2, alignSelf: "flex-start" }}>
                     {["standard", "escalating", "basic"].map(plan => (
-                      <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 10, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "#020617" : "var(--text-muted)" }}>
+                      <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 10, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                         {plan}
                       </button>
                     ))}
@@ -11812,7 +11806,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 </div>
                 <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2 }}>
                   {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["bequest", "Bequest"], ["total", "Total Yield"]].map(([id, label]) => (
-                    <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 10, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "#020617" : "var(--text-muted)" }}>
+                    <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 10, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
                       {label}
                     </button>
                   ))}
