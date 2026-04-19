@@ -3046,6 +3046,11 @@ export default function App() {
       const rssStart = Number(inp.rssPayoutStartAge) || 65;
       const rssPay   = Number(inp.rssMonthlyPayout)  || 0;
       const rssMigr  = Number(inp.lifeMigrationAge)  || 0;
+      // Fix 4a: RSS minimum age gate — must be born before 1958.
+      // minRssAge = currentYear − 1958 (e.g. 2026 → 68). Members born Jan 1958 turn 68 in 2026.
+      const minRssAge = (Number(inp.currentYear) || 2026) - 1958;
+      if (!errs.currentAge && ca > 0 && ca < minRssAge)
+        errs.currentAge = `RSS (Retirement Sum Scheme) applies to members born before 1958. Minimum valid age in ${Number(inp.currentYear) || 2026} is ${minRssAge}. Younger members should use CPF LIFE instead.`;
       if (rssStart < 55 || rssStart > 70) errs.rssPayoutStartAge = "RSS payout start age must be 55–70";
       if (!errs.rssPayoutStartAge && ca > 0 && rssStart > ca) errs.rssPayoutStartAge = "RSS payouts must have already started — enter the age when CPF Board began paying you (must be ≤ current age)";
       if (rssPay <= 0) errs.rssMonthlyPayout = "Enter your fixed monthly RSS payout amount from your CPF statement";
@@ -3707,11 +3712,22 @@ export default function App() {
 
   const handleBlur = (e) => {
     let { name, value } = e.target;
-    const coerced = (value === "" || isNaN(Number(value))) ? 0 : Number(value);
+    // Fix 5: strip currency formatting before coercing to a number.
+    // getDisplayValue renders "$30,000" when focusedField is null.  If a React re-render
+    // commits focusedField = null BEFORE blur fires (e.g. clicking a collapsed section
+    // header triggers mousedown → setState → re-render → blur), e.target.value already
+    // holds the formatted string.  Number("$30,000") = NaN → previous code coerced to 0,
+    // silently zeroing the field.  Stripping $ and , first makes the parse robust.
+    const stripped = String(value).replace(/[$,]/g, '').trim();
+    const coerced = (stripped === "" || isNaN(Number(stripped))) ? 0 : Number(stripped);
     // Pure updater — no side effects inside setState. Validation is handled by the
     // dedicated useEffect below which always receives the fully committed inputs state,
     // eliminating the stale-closure risk of the previous Promise.resolve microtask.
     setInputs(prev => ({ ...prev, [name]: coerced }));
+    // Always clear focusedField on blur so the committed field immediately renders in
+    // currency format.  Event order is guaranteed: blur(A) fires before focus(B), so
+    // field B's onFocus will set focusedField(B) after this null — no perceptible flicker.
+    setFocusedField(null);
   };
 
   // Bug 1 fix: validation useEffect — replaces the Promise.resolve microtask that was
@@ -3960,15 +3976,29 @@ export default function App() {
   useEffect(() => {
     if (!rssActionPending) return;
     const ca = Number(inputs.currentAge) || 65;
+    // Fix 4b: RSS is only valid for members born before 1958.
+    // Clamp currentAge to the minimum valid RSS age (currentYear − 1958) in both branches.
+    // If the user's age is below the minimum, snap it up and note it in the toast.
+    const minRssAge = (Number(inputs.currentYear) || 2026) - 1958;
+    const enforcedAge = Math.max(ca, minRssAge);
+    const ageClamped = enforcedAge > ca;
+    const ageClampNote = ageClamped ? ` Age adjusted to ${enforcedAge} (RSS minimum for ${Number(inputs.currentYear)||2026}).` : '';
+
     if (rssActionPending === 'keep') {
-      setInputs(p => ({ ...p, cpfScheme: 'rss' }));
-      showToast('✓ Switched to RSS — all existing fields kept.');
+      // Keep all existing fields — only override cpfScheme (and currentAge if invalid for RSS).
+      const updates = { cpfScheme: 'rss' };
+      if (ageClamped) updates.currentAge = enforcedAge;
+      setInputs(p => ({ ...p, ...updates }));
+      showToast(`✓ Switched to RSS — all existing fields kept.${ageClampNote}`);
     } else if (rssActionPending === 'reset') {
       setInputs(p => ({
         ...p,
         cpfScheme: 'rss',
-        // ── RSS payout defaults ──────────────────────────────────────────
-        rssPayoutStartAge: ca,       // default to current age (user should check CPF statement)
+        currentAge: enforcedAge,
+        // Fix 4b: default to 55 (CPF policy minimum payout start), not current age.
+        // Previously defaulted to `ca` which could be 75+ — users then had to manually
+        // correct it. 55 is the earliest valid RSS payout start per CPF policy.
+        rssPayoutStartAge: 55,
         rssMonthlyPayout:  0,        // must be entered from CPF statement
         lifeMigrationAge:  0,        // no migration configured
         lifePlanAtMigration: 'std',  // reset to standard for cleanliness
@@ -3985,7 +4015,7 @@ export default function App() {
         // ── Payout age (CPF LIFE only) ───────────────────────────────────
         payoutAge: 65,
       }));
-      showToast('✓ Switched to RSS — contribution & top-up fields reset.');
+      showToast(`✓ Switched to RSS — contribution & top-up fields reset.${ageClampNote}`);
     }
     setRssActionPending(null); // clear the flag
   }, [rssActionPending]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -9810,7 +9840,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   // Simple PMT-depletion estimate for KPI strip (engine does the real calculation in PR-2)
                   const rssDepEst = (() => {
                     if (!isRSSKpi || rssAnnual <= 0 || rssCurrentRa <= 0) return null;
-                    let bal = rssCurrentRa; const start = Number(inputs.rssPayoutStartAge) || 65;
+                    // Bug 1 fix: loop must start from currentAge (ca2), not rssPayoutStartAge.
+                    // rssCurrentRa is seeded from the RA at currentAge — iterating from
+                    // rssPayoutStartAge runs phantom years before the current position and
+                    // returns a depletion age that is (currentAge − rssPayoutStartAge) years too early.
+                    let bal = rssCurrentRa; const start = ca2;
                     for (let age = start; age <= 95; age++) {
                       bal = bal * (1 + CPF_RATES.RA) - rssAnnual;
                       if (bal <= 0) return age;
@@ -11082,7 +11116,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               const depletionAge = (() => { for (let i = displayAccumulation.length - 1; i >= 0; i--) { if (displayAccumulation[i]?.rssDepletionAge != null) return displayAccumulation[i].rssDepletionAge; } return null; })();
               // RA drawdown chart data: rows from rssPayoutStart onwards
               const raChartData = displayAccumulation.filter(r => r.age >= rssStartAge);
-              const raAtPayoutStart = accumulationByAge.get(rssStartAge)?.ra || 0;
+              // Bug 2 fix: accumulationByAge only covers currentAge → 95.
+              // When rssStartAge < currentAge (payout already began years ago), the Map
+              // lookup returns undefined → $0.  Fall back to the current RA input (saBalance)
+              // which is the best available proxy for the actual balance right now.
+              const currentAgeForRss = Number(debouncedInputs.currentAge) || 65;
+              const raAtPayoutStartIsCurrent = rssStartAge < currentAgeForRss;
+              const raAtPayoutStart = raAtPayoutStartIsCurrent
+                ? (Number(debouncedInputs.saBalance) || 0)
+                : (accumulationByAge.get(rssStartAge)?.ra || 0);
               return (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
                 {/* Header + eligibility bar */}
@@ -11125,10 +11167,40 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
                 )}
 
+                {/* Bug 3 fix: amber banner when payout < RA interest — RA grows rather than depletes.
+                    Uses 4% base rate as a conservative floor (actual effective rate is higher due to
+                    extra interest on first $30k/$60k, so this banner may trigger even slightly below
+                    the true break-even). Shown only when a payout amount has been entered. */}
+                {rssMonthlyAmt > 0 && (() => {
+                  const currentRaBal = (accumulationByAge.get(currentAgeForRss) || displayAccumulation[0])?.ra
+                    || Number(debouncedInputs.saBalance) || 0;
+                  const annualInterestFloor = currentRaBal * CPF_RATES.RA; // 4% base — conservative lower bound
+                  const annualPayout = rssMonthlyAmt * 12;
+                  if (annualPayout >= annualInterestFloor) return null;
+                  const breakEvenMonthly = Math.ceil(annualInterestFloor / 12);
+                  return (
+                    <div style={{ padding: "14px 18px", borderRadius: 12, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.45)", display: "flex", alignItems: "flex-start", gap: 12 }}>
+                      <span style={{ fontSize: 22, flexShrink: 0 }}>⚠</span>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: "#fcd34d", margin: "0 0 4px" }}>
+                          RA is growing — your payout is below the interest your RA earns
+                        </p>
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+                          Your monthly payout ({formatCurrency(rssMonthlyAmt)}/mo) is less than the interest your RA earns at the
+                          4% base rate (~{formatCurrency(breakEvenMonthly)}/mo on {formatCurrency(currentRaBal)}). Your RA will grow, not
+                          deplete — hence the upward chart. To project a depletion date, increase your monthly payout
+                          above ~{formatCurrency(breakEvenMonthly)}/mo. The actual break-even is slightly higher because your RA also
+                          earns an extra 1% on the first $60k and an additional 1% on the first $30k.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* KPI cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
                   {[
-                    ["RA at Payout Start", formatCurrency(raAtPayoutStart), "#60a5fa", `RA balance at age ${rssStartAge} when drawdowns began`],
+                    [raAtPayoutStartIsCurrent ? "Current RA" : "RA at Payout Start", formatCurrency(raAtPayoutStart), "#60a5fa", raAtPayoutStartIsCurrent ? `Current RA balance (payout started at age ${rssStartAge}, before the simulation window — using current balance as proxy)` : `RA balance at age ${rssStartAge} when drawdowns began`],
                     ["Monthly Payout", rssMonthlyAmt > 0 ? formatCurrency(rssMonthlyAmt) + "/mo" : "Not set", rssMonthlyAmt > 0 ? "#34d399" : "#f87171", "Fixed CPF Board RSS monthly amount"],
                     ["Annual Drawdown", rssMonthlyAmt > 0 ? formatCurrency(rssMonthlyAmt * 12) + "/yr" : "—", "#60a5fa", "Total annual RA debit"],
                     ["Est. Depletion Age", depletionAge != null ? `Age ${depletionAge}` : rssMonthlyAmt > 0 ? ">95" : "Set payout", depletionAge != null && depletionAge < 85 ? "#f87171" : "#34d399", "Age when RA balance hits $0"],
