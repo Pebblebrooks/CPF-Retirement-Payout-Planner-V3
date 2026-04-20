@@ -725,28 +725,16 @@ function runRSSEngine(inputs, {
   const careerBreakStart  = inputs.careerBreakStartAge !== "" && inputs.careerBreakStartAge != null ? Number(inputs.careerBreakStartAge) : null;
   const careerBreakEnd    = inputs.careerBreakEndAge   !== "" && inputs.careerBreakEndAge   != null ? Number(inputs.careerBreakEndAge)   : null;
   const computeGF = (age, bump = 0) => {
-    const hasBreak = careerBreakStart !== null && careerBreakEnd !== null;
-    const inBreak  = hasBreak && age >= careerBreakStart && age <= careerBreakEnd;
+    const inBreak = careerBreakStart !== null && careerBreakEnd !== null && age >= careerBreakStart && age <= careerBreakEnd;
     if (inBreak) return 0;
-    // BUG-5 fix: subtract break years that have already elapsed from compounding periods.
-    // Previously yearsTotal = age - startAge counted ALL years including break years, causing
-    // post-break salary to compound as if the break never happened (overstated growth).
-    // breakElapsed is only non-zero once the break window is fully behind the current age.
-    const breakElapsed = (hasBreak && age > careerBreakEnd)
-      ? Math.max(0, careerBreakEnd - careerBreakStart + 1) : 0;
+    const yearsTotal = Math.max(0, age - startAge);
     let gfVal;
     if (salaryPhaseAge !== null && age >= salaryPhaseAge) {
-      const rawYears1 = Math.max(0, salaryPhaseAge - startAge);
-      const rawYears2 = Math.max(0, age - salaryPhaseAge);
-      // Apportion break years to whichever phase they actually fell in.
-      // breakInP1 = overlap of [breakStart,breakEnd] with [startAge, salaryPhaseAge)
-      const breakInP1 = (hasBreak && age > careerBreakEnd)
-        ? Math.max(0, Math.min(careerBreakEnd, salaryPhaseAge - 1) - Math.max(careerBreakStart, startAge) + 1) : 0;
-      const breakInP2 = Math.max(0, breakElapsed - breakInP1);
-      gfVal = Math.pow(1 + salaryGrowth, Math.max(0, rawYears1 - breakInP1))
-            * Math.pow(1 + salaryGrowthRate2, Math.max(0, rawYears2 - breakInP2));
+      const years1 = Math.max(0, salaryPhaseAge - startAge);
+      const years2 = Math.max(0, age - salaryPhaseAge);
+      gfVal = Math.pow(1 + salaryGrowth, years1) * Math.pow(1 + salaryGrowthRate2, years2);
     } else {
-      gfVal = Math.pow(1 + salaryGrowth, Math.max(0, age - startAge - breakElapsed));
+      gfVal = Math.pow(1 + salaryGrowth, yearsTotal);
     }
     return gfVal * (1 + bump);
   };
@@ -1476,28 +1464,16 @@ function runProjectionEngine(inputs, {
   // Phase 1: (1+r1)^(age-startAge). Phase 2 (age >= phaseAge): (1+r1)^(phaseAge-startAge) * (1+r2)^(age-phaseAge).
   // Career break: returns 0 for ages within [breakStart, breakEnd], halting contributions for those years.
   const computeGF = (age, bump = 0) => {
-    const hasBreak = careerBreakStart !== null && careerBreakEnd !== null;
-    const inBreak  = hasBreak && age >= careerBreakStart && age <= careerBreakEnd;
+    const inBreak = careerBreakStart !== null && careerBreakEnd !== null && age >= careerBreakStart && age <= careerBreakEnd;
     if (inBreak) return 0;
-    // BUG-5 fix: subtract break years that have already elapsed from compounding periods.
-    // Previously yearsTotal = age - startAge counted ALL years including break years, causing
-    // post-break salary to compound as if the break never happened (overstated growth).
-    // breakElapsed is only non-zero once the break window is fully behind the current age.
-    const breakElapsed = (hasBreak && age > careerBreakEnd)
-      ? Math.max(0, careerBreakEnd - careerBreakStart + 1) : 0;
+    const yearsTotal = Math.max(0, age - startAge);
     let gfVal;
     if (salaryPhaseAge !== null && age >= salaryPhaseAge) {
-      const rawYears1 = Math.max(0, salaryPhaseAge - startAge);
-      const rawYears2 = Math.max(0, age - salaryPhaseAge);
-      // Apportion break years to whichever phase they actually fell in.
-      // breakInP1 = overlap of [breakStart,breakEnd] with [startAge, salaryPhaseAge)
-      const breakInP1 = (hasBreak && age > careerBreakEnd)
-        ? Math.max(0, Math.min(careerBreakEnd, salaryPhaseAge - 1) - Math.max(careerBreakStart, startAge) + 1) : 0;
-      const breakInP2 = Math.max(0, breakElapsed - breakInP1);
-      gfVal = Math.pow(1 + salaryGrowth, Math.max(0, rawYears1 - breakInP1))
-            * Math.pow(1 + salaryGrowthRate2, Math.max(0, rawYears2 - breakInP2));
+      const years1 = Math.max(0, salaryPhaseAge - startAge);
+      const years2 = Math.max(0, age - salaryPhaseAge);
+      gfVal = Math.pow(1 + salaryGrowth, years1) * Math.pow(1 + salaryGrowthRate2, years2);
     } else {
-      gfVal = Math.pow(1 + salaryGrowth, Math.max(0, age - startAge - breakElapsed));
+      gfVal = Math.pow(1 + salaryGrowth, yearsTotal);
     }
     return gfVal * (1 + bump);
   };
@@ -2715,22 +2691,11 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
 //        Only fields that differ from DEFAULT_INPUTS are stored, so a typical
 //        1,500-char JSON shrinks to ~200–400 chars before base64 → final URL
 //        length of ~270–540 chars instead of the previous 3,000+ chars.
-//   '.'  Old LZ77 format (retired — produced URLs LARGER than plain base64url).\
+//   '.'  Old LZ77 format (retired — produced URLs LARGER than plain base64url).
 //        Kept in the decoder for backward compatibility with existing share links.
 //   no prefix  Legacy: plain base64url of raw UTF-8 bytes. Pre-LZ77 era links.
 //
 // DEFAULT_INPUTS must be defined before this block (it is — see line ~330).
-//
-// ⚠️  BUG-4 WARNING — DELTA-ENCODING CORRECTNESS INVARIANT ⚠️
-// The encoder omits any input field whose value === DEFAULT_INPUTS[k].
-// The decoder restores omitted fields by merging the delta over DEFAULT_INPUTS:
-//   const mergedInputs = { ...DEFAULT_INPUTS, ...safeInputs };   (see line ~3441)
-// This means: if you change a DEFAULT_INPUTS value in a future edit, ALL existing
-// share links that relied on the old default will silently decode to the NEW default.
-// The appVersion "V4-2026" field is embedded in every share link — if you change
-// any default, you MUST also bump appVersion (e.g. "V5-2026") and add a migration
-// branch in the URL-parameter decode useEffect (line ~3429) to remap old defaults.
-// Failure to do this is a silent correctness regression with no visible error.
 
 const lzCompress = (str) => {
   try {
@@ -4286,6 +4251,8 @@ export default function App() {
       // value and immediately pressed Ctrl+S before the 180ms debounce fired, the previous
       // code serialised the new keystroke value while the chart still showed the old projection.
       // debouncedInputs is always in sync with the displayed projection.
+      // SL-Fix: Build a proper ?p= URL and copy directly to clipboard — no modal shown.
+      // Modal is kept as a fallback only when clipboard API is unavailable.
       const fullState = {
         inputs: debouncedInputs, activeTab, highlightPlan, viewMode, basicPremiumPct,
         scenarioLabelA, scenarioLabelB,
@@ -4296,10 +4263,19 @@ export default function App() {
         showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026"
       };
       const compressed = lzCompress(JSON.stringify(fullState));
-      setShareUrl(compressed);
-      setShowShareModal(true);
+      const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
+      const shareURL = `${base}?p=${compressed}`;
+      if (navigator?.clipboard?.writeText && window.isSecureContext) {
+        navigator.clipboard.writeText(shareURL)
+          .then(() => showToast("✓ Share link copied to clipboard!"))
+          .catch(() => { setShareUrl(shareURL); setShowShareModal(true); });
+      } else {
+        // Fallback: show modal with the full URL so user can copy manually
+        setShareUrl(shareURL);
+        setShowShareModal(true);
+      }
     } catch (e) {
-      alert("Could not generate share code: " + e.message);
+      alert("Could not generate share link: " + e.message);
     }
   };
   handleShareLinkInitRef.current = handleShareLinkInit; // keep ref current for keyboard shortcut handler
@@ -4713,9 +4689,7 @@ export default function App() {
       const residualOa = pass2ByAge.get(dwzA)?.oa || 0;
       let finalPmt  = dwzPmt;
       let finalPass = pass2;
-      // BUG-3 fix: raised threshold $500→$2,000 — eliminates pass 3 in most cases
-      // (only members with meaningful mandatory inflows post-payout trigger this correction)
-      if (residualOa > 2000 && dwzPmt > 0) {
+      if (residualOa > 500 && dwzPmt > 0) {
         const correctionMonthly = Math.round(residualOa / Math.max(1, n * 12));
         finalPmt  = dwzPmt + correctionMonthly;
         finalPass = engineFn({ ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 });
@@ -4741,9 +4715,7 @@ export default function App() {
             ? Math.round(privAtPayout * rPriv / (1 - Math.pow(1 + rPriv, -n)))
             : Math.round(privAtPayout / n))
         : 0;
-      // BUG-3 fix: guard pass 4 at privAtPayout > 1,000 — skips entire private DWZ block
-      // for members with trivial private balances (saves 2 engine passes in most cases)
-      if (pmtPrivAnnual > 0 && privAtPayout > 1000) {
+      if (pmtPrivAnnual > 0) {
         let privPass = engineFn(
           { ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
           { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa }
@@ -4755,8 +4727,7 @@ export default function App() {
         // the drawdown window, increment pmtPrivAnnual, and re-run once to correct depletion.
         let privPassByAge = new Map(privPass.map(r => [r.age, r])); // E2 fix: O(1) Map for privPass
         const residualPriv = privPassByAge.get(dwzA)?.privateAssets || 0;
-        // BUG-3 fix: raised threshold $500→$2,000 — eliminates pass 5 in most cases
-        if (residualPriv > 2000 && pmtPrivAnnual > 0) {
+        if (residualPriv > 500 && pmtPrivAnnual > 0) {
           const correctionAnnual = Math.round(residualPriv / Math.max(1, n));
           pmtPrivAnnual += correctionAnnual;
           privPass = engineFn(
@@ -6780,12 +6751,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <button onClick={() => setShowShareModal(false)} style={{ background: "none", border: "none", color: "var(--text-subtle)", cursor: "pointer" }}><X style={{ width: 20, height: 20 }} /></button>
             </div>
             <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 18, lineHeight: 1.5 }}>
-              Copy the code below and send to your financial advisor or colleague. They paste it into the <strong style={{ color: "var(--text-main)" }}>Restore</strong> box to see your exact projection instantly.
+              Your browser blocked automatic clipboard access. Copy the full URL below and paste it into any browser to open this exact projection instantly.
             </p>
 
-            {/* Profile Code */}
+            {/* Share URL */}
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontSize: 10, fontWeight: 800, color: "var(--clr-emerald)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>📋 Your Encoded Profile Code</label>
+              <label style={{ display: "block", fontSize: 10, fontWeight: 800, color: "var(--clr-emerald)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>🔗 Your Share Link URL</label>
               <textarea readOnly value={shareUrl} rows={4} onFocus={e => e.target.select()} style={{ width: "100%", padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 10, color: "var(--share-url-color)", fontSize: 10, outline: "none", resize: "none", fontFamily: "monospace", boxSizing: "border-box", lineBreak: "anywhere" }} />
             </div>
             <button onClick={executeCopy} className="cpf-btn-primary" style={{ width: "100%", padding: "11px", borderRadius: 12, background: "var(--clr-emerald)", color: "#ffffff", fontWeight: 800, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, marginBottom: 18 }}>
@@ -6798,10 +6769,19 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <div style={{ display: "flex", gap: 8 }}>
                 <input id="import-code-input" type="text" placeholder="Paste a received profile code here…" style={{ flex: 1, padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 10, color: "var(--text-bright)", fontSize: 11, outline: "none" }} />
                 <button onClick={() => {
-                  const val = document.getElementById("import-code-input")?.value?.trim();
-                  if (!val) return;
+                  const raw = document.getElementById("import-code-input")?.value?.trim();
+                  if (!raw) return;
                   try {
-                    const decoded = lzDecompress(val);
+                    // SL-Fix: accept both a raw encoded code AND a full share URL (extract ?p= param)
+                    let codeToLoad = raw;
+                    if (raw.startsWith("http")) {
+                      try {
+                        const urlObj = new URL(raw);
+                        const pParam = urlObj.searchParams.get("p");
+                        if (pParam) codeToLoad = pParam;
+                      } catch (_) { /* not a valid URL — try raw as-is */ }
+                    }
+                    const decoded = lzDecompress(codeToLoad);
                     const parsed = JSON.parse(decoded);
                     const rawInp = parsed.inputs || parsed;
                     // Whitelist — same guard as JSON file import
@@ -7255,11 +7235,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={handleExportProfile} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Save inputs as a JSON backup file">
               <Download style={{ width: 12, height: 12 }} />Export Profile
             </button>
-            <button onClick={() => {
-              try {
-                const fullState = { inputs: debouncedInputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, scenarioAInputs: scenarioA?.inputs ?? null, scenarioBInputs: scenarioB?.inputs ?? null, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" }; // Fix 2: scenario inputs included; Bug5-SL: debouncedInputs so link matches visible projection
-              } catch (e) { showToast("Could not generate share link: " + e.message); }
-            }} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Copy a shareable URL encoding all inputs, active tab, and Compare scenario slots A &amp; B. Anyone opening this link sees your exact projection. Use Export Profile for a JSON backup.">
+            <button onClick={handleShareLinkInit} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Copy a shareable URL encoding all inputs, active tab, and Compare scenario slots A &amp; B. Anyone opening this link sees your exact projection. Use Export Profile for a JSON backup.">
               <Link style={{ width: 12, height: 12 }} />Share Link
             </button>
             <button onClick={generatePDF} disabled={isGeneratingPdf} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-emerald-rgb),0.15)", color: "var(--clr-green)", padding: "6px 16px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-emerald-rgb),0.4)", cursor: "pointer", opacity: isGeneratingPdf ? 0.5 : 1 }} title="Generate a full PDF report with all charts and tables">
@@ -7329,18 +7305,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={() => { setMobileMenuOpen(false); handleExportProfile(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
               <Download style={{ width: 13, height: 13 }} />Export Profile
             </button>
-            <button onClick={() => {
-              setMobileMenuOpen(false);
-              try {
-                const fullState = { inputs: debouncedInputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, scenarioAInputs: scenarioA?.inputs ?? null, scenarioBInputs: scenarioB?.inputs ?? null, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" }; // Fix 2: scenario inputs included; Bug5-SL: debouncedInputs so link matches visible projection
-                const code = lzCompress(JSON.stringify(fullState));
-                const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
-                const shareURL = `${base}?p=${code}`;
-                if (navigator?.clipboard?.writeText) {
-                  navigator.clipboard.writeText(shareURL).then(() => showToast("✓ Share link copied!")).catch(() => { prompt("Copy this link:", shareURL); });
-                } else { prompt("Copy this link:", shareURL); }
-              } catch (e) { showToast("Could not generate share link"); }
-            }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
+            <button onClick={() => { setMobileMenuOpen(false); handleShareLinkInit(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
               <Link style={{ width: 13, height: 13 }} />Share Link
             </button>
             <button onClick={() => { setMobileMenuOpen(false); generatePDF(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-emerald-rgb),0.15)", color: "var(--clr-green)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-emerald-rgb),0.4)", cursor: "pointer" }}>
@@ -7643,14 +7608,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {/* RSS Payout Start Age */}
                           <div>
-                            {/* a11y fix: was <label> — changed to <div> because TooltipBox (role=button) inside
-                                a <label> triggers double-focus on mobile tap: label activates the input AND
-                                fires the tooltip. Use htmlFor on a plain <label> below for screen-reader association. */}
-                            <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", marginBottom: 3 }}>
-                              <label htmlFor="input-rssPayoutStartAge" style={{ cursor: "default" }}>RSS Payout Start Age</label>
+                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", marginBottom: 3 }}>
+                              RSS Payout Start Age
                               <TooltipBox id="t-rssStart" text="The age at which CPF Board began paying your fixed monthly RSS amount. For most pre-1958 members this was age 60 or 62 (older cohorts), or 65 (newer cohorts). Check your CPF statement — it will show the date payouts began." />
-                            </div>
-                            <input id="input-rssPayoutStartAge" type="text" inputMode="numeric" name="rssPayoutStartAge"
+                            </label>
+                            <input type="text" inputMode="numeric" name="rssPayoutStartAge"
                               value={inputs.rssPayoutStartAge ?? 65}
                               onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                               style={{ width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: `1px solid ${inputErrors.rssPayoutStartAge ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -7659,14 +7621,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                           {/* RSS Monthly Payout */}
                           <div>
-                            {/* a11y fix: was <label> — changed to <div> because TooltipBox (role=button) inside
-                                a <label> triggers double-focus on mobile tap. htmlFor label below preserves
-                                screen-reader association without the accessibility conflict. */}
-                            <div style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", marginBottom: 3 }}>
-                              <label htmlFor="input-rssMonthlyPayout" style={{ cursor: "default" }}>RSS Monthly Payout ($/mo)</label>
+                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", marginBottom: 3 }}>
+                              RSS Monthly Payout ($/mo)
                               <TooltipBox id="t-rssPay" text="Your fixed CPF Board monthly payout under RSS. Find this on your CPF statement or the CPF website — log in and check under 'My Retirement'. This amount is fixed by CPF Board and does not change year to year under RSS." />
-                            </div>
-                            <input id="input-rssMonthlyPayout" type="text" inputMode="decimal" name="rssMonthlyPayout"
+                            </label>
+                            <input type="text" inputMode="decimal" name="rssMonthlyPayout"
                               value={getDisplayValue('rssMonthlyPayout', inputs.rssMonthlyPayout)}
                               onFocus={() => setFocusedField('rssMonthlyPayout')}
                               onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
