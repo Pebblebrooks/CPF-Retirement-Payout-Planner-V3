@@ -4251,6 +4251,8 @@ export default function App() {
       // value and immediately pressed Ctrl+S before the 180ms debounce fired, the previous
       // code serialised the new keystroke value while the chart still showed the old projection.
       // debouncedInputs is always in sync with the displayed projection.
+      // SL-Fix: Build a proper ?p= URL and copy directly to clipboard — no modal shown.
+      // Modal is kept as a fallback only when clipboard API is unavailable.
       const fullState = {
         inputs: debouncedInputs, activeTab, highlightPlan, viewMode, basicPremiumPct,
         scenarioLabelA, scenarioLabelB,
@@ -4261,10 +4263,19 @@ export default function App() {
         showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026"
       };
       const compressed = lzCompress(JSON.stringify(fullState));
-      setShareUrl(compressed);
-      setShowShareModal(true);
+      const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
+      const shareURL = `${base}?p=${compressed}`;
+      if (navigator?.clipboard?.writeText && window.isSecureContext) {
+        navigator.clipboard.writeText(shareURL)
+          .then(() => showToast("✓ Share link copied to clipboard!"))
+          .catch(() => { setShareUrl(shareURL); setShowShareModal(true); });
+      } else {
+        // Fallback: show modal with the full URL so user can copy manually
+        setShareUrl(shareURL);
+        setShowShareModal(true);
+      }
     } catch (e) {
-      alert("Could not generate share code: " + e.message);
+      alert("Could not generate share link: " + e.message);
     }
   };
   handleShareLinkInitRef.current = handleShareLinkInit; // keep ref current for keyboard shortcut handler
@@ -6740,12 +6751,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <button onClick={() => setShowShareModal(false)} style={{ background: "none", border: "none", color: "var(--text-subtle)", cursor: "pointer" }}><X style={{ width: 20, height: 20 }} /></button>
             </div>
             <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 18, lineHeight: 1.5 }}>
-              Copy the code below and send to your financial advisor or colleague. They paste it into the <strong style={{ color: "var(--text-main)" }}>Restore</strong> box to see your exact projection instantly.
+              Your browser blocked automatic clipboard access. Copy the full URL below and paste it into any browser to open this exact projection instantly.
             </p>
 
-            {/* Profile Code */}
+            {/* Share URL */}
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontSize: 10, fontWeight: 800, color: "var(--clr-emerald)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>📋 Your Encoded Profile Code</label>
+              <label style={{ display: "block", fontSize: 10, fontWeight: 800, color: "var(--clr-emerald)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>🔗 Your Share Link URL</label>
               <textarea readOnly value={shareUrl} rows={4} onFocus={e => e.target.select()} style={{ width: "100%", padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 10, color: "var(--share-url-color)", fontSize: 10, outline: "none", resize: "none", fontFamily: "monospace", boxSizing: "border-box", lineBreak: "anywhere" }} />
             </div>
             <button onClick={executeCopy} className="cpf-btn-primary" style={{ width: "100%", padding: "11px", borderRadius: 12, background: "var(--clr-emerald)", color: "#ffffff", fontWeight: 800, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, marginBottom: 18 }}>
@@ -6758,10 +6769,19 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <div style={{ display: "flex", gap: 8 }}>
                 <input id="import-code-input" type="text" placeholder="Paste a received profile code here…" style={{ flex: 1, padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 10, color: "var(--text-bright)", fontSize: 11, outline: "none" }} />
                 <button onClick={() => {
-                  const val = document.getElementById("import-code-input")?.value?.trim();
-                  if (!val) return;
+                  const raw = document.getElementById("import-code-input")?.value?.trim();
+                  if (!raw) return;
                   try {
-                    const decoded = lzDecompress(val);
+                    // SL-Fix: accept both a raw encoded code AND a full share URL (extract ?p= param)
+                    let codeToLoad = raw;
+                    if (raw.startsWith("http")) {
+                      try {
+                        const urlObj = new URL(raw);
+                        const pParam = urlObj.searchParams.get("p");
+                        if (pParam) codeToLoad = pParam;
+                      } catch (_) { /* not a valid URL — try raw as-is */ }
+                    }
+                    const decoded = lzDecompress(codeToLoad);
                     const parsed = JSON.parse(decoded);
                     const rawInp = parsed.inputs || parsed;
                     // Whitelist — same guard as JSON file import
@@ -7215,7 +7235,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={handleExportProfile} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Save inputs as a JSON backup file">
               <Download style={{ width: 12, height: 12 }} />Export Profile
             </button>
-            <button onClick={handleShareLinkInit} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Copy a shareable profile code encoding all inputs and Compare scenarios. Paste into the Restore box on any device to load your exact projection.">
+            <button onClick={handleShareLinkInit} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Copy a shareable URL encoding all inputs, active tab, and Compare scenario slots A &amp; B. Anyone opening this link sees your exact projection. Use Export Profile for a JSON backup.">
               <Link style={{ width: 12, height: 12 }} />Share Link
             </button>
             <button onClick={generatePDF} disabled={isGeneratingPdf} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-emerald-rgb),0.15)", color: "var(--clr-green)", padding: "6px 16px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-emerald-rgb),0.4)", cursor: "pointer", opacity: isGeneratingPdf ? 0.5 : 1 }} title="Generate a full PDF report with all charts and tables">
