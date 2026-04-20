@@ -7215,11 +7215,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={handleExportProfile} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Save inputs as a JSON backup file">
               <Download style={{ width: 12, height: 12 }} />Export Profile
             </button>
-            <button onClick={() => {
-              try {
-                const fullState = { inputs: debouncedInputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, scenarioAInputs: scenarioA?.inputs ?? null, scenarioBInputs: scenarioB?.inputs ?? null, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" }; // Fix 2: scenario inputs included; Bug5-SL: debouncedInputs so link matches visible projection
-              } catch (e) { showToast("Could not generate share link: " + e.message); }
-            }} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Copy a shareable URL encoding all inputs, active tab, and Compare scenario slots A &amp; B. Anyone opening this link sees your exact projection. Use Export Profile for a JSON backup.">
+            <button onClick={handleShareLinkInit} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "6px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }} title="Copy a shareable profile code encoding all inputs and Compare scenarios. Paste into the Restore box on any device to load your exact projection.">
               <Link style={{ width: 12, height: 12 }} />Share Link
             </button>
             <button onClick={generatePDF} disabled={isGeneratingPdf} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(var(--clr-emerald-rgb),0.15)", color: "var(--clr-green)", padding: "6px 16px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-emerald-rgb),0.4)", cursor: "pointer", opacity: isGeneratingPdf ? 0.5 : 1 }} title="Generate a full PDF report with all charts and tables">
@@ -7289,18 +7285,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={() => { setMobileMenuOpen(false); handleExportProfile(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
               <Download style={{ width: 13, height: 13 }} />Export Profile
             </button>
-            <button onClick={() => {
-              setMobileMenuOpen(false);
-              try {
-                const fullState = { inputs: debouncedInputs, activeTab, highlightPlan, viewMode, basicPremiumPct, scenarioLabelA, scenarioLabelB, scenarioAInputs: scenarioA?.inputs ?? null, scenarioBInputs: scenarioB?.inputs ?? null, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026" }; // Fix 2: scenario inputs included; Bug5-SL: debouncedInputs so link matches visible projection
-                const code = lzCompress(JSON.stringify(fullState));
-                const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
-                const shareURL = `${base}?p=${code}`;
-                if (navigator?.clipboard?.writeText) {
-                  navigator.clipboard.writeText(shareURL).then(() => showToast("✓ Share link copied!")).catch(() => { prompt("Copy this link:", shareURL); });
-                } else { prompt("Copy this link:", shareURL); }
-              } catch (e) { showToast("Could not generate share link"); }
-            }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
+            <button onClick={() => { setMobileMenuOpen(false); handleShareLinkInit(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
               <Link style={{ width: 13, height: 13 }} />Share Link
             </button>
             <button onClick={() => { setMobileMenuOpen(false); generatePDF(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-emerald-rgb),0.15)", color: "var(--clr-green)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-emerald-rgb),0.4)", cursor: "pointer" }}>
