@@ -10396,7 +10396,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* ── SUMMARY TAB ── */}
             {activeTab === "summary" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                {/* Summary tab intro — collapsible via native <details> (no hooks) */}
+                {/* Summary tab intro — hidden in FHD tile-grid mode (self-documenting dashboard) */}
+                {desktopMode !== 'fhd' && (
                 <details style={{ borderRadius: 14, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
                   <summary style={{ padding: "10px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                     <p style={{ fontWeight: 700, color: "var(--text-highlight)", margin: 0, fontSize: 12 }}>📋 Summary Tab — What You're Looking At</p>
@@ -10441,7 +10442,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       ))}
                     </div>
                   </div>
-                </details>}
+                </details>)}
                 {/* FHD: Real/Nominal banner spans full tile grid width */}
                 <div className={desktopMode === 'fhd' ? 'fhd-tile w3' : undefined} style={desktopMode === 'fhd' ? { padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } : undefined}>
                   {isRealDollars ? (
