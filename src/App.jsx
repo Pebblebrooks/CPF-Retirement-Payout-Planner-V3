@@ -6565,11 +6565,19 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .cpf-tab-content::-webkit-scrollbar { width: 5px; }
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
         .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
-        /* ─── FHD: cpf-tab-content must be block so tile-grid owns layout ── */
+        /* ─── FHD: cpf-tab-content must be block so tile-grid owns layout.
+              min-height gives the tile grid a viewport boundary to fill against
+              so tiles stretch to occupy available space rather than shrinking
+              to minimum content size.                                          */
         .cpf-layout[data-mode="fhd"] .cpf-tab-content {
           display: block;
-          /* keep padding/scroll — only remove flex so inner grid fires */
-          padding: 16px;
+          padding: 12px 16px 16px;
+          min-height: calc(100vh - 180px); /* approx: viewport minus nav+kpi+tabs */
+          box-sizing: border-box;
+        }
+        /* Ensure panels that normally use fixed widths fill tiles in FHD */
+        .cpf-layout[data-mode="fhd"] .fhd-tile > div[style] {
+          min-width: 0;
         }
 
         /* ─── DESKTOP VIEWPORT MODES ─────────────────────────────────── */
@@ -6755,58 +6763,66 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           grid-template-columns: 720px 1fr;
         }
 
-        /* 2. Sidebar inner: CSS multi-column layout (newspaper style).
-              This is the ONLY pure-CSS approach where the two columns are
-              fully independent — expanding a section in col-2 never affects
-              col-1 height and never creates a "black hole" void.
-              CSS Grid couples row heights; multi-column does not.
-              !important overrides the inline display:flex on .cpf-sidebar-inner */
+        /* 2. Sidebar inner — flex-wrap two-column layout.
+              flex-wrap with width:50% items pins each section permanently to
+              left or right column. Sections NEVER jump between columns when
+              one expands. Within each pair-row the shorter section may have a
+              small gap below it — this is intentional and far better than
+              sections reordering unpredictably.
+              !important overrides the inline style={{ flexDirection:"column" }}
+              on the cpf-sidebar-inner div. */
         .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner {
-          display: block !important;  /* multi-column is a block-level container */
-          column-count: 2;
-          column-gap: 8px;
-          /* No align-items needed — multi-column handles this naturally */
+          display: flex !important;
+          flex-direction: row !important;
+          flex-wrap: wrap !important;
+          align-items: flex-start !important;
+          align-content: flex-start !important;
+          gap: 0 !important;          /* use margin on children for vertical gap */
         }
 
-        /* 3. Each section card must not break across the column boundary.
-              break-inside:avoid keeps each card whole in one column.
-              display:block overrides any flex/grid on the child itself.
-              margin-bottom replaces gap (gap is not supported on multi-column children). */
+        /* 3. Each section card takes exactly half the sidebar width.
+              flex-shrink:0 prevents cards from collapsing below 50%.
+              align-self:flex-start keeps card at the top of its flex row,
+              so expanding one card doesn't stretch its row partner. */
         .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner > div {
-          display: block;
-          break-inside: avoid;
-          -webkit-column-break-inside: avoid;  /* Safari */
-          page-break-inside: avoid;             /* older Firefox */
-          margin-bottom: 8px;
-          width: 100%;  /* fill the column width */
+          flex: 0 0 calc(50% - 4px);
+          width: calc(50% - 4px);
+          min-width: 0;
+          align-self: flex-start;
+          margin-bottom: 6px;
         }
+        /* Alternate left/right margins to create column gap */
+        .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner > div:nth-child(odd)  { margin-right: 4px; }
+        .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner > div:nth-child(even) { margin-left: 4px;  }
 
-        /* 4. Sticky bar: span both columns using a negative margin trick.
-              In multi-column, column-span:all is the correct property. */
+        /* 4. Sticky bar spans full width across both sidebar columns */
         .cpf-layout[data-mode="fhd"] .sidebar-sticky-bar {
-          column-span: all;   /* spans both columns — equivalent to grid-column:1/-1 */
+          flex: 0 0 100%;
+          width: 100%;
           position: sticky;
           top: 0;
           z-index: 11;
           margin-bottom: 8px;
+          order: -1;   /* always first regardless of DOM position */
         }
 
         /* ── FHD TILE GRID ─────────────────────────────────────────────────── */
 
         /* 5. Tile grid container — used as the Summary tab content wrapper in FHD.
-              width:100% + box-sizing ensures the grid fills the block-level
-              cpf-tab-content parent without overflowing its padding box.       */
+              grid-auto-rows:auto lets each row size to its tallest tile.
+              align-items:stretch makes every tile fill its row height,
+              eliminating blank areas within a grid row.                        */
         .fhd-tile-grid {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
-          grid-auto-rows: min-content;
+          grid-auto-rows: auto;
           gap: 10px;
-          align-items: start;
+          align-items: stretch;
           width: 100%;
           box-sizing: border-box;
         }
 
-        /* 6. Tile base */
+        /* 6. Tile base — stretch to fill grid cell vertically */
         .fhd-tile {
           border: 1px solid var(--border-subtle);
           border-radius: 14px;
@@ -6815,6 +6831,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           flex-direction: column;
           min-width: 0;
           overflow: hidden;
+          height: 100%;           /* fill the grid row height */
+          box-sizing: border-box;
         }
 
         /* 7. Column span helpers */
@@ -6874,23 +6892,39 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           font-weight: 700;
         }
 
-        /* 10. Tile body wrappers */
-        /* Fixed-height body for chart/visual tiles — preserves 16:9-ish aspect */
+        /* 10. Tile body wrappers.
+              Chart tiles use clamp() to scale with viewport — no fixed pixel cutoffs.
+              Auto tiles use flex:1 to fill remaining tile height.
+              All tile bodies are position:relative for any absolutely-positioned
+              overlays (tooltips, annotations).                                  */
         .fhd-tile-body-chart {
-          max-height: 320px;
+          flex: 1;
+          min-height: clamp(160px, 28vh, 380px);
+          max-height: clamp(200px, 38vh, 480px);
           overflow: hidden;
           position: relative;
         }
-        /* Auto-height for data / card tiles */
+        /* Auto-height: grows with content, fills tile */
         .fhd-tile-body-auto {
+          flex: 1;
           overflow: visible;
+          position: relative;
         }
-        /* Scrollable body for tall table tiles */
+        /* Scrollable body for tall table/ledger tiles */
         .fhd-tile-body-scroll {
-          max-height: 340px;
+          flex: 1;
+          min-height: clamp(140px, 24vh, 340px);
+          max-height: clamp(180px, 32vh, 400px);
           overflow-y: auto;
           scrollbar-width: thin;
           scrollbar-color: var(--border-strong) transparent;
+          position: relative;
+        }
+        /* Inner content of any tile body fills available space */
+        .fhd-tile-body-chart > *,
+        .fhd-tile-body-auto > *,
+        .fhd-tile-body-scroll > * {
+          min-height: 0;
         }
 
         /* 11. Collapse the existing section intro <details> in FHD — saves space */
@@ -6922,21 +6956,27 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner {
             display: flex !important;
             flex-direction: column !important;
-            column-count: unset !important;
+            flex-wrap: nowrap !important;
+            align-content: flex-start !important;
           }
           .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner > div {
-            break-inside: unset !important;
-            column-span: unset !important;
+            flex: unset !important;
+            width: 100% !important;
+            margin-right: 0 !important;
+            margin-left: 0 !important;
             margin-bottom: unset !important;
+            align-self: unset !important;
           }
           .fhd-tile-grid {
             display: flex !important;
             flex-direction: column !important;
+            align-items: stretch !important;
             grid-template-columns: unset !important;
             width: auto !important;
           }
           .fhd-tile, .fhd-tile.w2, .fhd-tile.w3 {
             grid-column: unset !important;
+            height: auto !important;
             border-radius: 0 !important;
             border-left: none !important;
             border-right: none !important;
@@ -10530,7 +10570,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 )}
                 {/* Hero — two-panel split */}
                 {/* ── Hero Panel: Left (deep navy + stats) + Right (account balances) ── */}
-                <div style={{ display: (desktopMode === 'fhd' && fhdTileTabs.hero !== 'balances') ? 'none' : 'grid', gridTemplateColumns: "1fr 1fr", gap: 14 }} className={desktopMode === 'fhd' ? 'hero-split fhd-tile-body-auto' : 'hero-split'}>
+                <div style={{ display: (desktopMode === 'fhd' && fhdTileTabs.hero !== 'balances') ? 'none' : 'grid', gridTemplateColumns: "1fr 1fr", gap: 14, padding: desktopMode === 'fhd' ? '0 0 4px 0' : undefined }} className={desktopMode === 'fhd' ? 'hero-split fhd-tile-body-auto' : 'hero-split'}>
 
                   {/* LEFT: projected total + nominal/real + 3 stat rings */}
                   <div style={{ background: "var(--hero-left-bg)", borderRadius: 16, padding: "22px", color: "var(--hero-text)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
