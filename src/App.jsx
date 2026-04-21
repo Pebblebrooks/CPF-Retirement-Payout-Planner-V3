@@ -6287,8 +6287,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* ── Sidebar gap alert ── */
         .theme-light .gap-alert-box {
-          background: rgba(254,243,199,0.85) !important;
-          border-color: #92400e !important;
+          background: var(--bg-panel) !important;
+          border-color: var(--border-subtle) !important;
         }
 
         /* ── Info badge pills ── */
@@ -6458,6 +6458,45 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .theme-light [style*="background: rgba(30, 41, 59, 0.6)"] {
           background: var(--bg-input) !important;
           color: var(--text-muted) !important;
+        }
+
+        /* ── Amber / brown tinted card backgrounds → neutral panel white ──
+           In light mode --clr-amber-rgb and --clr-amber3-rgb both resolve
+           to 146,64,14 (dark brown). Any element using these as a background
+           tint renders as a brownish card that clashes with the blue-grey
+           panel whites. These overrides neutralise every amber-tinted card
+           (FRS Tracker, gap alert, contribution gap detail, legal disclaimer,
+           deploy tip, "Fix in Inflows" button) to var(--bg-panel) = #d8e4f0
+           while keeping the amber accent colour on text and icons unchanged.
+           Scoped to .theme-light — zero impact on dark mode.             ── */
+        .theme-light [style*="background: rgba(var(--clr-amber-rgb),0.05)"],
+        .theme-light [style*="background: rgba(var(--clr-amber-rgb),0.06)"],
+        .theme-light [style*="background: rgba(var(--clr-amber-rgb),0.07)"],
+        .theme-light [style*="background: rgba(var(--clr-amber-rgb),0.08)"],
+        .theme-light [style*="background: rgba(var(--clr-amber-rgb),0.10)"],
+        .theme-light [style*="background: rgba(var(--clr-amber-rgb),0.12)"],
+        .theme-light [style*="background: rgba(var(--clr-amber-rgb),0.15)"],
+        .theme-light [style*="background: rgba(var(--clr-amber3-rgb),0.05)"],
+        .theme-light [style*="background: rgba(var(--clr-amber3-rgb),0.06)"],
+        .theme-light [style*="background: rgba(var(--clr-amber3-rgb),0.07)"],
+        .theme-light [style*="background: rgba(var(--clr-amber3-rgb),0.08)"],
+        .theme-light [style*="background: rgba(var(--clr-amber3-rgb),0.10)"],
+        .theme-light [style*="background: rgba(var(--clr-amber3-rgb),0.12)"],
+        .theme-light [style*="background: rgba(var(--clr-amber3-rgb),0.15)"] {
+          background: var(--bg-panel) !important;
+        }
+        /* Matching amber border tints → standard subtle border */
+        .theme-light [style*="rgba(var(--clr-amber-rgb),0.2)"],
+        .theme-light [style*="rgba(var(--clr-amber-rgb),0.25)"],
+        .theme-light [style*="rgba(var(--clr-amber-rgb),0.3)"],
+        .theme-light [style*="rgba(var(--clr-amber-rgb),0.35)"],
+        .theme-light [style*="rgba(var(--clr-amber-rgb),0.4)"],
+        .theme-light [style*="rgba(var(--clr-amber3-rgb),0.2)"],
+        .theme-light [style*="rgba(var(--clr-amber3-rgb),0.25)"],
+        .theme-light [style*="rgba(var(--clr-amber3-rgb),0.3)"],
+        .theme-light [style*="rgba(var(--clr-amber3-rgb),0.35)"],
+        .theme-light [style*="rgba(var(--clr-amber3-rgb),0.4)"] {
+          border-color: var(--border-subtle) !important;
         }
 
         /* ── Hero account donut ring SVG percentage text ──────────────
@@ -13486,3 +13525,4 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
     </TooltipContext.Provider>
   );
 }
+
