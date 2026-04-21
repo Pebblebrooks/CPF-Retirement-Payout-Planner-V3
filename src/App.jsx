@@ -6615,11 +6615,47 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-modal-inner { max-width: 100% !important; margin: 0 !important; border-radius: 0 !important; }
-          .welcome-step3-grid { grid-template-columns: 1fr 1fr !important; }
-        }
+          /* ── Welcome modal — base: standard desktop (769px – 1439px) ── */
+          .cpf-welcome-overlay { padding: 20px; }
+          .cpf-welcome-modal   { width: 100%; max-width: 640px; height: min(90vh, 700px); }
 
-        /* ─── TABLET PORTRAIT + MOBILE  ≤ 768 px ────────────────────── */
-        @media (max-width: 768px) {
+          /* ── Large desktop ≥ 1440 px ── */
+          @media (min-width: 1440px) {
+            .cpf-welcome-overlay { padding: 32px; }
+            .cpf-welcome-modal   { max-width: 780px; height: min(88vh, 820px); }
+            .cpf-welcome-body    { padding: 24px 28px !important; }
+            .cpf-welcome-footer  { padding: 20px 36px !important; }
+          }
+
+          /* ── Tablet landscape  769 – 1024 px ── */
+          @media (max-width: 1024px) and (min-width: 769px) {
+            .cpf-welcome-modal  { max-width: 620px; height: min(88vh, 680px); }
+            .welcome-step3-grid { grid-template-columns: 1fr 1fr !important; }
+          }
+
+          /* ── Tablet portrait  481 – 768 px ── */
+          @media (max-width: 768px) {
+            .cpf-welcome-overlay { padding: 12px; }
+            .cpf-welcome-modal   { max-width: 98%; height: min(94vh, 680px); border-radius: 18px !important; }
+            .cpf-welcome-body    { padding: 14px 16px !important; max-height: none !important; }
+            .cpf-welcome-header  { padding: 10px 14px !important; }
+            .cpf-welcome-footer  { padding: 12px 16px !important; }
+            .welcome-step0-grid  { grid-template-columns: 1fr !important; gap: 8px !important; }
+            .welcome-step3-grid  { grid-template-columns: 1fr 1fr !important; }
+          }
+
+          /* ── Small phone  ≤ 480 px ── */
+          @media (max-width: 480px) {
+            .cpf-welcome-overlay { padding: 6px; }
+            .cpf-welcome-modal   { max-width: 100%; height: min(98vh, 100%); border-radius: 14px !important; }
+            .cpf-welcome-body    { padding: 12px !important; max-height: none !important; }
+            .cpf-welcome-header  { padding: 8px 12px !important; }
+            .cpf-welcome-footer  { padding: 10px 12px !important; }
+            .welcome-step0-grid  { grid-template-columns: 1fr !important; gap: 7px !important; }
+            .welcome-step3-grid  { grid-template-columns: 1fr !important; }
+            .cpf-welcome-header h2 { font-size: 14px !important; }
+            .cpf-welcome-header p  { font-size: 10px !important; }
+          }
           /* Revert to normal page flow — no sticky panels on mobile */
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
@@ -6637,7 +6673,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
-          .cpf-welcome-body { max-height: 50vh !important; overflow-y: auto !important; }
+          .cpf-welcome-body { max-height: none !important; overflow-y: auto !important; }
           .welcome-step3-grid { grid-template-columns: 1fr !important; }
           .kpi-strip { grid-template-columns: 1fr 1fr !important; }
           .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
@@ -6665,10 +6701,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-kpi-label { font-size: 9px !important; }
           .cpf-tab-btn { font-size: 11px !important; padding: 6px 8px !important; }
           .sidebar-toggle-btn span { font-size: 9px !important; }
-          .cpf-welcome-header { padding: 10px 12px !important; }
-          .cpf-welcome-body { padding: 16px !important; max-height: 45vh !important; overflow-y: auto !important; }
-          .welcome-step3-grid { grid-template-columns: 1fr !important; }
-          .cpf-welcome-footer { padding: 14px 16px !important; }
         }
 
         /* ─── MOBILE HEADER  ≤ 640 px ───────────────────────────────── */
@@ -7026,8 +7058,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         </div>
       )}
       {showWelcome && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, width: "100%", maxWidth: 640, height: "min(90vh,700px)", overflow: "hidden", boxShadow: "var(--shadow-modal)", display: "flex", flexDirection: "column" }}>
+        <div className="cpf-welcome-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div className="cpf-welcome-modal" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, overflow: "hidden", boxShadow: "var(--shadow-modal)", display: "flex", flexDirection: "column" }}>
             {/* Header */}
             <div className="cpf-welcome-header" style={{ padding: "12px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
@@ -7060,7 +7092,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               {welcomeStep === 0 && (
                 <>
                   <p style={{ color: "var(--text-main)", fontSize: 15, lineHeight: 1.6, marginBottom: 24 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+                  <div className="welcome-step0-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
                     {[
                       ["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck],
                       ["Monte Carlo stress testing (Mild / Base / Stress variance)", Activity], ["Milestone alerts", Bell],
