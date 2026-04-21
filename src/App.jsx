@@ -2926,16 +2926,6 @@ export default function App() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopMode, setDesktopMode] = useState("auto");
-  // FHD Dashboard — in-tile sub-tab state. Tracks the active sub-tab for each
-  // tile in the FHD Summary tile grid. Scoped here so it persists across tab
-  // switches without triggering full projection re-runs.
-  const [fhdTileTabs, setFhdTileTabs] = useState({
-    hero:     'balances',    // 'balances' | 'life'
-    gantt:    'timeline',    // 'timeline'  | 'frs'
-    analysis: 'doughnut',   // 'doughnut'  | 'estate'
-    alerts:   'milestones', // 'milestones'| 'whatif'
-  });
-  const fhdSetTile = (tile, val) => setFhdTileTabs(prev => ({ ...prev, [tile]: val }));
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPresets, setShowPresets] = useState(false);
   const [tableSubTab, setTableSubTab] = useState("projection");
@@ -6566,7 +6556,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
         .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
         /* ─── DESKTOP VIEWPORT MODES ─────────────────────────────────── */
-        .cpf-layout[data-mode="fhd"] { /* grid-template-columns overridden by FHD module below */ max-width: 1920px; gap: 28px; padding: 28px 32px; }
+        .cpf-layout[data-mode="fhd"] { grid-template-columns: 380px 1fr; max-width: 1920px; gap: 28px; padding: 28px 32px; }
         .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 28px; }
         @media (min-width: 1920px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 380px 1fr; gap: 28px; padding: 28px 32px; } }
         @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 24px; } }
@@ -6608,29 +6598,69 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .freq-toggle-wrap button { padding: 4px 10px !important; font-size: 9px !important; min-height: 28px; }
         }
 
+        /* ─── WELCOME MODAL — global base (all viewports) ───────────── */
+        /* These are the foundation rules; each breakpoint block below narrows them. */
+        .cpf-welcome-overlay { padding: 20px; }
+        .cpf-welcome-modal   { width: 100%; max-width: 680px; height: min(90vh, 760px); box-sizing: border-box; }
+
+        /* ── Large desktop ≥ 1440px ── */
+        @media (min-width: 1440px) {
+          .cpf-welcome-overlay { padding: 32px; }
+          .cpf-welcome-modal   { max-width: 820px; height: min(88vh, 860px); }
+          .cpf-welcome-body    { padding: 24px 28px !important; }
+          .cpf-welcome-footer  { padding: 20px 36px !important; }
+        }
+
+        /* ── Mobile portrait 481–768px — welcome modal ── */
+        @media (max-width: 768px) {
+          .cpf-welcome-modal   { max-width: 98%; height: min(94vh, 680px); border-radius: 18px !important; }
+          .cpf-welcome-body    { padding: 14px 16px !important; max-height: none !important; overflow-y: auto !important; }
+          .cpf-welcome-header  { padding: 10px 14px !important; }
+          .cpf-welcome-footer  { padding: 12px 16px !important; }
+          .welcome-step0-grid  { grid-template-columns: 1fr !important; gap: 8px !important; }
+          .welcome-step3-grid  { grid-template-columns: 1fr 1fr !important; }
+        }
+
+        /* ── Small phone ≤ 480px — welcome modal ── */
+        @media (max-width: 480px) {
+          .cpf-welcome-modal   { max-width: 100%; height: min(98vh, 100%); border-radius: 14px !important; }
+          .cpf-welcome-body    { padding: 12px !important; max-height: none !important; overflow-y: auto !important; }
+          .cpf-welcome-header  { padding: 8px 12px !important; }
+          .cpf-welcome-footer  { padding: 10px 12px !important; }
+          .welcome-step0-grid  { grid-template-columns: 1fr !important; gap: 7px !important; }
+          .welcome-step3-grid  { grid-template-columns: 1fr !important; }
+          .cpf-welcome-header h2 { font-size: 14px !important; }
+          .cpf-welcome-header p  { font-size: 10px !important; }
+        }
+
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
         @media (max-width: 1024px) and (min-width: 769px) {
           /* Revert to normal page flow — no sticky panels on tablet */
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
-          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; }
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 16px 14px; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 14px !important; }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
-          .cpf-main-wrap { padding: 16px 14px; }
           .sidebar-toggle-btn { display: flex !important; position: sticky; top: 0; z-index: 40; background: var(--bg-panel); }
           .desktop-only { display: none !important; }
           .rg-6, .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
           .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-modal-inner { max-width: 100% !important; margin: 0 !important; border-radius: 0 !important; }
+          /* Welcome modal tablet override */
+          .cpf-welcome-modal  { max-width: 620px; height: min(88vh, 680px); }
           .welcome-step3-grid { grid-template-columns: 1fr 1fr !important; }
         }
 
-        /* ─── TABLET PORTRAIT + MOBILE  ≤ 768 px ────────────────────── */
+        /* ─── MOBILE  ≤ 768 px ───────────────────────────────────────── */
+        /* FIX: these rules were previously nested inside the tablet-landscape
+           @media (max-width:1024px) and (min-width:769px) block, which meant
+           they could never fire on a real mobile viewport (< 769px).
+           They are now a standalone block that correctly targets all mobile widths. */
         @media (max-width: 768px) {
-          /* Revert to normal page flow — no sticky panels on mobile */
+          /* Revert to normal page flow — single-column, scrollable */
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           .cpf-header-actions .hide-mobile { display: none; }
@@ -6647,12 +6677,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
-          .cpf-welcome-body { max-height: 50vh !important; overflow-y: auto !important; }
-          .welcome-step3-grid { grid-template-columns: 1fr !important; }
-          .kpi-strip { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; overflow-x: visible !important; }
-          .kpi-strip > div { min-width: 0 !important; padding: 6px 8px !important; flex: unset !important; border-right: none !important; border-bottom: 1px solid var(--border-subtle); }
-          .cpf-kpi-value { font-size: 13px !important; }
-          .cpf-kpi-label { font-size: 8px !important; white-space: normal !important; overflow: visible !important; text-overflow: unset !important; }
+          .kpi-strip { grid-template-columns: 1fr 1fr !important; }
+          .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
+          .cpf-kpi-value { font-size: 12px !important; }
+          .cpf-kpi-label { font-size: 8px !important; }
           body { overflow-x: hidden !important; }
           .pie-chart-wrap { flex-direction: column !important; align-items: stretch !important; }
           .pie-chart-wrap > div:first-child { width: 100% !important; }
@@ -6662,7 +6690,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .hero-split { grid-template-columns: 1fr !important; }
           .hero-split > div { overflow: hidden !important; min-width: 0 !important; }
           .hero-split svg { overflow: visible !important; }
-          /* Yield breakeven cards: 1-col on mobile */
           .yield-cards-grid { grid-template-columns: 1fr !important; }
         }
 
@@ -6673,12 +6700,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .rg-2, .life-plans-grid { grid-template-columns: 1fr !important; }
           .cpf-kpi-value { font-size: 14px !important; }
           .cpf-kpi-label { font-size: 9px !important; }
-          .cpf-tab-btn { font-size: 9px !important; padding: 6px 8px !important; }
+          .cpf-tab-btn { font-size: 11px !important; padding: 6px 8px !important; }
           .sidebar-toggle-btn span { font-size: 9px !important; }
-          .cpf-welcome-header { padding: 10px 12px !important; }
-          .cpf-welcome-body { padding: 16px !important; max-height: 45vh !important; overflow-y: auto !important; }
-          .welcome-step3-grid { grid-template-columns: 1fr !important; }
-          .cpf-welcome-footer { padding: 14px 16px !important; }
         }
 
         /* ─── MOBILE HEADER  ≤ 640 px ───────────────────────────────── */
@@ -6708,19 +6731,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-mobile-top-spacer { display: none !important; }
         }
 
-        /* ─── RSS KPI CARDS RESPONSIVE ─────────────────────────────── */
-        .rss-kpi-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-        @media (max-width: 768px) { .rss-kpi-cards { grid-template-columns: 1fr 1fr !important; gap: 8px !important; } }
-        @media (max-width: 480px) { .rss-kpi-cards { grid-template-columns: 1fr 1fr !important; gap: 6px !important; } }
-
-        /* ─── RSS TABLE SCROLL WRAPPER ──────────────────────────────── */
-        .rss-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-
-        /* ─── DOCS STICKY NAV — MOBILE TOP OFFSET ───────────────────── */
-        /* On mobile the window scrolls (cpf-tab-content is overflow:visible).
-           The fixed header is 48px tall — snap sticky bar just below it. */
-        @media (max-width: 640px) { #docs-sticky-nav { top: 48px !important; } }
-
         /* ─── GLOBAL OVERFLOW GUARD (Fixed for Recharts) ───────────── */
         @media (max-width: 1024px) {
           body, html, #root, .cpf-page-wrap, .cpf-layout, .cpf-main-wrap { max-width: 100vw; box-sizing: border-box; overflow-x: hidden; }
@@ -6734,183 +6744,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .recharts-wrapper, .recharts-surface, input[type="range"] {
           touch-action: pan-y !important;
         }
-
-        /* ══════════════════════════════════════════════════════════════════════
-           FHD DASHBOARD MODULE
-           ALL rules are scoped to .cpf-layout[data-mode="fhd"] or to
-           class names (.fhd-*) that are only emitted when desktopMode==="fhd".
-           Zero bleed to HD, Auto, or mobile/tablet modes.
-           The mobile safety block at the bottom reverts everything with !important.
-           ══════════════════════════════════════════════════════════════════════ */
-
-        /* 1. Widen sidebar column from 380px → 720px to accommodate 2-col grid */
-        .cpf-layout[data-mode="fhd"] {
-          grid-template-columns: 720px 1fr;
-        }
-
-        /* 2. Sidebar inner: switch flex-column → CSS 2-col grid.
-              !important overrides the inline display:flex on .cpf-sidebar-inner */
-        .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner {
-          display: grid !important;
-          grid-template-columns: 1fr 1fr;
-          gap: 6px;
-          align-items: start;    /* sections don't stretch to match tallest peer */
-        }
-
-        /* 3. Each section card — min-width:0 lets 1fr cells shrink below content */
-        .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner > div {
-          min-width: 0;
-        }
-
-        /* 4. Sticky bar spans full width across both sidebar columns */
-        .cpf-layout[data-mode="fhd"] .sidebar-sticky-bar {
-          position: sticky;
-          top: 0;
-          z-index: 11;
-          grid-column: 1 / -1;   /* future: if sticky bar ever moves inside the inner grid */
-        }
-
-        /* ── FHD TILE GRID ─────────────────────────────────────────────────── */
-
-        /* 5. Tile grid container — used as the Summary tab content wrapper in FHD */
-        .fhd-tile-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          grid-auto-rows: min-content;
-          gap: 10px;
-          align-items: start;
-          /* Lives inside .cpf-tab-content which already has overflow-y:auto      */
-          /* No extra height/overflow needed here — grid rows grow with content    */
-        }
-
-        /* 6. Tile base */
-        .fhd-tile {
-          border: 1px solid var(--border-subtle);
-          border-radius: 14px;
-          background: var(--bg-panel);
-          display: flex;
-          flex-direction: column;
-          min-width: 0;
-          overflow: hidden;
-        }
-
-        /* 7. Column span helpers */
-        .fhd-tile.w2 { grid-column: span 2; }
-        .fhd-tile.w3 { grid-column: span 3; }
-
-        /* 8. Tile header bar */
-        .fhd-tile-head {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 7px 14px;
-          border-bottom: 1px solid var(--border-subtle);
-          background: var(--bg-muted);
-          flex-shrink: 0;
-          flex-wrap: wrap;
-          gap: 6px;
-        }
-        .fhd-tile-title {
-          font-size: 11px;
-          font-weight: 800;
-          color: var(--text-main);
-          flex: 1;
-          white-space: nowrap;
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-        }
-
-        /* 9. In-tile sub-tab buttons */
-        .fhd-itab-row {
-          display: flex;
-          gap: 3px;
-          flex-wrap: wrap;
-        }
-        .fhd-itab {
-          font-size: 9px;
-          padding: 2px 8px;
-          border-radius: 5px;
-          border: 1px solid var(--border-strong);
-          background: transparent;
-          color: var(--text-muted);
-          cursor: pointer;
-          white-space: nowrap;
-          font-weight: 600;
-          font-family: inherit;
-          line-height: 1.5;
-          transition: background 0.1s, color 0.1s, border-color 0.1s;
-        }
-        .fhd-itab:hover {
-          background: var(--bg-input);
-          color: var(--text-main);
-        }
-        .fhd-itab.active {
-          background: rgba(var(--clr-emerald-rgb), 0.13);
-          border-color: rgba(var(--clr-emerald-rgb), 0.45);
-          color: var(--clr-green);
-          font-weight: 700;
-        }
-
-        /* 10. Tile body wrappers */
-        /* Fixed-height body for chart/visual tiles — preserves 16:9-ish aspect */
-        .fhd-tile-body-chart {
-          max-height: 320px;
-          overflow: hidden;
-          position: relative;
-        }
-        /* Auto-height for data / card tiles */
-        .fhd-tile-body-auto {
-          overflow: visible;
-        }
-        /* Scrollable body for tall table tiles */
-        .fhd-tile-body-scroll {
-          max-height: 340px;
-          overflow-y: auto;
-          scrollbar-width: thin;
-          scrollbar-color: var(--border-strong) transparent;
-        }
-
-        /* 11. Collapse the existing section intro <details> in FHD — saves space */
-        .fhd-tile-grid details[open] > summary ~ * { }   /* keep open if user opens */
-        .fhd-tile-grid details { border-radius: 10px !important; }
-
-        /* 12. In FHD mode, the KPI strip above the tabs becomes a denser row */
-        .cpf-layout[data-mode="fhd"] .kpi-strip {
-          padding: 3px 0;
-        }
-        .cpf-layout[data-mode="fhd"] .kpi-strip > div {
-          padding: 3px 14px !important;
-        }
-
-        /* ── MOBILE / TABLET SAFETY REVERT ─────────────────────────────────── */
-        /* All FHD rules are overridden back to existing values on ≤1024px.      */
-        /* The existing mobile overrides already use !important so these are      */
-        /* belt-and-suspenders guards only.                                       */
-        @media (max-width: 1024px) {
-          .cpf-layout[data-mode="fhd"] {
-            grid-template-columns: 1fr !important;
-          }
-          .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner {
-            display: flex !important;
-            flex-direction: column !important;
-            grid-template-columns: unset !important;
-          }
-          .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner > div {
-            min-width: unset !important;
-          }
-          .fhd-tile-grid {
-            display: flex !important;
-            flex-direction: column !important;
-            grid-template-columns: unset !important;
-          }
-          .fhd-tile, .fhd-tile.w2, .fhd-tile.w3 {
-            grid-column: unset !important;
-            border-radius: 0 !important;
-            border-left: none !important;
-            border-right: none !important;
-          }
-        }
-        /* ═══════════════════ END FHD DASHBOARD MODULE ═══════════════════════ */
       `}</style>
 
       {/* TOAST NOTIFICATION */}
@@ -7226,8 +7059,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         </div>
       )}
       {showWelcome && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, width: "100%", maxWidth: 640, height: "min(90vh,700px)", overflow: "hidden", boxShadow: "var(--shadow-modal)", display: "flex", flexDirection: "column" }}>
+        <div className="cpf-welcome-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div className="cpf-welcome-modal" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, overflow: "hidden", boxShadow: "var(--shadow-modal)", display: "flex", flexDirection: "column" }}>
             {/* Header */}
             <div className="cpf-welcome-header" style={{ padding: "12px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
@@ -7260,7 +7093,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               {welcomeStep === 0 && (
                 <>
                   <p style={{ color: "var(--text-main)", fontSize: 15, lineHeight: 1.6, marginBottom: 24 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+                  <div className="welcome-step0-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
                     {[
                       ["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck],
                       ["Monte Carlo stress testing (Mild / Base / Stress variance)", Activity], ["Milestone alerts", Bell],
@@ -10229,15 +10062,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <button key={id} role="tab" aria-selected={activeTab === id} aria-controls={`panel-${id}`}
                   onClick={() => { if (isLifeLocked) return; setActiveTab(id); }}
                   title={isLifeLocked ? "CPF LIFE — not available to foreigners" : undefined}
-                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: "10px 10px 0 0", fontSize: 11, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: activeTab === id ? "var(--bg-base)" : "transparent", color: activeTab === id ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: activeTab === id ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", marginBottom: -1, opacity: isLifeLocked ? 0.45 : 1 }}>
-                  <Icon style={{ width: 12, height: 12 }} />{label}{isLifeLocked && <span style={{ fontSize: 9, marginLeft: 2 }}>🔒</span>}
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 16px", borderRadius: "10px 10px 0 0", fontSize: 13, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: activeTab === id ? "var(--bg-base)" : "transparent", color: activeTab === id ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: activeTab === id ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", marginBottom: -1, opacity: isLifeLocked ? 0.45 : 1 }}>
+                  <Icon style={{ width: 14, height: 14 }} />{label}{isLifeLocked && <span style={{ fontSize: 9, marginLeft: 2 }}>🔒</span>}
                 </button>
                 );
               })}
             </div>
             {/* Persistent KPI strip */}
             {activeTab !== "welcome" && activeTab !== "notes" && (
-              <div className="kpi-strip" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "center", gap: 0, background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+              <div className="kpi-strip" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "center", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
                 {(() => {
                   const pa = payoutAge65; // CQ-2 fix: use debounced value to match displayProjection/displayAccumulation
                   // Use displayProjection (already inflation-adjusted when isRealDollars=true)
@@ -10298,9 +10131,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     { label: "Payout Age", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts. Estimates based on 2026 CPF Board data." },
                   ];
                 })().map(({ label, value, color, tip }, i) => (
-                  <div key={i} title={tip || ""} style={{ padding: "4px 20px", borderRight: "1px solid var(--border-subtle)", flex: "1 1 0", minWidth: 100, textAlign: "center", boxSizing: "border-box", cursor: "help", background: i === 0 ? "rgba(var(--clr-blue-rgb),0.08)" : i > 0 && i < 4 ? "rgba(var(--clr-emerald-rgb),0.04)" : "transparent" }}>
-                    <div className="cpf-kpi-label" style={{ fontSize: 11, fontWeight: 800, color: i === 0 ? "var(--clr-blue)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
-                    <div className="cpf-kpi-value" style={{ fontSize: 22, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)" }}>{value}</div>
+                  <div key={i} title={tip || ""} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-subtle)", flex: "1 1 0", minWidth: 90, textAlign: "center", boxSizing: "border-box", cursor: "help", background: i === 0 ? "rgba(var(--clr-blue-rgb),0.08)" : i > 0 && i < 4 ? "rgba(var(--clr-emerald-rgb),0.04)" : "transparent" }}>
+                    <div className="cpf-kpi-label" style={{ fontSize: 10, fontWeight: 800, color: i === 0 ? "var(--clr-blue)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+                    <div className="cpf-kpi-value" style={{ fontSize: 17, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)" }}>{value}</div>
                   </div>
                 ))}
               </div>
@@ -10312,53 +10145,53 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {activeTab === "welcome" && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 <h3 style={{ fontSize: 20, fontWeight: 900, marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 10 }}><Lightbulb style={{ width: 22, height: 22, color: "var(--clr-emerald)" }} />CPF Planner Pro — Welcome Guide</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {/* Page 1 */}
-                  <div style={{ background: "var(--bg-muted)", borderRadius: 16, border: "1px solid var(--border-strong)", overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(135deg,#064e3b,#065f46)", padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
-                      <div style={{ background: "#10b98122", padding: 12, borderRadius: 12 }}><Calculator style={{ width: 24, height: 24, color: "var(--clr-emerald)" }} /></div>
-                      <div><h4 style={{ fontSize: 18, fontWeight: 900, color: "#ecfdf5", marginBottom: 2 }}>Welcome to CPF Planner Pro</h4><p style={{ fontSize: 12, color: "#6ee7b7" }}>Your end-to-end Singapore retirement simulation engine</p></div>
+                  <div style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(16,185,129,0.12)" }}>
+                    <div style={{ background: "linear-gradient(145deg, #022c22 0%, #065f46 45%, #10b981 80%, #6ee7b7 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><Calculator style={{ width: 20, height: 20, color: "#ecfdf5" }} /></div>
+                      <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#ecfdf5", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Welcome to CPF Planner Pro</h4><p style={{ fontSize: 11, color: "rgba(236,253,245,0.8)", margin: 0 }}>Your end-to-end Singapore retirement simulation engine</p></div>
                     </div>
-                    <div style={{ padding: "20px 24px" }}>
-                      <p style={{ color: "var(--text-main)", fontSize: 14, lineHeight: 1.7, marginBottom: 20 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
+                    <div style={{ padding: "16px 20px" }}>
+                      <p style={{ color: "var(--text-main)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8 }}>
                         {[["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck], ["Monte Carlo stress testing", Activity], ["Milestone alerts", Bell], ["Holistic Strategy & ⚡ Fill Gap", Target], ["OA Drawdown decumulation engine", ArrowRightLeft], ["Side-by-side scenario diff", Split], ["PDF & CSV export", Download], ["SRS tax-deferred savings", BookOpen], ["Property Monetisation (LBS / downgrade)", Home], ["Die with Zero draw-down planner", Clock], ["7 sample profiles to explore instantly", Users], ["PR G/G & F/G rates with auto-advancement", Users], ["Recurring / One-Time frequency toggles", ArrowRightLeft], ["OA→SA / OA→RA For Loved One transfers", Users], ["Annual Cashflow Ledger", TableIcon], ["OA Education Loan Scheme", BookOpen], ["PwD MRSS under-55 bypass", ShieldCheck], ["MMSS 5-year pilot (2026–2030)", Gift], ["Accumulation: SA pre-55 / RA from-55 split", BarChart3]].map(([text, Icon], i) => (
-                          <div key={i} style={{ background: "var(--bg-base)", padding: "10px 14px", borderRadius: 10, display: "flex", alignItems: "center", gap: 10, border: "1px solid var(--border-subtle)" }}>
-                            <Icon style={{ width: 14, height: 14, color: "var(--clr-emerald)" }} />
+                          <div key={i} style={{ background: "var(--bg-base)", padding: "8px 12px", borderRadius: 12, display: "flex", alignItems: "center", gap: 10, border: "1px solid var(--border-subtle)" }}>
+                            <Icon style={{ width: 13, height: 13, color: "var(--clr-emerald)" }} />
                             <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-highlight)" }}>{text}</span>
                           </div>
                         ))}
                       </div>
-                      <div style={{ background: "var(--bg-base)", padding: 14, borderRadius: 10, border: "1px solid var(--border-subtle)", marginTop: 16 }}>
+                      <div style={{ background: "var(--bg-base)", padding: "12px 14px", borderRadius: 12, border: "1px solid var(--border-subtle)", marginTop: 12 }}>
                         <p style={{ fontSize: 12, color: "var(--text-muted)" }}><strong style={{ color: "var(--text-bright)" }}>Data stays on your device.</strong> Use <strong style={{ color: "var(--text-bright)" }}>Export Profile</strong> to back up your inputs as a JSON file, or Share to generate an encoded profile code. No server storage — everything runs locally in your browser. Hit <strong style={{ color: "var(--text-bright)" }}>Samples</strong> in the header to instantly load a pre-built profile and start exploring.</p>
                       </div>
                     </div>
                   </div>
                   {/* Page 2 */}
-                  <div style={{ background: "var(--bg-muted)", borderRadius: 16, border: "1px solid var(--border-strong)", overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(135deg,#1e3a5f,#1e40af)", padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
-                      <div style={{ background: "#3b82f622", padding: 12, borderRadius: 12 }}><User style={{ width: 24, height: 24, color: "var(--clr-blue)" }} /></div>
-                      <div><h4 style={{ fontSize: 18, fontWeight: 900, color: "#eff6ff", marginBottom: 2 }}>Setting Up Your Profile</h4><p style={{ fontSize: 12, color: "#93c5fd" }}>Step 1 — The Input Engine (left panel)</p></div>
+                  <div style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(59,130,246,0.12)" }}>
+                    <div style={{ background: "linear-gradient(145deg, #0c1a3a 0%, #1e40af 45%, #3b82f6 80%, #93c5fd 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><User style={{ width: 20, height: 20, color: "#eff6ff" }} /></div>
+                      <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#eff6ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Setting Up Your Profile</h4><p style={{ fontSize: 11, color: "rgba(239,246,255,0.8)", margin: 0 }}>Step 1 — The Input Engine (left panel)</p></div>
                     </div>
-                    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                       {[["1", "Enter your CPF balances & gender", "Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). Select SC or PR — PR members in Year 1 or 2 get lower contribution rates, with the engine automatically advancing from Yr 1 → Yr 2 → Yr 3+ rates each projection year.", "var(--clr-blue2)"], ["2", "Auto-Calc Contributions (SC / PR / SEP)", "For employed members: enter OW, AW, and Salary Growth %, then click ⚡ Auto-Calc. SC uses full rates. PR members: select tenure year (1 / 2 / 3+) and rate type — G/G (default, graduated employer) or F/G (full employer 17%, requires joint CPF application). Auto-Calc uses the correct rates and the engine advances tiers automatically year-by-year. SEP members use the Inflows (VC3A) panel instead.", "var(--clr-emerald)"], ["3", "Add voluntary top-ups & CPF Transfers", "RSTU top-ups to SA/RA, gov grants, MRSS/MMSS. Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the current year. CPF Transfers: OA→SA/RA (For Self: internal move; For Loved One: OA outflow only, no FRS cap). CPFIS: OA above $20k and SA above $40k are investible separately.", "var(--clr-purple)"], ["4", "Review the Inflows panel limit", "The Inflows panel tracks the $37,740 CPF Annual Limit for VC contributions. It turns orange if your combined VC3A/RSTU inputs exceed your remaining allowance.", "var(--clr-amber)"], ["5", "Set your life-phase timelines", "Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model transitions accurately. If selling property, enter Sell Property at Age — CPF requires refund of OA housing principal + 2.5%/yr accrued interest, credited back to OA.", "var(--clr-orange)"], ["6", "Configure SRS (optional)", "Enter your SRS balance, annual contribution (max $15,300/yr for SC/PR), and drawdown start age in the SRS panel. Contributions are tax-deductible; 50% of each withdrawal is taxable from age 63; full balance must be withdrawn within 10 years of first withdrawal. The engine models growth and drawdown separately.", "#0ea5e9"], ["7", "Plan decumulation income & Property Monetisation", "Set a Target Monthly Income in Decumulation & Goals. Click ⚡ Fill Gap to auto-set the OA Drawdown amount. If you plan to downgrade, use LBS, or sell and buy smaller, toggle Property Monetisation in the Property & Timelines section to add net cash proceeds and any RA top-up to the projection.", "#f43f5e"], ["8", "Try Die with Zero mode (optional)", "Toggle Die with Zero in Decumulation & Goals. Set a target depletion age — the tool automatically computes the exact monthly OA draw using the PMT annuity formula and applies it directly to the projection. The OA draw is shown as auto-applied in the panel. RA and CPF LIFE payouts are unaffected.", "var(--clr-green)"]].map(([num, title, desc, color]) => (
-                        <div key={num} style={{ display: "flex", gap: 14 }}>
-                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: `${color}22`, color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{num}</div>
-                          <div><h5 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)", marginBottom: 4 }}>{title}</h5><p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</p></div>
+                        <div key={num} style={{ display: "flex", gap: 12 }}>
+                          <div style={{ width: 26, height: 26, borderRadius: "50%", background: `${color}20`, color, border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{num}</div>
+                          <div><h5 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)", marginBottom: 2 }}>{title}</h5><p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</p></div>
                         </div>
                       ))}
                     </div>
                   </div>
                   {/* Page 3 */}
-                  <div style={{ background: "var(--bg-muted)", borderRadius: 16, border: "1px solid var(--border-strong)", overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(135deg,#3b0764,#6b21a8)", padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
-                      <div style={{ background: "#a855f722", padding: 12, borderRadius: 12 }}><LayoutDashboard style={{ width: 24, height: 24, color: "var(--clr-violet2)" }} /></div>
-                      <div><h4 style={{ fontSize: 18, fontWeight: 900, color: "#faf5ff", marginBottom: 2 }}>Exploring the Dashboard</h4><p style={{ fontSize: 12, color: "#d8b4fe" }}>Step 2 — The right panel tabs</p></div>
+                  <div style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(139,92,246,0.12)" }}>
+                    <div style={{ background: "linear-gradient(145deg, #1e0338 0%, #6b21a8 45%, #a855f7 80%, #d8b4fe 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><LayoutDashboard style={{ width: 20, height: 20, color: "#faf5ff" }} /></div>
+                      <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#faf5ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Exploring the Dashboard</h4><p style={{ fontSize: 11, color: "rgba(250,245,255,0.8)", margin: 0 }}>Step 2 — The right panel tabs</p></div>
                     </div>
-                    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+                    <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                       {[["Summary", PieChart, "var(--clr-emerald)", "Key metrics at a glance: total CPF at payout age, net worth breakdown doughnut chart, estate planning panel, milestone alerts, 20% RA-to-OA transfer notice, and What-If Explorer with SA/RA text override."], ["Strategy", Target, "#f43f5e", "Holistic income planner for retirement. Set your Target Monthly Income, then click ⚡ Fill Gap to auto-set the OA Drawdown needed to close the income gap. Gantt timeline shows all income streams. Income table shows CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets side by side."], ["Accumulation", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance. Real vs Nominal dollar toggle adjusts for inflation."], ["LIFE Comparison", ShieldCheck, "var(--clr-purple)", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."], ["Compare", Split, "var(--clr-orange)", "Save two scenarios (e.g. retire at 65 vs 70) and view a colour-coded diff table showing every metric that changes between them."], ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Download as CSV."]].map(([title, Icon, color, desc]) => (
                         <div key={title}>
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}15`, border: `1px solid ${color}33`, padding: "4px 10px", borderRadius: 8, marginBottom: 6 }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}15`, border: `1px solid ${color}33`, padding: "4px 10px", borderRadius: 10, marginBottom: 5 }}>
                             <Icon style={{ width: 12, height: 12, color }} />
                             <span style={{ fontSize: 11, fontWeight: 700, color }}>{title}</span>
                           </div>
@@ -10368,24 +10201,24 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   </div>
                   {/* Page 4 */}
-                  <div style={{ background: "var(--bg-muted)", borderRadius: 16, border: "1px solid var(--border-strong)", overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(135deg,#78350f,#92400e)", padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
-                      <div style={{ background: "#fbbf2422", padding: 12, borderRadius: 12 }}><Lightbulb style={{ width: 24, height: 24, color: "var(--clr-amber)" }} /></div>
-                      <div><h4 style={{ fontSize: 18, fontWeight: 900, color: "#fffbeb", marginBottom: 2 }}>Advanced Features & Disclaimer</h4><p style={{ fontSize: 12, color: "#fde68a" }}>Step 3 — Power tools and legal notice</p></div>
+                  <div style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(245,158,11,0.12)" }}>
+                    <div style={{ background: "linear-gradient(145deg, #431407 0%, #b45309 45%, #f59e0b 80%, #fde68a 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><Lightbulb style={{ width: 20, height: 20, color: "#fffbeb" }} /></div>
+                      <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#fffbeb", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Advanced Features & Disclaimer</h4><p style={{ fontSize: 11, color: "rgba(255,251,235,0.8)", margin: 0 }}>Step 3 — Power tools and legal notice</p></div>
                     </div>
-                    <div style={{ padding: "20px 24px" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10, marginBottom: 20 }}>
+                    <div style={{ padding: "16px 20px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8, marginBottom: 16 }}>
                         {[["Share Link", Link, "Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."], ["PDF Report", Download, "Print-ready 6-page report: cover KPIs, input parameters & CPF LIFE estimates, charts, year-by-year projection & sensitivity, Decumulation Strategy (income table + OA exhaustion age), milestones & disclaimer."], ["SEP Mode", Briefcase, "Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr split proportionally across OA/SA/MA. BHS and ERS caps enforced."], ["Monte Carlo", Activity, "200 simulations with selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in the Accumulation tab. Probability of Sufficiency badge shows the active band."], ["SRS", BookOpen, "Tax-deferred savings scheme — contributions deductible up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63; full balance must be withdrawn within 10 years. Model in the SRS panel."], ["Property Monetisation", Home, "One-time event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds to private assets; RA top-up to RA. Now in the Property & Timelines panel."], ["Die with Zero", Clock, "PMT-based draw-down planner — toggle in Decumulation & Goals. Set a target depletion age; the OA draw is computed via PMT and auto-applied to the projection immediately. All liquid assets reach $0 at that age; RA/CPF LIFE unaffected."], ["Sample Profiles", Users, "7 pre-built scenarios from Blank Slate to Post-55 RA Builder. Load from the Samples button in the header (desktop) or hamburger menu (mobile) to explore the tool instantly."], ["PR G/G & F/G Rates", Users, "PR members in Year 1 or 2 can select G/G (graduated employer, default) or F/G (full employer 17% — requires joint CPF application). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates in the projection."], ["Recurring / One-Time Toggles", ArrowRightLeft, "Every inflow/outflow field has a frequency toggle. 'Recurring' applies the amount every projection year. 'One-Time' applies it only in the first projection year — ideal for lump-sum top-ups or one-off withdrawals."], ["OA→SA / OA→RA For Loved One", Users, "CPF Transfers panel supports For Self (internal move with FRS/ERS cap) and For Loved One (OA outflow only, no headroom constraint on the recipient). Applies to both OA→SA (pre-55) and OA→RA (55+)."], ["Annual Cashflow Ledger", TableIcon, "In the Data Table tab, switch to Cashflow Ledger for a full year-by-year breakdown: mandatory, voluntary, grants, OA/SA/RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with column totals."], ["Gender Toggle", Users, "Male/Female selection affects CPF LIFE payout. Female payouts are ~7% lower (0.93× male) due to longer life expectancy. Estimates use 2026 CPF Board data with linear interpolation."], ["OA Drawdown & ⚡ Fill Gap", Download, "Draw monthly cash from OA after CPF LIFE starts to close the income gap. Set a Target Monthly Income, then click ⚡ Fill Gap to auto-set the exact draw amount. OA Exhaustion Age badge updates live."], ["Property Sale & CPF Refund", Home, "Enter Sell Property at Age in Timelines & Property. On sale, CPF refunds OA housing principal + 2.5%/yr interest to OA. With pledge active, refund restores RA to FRS first."], ["OA Education Loan", BookOpen, "Model CPF Education Scheme withdrawals: use OA savings to fund tuition at approved local institutions. Engine enforces the 40% OA ceiling and age 55+ FRS-first rule. Modelled as a pure OA outflow."], ["PwD MRSS Bypass", ShieldCheck, "Enable the Person with Disabilities (PwD) flag in Profile to unlock MRSS below age 55. PwD members are exempt from the age-55 requirement for the Matched Retirement Savings Scheme."], ["Retirement Sum Growth", TrendingUp, "Control how fast FRS, BRS, ERS, and BHS targets rise each year (default 3%, CPF Board historical average). Preset buttons: 2% / 3% / 4%. Found in the Salary section."], ["Phased Salary & Career Break", Briefcase, "Model a growth rate change at a specific age (Phase 2) or a full contribution pause for a career break age range (sabbatical, NS, parental leave). Both affect mandatory contribution projections. Found in the Salary section."], ["Life Events", Activity, "Overlay stress-test events: Retrenchment, Career Break, Medical Crisis (draws OA/private), Windfall (one-off inflow), Early Retirement, or Hyperinflation. Coloured bands on the Accumulation chart and a row in the Strategy Gantt. Found in the Life Events panel."]].map(([title, Icon, desc]) => (
-                          <div key={title} style={{ background: "var(--bg-base)", padding: "14px", borderRadius: 10, border: "1px solid var(--border-subtle)" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                              <Icon style={{ width: 14, height: 14, color: "var(--clr-blue2)" }} />
+                          <div key={title} style={{ background: "var(--bg-base)", padding: "12px 14px", borderRadius: 12, border: "1px solid var(--border-subtle)" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                              <Icon style={{ width: 13, height: 13, color: "var(--clr-blue2)" }} />
                               <h5 style={{ fontSize: 12, fontWeight: 700, color: "var(--text-bright)" }}>{title}</h5>
                             </div>
                             <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>{desc}</p>
                           </div>
                         ))}
                       </div>
-                      <div style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "14px", borderRadius: "10px" }}>
+                      <div style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "12px" }}>
                         <p style={{ fontSize: 10, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER}</p>
                       </div>
                     </div>
@@ -10396,8 +10229,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* ── SUMMARY TAB ── */}
             {activeTab === "summary" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                {/* Summary tab intro — hidden in FHD tile-grid mode (self-documenting dashboard) */}
-                {desktopMode !== 'fhd' && (
+                {/* Summary tab intro — collapsible via native <details> (no hooks) */}
                 <details style={{ borderRadius: 14, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
                   <summary style={{ padding: "10px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                     <p style={{ fontWeight: 700, color: "var(--text-highlight)", margin: 0, fontSize: 12 }}>📋 Summary Tab — What You're Looking At</p>
@@ -10442,15 +10274,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       ))}
                     </div>
                   </div>
-                </details>)}
-                {/* FHD: Real/Nominal banner spans full tile grid width */}
-                <div className={desktopMode === 'fhd' ? 'fhd-tile w3' : undefined} style={desktopMode === 'fhd' ? { padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } : undefined}>
-                  {isRealDollars ? (
-                    <div style={{ background: "rgba(var(--clr-blue2-rgb),0.15)", border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", padding: desktopMode === 'fhd' ? "4px 12px" : 10, textAlign: "center", fontSize: desktopMode === 'fhd' ? 11 : 12, fontWeight: 700, color: "#93c5fd", borderRadius: 10, flex: desktopMode === 'fhd' ? 1 : undefined }}>📐 Real Dollars (Adjusted for {inputs.inflationRate}% Inflation)</div>
-                  ) : (
-                    <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", padding: desktopMode === 'fhd' ? "4px 12px" : 10, textAlign: "center", fontSize: desktopMode === 'fhd' ? 11 : 12, fontWeight: 700, color: "var(--text-muted)", borderRadius: 10, flex: desktopMode === 'fhd' ? 1 : undefined }}>💲 Nominal Dollars</div>
-                  )}
-                </div>{/* /fhd-tile w3 banner */}
+                </details>
+                {isRealDollars ? (
+                  <div style={{ background: "rgba(var(--clr-blue2-rgb),0.15)", border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", padding: 10, textAlign: "center", fontSize: 12, fontWeight: 700, color: "#93c5fd", borderRadius: 10 }}>Displaying Real Dollars (Adjusted for {inputs.inflationRate}% Inflation)</div>
+                ) : (
+                  <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", padding: 10, textAlign: "center", fontSize: 12, fontWeight: 700, color: "var(--text-muted)", borderRadius: 10 }}>Displaying Nominal Dollars</div>
+                )}
                 {/* Property Pledge Active Notice */}
                 {inputs.usePropertyPledge && (() => {
                   // REM-2a fix: replaced O(n) projection.find() with O(1) projectionByAge.get()
@@ -10481,22 +10310,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </p>
                   </div>
                 )}
-                {/* ─── FHD TILE 1: Balances & LIFE Plans (w2) ─────────────────────── */}
-                <div className={desktopMode === 'fhd' ? 'fhd-tile w2' : undefined}>
-                {desktopMode === 'fhd' && (
-                  <div className="fhd-tile-head" style={{ borderRadius: '14px 14px 0 0' }}>
-                    <span className="fhd-tile-title">📊 Account Overview</span>
-                    <div className="fhd-itab-row">
-                      <button className={`fhd-itab${fhdTileTabs.hero === 'balances' ? ' active' : ''}`}
-                              onClick={() => fhdSetTile('hero', 'balances')}>Balances</button>
-                      <button className={`fhd-itab${fhdTileTabs.hero === 'life' ? ' active' : ''}`}
-                              onClick={() => fhdSetTile('hero', 'life')}>LIFE Plans</button>
-                    </div>
-                  </div>
-                )}
                 {/* Hero — two-panel split */}
                 {/* ── Hero Panel: Left (deep navy + stats) + Right (account balances) ── */}
-                <div style={{ display: (desktopMode === 'fhd' && fhdTileTabs.hero !== 'balances') ? 'none' : 'grid', gridTemplateColumns: "1fr 1fr", gap: 14 }} className={desktopMode === 'fhd' ? 'hero-split fhd-tile-body-auto' : 'hero-split'}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="hero-split">
 
                   {/* LEFT: projected total + nominal/real + 3 stat rings */}
                   <div style={{ background: "var(--hero-left-bg)", borderRadius: 16, padding: "22px", color: "var(--hero-text)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
@@ -10645,7 +10461,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     for all three plans, which was confusing and implied missing data.
                     Show a compact RSS summary card in its place instead. */}
                 {!isForeigner && !isRSSMode && (
-                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 24, display: (desktopMode === 'fhd' && fhdTileTabs.hero !== 'life') ? 'none' : undefined }}>
+                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 24 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                     <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>CPF LIFE Starting Payouts (Monthly)</p>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: inputs.isMale !== false ? "rgba(var(--clr-green-rgb),0.15)" : "rgba(var(--clr-blue-rgb),0.15)", color: inputs.isMale !== false ? "var(--clr-green)" : "var(--clr-blue)", border: `1px solid ${inputs.isMale !== false ? "rgba(var(--clr-green-rgb),0.3)" : "rgba(var(--clr-blue-rgb),0.3)"}` }}>
@@ -10707,14 +10523,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   );
                 })()}
-                {/* ─── FHD TILE 2: Goal & Stats (1-col) ─────────────────────────── */}
-                </div>{/* /fhd-tile w2 tile1 */}
-                <div className={desktopMode === 'fhd' ? 'fhd-tile' : undefined}>
-                {desktopMode === 'fhd' && (
-                  <div className="fhd-tile-head">
-                    <span className="fhd-tile-title">🎯 Goal Tracking & Stats</span>
-                  </div>
-                )}
                 {/* Goal Tracking Card — hidden for foreigners (CPF LIFE plan basis is irrelevant) */}
                 {/* FIX: Previously only CPF LIFE was included in "Projected" — OA draw, SRS, and private
                     assets were ignored, so Fill Gap had no visible effect on this card.
@@ -10820,22 +10628,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <strong style={{ color: "var(--clr-blue)" }}>Net Worth @ payout age / 95</strong> = OA + MA + RA + Property at that age under the highlighted LIFE plan. &nbsp;
                   <strong style={{ color: "var(--clr-amber)" }}>Est. Tax Savings (RSTU)</strong> = annual tax relief estimate from your RSTU cash top-up, capped at $8,000 and FRS headroom.
                 </div>
-                </div>{/* /fhd-tile tile2 */}
-                <div className={desktopMode === 'fhd' ? 'fhd-tile w2' : undefined}>
-                {/* ─── FHD TILE 3: Timeline (w2) ─────────────────────────────────── */}
-                {desktopMode === 'fhd' && (
-                  <div className="fhd-tile-head">
-                    <span className="fhd-tile-title">📅 Contribution Timeline</span>
-                    <div className="fhd-itab-row">
-                      <button className={`fhd-itab${fhdTileTabs.gantt === 'timeline' ? ' active' : ''}`}
-                              onClick={() => fhdSetTile('gantt', 'timeline')}>Gantt</button>
-                      <button className={`fhd-itab${fhdTileTabs.gantt === 'frs' ? ' active' : ''}`}
-                              onClick={() => fhdSetTile('gantt', 'frs')}>FRS Tracker</button>
-                    </div>
-                  </div>
-                )}
                 {/* ── Contribution Timeline Gantt ── */}
-                {(desktopMode !== 'fhd' || fhdTileTabs.gantt === 'timeline') && (() => {
+                {(() => {
                   const ca = Number(inputs.currentAge) || 35;
                   const payoutAge = payoutAge65; // CQ-2 fix: cosmetic — keeps Gantt bar positions in sync with debounced data
                   const contribStop = Number(inputs.contributionStopAge) || 65;
@@ -10934,7 +10728,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   );
                 })()}
                 {/* FRS Tracker — hidden for foreigners (no CPF account, no RA) */}
-                {(desktopMode !== 'fhd' || fhdTileTabs.gantt === 'frs') && !isForeigner && (() => {
+                {!isForeigner && (() => {
                   const currentAge = Number(inputs.currentAge) || 35;
                   const isAlreadyPast55 = currentAge >= 55;
                   // If already past 55, use the RA from the first projection row (current state)
@@ -10991,22 +10785,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   );
                 })()}
-                </div>{/* /fhd-tile w2 tile3 */}
-                <div className={desktopMode === 'fhd' ? 'fhd-tile w2' : undefined}>
-                {/* ─── FHD TILE 4: Net Worth Analysis (w2) ──────────────────────── */}
-                {desktopMode === 'fhd' && (
-                  <div className="fhd-tile-head">
-                    <span className="fhd-tile-title">🍩 Net Worth Analysis</span>
-                    <div className="fhd-itab-row">
-                      <button className={`fhd-itab${fhdTileTabs.analysis === 'doughnut' ? ' active' : ''}`}
-                              onClick={() => fhdSetTile('analysis', 'doughnut')}>Portfolio Mix</button>
-                      <button className={`fhd-itab${fhdTileTabs.analysis === 'estate' ? ' active' : ''}`}
-                              onClick={() => fhdSetTile('analysis', 'estate')}>Estate Planning</button>
-                    </div>
-                  </div>
-                )}
                 {/* Doughnut */}
-                {(desktopMode !== 'fhd' || fhdTileTabs.analysis === 'doughnut') && (() => {
+                {(() => {
                   const oaVal = payoutAgeData.oa || 0;
                   const maVal = payoutAgeData.ma || 0;
                   const raVal = payoutAgeData.ra || 0;
@@ -11057,7 +10837,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   );
                 })()}
                 {/* Estate Planning Panel */}
-                {(desktopMode !== 'fhd' || fhdTileTabs.analysis === 'estate') && (() => {
+                {(() => {
                   const ages = [65, 70, 75, 80, 85, 90, 95];
                   const plan = highlightPlan;
                   const isRSSEstate = debouncedInputs.cpfScheme === 'rss';
@@ -11134,22 +10914,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   );
                 })()}
 
-                </div>{/* /fhd-tile w2 tile4 */}
-                <div className={desktopMode === 'fhd' ? 'fhd-tile w3' : undefined}>
-                {/* ─── FHD TILE 5: Alerts & What-If (w3) ────────────────────────── */}
-                {desktopMode === 'fhd' && (
-                  <div className="fhd-tile-head" style={{ borderRadius: 14 }}>
-                    <span className="fhd-tile-title">🔔 Milestones & What-If Explorer</span>
-                    <div className="fhd-itab-row">
-                      <button className={`fhd-itab${fhdTileTabs.alerts === 'milestones' ? ' active' : ''}`}
-                              onClick={() => fhdSetTile('alerts', 'milestones')}>Milestones</button>
-                      <button className={`fhd-itab${fhdTileTabs.alerts === 'whatif' ? ' active' : ''}`}
-                              onClick={() => fhdSetTile('alerts', 'whatif')}>What-If Explorer</button>
-                    </div>
-                  </div>
-                )}
                 {/* Milestones */}
-                {(desktopMode !== 'fhd' || fhdTileTabs.alerts === 'milestones') && milestones.length > 0 && (
+                {milestones.length > 0 && (
                   <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Bell style={{ width: 18, height: 18, color: "var(--clr-amber)" }} /><h3 style={{ fontSize: 16, fontWeight: 800 }}>Milestone Alerts</h3></div>
@@ -11176,7 +10942,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
                 )}
                 {/* What-If */}
-                {(desktopMode !== 'fhd' || fhdTileTabs.alerts === 'whatif') && <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: desktopMode === 'fhd' ? '0 0 14px 14px' : 24 }}>
+                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}><SlidersHorizontal style={{ width: 18, height: 18, color: "var(--clr-green)" }} /><h3 style={{ fontSize: 16, fontWeight: 800 }}>What-If Explorer</h3><span style={{ fontSize: 9, background: "var(--bg-input)", color: "var(--text-muted)", padding: "3px 8px", borderRadius: 999, border: "1px solid var(--border-strong)" }}>Live Simulation</span></div>
                     <button onClick={(e) => {
@@ -11492,8 +11258,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                     );
                   })()}
-                </div>}{/* /What-If conditional */}
-                </div>{/* /fhd-tile w3 tile5 */}
+                </div>
               </div>
             )}
             {/* ── ACCUMULATION TAB ── */}
@@ -11831,8 +11596,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   );
                 })()}
 
-                {/* KPI cards — responsive via .rss-kpi-cards CSS class (2-col on mobile, 4-col on desktop) */}
-                <div className="rss-kpi-cards">
+                {/* KPI cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
                   {[
                     [raAtPayoutStartIsCurrent ? "Current RA" : "RA at Payout Start", formatCurrency(raAtPayoutStart), "var(--clr-blue)", raAtPayoutStartIsCurrent ? `Current RA balance (payout started at age ${rssStartAge}, before the simulation window — using current balance as proxy)` : `RA balance at age ${rssStartAge} when drawdowns began`],
                     ["Monthly Payout", rssMonthlyAmt > 0 ? formatCurrency(rssMonthlyAmt) + "/mo" : "Not set", rssMonthlyAmt > 0 ? "var(--clr-green)" : "var(--clr-red)", "Fixed CPF Board RSS monthly amount"],
@@ -12743,22 +12508,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         // but old scrollMarginTop was only 160px, hiding the section heading).
                         const stickyBar = document.getElementById('docs-sticky-nav');
                         const scrollEl = target.closest('.cpf-tab-content');
-                        // On mobile, cpf-tab-content has overflow-y:visible — it is NOT the scroll
-                        // container (the window scrolls instead). Detect this by checking whether
-                        // the element is actually scrollable; if not, use window.scrollBy so the
-                        // nav buttons work on mobile exactly as they do on desktop.
-                        const isScrollable = scrollEl && scrollEl.scrollHeight > scrollEl.clientHeight;
-                        if (stickyBar) {
+                        if (scrollEl && stickyBar) {
                           // delta = how far to scroll so target top lands just below sticky bar bottom
                           const delta = target.getBoundingClientRect().top
                                       - stickyBar.getBoundingClientRect().bottom
                                       - 8; // 8px breathing room below the bar
-                          if (isScrollable) {
-                            scrollEl.scrollBy({ top: delta, behavior: 'smooth' });
-                          } else {
-                            // Mobile path: window is the scroll container
-                            window.scrollBy({ top: delta, behavior: 'smooth' });
-                          }
+                          scrollEl.scrollBy({ top: delta, behavior: 'smooth' });
                         } else {
                           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
@@ -13731,4 +13486,3 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
     </TooltipContext.Provider>
   );
 }
-
