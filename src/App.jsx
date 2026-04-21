@@ -6598,29 +6598,69 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .freq-toggle-wrap button { padding: 4px 10px !important; font-size: 9px !important; min-height: 28px; }
         }
 
+        /* ─── WELCOME MODAL — global base (all viewports) ───────────── */
+        /* These are the foundation rules; each breakpoint block below narrows them. */
+        .cpf-welcome-overlay { padding: 20px; }
+        .cpf-welcome-modal   { width: 100%; max-width: 680px; height: min(90vh, 760px); box-sizing: border-box; }
+
+        /* ── Large desktop ≥ 1440px ── */
+        @media (min-width: 1440px) {
+          .cpf-welcome-overlay { padding: 32px; }
+          .cpf-welcome-modal   { max-width: 820px; height: min(88vh, 860px); }
+          .cpf-welcome-body    { padding: 24px 28px !important; }
+          .cpf-welcome-footer  { padding: 20px 36px !important; }
+        }
+
+        /* ── Mobile portrait 481–768px — welcome modal ── */
+        @media (max-width: 768px) {
+          .cpf-welcome-modal   { max-width: 98%; height: min(94vh, 680px); border-radius: 18px !important; }
+          .cpf-welcome-body    { padding: 14px 16px !important; max-height: none !important; overflow-y: auto !important; }
+          .cpf-welcome-header  { padding: 10px 14px !important; }
+          .cpf-welcome-footer  { padding: 12px 16px !important; }
+          .welcome-step0-grid  { grid-template-columns: 1fr !important; gap: 8px !important; }
+          .welcome-step3-grid  { grid-template-columns: 1fr 1fr !important; }
+        }
+
+        /* ── Small phone ≤ 480px — welcome modal ── */
+        @media (max-width: 480px) {
+          .cpf-welcome-modal   { max-width: 100%; height: min(98vh, 100%); border-radius: 14px !important; }
+          .cpf-welcome-body    { padding: 12px !important; max-height: none !important; overflow-y: auto !important; }
+          .cpf-welcome-header  { padding: 8px 12px !important; }
+          .cpf-welcome-footer  { padding: 10px 12px !important; }
+          .welcome-step0-grid  { grid-template-columns: 1fr !important; gap: 7px !important; }
+          .welcome-step3-grid  { grid-template-columns: 1fr !important; }
+          .cpf-welcome-header h2 { font-size: 14px !important; }
+          .cpf-welcome-header p  { font-size: 10px !important; }
+        }
+
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
         @media (max-width: 1024px) and (min-width: 769px) {
           /* Revert to normal page flow — no sticky panels on tablet */
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
-          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; }
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 16px 14px; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 14px !important; }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
-          .cpf-main-wrap { padding: 16px 14px; }
           .sidebar-toggle-btn { display: flex !important; position: sticky; top: 0; z-index: 40; background: var(--bg-panel); }
           .desktop-only { display: none !important; }
           .rg-6, .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
           .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-modal-inner { max-width: 100% !important; margin: 0 !important; border-radius: 0 !important; }
+          /* Welcome modal tablet override */
+          .cpf-welcome-modal  { max-width: 620px; height: min(88vh, 680px); }
           .welcome-step3-grid { grid-template-columns: 1fr 1fr !important; }
         }
 
-        /* ─── TABLET PORTRAIT + MOBILE  ≤ 768 px ────────────────────── */
+        /* ─── MOBILE  ≤ 768 px ───────────────────────────────────────── */
+        /* FIX: these rules were previously nested inside the tablet-landscape
+           @media (max-width:1024px) and (min-width:769px) block, which meant
+           they could never fire on a real mobile viewport (< 769px).
+           They are now a standalone block that correctly targets all mobile widths. */
         @media (max-width: 768px) {
-          /* Revert to normal page flow — no sticky panels on mobile */
+          /* Revert to normal page flow — single-column, scrollable */
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           .cpf-header-actions .hide-mobile { display: none; }
@@ -6637,8 +6677,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
-          .cpf-welcome-body { max-height: 50vh !important; overflow-y: auto !important; }
-          .welcome-step3-grid { grid-template-columns: 1fr !important; }
           .kpi-strip { grid-template-columns: 1fr 1fr !important; }
           .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
           .cpf-kpi-value { font-size: 12px !important; }
@@ -6652,7 +6690,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .hero-split { grid-template-columns: 1fr !important; }
           .hero-split > div { overflow: hidden !important; min-width: 0 !important; }
           .hero-split svg { overflow: visible !important; }
-          /* Yield breakeven cards: 1-col on mobile */
           .yield-cards-grid { grid-template-columns: 1fr !important; }
         }
 
@@ -6665,10 +6702,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-kpi-label { font-size: 9px !important; }
           .cpf-tab-btn { font-size: 11px !important; padding: 6px 8px !important; }
           .sidebar-toggle-btn span { font-size: 9px !important; }
-          .cpf-welcome-header { padding: 10px 12px !important; }
-          .cpf-welcome-body { padding: 16px !important; max-height: 45vh !important; overflow-y: auto !important; }
-          .welcome-step3-grid { grid-template-columns: 1fr !important; }
-          .cpf-welcome-footer { padding: 14px 16px !important; }
         }
 
         /* ─── MOBILE HEADER  ≤ 640 px ───────────────────────────────── */
@@ -7026,8 +7059,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         </div>
       )}
       {showWelcome && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, width: "100%", maxWidth: 640, height: "min(90vh,700px)", overflow: "hidden", boxShadow: "var(--shadow-modal)", display: "flex", flexDirection: "column" }}>
+        <div className="cpf-welcome-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div className="cpf-welcome-modal" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, overflow: "hidden", boxShadow: "var(--shadow-modal)", display: "flex", flexDirection: "column" }}>
             {/* Header */}
             <div className="cpf-welcome-header" style={{ padding: "12px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
@@ -7060,7 +7093,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               {welcomeStep === 0 && (
                 <>
                   <p style={{ color: "var(--text-main)", fontSize: 15, lineHeight: 1.6, marginBottom: 24 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+                  <div className="welcome-step0-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
                     {[
                       ["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck],
                       ["Monte Carlo stress testing (Mild / Base / Stress variance)", Activity], ["Milestone alerts", Bell],
