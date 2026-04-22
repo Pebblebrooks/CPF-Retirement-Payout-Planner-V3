@@ -6715,12 +6715,105 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* ─── PAGE-WIDE WRAPPER ─── */
         .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 20px; width: 100%; box-sizing: border-box; }
-        .cpf-page-wrap[data-mode="fhd"] { max-width: 1920px; padding: 6px 32px; }
+        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 32px; }
         .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 28px; }
         .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 20px; }
-        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { padding: 6px 32px; } }
+        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 32px; } }
         @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 24px; } }
         @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 16px; } }
+
+        /* ═══════════════════════════════════════════════════════════════
+           QHD / 4K RIGHT-PANEL MODULE  (within FHD layout scope)
+           Applies at ≥2560px in fhd mode, or auto mode on ≥2560px screens.
+           Prevents chart/card over-stretching by constraining the content
+           column width proportionally to viewport via padding + max-width.
+           Does NOT affect sidebar, nav bar, or HD/tablet/mobile rules.
+           ═══════════════════════════════════════════════════════════════ */
+
+        /* FHD layout: expand to fill full viewport at all widths ≥1920px */
+        .cpf-layout[data-mode="fhd"] {
+          max-width: 100%;
+        }
+        @media (min-width: 1920px) {
+          .cpf-layout[data-mode="auto"] {
+            max-width: 100%;
+          }
+        }
+
+        /* QHD (2560px+): add proportional side-padding to the tab content
+           so the readable content line never exceeds ~1300px.
+           clamp(24px, 4vw, 180px) → grows from 24px to ~180px as viewport widens. */
+        @media (min-width: 2560px) {
+          .cpf-layout[data-mode="fhd"] .cpf-tab-content,
+          .cpf-layout[data-mode="auto"] .cpf-tab-content {
+            padding-left: clamp(24px, 4vw, 180px);
+            padding-right: clamp(24px, 4vw, 180px);
+          }
+
+          /* Chart containers: prevent Recharts from rendering at absurd widths.
+             ResponsiveContainer fills its parent — capping its parent caps the chart. */
+          .cpf-layout[data-mode="fhd"] .recharts-responsive-container,
+          .cpf-layout[data-mode="auto"] .recharts-responsive-container,
+          .cpf-layout[data-mode="fhd"] .recharts-wrapper,
+          .cpf-layout[data-mode="auto"] .recharts-wrapper {
+            max-width: 1400px !important;
+          }
+
+          /* hero-split 2-up grid: at QHD+ each half is already wide enough.
+             Keep the 50/50 split but add a cap so neither card exceeds 720px. */
+          .cpf-layout[data-mode="fhd"] .hero-split,
+          .cpf-layout[data-mode="auto"] .hero-split {
+            grid-template-columns: minmax(340px, 680px) minmax(340px, 680px);
+            justify-content: center;
+          }
+
+          /* KPI strip: lock pill width so stats don't stretch into unreadable blobs */
+          .cpf-layout[data-mode="fhd"] .kpi-strip,
+          .cpf-layout[data-mode="auto"] .kpi-strip {
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+          }
+
+          /* Nav bar: scale up horizontal padding proportionally so logo and
+             action buttons sit in well-proportioned margins at 2560px+ */
+          .cpf-page-wrap[data-mode="fhd"] {
+            padding-left: clamp(32px, 3vw, 120px);
+            padding-right: clamp(32px, 3vw, 120px);
+          }
+          .cpf-page-wrap[data-mode="auto"] {
+            padding-left: clamp(32px, 3vw, 120px);
+            padding-right: clamp(32px, 3vw, 120px);
+          }
+
+          /* Sidebar sticky bar: scale up too so it stays in line with sidebar width */
+          .cpf-layout[data-mode="fhd"] .sidebar-sticky-bar,
+          .cpf-layout[data-mode="auto"] .sidebar-sticky-bar {
+            gap: 8px;
+            padding: 7px 10px;
+          }
+        }
+
+        /* 4K (3840px+): tighten further — content stays inside ~1600px readable zone */
+        @media (min-width: 3840px) {
+          .cpf-layout[data-mode="fhd"] .cpf-tab-content,
+          .cpf-layout[data-mode="auto"] .cpf-tab-content {
+            padding-left: clamp(180px, 10vw, 400px);
+            padding-right: clamp(180px, 10vw, 400px);
+          }
+          .cpf-page-wrap[data-mode="fhd"],
+          .cpf-page-wrap[data-mode="auto"] {
+            padding-left: clamp(80px, 6vw, 260px);
+            padding-right: clamp(80px, 6vw, 260px);
+          }
+          .cpf-layout[data-mode="fhd"] .recharts-responsive-container,
+          .cpf-layout[data-mode="auto"] .recharts-responsive-container {
+            max-width: 1600px !important;
+          }
+        }
+        /* ═══════════════════════════════════════════════════════════════
+           END QHD / 4K RIGHT-PANEL MODULE
+           ═══════════════════════════════════════════════════════════════ */
 
         .cpf-header-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
         .mobile-menu-btn { display: none; }
@@ -7510,7 +7603,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         className="cpf-layout"
         data-mode={desktopMode}
         style={{
-          maxWidth: desktopMode === 'fhd' ? '1920px' : desktopMode === 'hd' ? '1440px' : '100%',
+          maxWidth: desktopMode === 'fhd' ? '100%' : desktopMode === 'hd' ? '1440px' : '100%',
           flex: '1 1 0',
           overflow: 'hidden',
           background: 'var(--bg-base)'
