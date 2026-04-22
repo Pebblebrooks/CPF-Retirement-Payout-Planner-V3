@@ -6673,10 +6673,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           display: none !important;
         }
 
-        /* sidebar-col-toggle: column-level collapse button.
-           Hidden by default (single-column / HD / tablet / mobile).
-           Only revealed inside FHD layout via the rules below. */
+        /* sidebar-col-toggle: removed from column headers — no longer used in JSX.
+           CSS kept as dead rule guard; selectors won't match anything. */
         .sidebar-col-toggle {
+          display: none !important;
+        }
+
+        /* fhd-col-toggles: the C1/C2/C3 collapse group in the sticky bar.
+           Hidden on all viewport sizes except FHD. */
+        .fhd-col-toggles {
           display: none !important;
         }
 
@@ -6685,64 +6690,23 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           /* default: normal block */
         }
 
-        /* ── Reveal column toggles & span gap alert only in FHD mode ── */
-        .cpf-layout[data-mode="fhd"] .sidebar-col-toggle {
+        /* ── Reveal column controls & span gap alert only in FHD mode ── */
+        .cpf-layout[data-mode="fhd"] .fhd-col-toggles {
           display: flex !important;
           align-items: center;
-          justify-content: space-between;
-          width: 100%;
-          padding: 7px 12px;
-          border-radius: 10px;
-          border: 1px solid var(--border-strong);
-          background: var(--bg-panel);
-          color: var(--text-subtle);
-          font-size: 10px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
-          cursor: pointer;
-          transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-          box-sizing: border-box;
-          gap: 8px;
+          gap: 4px;
+          flex-shrink: 0;
         }
-        .cpf-layout[data-mode="fhd"] .sidebar-col-toggle:hover {
-          background: var(--bg-muted);
-          color: var(--text-main);
-          border-color: var(--border-strong);
-        }
-        .cpf-layout[data-mode="fhd"] .sidebar-col-1 .sidebar-col-toggle { border-color: rgba(56,189,248,0.3); color: var(--clr-sky); }
-        .cpf-layout[data-mode="fhd"] .sidebar-col-2 .sidebar-col-toggle { border-color: rgba(163,230,53,0.3); color: var(--clr-lime); }
-        .cpf-layout[data-mode="fhd"] .sidebar-col-3 .sidebar-col-toggle { border-color: rgba(var(--clr-blue-rgb),0.3); color: var(--clr-blue); }
-        .cpf-layout[data-mode="fhd"] .sidebar-col-1 .sidebar-col-toggle:hover { background: rgba(56,189,248,0.06); border-color: rgba(56,189,248,0.5); }
-        .cpf-layout[data-mode="fhd"] .sidebar-col-2 .sidebar-col-toggle:hover { background: rgba(163,230,53,0.06); border-color: rgba(163,230,53,0.5); }
-        .cpf-layout[data-mode="fhd"] .sidebar-col-3 .sidebar-col-toggle:hover { background: rgba(var(--clr-blue-rgb),0.06); border-color: rgba(var(--clr-blue-rgb),0.5); }
-
         .cpf-layout[data-mode="fhd"] .sidebar-gap-alert {
           grid-column: 1 / -1;
         }
         @media (min-width: 1920px) {
-          .cpf-layout[data-mode="auto"] .sidebar-col-toggle {
+          .cpf-layout[data-mode="auto"] .fhd-col-toggles {
             display: flex !important;
             align-items: center;
-            justify-content: space-between;
-            width: 100%;
-            padding: 7px 12px;
-            border-radius: 10px;
-            border: 1px solid var(--border-strong);
-            background: var(--bg-panel);
-            color: var(--text-subtle);
-            font-size: 10px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            cursor: pointer;
-            transition: background 0.15s ease, color 0.15s ease;
-            box-sizing: border-box;
-            gap: 8px;
+            gap: 4px;
+            flex-shrink: 0;
           }
-          .cpf-layout[data-mode="auto"] .sidebar-col-1 .sidebar-col-toggle { border-color: rgba(56,189,248,0.3); color: var(--clr-sky); }
-          .cpf-layout[data-mode="auto"] .sidebar-col-2 .sidebar-col-toggle { border-color: rgba(163,230,53,0.3); color: var(--clr-lime); }
-          .cpf-layout[data-mode="auto"] .sidebar-col-3 .sidebar-col-toggle { border-color: rgba(var(--clr-blue-rgb),0.3); color: var(--clr-blue); }
           .cpf-layout[data-mode="auto"] .sidebar-gap-alert { grid-column: 1 / -1; }
         }
         /* ═══════════════════════════════════════════════════════════════
@@ -7582,19 +7546,29 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <button onClick={collapseAllSections} style={{ flex: 1, padding: "5px 0", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
               <ChevronUp style={{ width: 11, height: 11 }} />Collapse All
             </button>
+            {/* FHD-only column collapse controls — hidden via CSS on ≤1919px */}
+            <div className="fhd-col-toggles">
+              <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", opacity: 0.6, whiteSpace: "nowrap" }}>Cols:</span>
+              {[
+                { n: 1, label: "C1", icon: <User style={{ width: 9, height: 9 }} />, activeColor: "rgba(56,189,248,0.12)", activeBorder: "rgba(56,189,248,0.4)", activeText: "var(--clr-sky)" },
+                { n: 2, label: "C2", icon: <Gift style={{ width: 9, height: 9 }} />, activeColor: "rgba(163,230,53,0.12)", activeBorder: "rgba(163,230,53,0.4)", activeText: "var(--clr-lime)" },
+                { n: 3, label: "C3", icon: <Home style={{ width: 9, height: 9 }} />, activeColor: "rgba(var(--clr-blue-rgb),0.12)", activeBorder: "rgba(var(--clr-blue-rgb),0.4)", activeText: "var(--clr-blue)" },
+              ].map(({ n, label, icon, activeColor, activeBorder, activeText }) => (
+                <button key={n} onClick={() => toggleCol(n)} title={`Toggle column ${n}`}
+                  style={{ display: "flex", alignItems: "center", gap: 3, padding: "5px 7px", borderRadius: 8, fontSize: 9, fontWeight: 800, cursor: "pointer",
+                    background: colOpen[n] ? activeColor : "rgba(100,116,139,0.08)",
+                    border: `1px solid ${colOpen[n] ? activeBorder : "var(--border-strong)"}`,
+                    color: colOpen[n] ? activeText : "var(--text-muted)" }}>
+                  {icon}{label}{colOpen[n] ? <ChevronUp style={{ width: 8, height: 8 }} /> : <ChevronDown style={{ width: 8, height: 8 }} />}
+                </button>
+              ))}
+            </div>
           </div>
           <div className={`cpf-sidebar-inner${sidebarOpen ? "" : " sidebar-collapsed"}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {/* ── FHD COL 1: Profile & Contributions ──────────────────────────
                 Visible as a column only at ≥1920px / data-mode="fhd".
                 At smaller sizes this wrapper is an invisible flex-column passthrough. */}
             <div className="sidebar-col sidebar-col-1">
-              <button className="sidebar-col-toggle" onClick={() => toggleCol(1)} aria-label="Toggle Profile &amp; Contributions column">
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <User style={{ width: 11, height: 11 }} />
-                  <span>Profile &amp; Contributions</span>
-                </div>
-                <span style={{ fontSize: 9, opacity: 0.7 }}>{colOpen[1] ? "▲" : "▼"}</span>
-              </button>
               <div className={`sidebar-col-body${colOpen[1] ? "" : " col-collapsed"}`}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <div onClick={() => toggleSection("profile")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("profile"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("profile") ? "rgba(56,189,248,0.08)" : "transparent" }}>
@@ -8562,21 +8536,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               </div>}
             </div>{/* /contribs inner */}
             </div>{/* /contribs gate wrapper */}
-              </div>{/* /sidebar-col-1-body */}
-            </div>{/* /sidebar-col-1 */}
-
-            {/* ── FHD COL 2: Inflows, Outflows & Transfers ─────────────────────
-                Visible as a column only at ≥1920px / data-mode="fhd".
-                At smaller sizes this wrapper is an invisible flex-column passthrough. */}
-            <div className="sidebar-col sidebar-col-2">
-              <button className="sidebar-col-toggle" onClick={() => toggleCol(2)} aria-label="Toggle Inflows &amp; Outflows column">
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Gift style={{ width: 11, height: 11 }} />
-                  <span>Inflows &amp; Outflows</span>
-                </div>
-                <span style={{ fontSize: 9, opacity: 0.7 }}>{colOpen[2] ? "▲" : "▼"}</span>
-              </button>
-              <div className={`sidebar-col-body${colOpen[2] ? "" : " col-collapsed"}`}>
             {/* Inflows */}
             <div style={{ position: "relative" }}>
             {isForeigner && (
@@ -9054,7 +9013,38 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               </div>}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
+            {/* ── RA Gap Alert — lives in col1 body: contextually belongs with Profile/Contributions ── */}
+            {gapAlert && !isForeigner && (
+              <div className="sidebar-gap-alert" style={{ borderRadius: 10, padding: "9px 12px", border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.3)" : "rgba(var(--clr-amber3-rgb),0.3)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.07)" : "rgba(var(--clr-amber3-rgb),0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <AlertTriangle style={{ width: 12, height: 12, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0 }} />
+                  <span style={{ fontSize: 9, fontWeight: 700, color: gapAlert.isUrgent ? "#fca5a5" : "#fcd34d", lineHeight: 1.3 }}>
+                    RA gap: <strong>{formatCurrency(gapAlert.frsGap)}</strong> short of FRS · +{formatCurrency(gapAlert.annualTopUp)}/yr needed
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenSections(prev => {
+                      const next = new Set(prev);
+                      next.add("topups");
+                      try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([...next])); } catch { }
+                      return next;
+                    });
+                    setTimeout(() => rstuRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+                  }}
+                  style={{ flexShrink: 0, padding: "4px 9px", borderRadius: 6, fontSize: 10, fontWeight: 800, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
+                  Fix in Inflows ↗
+                </button>
+              </div>
+            )}
+              </div>{/* /sidebar-col-1-body */}
+            </div>{/* /sidebar-col-1 */}
 
+            {/* ── FHD COL 2: Outflows, Transfers & Property (3 sections) ──────
+                Passthrough flex-column on ≤1919px; grid column on ≥1920px. */}
+            <div className="sidebar-col sidebar-col-2">
+              <div className={`sidebar-col-body${colOpen[2] ? "" : " col-collapsed"}`}>
             {/* Outflows */}
             <div style={{ position: "relative" }}>
             {isForeigner && (
@@ -9371,23 +9361,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               </div>}
             </div>{/* /transfers inner */}
             </div>{/* /transfers gate wrapper */}
-              </div>{/* /sidebar-col-2-body */}
-            </div>{/* /sidebar-col-2 */}
-
-            {/* ── FHD COL 3: Property, Private Assets & Decumulation ───────────
-                Visible as a column only at ≥1920px / data-mode="fhd".
-                At smaller sizes this wrapper is an invisible flex-column passthrough. */}
-            <div className="sidebar-col sidebar-col-3">
-              <button className="sidebar-col-toggle" onClick={() => toggleCol(3)} aria-label="Toggle Property &amp; Decumulation column">
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Home style={{ width: 11, height: 11 }} />
-                  <span>Property &amp; Decumulation</span>
-                </div>
-                <span style={{ fontSize: 9, opacity: 0.7 }}>{colOpen[3] ? "▲" : "▼"}</span>
-              </button>
-              <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
-
-            {/* Property — consolidated section */}
+            {/* Property — consolidated section (3rd section of col2) */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <div onClick={() => toggleSection("property")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("property"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("property") ? "rgba(var(--clr-blue-rgb),0.06)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--clr-blue)" }}>
@@ -9614,6 +9588,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 </div>
               </div>}
             </div>
+              </div>{/* /sidebar-col-2-body */}
+            </div>{/* /sidebar-col-2 */}
+
+            {/* ── FHD COL 3: Private Assets, Life Events & Decumulation (3 sections) ──
+                Passthrough flex-column on ≤1919px; grid column on ≥1920px. */}
+            <div className="sidebar-col sidebar-col-3">
+              <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible", marginTop: 12, marginBottom: 0 }}>
               <div onClick={() => toggleSection("privateAssets")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("privateAssets"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("privateAssets") ? "rgba(var(--clr-purple-rgb),0.06)" : "transparent" }}>
@@ -10243,30 +10224,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 Hidden for foreigners: no CPF account means no RA, no FRS, no gap concept. */}
               </div>{/* /sidebar-col-3-body */}
             </div>{/* /sidebar-col-3 */}
-            {gapAlert && !isForeigner && (
-              <div className="sidebar-gap-alert" style={{ borderRadius: 10, padding: "9px 12px", border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.3)" : "rgba(var(--clr-amber3-rgb),0.3)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.07)" : "rgba(var(--clr-amber3-rgb),0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                  <AlertTriangle style={{ width: 12, height: 12, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0 }} />
-                  <span style={{ fontSize: 9, fontWeight: 700, color: gapAlert.isUrgent ? "#fca5a5" : "#fcd34d", lineHeight: 1.3 }}>
-                    RA gap: <strong>{formatCurrency(gapAlert.frsGap)}</strong> short of FRS · +{formatCurrency(gapAlert.annualTopUp)}/yr needed
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpenSections(prev => {
-                      const next = new Set(prev);
-                      next.add("topups");
-                      try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([...next])); } catch { }
-                      return next;
-                    });
-                    setTimeout(() => rstuRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
-                  }}
-                  style={{ flexShrink: 0, padding: "4px 9px", borderRadius: 6, fontSize: 10, fontWeight: 800, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
-                  Fix in Inflows ↗
-                </button>
-              </div>
-            )}
           </div>
           {/* Confidence badge — pinned at sidebar bottom, always visible */}
           <div style={{ padding: "8px 12px", borderTop: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6, background: "var(--bg-base)" }}>
