@@ -6629,20 +6629,20 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* FHD outer layout: sidebar widens to house 3 sub-columns; main panel
            gets the remaining 1fr — no blank space, no fixed pixel right width.
-           padding-left/right matches cpf-page-wrap[data-mode="fhd"] (32px)
-           so sidebar left edge aligns flush with nav bar logo/items. */
+           Zero horizontal padding — cards sit flush with cpf-page-wrap edges,
+           aligning with nav bar logo and action buttons at same 32px margin. */
         .cpf-layout[data-mode="fhd"] {
           grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
           max-width: 100%;
           gap: 20px;
-          padding: 12px 32px 20px;
+          padding: 12px 0 20px;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] {
             grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
             max-width: 100%;
             gap: 20px;
-            padding: 12px 32px 20px;
+            padding: 12px 0 20px;
           }
         }
 
@@ -6655,7 +6655,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           gap: 8px !important;
           align-items: stretch;
           flex-direction: unset;
-          padding: 8px;
+          padding: 0;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] .cpf-sidebar-inner {
@@ -6665,7 +6665,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             gap: 8px !important;
             align-items: stretch;
             flex-direction: unset;
-            padding: 8px;
+            padding: 0;
           }
         }
 
@@ -6683,6 +6683,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           flex-direction: column;
           gap: 6px;
           flex: 1;
+          justify-content: flex-start;
         }
         .sidebar-col-body.col-collapsed {
           display: none !important;
@@ -6694,34 +6695,25 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           display: none !important;
         }
 
-        /* fhd-col-toggles: the C1/C2/C3 collapse group in the sticky bar.
-           Hidden on all viewport sizes except FHD. */
-        .fhd-col-toggles {
-          display: none !important;
-        }
+        /* fhd-col-btn: 3 dual-function column header buttons in the sticky bar.
+           Hidden at ≤1919px; visible only in FHD layout. */
+        .fhd-col-btn { display: none !important; }
+
+        /* hd-only-btn: Expand All / Collapse All. Shown at ≤1919px, hidden at FHD. */
+        .hd-only-btn { display: flex; }
 
         /* Gap alert: spans all 3 columns in FHD grid mode */
         .sidebar-gap-alert {
           /* default: normal block */
         }
 
-        /* ── Reveal column controls & span gap alert only in FHD mode ── */
-        .cpf-layout[data-mode="fhd"] .fhd-col-toggles {
-          display: flex !important;
-          align-items: center;
-          gap: 4px;
-          flex-shrink: 0;
-        }
-        .cpf-layout[data-mode="fhd"] .sidebar-gap-alert {
-          grid-column: 1 / -1;
-        }
+        /* ── FHD mode: show column buttons, hide HD-only buttons ── */
+        .cpf-layout[data-mode="fhd"] .fhd-col-btn  { display: flex !important; }
+        .cpf-layout[data-mode="fhd"] .hd-only-btn  { display: none !important; }
+        .cpf-layout[data-mode="fhd"] .sidebar-gap-alert { grid-column: 1 / -1; }
         @media (min-width: 1920px) {
-          .cpf-layout[data-mode="auto"] .fhd-col-toggles {
-            display: flex !important;
-            align-items: center;
-            gap: 4px;
-            flex-shrink: 0;
-          }
+          .cpf-layout[data-mode="auto"] .fhd-col-btn  { display: flex !important; }
+          .cpf-layout[data-mode="auto"] .hd-only-btn  { display: none !important; }
           .cpf-layout[data-mode="auto"] .sidebar-gap-alert { grid-column: 1 / -1; }
         }
         /* ═══════════════════════════════════════════════════════════════
@@ -7654,33 +7646,58 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             )}
           </div>
           {/* Sticky Expand / Collapse bar — always visible at top of sidebar while scrolling */}
-          <div className="sidebar-sticky-bar" style={{ display: "flex", gap: 6, padding: "6px 8px", position: "sticky", top: 0, zIndex: 10, background: "var(--bg-base)", borderBottom: "1px solid var(--border-subtle)", backdropFilter: "blur(6px)" }}>
-            <button onClick={expandAllSections} style={{ flex: 1, padding: "5px 0", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+          {/* Sticky bar — FHD: 3 dual-function column buttons; HD/smaller: Expand/Collapse All */}
+          <div className="sidebar-sticky-bar" style={{ display: "flex", gap: 6, padding: "6px 0", position: "sticky", top: 0, zIndex: 10, background: "var(--bg-base)", borderBottom: "1px solid var(--border-subtle)", backdropFilter: "blur(6px)" }}>
+            {/* HD and below: plain Expand All / Collapse All (hidden at ≥1920px via CSS) */}
+            <button className="hd-only-btn" onClick={expandAllSections} style={{ flex: 1, padding: "5px 0", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
               <ChevronDown style={{ width: 11, height: 11 }} />Expand All
             </button>
-            <button onClick={collapseAllSections} style={{ flex: 1, padding: "5px 0", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+            <button className="hd-only-btn" onClick={collapseAllSections} style={{ flex: 1, padding: "5px 0", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
               <ChevronUp style={{ width: 11, height: 11 }} />Collapse All
             </button>
-            {/* FHD-only column collapse controls — hidden via CSS on ≤1919px */}
-            <div className="fhd-col-toggles">
-              <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", opacity: 0.6, whiteSpace: "nowrap" }}>Hide col:</span>
-              {[
-                { n: 1, label: "Profile & Contribs", icon: <User style={{ width: 9, height: 9 }} />, activeColor: "rgba(56,189,248,0.12)", activeBorder: "rgba(56,189,248,0.4)", activeText: "var(--clr-sky)" },
-                { n: 2, label: "Flows & Transfers", icon: <Gift style={{ width: 9, height: 9 }} />, activeColor: "rgba(163,230,53,0.12)", activeBorder: "rgba(163,230,53,0.4)", activeText: "var(--clr-lime)" },
-                { n: 3, label: "Assets & Goals", icon: <Home style={{ width: 9, height: 9 }} />, activeColor: "rgba(var(--clr-blue-rgb),0.12)", activeBorder: "rgba(var(--clr-blue-rgb),0.4)", activeText: "var(--clr-blue)" },
-              ].map(({ n, label, icon, activeColor, activeBorder, activeText }) => (
-                <button key={n} onClick={() => toggleCol(n)} title={colOpen[n] ? `Hide column: ${label}` : `Show column: ${label}`}
-                  style={{ display: "flex", alignItems: "center", gap: 3, padding: "5px 8px", borderRadius: 8, fontSize: 9, fontWeight: 700, cursor: "pointer",
-                    background: colOpen[n] ? activeColor : "rgba(100,116,139,0.08)",
-                    border: `1px solid ${colOpen[n] ? activeBorder : "var(--border-strong)"}`,
-                    color: colOpen[n] ? activeText : "var(--text-muted)",
-                    textDecoration: colOpen[n] ? "none" : "line-through",
-                    opacity: colOpen[n] ? 1 : 0.55 }}>
-                  {icon}<span style={{ maxWidth: 64, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{label}</span>
-                  {colOpen[n] ? <ChevronUp style={{ width: 8, height: 8 }} /> : <ChevronDown style={{ width: 8, height: 8 }} />}
-                </button>
-              ))}
-            </div>
+            {/* FHD: 3 dual-function column header buttons (hidden at ≤1919px via CSS).
+                Each button toggles ALL sections within that column open/closed.
+                State: if any section in col is open → clicking collapses all; if all closed → expands all. */}
+            {(() => {
+              const colSections = {
+                1: ["profile", "contribs", "topups"],
+                2: ["outflows", "transfers", "property"],
+                3: ["privateAssets", "lifeEvents", "decumulation"],
+              };
+              const colMeta = [
+                { n: 1, label: "Profile & Contributions", icon: <User style={{ width: 10, height: 10 }} />, clr: "var(--clr-sky)",  bg: "rgba(56,189,248,0.08)",             bdr: "rgba(56,189,248,0.35)" },
+                { n: 2, label: "Outflows & Transfers",    icon: <Gift style={{ width: 10, height: 10 }} />, clr: "var(--clr-lime)", bg: "rgba(163,230,53,0.08)",            bdr: "rgba(163,230,53,0.35)" },
+                { n: 3, label: "Assets & Goals",          icon: <Home style={{ width: 10, height: 10 }} />, clr: "var(--clr-blue)", bg: "rgba(var(--clr-blue-rgb),0.08)",   bdr: "rgba(var(--clr-blue-rgb),0.35)" },
+              ];
+              return colMeta.map(({ n, label, icon, clr, bg, bdr }) => {
+                const ids = colSections[n];
+                const anyOpen = ids.some(id => openSections.has(id));
+                const handleColToggle = () => {
+                  setOpenSections(prev => {
+                    const next = new Set(prev);
+                    if (anyOpen) { ids.forEach(id => next.delete(id)); }
+                    else         { ids.forEach(id => next.add(id)); }
+                    try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([...next])); } catch {}
+                    return next;
+                  });
+                };
+                return (
+                  <button key={n} className="fhd-col-btn" onClick={handleColToggle}
+                    title={anyOpen ? `Collapse: ${label}` : `Expand: ${label}`}
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "6px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                      border: `1px solid ${anyOpen ? bdr : "var(--border-strong)"}`,
+                      background: anyOpen ? bg : "rgba(100,116,139,0.06)",
+                      color: anyOpen ? clr : "var(--text-muted)",
+                      transition: "all 0.15s ease" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                      {icon}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                    </div>
+                    {anyOpen ? <ChevronUp style={{ width: 9, height: 9, flexShrink: 0 }} /> : <ChevronDown style={{ width: 9, height: 9, flexShrink: 0 }} />}
+                  </button>
+                );
+              });
+            })()}
           </div>
           <div className={`cpf-sidebar-inner${sidebarOpen ? "" : " sidebar-collapsed"}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {/* ── FHD COL 1: Profile & Contributions ──────────────────────────
