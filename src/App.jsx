@@ -6325,6 +6325,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .theme-light .freq-recurring-active { color: #065f46 !important; background: rgba(6,95,70,0.14) !important; }
         .theme-light .freq-onetime-active   { color: #92400e !important; background: rgba(146,64,14,0.14) !important; }
 
+        /* Auto-Calc button: in dark mode clr-lime=#a3e635 (bright) + #14532d text = readable.
+           In light mode clr-lime=#166534 (dark green) + #14532d text = near-invisible.
+           Override: white background with dark-green text and border for full contrast. */
+        .theme-light .auto-calc-btn {
+          background: #166534 !important;
+          color: #ffffff !important;
+          border: 1px solid #14532d !important;
+        }
+        .theme-light .auto-calc-btn:hover {
+          background: #14532d !important;
+        }
+
         /* ── Modal overlays ── */
         .theme-light .modal-heading { color: #08111e !important; }
 
@@ -6608,7 +6620,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 28px; }
         @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 24px; } }
         @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 16px; } }
-
         /* ═══════════════════════════════════════════════════════════════
            FHD MULTI-COLUMN SIDEBAR MODULE
            Scope: data-mode="fhd" (explicit) OR auto mode on ≥1920px screens.
@@ -6617,18 +6628,21 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
            ═══════════════════════════════════════════════════════════════ */
 
         /* FHD outer layout: sidebar widens to house 3 sub-columns; main panel
-           gets the remaining 1fr — no blank space, no fixed pixel right width */
+           gets the remaining 1fr — no blank space, no fixed pixel right width.
+           padding-left/right matches cpf-page-wrap[data-mode="fhd"] (32px)
+           so sidebar left edge aligns flush with nav bar logo/items. */
         .cpf-layout[data-mode="fhd"] {
           grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
-          max-width: 1920px;
+          max-width: 100%;
           gap: 20px;
-          padding: 20px 28px;
+          padding: 12px 32px 20px;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] {
             grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
+            max-width: 100%;
             gap: 20px;
-            padding: 20px 28px;
+            padding: 12px 32px 20px;
           }
         }
 
@@ -6639,7 +6653,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           grid-template-columns: repeat(3, 1fr) !important;
           grid-template-rows: auto;
           gap: 8px !important;
-          align-items: start;
+          align-items: stretch;
           flex-direction: unset;
           padding: 8px;
         }
@@ -6649,7 +6663,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             grid-template-columns: repeat(3, 1fr) !important;
             grid-template-rows: auto;
             gap: 8px !important;
-            align-items: start;
+            align-items: stretch;
             flex-direction: unset;
             padding: 8px;
           }
@@ -6668,6 +6682,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           display: flex;
           flex-direction: column;
           gap: 6px;
+          flex: 1;
         }
         .sidebar-col-body.col-collapsed {
           display: none !important;
@@ -6829,6 +6844,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .rg-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
         .rg-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
         .rg-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        /* summary-stats-grid: 2-col inside row-2 right panel at all sizes.
+           At ≥1920px right panel is already 50% wide so 2-col fits well.
+           Mobile overrides handled by .rg-5 breakpoint rules below. */
+        .summary-stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
         .sidebar-toggle-btn { display: none; }
         /* Sidebar sticky expand/collapse bar — only meaningful on desktop where sidebar scrolls */
         .sidebar-sticky-bar { display: flex; }
@@ -6917,6 +6936,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
           .rg-5, .rg-4, .rg-3, .rg-2 { grid-template-columns: 1fr 1fr !important; }
+          .summary-row2 { grid-template-columns: 1fr !important; }
           .life-plans-grid { grid-template-columns: 1fr !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; }
@@ -6941,6 +6961,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         @media (max-width: 480px) {
           .cpf-main-wrap { padding: 6px 6px; }
           .rg-6, .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; gap: 5px !important; }
+          .summary-row2 { grid-template-columns: 1fr !important; }
+          .summary-stats-grid { grid-template-columns: 1fr 1fr !important; }
           .rg-2, .life-plans-grid { grid-template-columns: 1fr !important; }
           .cpf-kpi-value { font-size: 14px !important; }
           .cpf-kpi-label { font-size: 9px !important; }
@@ -7641,18 +7663,21 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </button>
             {/* FHD-only column collapse controls — hidden via CSS on ≤1919px */}
             <div className="fhd-col-toggles">
-              <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", opacity: 0.6, whiteSpace: "nowrap" }}>Cols:</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", opacity: 0.6, whiteSpace: "nowrap" }}>Hide col:</span>
               {[
-                { n: 1, label: "C1", icon: <User style={{ width: 9, height: 9 }} />, activeColor: "rgba(56,189,248,0.12)", activeBorder: "rgba(56,189,248,0.4)", activeText: "var(--clr-sky)" },
-                { n: 2, label: "C2", icon: <Gift style={{ width: 9, height: 9 }} />, activeColor: "rgba(163,230,53,0.12)", activeBorder: "rgba(163,230,53,0.4)", activeText: "var(--clr-lime)" },
-                { n: 3, label: "C3", icon: <Home style={{ width: 9, height: 9 }} />, activeColor: "rgba(var(--clr-blue-rgb),0.12)", activeBorder: "rgba(var(--clr-blue-rgb),0.4)", activeText: "var(--clr-blue)" },
+                { n: 1, label: "Profile & Contribs", icon: <User style={{ width: 9, height: 9 }} />, activeColor: "rgba(56,189,248,0.12)", activeBorder: "rgba(56,189,248,0.4)", activeText: "var(--clr-sky)" },
+                { n: 2, label: "Flows & Transfers", icon: <Gift style={{ width: 9, height: 9 }} />, activeColor: "rgba(163,230,53,0.12)", activeBorder: "rgba(163,230,53,0.4)", activeText: "var(--clr-lime)" },
+                { n: 3, label: "Assets & Goals", icon: <Home style={{ width: 9, height: 9 }} />, activeColor: "rgba(var(--clr-blue-rgb),0.12)", activeBorder: "rgba(var(--clr-blue-rgb),0.4)", activeText: "var(--clr-blue)" },
               ].map(({ n, label, icon, activeColor, activeBorder, activeText }) => (
-                <button key={n} onClick={() => toggleCol(n)} title={`Toggle column ${n}`}
-                  style={{ display: "flex", alignItems: "center", gap: 3, padding: "5px 7px", borderRadius: 8, fontSize: 9, fontWeight: 800, cursor: "pointer",
+                <button key={n} onClick={() => toggleCol(n)} title={colOpen[n] ? `Hide column: ${label}` : `Show column: ${label}`}
+                  style={{ display: "flex", alignItems: "center", gap: 3, padding: "5px 8px", borderRadius: 8, fontSize: 9, fontWeight: 700, cursor: "pointer",
                     background: colOpen[n] ? activeColor : "rgba(100,116,139,0.08)",
                     border: `1px solid ${colOpen[n] ? activeBorder : "var(--border-strong)"}`,
-                    color: colOpen[n] ? activeText : "var(--text-muted)" }}>
-                  {icon}{label}{colOpen[n] ? <ChevronUp style={{ width: 8, height: 8 }} /> : <ChevronDown style={{ width: 8, height: 8 }} />}
+                    color: colOpen[n] ? activeText : "var(--text-muted)",
+                    textDecoration: colOpen[n] ? "none" : "line-through",
+                    opacity: colOpen[n] ? 1 : 0.55 }}>
+                  {icon}<span style={{ maxWidth: 64, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{label}</span>
+                  {colOpen[n] ? <ChevronUp style={{ width: 8, height: 8 }} /> : <ChevronDown style={{ width: 8, height: 8 }} />}
                 </button>
               ))}
             </div>
@@ -7670,9 +7695,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--clr-sky)" }}>Profile & Balances</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: saveStatus === "Saving..." ? "rgba(var(--clr-amber-rgb),0.1)" : "rgba(56,189,248,0.12)", color: saveStatus === "Saving..." ? "var(--clr-amber)" : "var(--clr-sky)" }}>
-                    {saveStatus === "Saving..." ? <Loader2 style={{ width: 10, height: 10 }} /> : <CheckCircle2 style={{ width: 10, height: 10 }} />}{saveStatus}
-                  </div>
                   <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700 }}>{openSections.has("profile") ? "▲" : "▼"}</span>
                 </div>
               </div>
@@ -8267,7 +8289,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                       );
                     })()}
-                    <button onClick={handleAutoCalc} style={{ width: "100%", background: "var(--clr-lime)", color: "#14532d", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 11, border: "none", cursor: "pointer" }}>⚡ Auto-Calc CPF Contributions</button>
+                    <button onClick={handleAutoCalc} className="auto-calc-btn" style={{ width: "100%", background: "var(--clr-lime)", color: "#14532d", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 11, border: "none", cursor: "pointer" }}>⚡ Auto-Calc CPF Contributions</button>
                   </div>
                 )}
                 {inputs.showSalaryCalc && !isSelfEmployed && (() => {
@@ -10314,7 +10336,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </div>
             {/* Persistent KPI strip */}
             {activeTab !== "welcome" && activeTab !== "notes" && (
-              <div className="kpi-strip" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "center", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+              <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "1fr", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
                 {(() => {
                   const pa = payoutAge65; // CQ-2 fix: use debounced value to match displayProjection/displayAccumulation
                   // Use displayProjection (already inflation-adjusted when isRealDollars=true)
@@ -10375,7 +10397,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     { label: "Payout Age", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts. Estimates based on 2026 CPF Board data." },
                   ];
                 })().map(({ label, value, color, tip }, i) => (
-                  <div key={i} title={tip || ""} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-subtle)", flex: "1 1 0", minWidth: 90, textAlign: "center", boxSizing: "border-box", cursor: "help", background: i === 0 ? "rgba(var(--clr-blue-rgb),0.08)" : i > 0 && i < 4 ? "rgba(var(--clr-emerald-rgb),0.04)" : "transparent" }}>
+                  <div key={i} title={tip || ""} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-subtle)", minWidth: 0, textAlign: "center", boxSizing: "border-box", cursor: "help", background: i === 0 ? "rgba(var(--clr-blue-rgb),0.08)" : i > 0 && i < 4 ? "rgba(var(--clr-emerald-rgb),0.04)" : "transparent" }}>
                     <div className="cpf-kpi-label" style={{ fontSize: 10, fontWeight: 800, color: i === 0 ? "var(--clr-blue)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
                     <div className="cpf-kpi-value" style={{ fontSize: 17, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)" }}>{value}</div>
                   </div>
@@ -10704,6 +10726,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 {/* S6 fix: added !isRSSMode guard — RSS members were seeing CPF LIFE cards showing $0
                     for all three plans, which was confusing and implied missing data.
                     Show a compact RSS summary card in its place instead. */}
+                {/* ── Summary Row 2: LIFE Plans (left) + Key Stats (right) side-by-side ── */}
+                <div className="summary-row2 hero-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
                 {!isForeigner && !isRSSMode && (
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 24 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -10839,8 +10863,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   }
                   return null;
                 })()}
+                {/* ── Right col of Row 2: Key Stats tiles + explanation ── */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {/* Stats Row */}
-                <div className="rg-5" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
+                <div className="rg-5 summary-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10 }}>
                   {/* CQ-2 perf: use pre-built Maps instead of 4× O(n) .find() calls */}
                   {/* M2 fix: append Nom. badge when real-dollar mode is on — these 4 cards always read from
                    projectionByAge/payoutByAge (nominal), while surrounding hero uses displayAccumulation (deflated). */}
@@ -10872,6 +10898,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <strong style={{ color: "var(--clr-blue)" }}>Net Worth @ payout age / 95</strong> = OA + MA + RA + Property at that age under the highlighted LIFE plan. &nbsp;
                   <strong style={{ color: "var(--clr-amber)" }}>Est. Tax Savings (RSTU)</strong> = annual tax relief estimate from your RSTU cash top-up, capped at $8,000 and FRS headroom.
                 </div>
+                </div>{/* /right col stats + explanation */}
+                </div>{/* /summary-row2 grid */}
                 {/* ── Contribution Timeline Gantt ── */}
                 {(() => {
                   const ca = Number(inputs.currentAge) || 35;
