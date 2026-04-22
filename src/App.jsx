@@ -8174,7 +8174,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                       );
                     })()}
-                    <button onClick={handleAutoCalc} style={{ width: "100%", background: "var(--clr-lime)", color: "var(--ctrl-on-text)", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 11, border: "none", cursor: "pointer" }}>⚡ Auto-Calc CPF Contributions</button>
+                    <button onClick={handleAutoCalc} style={{ width: "100%", background: "var(--clr-lime)", color: "#14532d", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 11, border: "none", cursor: "pointer" }}>⚡ Auto-Calc CPF Contributions</button>
                   </div>
                 )}
                 {inputs.showSalaryCalc && !isSelfEmployed && (() => {
@@ -9013,31 +9013,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               </div>}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
-            {/* ── RA Gap Alert — lives in col1 body: contextually belongs with Profile/Contributions ── */}
-            {gapAlert && !isForeigner && (
-              <div className="sidebar-gap-alert" style={{ borderRadius: 10, padding: "9px 12px", border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.3)" : "rgba(var(--clr-amber3-rgb),0.3)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.07)" : "rgba(var(--clr-amber3-rgb),0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                  <AlertTriangle style={{ width: 12, height: 12, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0 }} />
-                  <span style={{ fontSize: 9, fontWeight: 700, color: gapAlert.isUrgent ? "#fca5a5" : "#fcd34d", lineHeight: 1.3 }}>
-                    RA gap: <strong>{formatCurrency(gapAlert.frsGap)}</strong> short of FRS · +{formatCurrency(gapAlert.annualTopUp)}/yr needed
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpenSections(prev => {
-                      const next = new Set(prev);
-                      next.add("topups");
-                      try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([...next])); } catch { }
-                      return next;
-                    });
-                    setTimeout(() => rstuRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
-                  }}
-                  style={{ flexShrink: 0, padding: "4px 9px", borderRadius: 6, fontSize: 10, fontWeight: 800, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
-                  Fix in Inflows ↗
-                </button>
-              </div>
-            )}
               </div>{/* /sidebar-col-1-body */}
             </div>{/* /sidebar-col-1 */}
 
@@ -10224,18 +10199,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 Hidden for foreigners: no CPF account means no RA, no FRS, no gap concept. */}
               </div>{/* /sidebar-col-3-body */}
             </div>{/* /sidebar-col-3 */}
-          </div>
-          {/* Confidence badge — pinned at sidebar bottom, always visible */}
-          <div style={{ padding: "8px 12px", borderTop: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6, background: "var(--bg-base)" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, fontWeight: 700, color: "var(--clr-green)", background: "rgba(var(--clr-emerald-rgb),0.08)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", borderRadius: 20, padding: "3px 8px" }}>
-              <span>📅</span> 2026 CPF Rates
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, fontWeight: 700, color: "var(--clr-slate)", background: "rgba(148,163,184,0.08)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 20, padding: "3px 8px" }}>
-              <span>🎓</span> Educational Tool
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, fontWeight: 700, color: "var(--clr-blue)", background: "rgba(var(--clr-blue2-rgb),0.08)", border: "1px solid rgba(var(--clr-blue2-rgb),0.2)", borderRadius: 20, padding: "3px 8px" }}>
-              <span>🔒</span> Data stays local
-            </span>
           </div>
         </aside>
         {/* Confidence badge comment cleaned up */}
