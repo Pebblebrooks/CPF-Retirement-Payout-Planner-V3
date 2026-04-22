@@ -7693,8 +7693,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       border: `1px solid ${anyOpen ? bdr : "rgba(100,116,139,0.2)"}`,
                       background: anyOpen ? solid : "rgba(100,116,139,0.05)",
                       transition: "all 0.15s ease" }}>
-                    {/* Color pip — small circle in column accent color */}
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.5, flexShrink: 0, transition: "all 0.15s" }} />
+                    {/* Slim color bar — replaces pip circle */}
+                    <span style={{ width: 32, height: 3, borderRadius: 2, background: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.85 : 0.5, flexShrink: 0, transition: "all 0.15s" }} />
                     {anyOpen
                       ? <ChevronUp   style={{ width: 10, height: 10, color: "#fff", opacity: 0.8, flexShrink: 0 }} />
                       : <ChevronDown style={{ width: 10, height: 10, color: clr,   opacity: 0.55, flexShrink: 0 }} />}
@@ -9707,7 +9707,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <div className="sidebar-col sidebar-col-3">
               <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible", marginTop: 12, marginBottom: 0 }}>
+            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <div onClick={() => toggleSection("privateAssets")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("privateAssets"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("privateAssets") ? "rgba(var(--clr-purple-rgb),0.06)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--clr-purple)" }}>
                   <Briefcase style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>Private Assets</span>
@@ -9900,7 +9900,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               };
               const isPoint = leFormState.type === 'windfall' || leFormState.type === 'early_retirement';
               return (
-                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible", marginTop: 12, marginBottom: 12 }}>
+                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
                   {/* Header */}
                   <div onClick={() => toggleSection("lifeevents")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("lifeevents"); }}} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("lifeevents") ? "rgba(239,68,68,0.06)" : "transparent" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -10052,7 +10052,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             })()}
 
             {/* Decumulation & Goals — income targets, OA drawdown, Die with Zero */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible", marginTop: 12, marginBottom: 12 }}>
+            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <div onClick={() => toggleSection("decumulation")} tabIndex={0} className="sidebar-section-header" onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSection("decumulation"); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer", userSelect: "none", background: openSections.has("decumulation") ? "rgba(244,63,94,0.06)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#f43f5e" }}>
                   <Target style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>Decumulation &amp; Goals</span>
