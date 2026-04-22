@@ -6653,7 +6653,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           grid-template-columns: repeat(3, 1fr) !important;
           grid-template-rows: auto;
           gap: 8px !important;
-          align-items: stretch;
+          align-items: start;
           flex-direction: unset;
           padding: 0;
         }
@@ -6663,7 +6663,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             grid-template-columns: repeat(3, 1fr) !important;
             grid-template-rows: auto;
             gap: 8px !important;
-            align-items: stretch;
+            align-items: start;
             flex-direction: unset;
             padding: 0;
           }
@@ -6677,13 +6677,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           min-width: 0;
         }
 
-        /* sidebar-col-body: the collapsible section container within a column */
+        /* sidebar-col-body: the collapsible section container within a column.
+           flex: 0 0 auto — body is only as tall as its sections.
+           Do NOT use flex:1 here: that causes the body to stretch to the full
+           column height and distributes phantom space between sections when
+           col3 sections are shorter than col1/col2 sections. */
         .sidebar-col-body {
           display: flex;
           flex-direction: column;
           gap: 6px;
-          flex: 1;
-          justify-content: flex-start;
+          flex: 0 0 auto;
         }
         .sidebar-col-body.col-collapsed {
           display: none !important;
@@ -7665,11 +7668,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 3: ["privateAssets", "lifeEvents", "decumulation"],
               };
               const colMeta = [
-                { n: 1, label: "Profile & Contributions", icon: <User style={{ width: 10, height: 10 }} />, clr: "var(--clr-sky)",  bg: "rgba(56,189,248,0.08)",             bdr: "rgba(56,189,248,0.35)" },
-                { n: 2, label: "Outflows & Transfers",    icon: <Gift style={{ width: 10, height: 10 }} />, clr: "var(--clr-lime)", bg: "rgba(163,230,53,0.08)",            bdr: "rgba(163,230,53,0.35)" },
-                { n: 3, label: "Assets & Goals",          icon: <Home style={{ width: 10, height: 10 }} />, clr: "var(--clr-blue)", bg: "rgba(var(--clr-blue-rgb),0.08)",   bdr: "rgba(var(--clr-blue-rgb),0.35)" },
+                { n: 1, label: "Profile & Contributions", clr: "var(--clr-sky)",  bg: "rgba(56,189,248,0.08)",           bdr: "rgba(56,189,248,0.5)",         solid: "rgba(56,189,248,0.55)"           },
+                { n: 2, label: "Outflows & Transfers",    clr: "var(--clr-lime)", bg: "rgba(163,230,53,0.08)",           bdr: "rgba(163,230,53,0.5)",         solid: "rgba(163,230,53,0.55)"           },
+                { n: 3, label: "Assets & Goals",          clr: "var(--clr-blue)", bg: "rgba(var(--clr-blue-rgb),0.08)", bdr: "rgba(var(--clr-blue-rgb),0.5)", solid: "rgba(var(--clr-blue-rgb),0.55)" },
               ];
-              return colMeta.map(({ n, label, icon, clr, bg, bdr }) => {
+              return colMeta.map(({ n, label, clr, bg, bdr, solid }) => {
                 const ids = colSections[n];
                 const anyOpen = ids.some(id => openSections.has(id));
                 const handleColToggle = () => {
@@ -7682,18 +7685,19 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   });
                 };
                 return (
+                  /* Colored tab — no text label, just a solid color strip + chevron.
+                     Expanded: full solid color. Collapsed: dim transparent tint. */
                   <button key={n} className="fhd-col-btn" onClick={handleColToggle}
                     title={anyOpen ? `Collapse: ${label}` : `Expand: ${label}`}
-                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "6px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                      border: `1px solid ${anyOpen ? bdr : "var(--border-strong)"}`,
-                      background: anyOpen ? bg : "rgba(100,116,139,0.06)",
-                      color: anyOpen ? clr : "var(--text-muted)",
+                    style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer",
+                      border: `1px solid ${anyOpen ? bdr : "rgba(100,116,139,0.2)"}`,
+                      background: anyOpen ? solid : "rgba(100,116,139,0.05)",
                       transition: "all 0.15s ease" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-                      {icon}
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-                    </div>
-                    {anyOpen ? <ChevronUp style={{ width: 9, height: 9, flexShrink: 0 }} /> : <ChevronDown style={{ width: 9, height: 9, flexShrink: 0 }} />}
+                    {/* Color pip — small circle in column accent color */}
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.5, flexShrink: 0, transition: "all 0.15s" }} />
+                    {anyOpen
+                      ? <ChevronUp   style={{ width: 10, height: 10, color: "#fff", opacity: 0.8, flexShrink: 0 }} />
+                      : <ChevronDown style={{ width: 10, height: 10, color: clr,   opacity: 0.55, flexShrink: 0 }} />}
                   </button>
                 );
               });
