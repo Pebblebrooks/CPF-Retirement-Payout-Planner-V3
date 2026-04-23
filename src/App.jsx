@@ -11149,19 +11149,25 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <h4 style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>Contribution Timeline Overview</h4>
                         <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>Age {ca} → 95</span>
                       </div>
-                      {/* Age ruler */}
-                      <div style={{ position: "relative", height: 20, marginBottom: 4 }}>
-                        {markers.map(age => (
-                          <div key={age} style={{ position: "absolute", left: left(age), transform: "translateX(-50%)", fontSize: 9, color: "var(--text-muted)", fontWeight: 700, fontFamily: "monospace" }}>
-                            {age}
-                          </div>
-                        ))}
+                      {/* Age ruler — flex layout mirrors Life Journey Timeline: spacer + bar area */}
+                      <div style={{ display: "flex", marginBottom: 4 }}>
+                        <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
+                        <div style={{ flex: 1, position: "relative", height: 20 }}>
+                          {markers.map(age => (
+                            <div key={age} style={{ position: "absolute", left: left(age), transform: "translateX(-50%)", fontSize: 9, color: "var(--text-muted)", fontWeight: 700, fontFamily: "monospace" }}>
+                              {age}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                       {/* Tick lines */}
-                      <div style={{ position: "relative", height: 4, marginBottom: 8, background: "var(--border-subtle)", borderRadius: 2 }}>
-                        {markers.map(age => (
-                          <div key={age} style={{ position: "absolute", left: left(age), width: 2, height: "100%", background: "var(--text-muted)", transform: "translateX(-50%)" }} />
-                        ))}
+                      <div style={{ display: "flex", marginBottom: 8 }}>
+                        <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
+                        <div style={{ flex: 1, position: "relative", height: 4, background: "var(--border-subtle)", borderRadius: 2 }}>
+                          {markers.map(age => (
+                            <div key={age} style={{ position: "absolute", left: left(age), width: 2, height: "100%", background: "var(--text-muted)", transform: "translateX(-50%)" }} />
+                          ))}
+                        </div>
                       </div>
                       {/* Phase bars */}
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
