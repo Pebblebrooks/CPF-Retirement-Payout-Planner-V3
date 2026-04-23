@@ -6787,6 +6787,35 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           }
         }
 
+        /* FHD hero-split: lock each card to exactly 480px so column widths are
+           fixed regardless of viewport width. 480 + 14 (gap) + 480 = 974px total.
+           justify-content: center keeps the pair centred in the tab content area. */
+        .cpf-layout[data-mode="fhd"] .hero-split {
+          grid-template-columns: 480px 480px;
+          justify-content: center;
+        }
+        @media (min-width: 1920px) {
+          .cpf-layout[data-mode="auto"] .hero-split {
+            grid-template-columns: 480px 480px;
+            justify-content: center;
+          }
+        }
+
+        /* FHD kpi-strip: cap at 974px and centre so it stays edge-aligned
+           with the two hero cards below it. */
+        .cpf-layout[data-mode="fhd"] .kpi-strip {
+          max-width: 974px;
+          margin-left: auto;
+          margin-right: auto;
+        }
+        @media (min-width: 1920px) {
+          .cpf-layout[data-mode="auto"] .kpi-strip {
+            max-width: 974px;
+            margin-left: auto;
+            margin-right: auto;
+          }
+        }
+
         /* QHD (2560px+): add proportional side-padding to the tab content
            so the readable content line never exceeds ~1300px.
            clamp(24px, 4vw, 180px) → grows from 24px to ~180px as viewport widens. */
@@ -10867,10 +10896,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     return (
                       <div style={{ marginTop: 16 }}>
                         <div style={{ height: 1, background: "var(--border-subtle)", marginBottom: 14 }} />
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 12 }}>
                           <PieChart style={{ width: 13, height: 13, color: "var(--clr-blue)" }} />
-                          <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>Net Worth at Age {inputs.payoutAge}</p>
-                          <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 900, color: "var(--text-bright)", fontFamily: "monospace" }}>{formatCurrency(nwTotal)}</span>
+                          <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>Net Worth at Age {inputs.payoutAge}</p>
+                          <span style={{ fontSize: 14, fontWeight: 900, color: "var(--text-bright)", fontFamily: "monospace" }}>{formatCurrency(nwTotal)}</span>
                         </div>
                         <div className="nw-mini-wrap" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
                           <div className="nw-mini-chart" style={{ width: 180, height: 180 }}>
@@ -10883,13 +10912,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               </RechartsPieChart>
                             </ResponsiveContainer>
                           </div>
-                          <div className="nw-mini-legend" style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 10px" }}>
+                          <div className="nw-mini-legend" style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 28px" }}>
                             {nwSlices.map(s => (
-                              <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+                              <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
                                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-                                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-                                <span style={{ fontSize: 11, fontWeight: 900, color: "var(--text-main)", fontFamily: "monospace", flexShrink: 0 }}>{formatCurrency(s.value)}</span>
-                                <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-subtle)", flexShrink: 0, minWidth: 28, textAlign: "right" }}>{((s.value / nwTotal) * 100).toFixed(0)}%</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                                <span style={{ fontSize: 12, fontWeight: 900, color: "var(--text-main)", fontFamily: "monospace", flexShrink: 0 }}>{formatCurrency(s.value)}</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-subtle)", flexShrink: 0, minWidth: 28, textAlign: "right" }}>{((s.value / nwTotal) * 100).toFixed(0)}%</span>
                               </div>
                             ))}
                           </div>
