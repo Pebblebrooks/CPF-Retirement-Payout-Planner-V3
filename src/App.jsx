@@ -6787,16 +6787,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           }
         }
 
-        /* FHD hero-split: lock each card to exactly 480px so column widths are
-           fixed regardless of viewport width. 480 + 14 (gap) + 480 = 974px total.
-           justify-content: center keeps the pair centred in the tab content area. */
+        /* FHD hero-split: cap each card at 480px but allow shrinking on narrower
+           content areas (e.g. FHD mode on a sub-1920px screen).
+           min(480px, calc(50% - 7px)) = 480px when space allows, else fills half
+           the available width minus half the 14px gap. justify-content: center
+           keeps the pair centred when space exceeds the combined max. */
         .cpf-layout[data-mode="fhd"] .hero-split {
-          grid-template-columns: 480px 480px;
+          grid-template-columns: repeat(2, min(480px, calc(50% - 7px)));
           justify-content: center;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] .hero-split {
-            grid-template-columns: 480px 480px;
+            grid-template-columns: repeat(2, min(480px, calc(50% - 7px)));
             justify-content: center;
           }
         }
