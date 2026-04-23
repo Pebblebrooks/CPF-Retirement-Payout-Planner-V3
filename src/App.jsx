@@ -6605,7 +6605,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           gap: 24px;
           width: 100%;
           margin: 0 auto;
-          padding: 24px 20px;
+          padding: 24px 8px;
           align-items: start;
           box-sizing: border-box;
           transition: max-width 0.3s ease, grid-template-columns 0.3s ease, padding 0.3s ease;
@@ -6652,9 +6652,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
         .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
         /* ─── DESKTOP VIEWPORT MODES (HD and below — unchanged) ─────── */
-        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 28px; }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 24px; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 16px; } }
+        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 12px; }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 12px; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 8px; } }
         /* ═══════════════════════════════════════════════════════════════
            FHD MULTI-COLUMN SIDEBAR MODULE
            Scope: data-mode="fhd" (explicit) OR auto mode on ≥1920px screens.
@@ -6664,22 +6664,20 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* FHD outer layout: sidebar widens to house 3 sub-columns; main panel
            gets the remaining 1fr — no blank space, no fixed pixel right width.
-           24px horizontal padding aligns left edge of sidebar with nav bar brand logo
-           (cpf-page-wrap[data-mode="fhd"] uses padding: 6px 32px; 24px keeps sidebar
-           from hitting clamp(860px) floor on 1920px screens while still giving a
-           visible left inset that matches the brand logo alignment). */
+           12px horizontal padding keeps the sidebar clear of the viewport edge
+           while maximising available content width on 1920px screens. */
         .cpf-layout[data-mode="fhd"] {
           grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
           max-width: 100%;
           gap: 20px;
-          padding: 12px 24px 20px;
+          padding: 12px 12px 20px;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] {
             grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
             max-width: 100%;
             gap: 20px;
-            padding: 12px 24px 20px;
+            padding: 12px 12px 20px;
           }
         }
 
@@ -6761,13 +6759,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
            ═══════════════════════════════════════════════════════════════ */
 
         /* ─── PAGE-WIDE WRAPPER ─── */
-        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 20px; width: 100%; box-sizing: border-box; }
-        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 32px; }
-        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 28px; }
-        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 20px; }
-        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 32px; } }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 24px; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 16px; } }
+        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 8px; width: 100%; box-sizing: border-box; }
+        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 12px; }
+        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 12px; }
+        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 8px; }
+        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 12px; } }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 12px; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 8px; } }
 
         /* ═══════════════════════════════════════════════════════════════
            QHD / 4K RIGHT-PANEL MODULE  (within FHD layout scope)
