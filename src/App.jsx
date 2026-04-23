@@ -4137,6 +4137,30 @@ export default function App() {
           if (raw.cpfisAmount !== undefined && !raw.cpfisOaAmount) {
             safe.cpfisOaAmount = raw.cpfisAmount;
           }
+          // IMP-4: sanitise each life event object to guard against old schemas.
+          // Previously the entire lifeEvents array was copied verbatim — if an event was
+          // saved before fields like drawSource, windfallDest, or magnitude were introduced,
+          // those properties would be undefined and the engine would silently produce $0 impact.
+          // Now each event is merged against a known-good default skeleton so no field is missing.
+          const LIFE_EVENT_DEFAULTS = {
+            id: "", type: "retrenchment", label: "", startAge: 35, endAge: 36,
+            magnitude: 0, enabled: true, drawSource: "oa_then_private",
+            windfallDest: "private", hyperRate: 0.06, overrideSalary: 0,
+          };
+          if (Array.isArray(safe.lifeEvents)) {
+            safe.lifeEvents = safe.lifeEvents.map(ev => {
+              const base = { ...LIFE_EVENT_DEFAULTS };
+              if (ev && typeof ev === "object") {
+                Object.keys(LIFE_EVENT_DEFAULTS).forEach(k => {
+                  if (ev[k] !== undefined) base[k] = ev[k];
+                });
+                // Legacy field renames — add more here as needed
+                if (ev.amount !== undefined && ev.magnitude === undefined) base.magnitude = ev.amount;
+                if (ev.source !== undefined && ev.drawSource === undefined) base.drawSource = ev.source;
+              }
+              return base;
+            });
+          }
           return safe;
         };
         // Support both old format (just inputs) and new full-state format.
@@ -4227,9 +4251,18 @@ export default function App() {
           } catch { setScenarioB(null); }
           setMobileMenuOpen(false);
           lastSavedRef.current = JSON.stringify(safeIn); // clear unsaved-changes flag
-          showToast(scenariosRefreshed
-            ? "✓ Profile loaded — scenario projections refreshed from inputs (older export format detected)"
-            : "✓ Profile loaded successfully");
+          // IMP-5: More informative toast. Three cases:
+          //   scenariosRefreshed → old format, projection rows regenerated from inputs (normal)
+          //   file had scenario keys but none loaded → format too old, warn user
+          //   no scenario keys in file → clean single-profile export, say so clearly
+          const fileHadScenarios = p.scenarioA != null || p.scenarioB != null || p.scenarioAInputs != null || p.scenarioBInputs != null;
+          showToast(
+            scenariosRefreshed
+              ? "✓ Profile loaded — scenario projections regenerated from saved inputs"
+              : fileHadScenarios
+                ? "✓ Profile loaded — saved scenarios could not be restored (format too old; re-save them to update)"
+                : "✓ Profile loaded successfully"
+          );
         } else {
           // Legacy: old format was just the inputs object directly
           setScenarioA(null);
@@ -6902,13 +6935,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 16px 14px; }
-          .cpf-tab-content { overflow-y: visible !important; padding: 10px 14px !important; }
+          /* W1 fix: remove horizontal padding from tab-content — parent cpf-main-wrap already provides
+             14px inset, so adding another 14px here made content 14px narrower per side than the
+             tab header panel above it. Vertical padding kept so content breathes below the KPI strip. */
+          .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           .sidebar-toggle-btn { display: flex !important; position: sticky; top: 0; z-index: 40; background: var(--bg-panel); }
           .desktop-only { display: none !important; }
           .rg-6, .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
           .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
+          /* M1 fix: collapse sub-grid on tablet too */
+          .summary-stats-subgrid { grid-template-columns: 1fr !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-modal-inner { max-width: 100% !important; margin: 0 !important; border-radius: 0 !important; }
           /* Welcome modal tablet override */
@@ -6929,13 +6967,20 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
           .cpf-sidebar-inner { display: flex; flex-direction: column; gap: 12px; padding: 10px 12px 14px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
-          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; }
-          .cpf-tab-content { overflow-y: visible !important; padding: 10px 10px !important; }
+          /* W1 fix: move horizontal inset from cpf-tab-content up to cpf-main-wrap so the tab
+             header panel (tabs + KPI strip) and the scrollable content below it share the same
+             10px left/right margin. Previously the header was full-bleed while content had its
+             own 10px padding, creating a visible width mis-alignment. */
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
+          .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
+
           .sidebar-toggle-btn { display: flex !important; position: sticky; top: 0; z-index: 40; background: var(--bg-panel); }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
           .rg-5, .rg-4, .rg-3, .rg-2 { grid-template-columns: 1fr 1fr !important; }
           .summary-row2 { grid-template-columns: 1fr !important; }
+          /* M1 fix: collapse the milestone ↔ stats sub-grid to a single column on mobile */
+          .summary-stats-subgrid { grid-template-columns: 1fr !important; }
           .life-plans-grid { grid-template-columns: 1fr !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; }
@@ -6958,7 +7003,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
         @media (max-width: 480px) {
+          /* W1 fix: cpf-main-wrap provides 6px horizontal inset; override cpf-tab-content
+             horizontal padding (set to 10px in the 768px rule above) back to 0 so both
+             the tab header and content area sit at the same 6px inset from the screen edge. */
           .cpf-main-wrap { padding: 6px 6px; }
+          .cpf-tab-content { padding: 10px 0 !important; }
           .rg-6, .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; gap: 5px !important; }
           .summary-row2 { grid-template-columns: 1fr !important; }
           .summary-stats-grid { grid-template-columns: 1fr 1fr !important; }
@@ -10752,9 +10801,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     for all three plans, which was confusing and implied missing data.
                     Show a compact RSS summary card in its place instead. */}
                 {/* ── Summary Row 2: LIFE Plans (left) + Key Stats (right) side-by-side ── */}
-                <div className="summary-row2 hero-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
+                {/* H1 fix: "start" → "stretch" so the left CPF LIFE card grows to match
+                    the full height of the right column. height+boxSizing on the card div
+                    ensure the stretched cell is fully filled with no overflow. */}
+                <div className="summary-row2 hero-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch" }}>
                 {!isForeigner && !isRSSMode && (
-                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 24 }}>
+                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 24, height: "100%", boxSizing: "border-box" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                     <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>CPF LIFE Starting Payouts (Monthly)</p>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: inputs.isMale !== false ? "rgba(var(--clr-green-rgb),0.15)" : "rgba(var(--clr-blue-rgb),0.15)", color: inputs.isMale !== false ? "var(--clr-green)" : "var(--clr-blue)", border: `1px solid ${inputs.isMale !== false ? "rgba(var(--clr-green-rgb),0.3)" : "rgba(var(--clr-blue-rgb),0.3)"}` }}>
@@ -10888,78 +10940,89 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   }
                   return null;
                 })()}
-                {/* ── Right col of Row 2: Key Stats tiles + explanation ── */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {/* Stats Row */}
-                <div className="rg-5 summary-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10 }}>
-                  {/* CQ-2 perf: use pre-built Maps instead of 4× O(n) .find() calls */}
-                  {/* M2 fix: append Nom. badge when real-dollar mode is on — these 4 cards always read from
-                   projectionByAge/payoutByAge (nominal), while surrounding hero uses displayAccumulation (deflated). */}
-                  {/* S2 fix: IIFE so const declarations are valid in JSX. summaryRefAge = currentAge for RSS
-                      (payoutAge65 is in the past), payoutAge65 for LIFE. */}
-                  {(() => {
-                    const rssNW = isRSSMode
-                      ? ((projectionByAge.get(summaryRefAge)?.oa || 0) + (projectionByAge.get(summaryRefAge)?.ma || 0) + (projectionByAge.get(summaryRefAge)?.ra || 0))
-                      : (payoutByAge.get(summaryRefAge)?.[`${highlightPlan}NetWorth`] || 0);
-                    return [[`Cumulative Top-ups${isRealDollars ? ' · Nom.' : ''}`, projectionByAge.get(summaryRefAge)?.cumulativeInjected || 0, "var(--clr-green)"], [`Cumulative Outflow${isRealDollars ? ' · Nom.' : ''}`, projectionByAge.get(summaryRefAge)?.cumulativeOutflow || 0, "#f472b6"], [`Net Worth @ ${summaryRefAge}${isRealDollars ? ' · Nom.' : ''}`, rssNW, "var(--clr-blue)"], [`Net Worth @ 95${isRealDollars ? ' · Nom.' : ''}`, payoutByAge.get(95)?.[`${highlightPlan}NetWorth`] || 0, "var(--text-bright)"]].map(([label, val, color]) => (
-                      <div key={label} style={{ padding: 16, borderRadius: 16, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
-                        <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
-                        <p style={{ fontSize: 14, fontWeight: 900, color, fontFamily: "monospace" }}>{formatCurrency(val)}</p>
+                {/* ── Right col of Row 2: 2-column sub-grid — Milestone Alerts (left) | Stats+Tax+KeyStats (right) ── */}
+                {/* M1 fix: previously milestone sat at the bottom of a flex-column below the stats tiles,
+                    creating blank space when milestone was absent and a long scroll when present.
+                    Now structured as a 2-col sub-grid: milestone fills the full left cell height;
+                    stats + tax + key-stats stack in the right cell. Both cells stretch equally.
+                    On mobile the sub-grid collapses to 1 column (see .summary-stats-subgrid rule). */}
+                <div className="summary-stats-subgrid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "stretch" }}>
+
+                  {/* ── LEFT sub-cell: Milestone Alerts ── */}
+                  {milestones.length > 0 ? (
+                    <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 20, borderRadius: 20, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Bell style={{ width: 16, height: 16, color: "var(--clr-amber)" }} /><h3 style={{ fontSize: 14, fontWeight: 800 }}>Milestone Alerts</h3></div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 9, background: "var(--bg-input)", color: "var(--text-muted)", padding: "3px 8px", borderRadius: 999, border: "1px solid var(--border-strong)" }}>{milestones.length} milestone{milestones.length !== 1 ? "s" : ""} detected</span>
+                          <button onClick={printMilestoneReport} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 8, fontSize: 9, fontWeight: 700, background: "rgba(var(--clr-amber3-rgb),0.1)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", color: "#fcd34d", cursor: "pointer" }}>
+                            <Printer style={{ width: 10, height: 10 }} />Print Report
+                          </button>
+                        </div>
                       </div>
-                    ));
-                  })()}
-                  {/* Est. Tax Savings spans both columns so the stats grid is a clean 2×3 */}
-                  <div style={{ gridColumn: "1 / -1", padding: 16, borderRadius: 16, background: "rgba(var(--clr-amber3-rgb),0.05)", border: "1px solid rgba(var(--clr-amber3-rgb),0.2)" }}>
-                    <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber2)", marginBottom: 6 }}>Est. Tax Savings (RSTU)</p>
-                    <p style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>{formatCurrency(estimatedTaxSavings)}<span style={{ fontSize: 9, color: "#92400e", marginLeft: 4 }}>/ yr</span></p>
-                    {currentSaRa >= currentFRS && <p style={{ fontSize: 9, color: "var(--clr-amber2)", marginTop: 4 }}>SA/RA ≥ FRS — top-ups earn no tax relief (ERS top-ups permitted but unrelieved)</p>}
-                    {currentSaRa < currentFRS && eligibleRSTU < (Number(inputs.vcSaTopup) || 0) && <p style={{ fontSize: 9, color: "var(--clr-amber2)", marginTop: 4 }}>Relief capped at FRS headroom ({formatCurrency(Math.max(0, currentFRS - currentSaRa))})</p>}
-                  </div>
-                </div>
-                {/* Stats Row explanation */}
-                <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                  <strong style={{ color: "var(--text-highlight)" }}>Key Statistics explained: </strong>
-                  <strong style={{ color: "var(--clr-green)" }}>Cumulative Top-ups</strong> = all contributions + inflows made from your current age to payout age. &nbsp;
-                  <strong style={{ color: "#f472b6" }}>Cumulative Outflow</strong> = all housing and medical deductions over the same period. &nbsp;
-                  <strong style={{ color: "var(--clr-blue)" }}>Net Worth @ payout age / 95</strong> = OA + MA + RA + Property at that age under the highlighted LIFE plan. &nbsp;
-                  <strong style={{ color: "var(--clr-amber)" }}>Est. Tax Savings (RSTU)</strong> = annual tax relief estimate from your RSTU cash top-up, capped at $8,000 and FRS headroom.
-                </div>
-                {/* ── Full Milestone Alerts — moved into right column to fill blank space ── */}
-                {milestones.length > 0 ? (
-                  <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 20, borderRadius: 20 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Bell style={{ width: 16, height: 16, color: "var(--clr-amber)" }} /><h3 style={{ fontSize: 14, fontWeight: 800 }}>Milestone Alerts</h3></div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 9, background: "var(--bg-input)", color: "var(--text-muted)", padding: "3px 8px", borderRadius: 999, border: "1px solid var(--border-strong)" }}>{milestones.length} milestone{milestones.length !== 1 ? "s" : ""} detected</span>
-                        <button onClick={printMilestoneReport} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 8, fontSize: 9, fontWeight: 700, background: "rgba(var(--clr-amber3-rgb),0.1)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", color: "#fcd34d", cursor: "pointer" }}>
-                          <Printer style={{ width: 10, height: 10 }} />Print Report
-                        </button>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+                        {milestones.map((m, idx) => {
+                          const colors = { success: { bg: "rgba(var(--clr-emerald-rgb),0.08)", border: "rgba(var(--clr-emerald-rgb),0.25)", badge: "rgba(var(--clr-emerald-rgb),0.15)", badgeText: "var(--clr-green)", dot: "var(--clr-green)" }, gold: { bg: "rgba(var(--clr-amber3-rgb),0.08)", border: "rgba(var(--clr-amber3-rgb),0.25)", badge: "rgba(var(--clr-amber3-rgb),0.15)", badgeText: "var(--clr-amber)", dot: "var(--clr-amber)" }, teal: { bg: "rgba(20,184,166,0.08)", border: "rgba(20,184,166,0.25)", badge: "rgba(20,184,166,0.15)", badgeText: "#2dd4bf", dot: "#2dd4bf" }, warning: { bg: "rgba(249,115,22,0.08)", border: "rgba(249,115,22,0.25)", badge: "rgba(249,115,22,0.15)", badgeText: "var(--clr-orange)", dot: "var(--clr-orange)" }, danger: { bg: "rgba(239,68,68,0.08)", border: "rgba(239,68,68,0.25)", badge: "rgba(239,68,68,0.15)", badgeText: "var(--clr-red)", dot: "var(--clr-red)" } }[m.type] || { bg: "rgba(var(--clr-blue2-rgb),0.08)", border: "rgba(var(--clr-blue2-rgb),0.25)", badge: "rgba(var(--clr-blue2-rgb),0.15)", badgeText: "var(--clr-blue)", dot: "var(--clr-blue)" };
+                          return (<div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 14, borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.bg }}>
+                            <div style={{ width: 7, height: 7, borderRadius: "50%", background: colors.dot, flexShrink: 0, marginTop: 4 }} />
+                            <div><div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, marginBottom: 3 }}>
+                              <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, background: colors.badge, color: colors.badgeText }}>Age {m.age}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: colors.badgeText }}>{m.label}</span>
+                            </div><p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>{m.detail}</p></div>
+                          </div>);
+                        })}
+                      </div>
+                      <p style={{ marginTop: 12, fontSize: 9, color: "var(--text-muted)" }}>Milestones update automatically as you adjust inputs.</p>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "14px 16px", borderRadius: 16, background: "rgba(var(--clr-emerald-rgb),0.04)", border: "1px solid rgba(var(--clr-emerald-rgb),0.15)", display: "flex", alignItems: "center", gap: 10, height: "100%", boxSizing: "border-box" }}>
+                      <Bell style={{ width: 13, height: 13, color: "var(--clr-emerald)" }} />
+                      <div>
+                        <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-green)", margin: "0 0 2px" }}>No Milestone Alerts</p>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0 }}>On track — no alerts detected for current inputs.</p>
                       </div>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {milestones.map((m, idx) => {
-                        const colors = { success: { bg: "rgba(var(--clr-emerald-rgb),0.08)", border: "rgba(var(--clr-emerald-rgb),0.25)", badge: "rgba(var(--clr-emerald-rgb),0.15)", badgeText: "var(--clr-green)", dot: "var(--clr-green)" }, gold: { bg: "rgba(var(--clr-amber3-rgb),0.08)", border: "rgba(var(--clr-amber3-rgb),0.25)", badge: "rgba(var(--clr-amber3-rgb),0.15)", badgeText: "var(--clr-amber)", dot: "var(--clr-amber)" }, teal: { bg: "rgba(20,184,166,0.08)", border: "rgba(20,184,166,0.25)", badge: "rgba(20,184,166,0.15)", badgeText: "#2dd4bf", dot: "#2dd4bf" }, warning: { bg: "rgba(249,115,22,0.08)", border: "rgba(249,115,22,0.25)", badge: "rgba(249,115,22,0.15)", badgeText: "var(--clr-orange)", dot: "var(--clr-orange)" }, danger: { bg: "rgba(239,68,68,0.08)", border: "rgba(239,68,68,0.25)", badge: "rgba(239,68,68,0.15)", badgeText: "var(--clr-red)", dot: "var(--clr-red)" } }[m.type] || { bg: "rgba(var(--clr-blue2-rgb),0.08)", border: "rgba(var(--clr-blue2-rgb),0.25)", badge: "rgba(var(--clr-blue2-rgb),0.15)", badgeText: "var(--clr-blue)", dot: "var(--clr-blue)" };
-                        return (<div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 14, borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.bg }}>
-                          <div style={{ width: 7, height: 7, borderRadius: "50%", background: colors.dot, flexShrink: 0, marginTop: 4 }} />
-                          <div><div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, marginBottom: 3 }}>
-                            <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, background: colors.badge, color: colors.badgeText }}>Age {m.age}</span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: colors.badgeText }}>{m.label}</span>
-                          </div><p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>{m.detail}</p></div>
-                        </div>);
-                      })}
+                  )}
+
+                  {/* ── RIGHT sub-cell: KPI stats tiles + Tax Savings + Key Stats explanation ── */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {/* Stats Row */}
+                    <div className="rg-5 summary-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10 }}>
+                      {/* CQ-2 perf: use pre-built Maps instead of 4× O(n) .find() calls */}
+                      {/* M2 fix: append Nom. badge when real-dollar mode is on — these 4 cards always read from
+                       projectionByAge/payoutByAge (nominal), while surrounding hero uses displayAccumulation (deflated). */}
+                      {/* S2 fix: IIFE so const declarations are valid in JSX. summaryRefAge = currentAge for RSS
+                          (payoutAge65 is in the past), payoutAge65 for LIFE. */}
+                      {(() => {
+                        const rssNW = isRSSMode
+                          ? ((projectionByAge.get(summaryRefAge)?.oa || 0) + (projectionByAge.get(summaryRefAge)?.ma || 0) + (projectionByAge.get(summaryRefAge)?.ra || 0))
+                          : (payoutByAge.get(summaryRefAge)?.[`${highlightPlan}NetWorth`] || 0);
+                        return [[`Cumulative Top-ups${isRealDollars ? ' · Nom.' : ''}`, projectionByAge.get(summaryRefAge)?.cumulativeInjected || 0, "var(--clr-green)"], [`Cumulative Outflow${isRealDollars ? ' · Nom.' : ''}`, projectionByAge.get(summaryRefAge)?.cumulativeOutflow || 0, "#f472b6"], [`Net Worth @ ${summaryRefAge}${isRealDollars ? ' · Nom.' : ''}`, rssNW, "var(--clr-blue)"], [`Net Worth @ 95${isRealDollars ? ' · Nom.' : ''}`, payoutByAge.get(95)?.[`${highlightPlan}NetWorth`] || 0, "var(--text-bright)"]].map(([label, val, color]) => (
+                          <div key={label} style={{ padding: 16, borderRadius: 16, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
+                            <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
+                            <p style={{ fontSize: 14, fontWeight: 900, color, fontFamily: "monospace" }}>{formatCurrency(val)}</p>
+                          </div>
+                        ));
+                      })()}
+                      {/* Est. Tax Savings spans both columns so the stats grid is a clean 2×3 */}
+                      <div style={{ gridColumn: "1 / -1", padding: 16, borderRadius: 16, background: "rgba(var(--clr-amber3-rgb),0.05)", border: "1px solid rgba(var(--clr-amber3-rgb),0.2)" }}>
+                        <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber2)", marginBottom: 6 }}>Est. Tax Savings (RSTU)</p>
+                        <p style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>{formatCurrency(estimatedTaxSavings)}<span style={{ fontSize: 9, color: "#92400e", marginLeft: 4 }}>/ yr</span></p>
+                        {currentSaRa >= currentFRS && <p style={{ fontSize: 9, color: "var(--clr-amber2)", marginTop: 4 }}>SA/RA ≥ FRS — top-ups earn no tax relief (ERS top-ups permitted but unrelieved)</p>}
+                        {currentSaRa < currentFRS && eligibleRSTU < (Number(inputs.vcSaTopup) || 0) && <p style={{ fontSize: 9, color: "var(--clr-amber2)", marginTop: 4 }}>Relief capped at FRS headroom ({formatCurrency(Math.max(0, currentFRS - currentSaRa))})</p>}
+                      </div>
                     </div>
-                    <p style={{ marginTop: 12, fontSize: 9, color: "var(--text-muted)" }}>Milestones update automatically as you adjust inputs.</p>
-                  </div>
-                ) : (
-                  <div style={{ padding: "14px 16px", borderRadius: 16, background: "rgba(var(--clr-emerald-rgb),0.04)", border: "1px solid rgba(var(--clr-emerald-rgb),0.15)", display: "flex", alignItems: "center", gap: 10 }}>
-                    <Bell style={{ width: 13, height: 13, color: "var(--clr-emerald)" }} />
-                    <div>
-                      <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-green)", margin: "0 0 2px" }}>No Milestone Alerts</p>
-                      <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0 }}>On track — no alerts detected for current inputs.</p>
+                    {/* Stats Row explanation */}
+                    <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      <strong style={{ color: "var(--text-highlight)" }}>Key Statistics explained: </strong>
+                      <strong style={{ color: "var(--clr-green)" }}>Cumulative Top-ups</strong> = all contributions + inflows made from your current age to payout age. &nbsp;
+                      <strong style={{ color: "#f472b6" }}>Cumulative Outflow</strong> = all housing and medical deductions over the same period. &nbsp;
+                      <strong style={{ color: "var(--clr-blue)" }}>Net Worth @ payout age / 95</strong> = OA + MA + RA + Property at that age under the highlighted LIFE plan. &nbsp;
+                      <strong style={{ color: "var(--clr-amber)" }}>Est. Tax Savings (RSTU)</strong> = annual tax relief estimate from your RSTU cash top-up, capped at $8,000 and FRS headroom.
                     </div>
-                  </div>
-                )}
-                </div>{/* /right col stats + explanation */}
+                  </div>{/* /right sub-cell */}
+
+                </div>{/* /summary-stats-subgrid */}
                 </div>{/* /summary-row2 grid */}
                 {/* ── Contribution Timeline Gantt ── */}
                 {(() => {
