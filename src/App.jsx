@@ -6601,11 +6601,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           overflow: hidden;
           min-width: 0;
         }
-        /* The scrollable content area inside the main wrap */
+        /* The scrollable content area inside the main wrap.
+           scrollbar-gutter removed — content fills the same width as the tab
+           header card above. The thin overlay scrollbar (5px) does not reserve
+           permanent gutter space, so header and content stay visually aligned. */
         .cpf-tab-content {
           overflow-y: auto;
           overflow-x: hidden;
-          scrollbar-gutter: stable;
           scrollbar-width: thin;
           scrollbar-color: var(--border-strong) transparent;
           padding: 12px 0;
@@ -6629,20 +6631,22 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* FHD outer layout: sidebar widens to house 3 sub-columns; main panel
            gets the remaining 1fr — no blank space, no fixed pixel right width.
-           Zero horizontal padding — cards sit flush with cpf-page-wrap edges,
-           aligning with nav bar logo and action buttons at same 32px margin. */
+           24px horizontal padding aligns left edge of sidebar with nav bar brand logo
+           (cpf-page-wrap[data-mode="fhd"] uses padding: 6px 32px; 24px keeps sidebar
+           from hitting clamp(860px) floor on 1920px screens while still giving a
+           visible left inset that matches the brand logo alignment). */
         .cpf-layout[data-mode="fhd"] {
           grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
           max-width: 100%;
           gap: 20px;
-          padding: 12px 0 20px;
+          padding: 12px 24px 20px;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] {
             grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
             max-width: 100%;
             gap: 20px;
-            padding: 12px 0 20px;
+            padding: 12px 24px 20px;
           }
         }
 
@@ -10904,44 +10908,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                     ));
                   })()}
-                  <div style={{ padding: 16, borderRadius: 16, background: "rgba(var(--clr-amber3-rgb),0.05)", border: "1px solid rgba(var(--clr-amber3-rgb),0.2)" }}>
+                  {/* Est. Tax Savings spans both columns so the stats grid is a clean 2×3 */}
+                  <div style={{ gridColumn: "1 / -1", padding: 16, borderRadius: 16, background: "rgba(var(--clr-amber3-rgb),0.05)", border: "1px solid rgba(var(--clr-amber3-rgb),0.2)" }}>
                     <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber2)", marginBottom: 6 }}>Est. Tax Savings (RSTU)</p>
                     <p style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>{formatCurrency(estimatedTaxSavings)}<span style={{ fontSize: 9, color: "#92400e", marginLeft: 4 }}>/ yr</span></p>
                     {currentSaRa >= currentFRS && <p style={{ fontSize: 9, color: "var(--clr-amber2)", marginTop: 4 }}>SA/RA ≥ FRS — top-ups earn no tax relief (ERS top-ups permitted but unrelieved)</p>}
                     {currentSaRa < currentFRS && eligibleRSTU < (Number(inputs.vcSaTopup) || 0) && <p style={{ fontSize: 9, color: "var(--clr-amber2)", marginTop: 4 }}>Relief capped at FRS headroom ({formatCurrency(Math.max(0, currentFRS - currentSaRa))})</p>}
                   </div>
-                  {/* ── Compact Milestone card — fills blank cell next to Tax Savings ── */}
-                  {milestones.length > 0 ? (
-                    <div style={{ padding: 16, borderRadius: 16, background: "rgba(var(--clr-amber3-rgb),0.04)", border: "1px solid rgba(var(--clr-amber3-rgb),0.18)", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <Bell style={{ width: 12, height: 12, color: "var(--clr-amber)" }} />
-                          <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber2)", margin: 0 }}>Milestone Alerts</p>
-                        </div>
-                        <span style={{ fontSize: 9, background: "var(--bg-input)", color: "var(--text-muted)", padding: "2px 7px", borderRadius: 999, border: "1px solid var(--border-strong)", fontWeight: 700 }}>{milestones.length}</span>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                        {milestones.slice(0, 4).map((m, idx) => {
-                          const dot = { success: "var(--clr-green)", gold: "var(--clr-amber)", teal: "#2dd4bf", warning: "var(--clr-orange)", danger: "var(--clr-red)" }[m.type] || "var(--clr-blue)";
-                          return (
-                            <div key={idx} style={{ display: "flex", gap: 7, alignItems: "flex-start" }}>
-                              <span style={{ width: 5, height: 5, borderRadius: "50%", background: dot, flexShrink: 0, marginTop: 4 }} />
-                              <span style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.4 }}><span style={{ fontWeight: 700, color: dot }}>Age {m.age}</span> · {m.label}</span>
-                            </div>
-                          );
-                        })}
-                        {milestones.length > 4 && (
-                          <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 1 }}>+{milestones.length - 4} more — see Milestone Alerts below</p>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ padding: 16, borderRadius: 16, background: "rgba(var(--clr-emerald-rgb),0.04)", border: "1px solid rgba(var(--clr-emerald-rgb),0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                      <Bell style={{ width: 14, height: 14, color: "var(--clr-emerald)" }} />
-                      <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-green)", margin: 0 }}>No Alerts</p>
-                      <p style={{ fontSize: 9, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.4 }}>On track — no milestone alerts detected</p>
-                    </div>
-                  )}
                 </div>
                 {/* Stats Row explanation */}
                 <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.6 }}>
@@ -10951,6 +10924,41 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <strong style={{ color: "var(--clr-blue)" }}>Net Worth @ payout age / 95</strong> = OA + MA + RA + Property at that age under the highlighted LIFE plan. &nbsp;
                   <strong style={{ color: "var(--clr-amber)" }}>Est. Tax Savings (RSTU)</strong> = annual tax relief estimate from your RSTU cash top-up, capped at $8,000 and FRS headroom.
                 </div>
+                {/* ── Full Milestone Alerts — moved into right column to fill blank space ── */}
+                {milestones.length > 0 ? (
+                  <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 20, borderRadius: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Bell style={{ width: 16, height: 16, color: "var(--clr-amber)" }} /><h3 style={{ fontSize: 14, fontWeight: 800 }}>Milestone Alerts</h3></div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 9, background: "var(--bg-input)", color: "var(--text-muted)", padding: "3px 8px", borderRadius: 999, border: "1px solid var(--border-strong)" }}>{milestones.length} milestone{milestones.length !== 1 ? "s" : ""} detected</span>
+                        <button onClick={printMilestoneReport} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 8, fontSize: 9, fontWeight: 700, background: "rgba(var(--clr-amber3-rgb),0.1)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", color: "#fcd34d", cursor: "pointer" }}>
+                          <Printer style={{ width: 10, height: 10 }} />Print Report
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {milestones.map((m, idx) => {
+                        const colors = { success: { bg: "rgba(var(--clr-emerald-rgb),0.08)", border: "rgba(var(--clr-emerald-rgb),0.25)", badge: "rgba(var(--clr-emerald-rgb),0.15)", badgeText: "var(--clr-green)", dot: "var(--clr-green)" }, gold: { bg: "rgba(var(--clr-amber3-rgb),0.08)", border: "rgba(var(--clr-amber3-rgb),0.25)", badge: "rgba(var(--clr-amber3-rgb),0.15)", badgeText: "var(--clr-amber)", dot: "var(--clr-amber)" }, teal: { bg: "rgba(20,184,166,0.08)", border: "rgba(20,184,166,0.25)", badge: "rgba(20,184,166,0.15)", badgeText: "#2dd4bf", dot: "#2dd4bf" }, warning: { bg: "rgba(249,115,22,0.08)", border: "rgba(249,115,22,0.25)", badge: "rgba(249,115,22,0.15)", badgeText: "var(--clr-orange)", dot: "var(--clr-orange)" }, danger: { bg: "rgba(239,68,68,0.08)", border: "rgba(239,68,68,0.25)", badge: "rgba(239,68,68,0.15)", badgeText: "var(--clr-red)", dot: "var(--clr-red)" } }[m.type] || { bg: "rgba(var(--clr-blue2-rgb),0.08)", border: "rgba(var(--clr-blue2-rgb),0.25)", badge: "rgba(var(--clr-blue2-rgb),0.15)", badgeText: "var(--clr-blue)", dot: "var(--clr-blue)" };
+                        return (<div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 14, borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.bg }}>
+                          <div style={{ width: 7, height: 7, borderRadius: "50%", background: colors.dot, flexShrink: 0, marginTop: 4 }} />
+                          <div><div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, marginBottom: 3 }}>
+                            <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, background: colors.badge, color: colors.badgeText }}>Age {m.age}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: colors.badgeText }}>{m.label}</span>
+                          </div><p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>{m.detail}</p></div>
+                        </div>);
+                      })}
+                    </div>
+                    <p style={{ marginTop: 12, fontSize: 9, color: "var(--text-muted)" }}>Milestones update automatically as you adjust inputs.</p>
+                  </div>
+                ) : (
+                  <div style={{ padding: "14px 16px", borderRadius: 16, background: "rgba(var(--clr-emerald-rgb),0.04)", border: "1px solid rgba(var(--clr-emerald-rgb),0.15)", display: "flex", alignItems: "center", gap: 10 }}>
+                    <Bell style={{ width: 13, height: 13, color: "var(--clr-emerald)" }} />
+                    <div>
+                      <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-green)", margin: "0 0 2px" }}>No Milestone Alerts</p>
+                      <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0 }}>On track — no alerts detected for current inputs.</p>
+                    </div>
+                  </div>
+                )}
                 </div>{/* /right col stats + explanation */}
                 </div>{/* /summary-row2 grid */}
                 {/* ── Contribution Timeline Gantt ── */}
@@ -11239,33 +11247,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   );
                 })()}
 
-                {/* Milestones */}
-                {milestones.length > 0 && (
-                  <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Bell style={{ width: 18, height: 18, color: "var(--clr-amber)" }} /><h3 style={{ fontSize: 16, fontWeight: 800 }}>Milestone Alerts</h3></div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 10, background: "var(--bg-input)", color: "var(--text-muted)", padding: "4px 10px", borderRadius: 999, border: "1px solid var(--border-strong)" }}>{milestones.length} milestone{milestones.length !== 1 ? "s" : ""} detected</span>
-                        <button onClick={printMilestoneReport} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, fontSize: 10, fontWeight: 700, background: "rgba(var(--clr-amber3-rgb),0.1)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", color: "#fcd34d", cursor: "pointer" }}>
-                          <Printer style={{ width: 11, height: 11 }} />Print Report
-                        </button>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {milestones.map((m, idx) => {
-                        const colors = { success: { bg: "rgba(var(--clr-emerald-rgb),0.08)", border: "rgba(var(--clr-emerald-rgb),0.25)", badge: "rgba(var(--clr-emerald-rgb),0.15)", badgeText: "var(--clr-green)", dot: "var(--clr-green)" }, gold: { bg: "rgba(var(--clr-amber3-rgb),0.08)", border: "rgba(var(--clr-amber3-rgb),0.25)", badge: "rgba(var(--clr-amber3-rgb),0.15)", badgeText: "var(--clr-amber)", dot: "var(--clr-amber)" }, teal: { bg: "rgba(20,184,166,0.08)", border: "rgba(20,184,166,0.25)", badge: "rgba(20,184,166,0.15)", badgeText: "#2dd4bf", dot: "#2dd4bf" }, warning: { bg: "rgba(249,115,22,0.08)", border: "rgba(249,115,22,0.25)", badge: "rgba(249,115,22,0.15)", badgeText: "var(--clr-orange)", dot: "var(--clr-orange)" }, danger: { bg: "rgba(239,68,68,0.08)", border: "rgba(239,68,68,0.25)", badge: "rgba(239,68,68,0.15)", badgeText: "var(--clr-red)", dot: "var(--clr-red)" } }[m.type] || { bg: "rgba(var(--clr-blue2-rgb),0.08)", border: "rgba(var(--clr-blue2-rgb),0.25)", badge: "rgba(var(--clr-blue2-rgb),0.15)", badgeText: "var(--clr-blue)", dot: "var(--clr-blue)" };
-                        return (<div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: 16, borderRadius: 14, border: `1px solid ${colors.border}`, background: colors.bg }}>
-                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: colors.dot, flexShrink: 0, marginTop: 4 }} />
-                          <div><div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-                            <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", padding: "2px 8px", borderRadius: 999, background: colors.badge, color: colors.badgeText }}>Age {m.age}</span>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: colors.badgeText }}>{m.label}</span>
-                          </div><p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>{m.detail}</p></div>
-                        </div>);
-                      })}
-                    </div>
-                    <p style={{ marginTop: 16, fontSize: 10, color: "var(--text-muted)" }}>Milestones update automatically as you adjust inputs.</p>
-                  </div>
-                )}
                 {/* What-If */}
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
