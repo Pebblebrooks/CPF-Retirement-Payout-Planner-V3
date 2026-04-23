@@ -6787,19 +6787,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           }
         }
 
-        /* FHD hero-split: cap each card at 480px but allow shrinking on narrower
-           content areas. minmax(0, min(480px, calc(50%-7px))) = equal halves up to
-           480px each, with auto-min-sizing disabled (minmax 0 floor) so content
-           inside one column can never expand that column beyond its track size.
-           !important overrides the inline gridTemplateColumns on hero-split divs. */
+        /* FHD hero-split: force equal 50/50 columns.
+           minWidth:0 on each grid item (in JSX) prevents min-content bloating one column.
+           !important overrides the inline gridTemplateColumns on the hero-split divs. */
         .cpf-layout[data-mode="fhd"] .hero-split {
-          grid-template-columns: repeat(2, minmax(0, min(480px, calc(50% - 7px)))) !important;
-          justify-content: center !important;
+          grid-template-columns: 1fr 1fr !important;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] .hero-split {
-            grid-template-columns: repeat(2, minmax(0, min(480px, calc(50% - 7px)))) !important;
-            justify-content: center !important;
+            grid-template-columns: 1fr 1fr !important;
           }
         }
 
@@ -10690,10 +10686,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 )}
                 {/* Hero — two-panel split */}
                 {/* ── Hero Panel: Left (deep navy + stats) + Right (account balances) ── */}
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }} className="hero-split">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="hero-split">
 
                   {/* LEFT: projected total + nominal/real + 3 stat rings */}
-                  <div style={{ background: "var(--hero-left-bg)", borderRadius: 16, padding: "22px", color: "var(--hero-text)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                  <div style={{ background: "var(--hero-left-bg)", borderRadius: 16, padding: "22px", color: "var(--hero-text)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", minWidth: 0 }}>
                     <svg style={{ position: "absolute", right: 0, top: 0, opacity: 0.07, pointerEvents: "none" }} width="160" height="160" viewBox="0 0 100 100">
                       <path d="M10 90 L80 20 M55 20 L80 20 L80 45" fill="none" stroke="var(--hero-arrow)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -10792,7 +10788,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
 
                   {/* RIGHT: 2×2 account balance cards with rings */}
-                  <div style={{ background: "var(--hero-right-bg)", border: "1px solid var(--hero-border)", borderRadius: 16, padding: 20, color: "var(--hero-text)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                  <div style={{ background: "var(--hero-right-bg)", border: "1px solid var(--hero-border)", borderRadius: 16, padding: 20, color: "var(--hero-text)", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
                     <p style={{ fontSize: 9, fontWeight: 700, color: "var(--hero-label)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
                       {isRSSMode ? `Current Account Balances (Age ${summaryRefAge})` : `Account Balances at Age ${inputs.payoutAge}`}
                     </p>
@@ -10842,9 +10838,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 {/* H1 fix: "start" → "stretch" so the left CPF LIFE card grows to match
                     the full height of the right column. height+boxSizing on the card div
                     ensure the stretched cell is fully filled with no overflow. */}
-                <div className="summary-row2 hero-split" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14, alignItems: "stretch" }}>
+                <div className="summary-row2 hero-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch" }}>
                 {!isForeigner && !isRSSMode && (
-                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 24, height: "100%", boxSizing: "border-box" }}>
+                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 24, height: "100%", boxSizing: "border-box", minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                     <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>CPF LIFE Starting Payouts (Monthly)</p>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: inputs.isMale !== false ? "rgba(var(--clr-green-rgb),0.15)" : "rgba(var(--clr-blue-rgb),0.15)", color: inputs.isMale !== false ? "var(--clr-green)" : "var(--clr-blue)", border: `1px solid ${inputs.isMale !== false ? "rgba(var(--clr-green-rgb),0.3)" : "rgba(var(--clr-blue-rgb),0.3)"}` }}>
@@ -11043,7 +11039,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     Now structured as a 2-col sub-grid: milestone fills the full left cell height;
                     stats + tax + key-stats stack in the right cell. Both cells stretch equally.
                     On mobile the sub-grid collapses to 1 column (see .summary-stats-subgrid rule). */}
-                <div className="summary-stats-subgrid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "stretch", minWidth: 0, overflow: "hidden" }}>
+                <div className="summary-stats-subgrid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "stretch", minWidth: 0 }}>
 
                   {/* ── LEFT sub-cell: Milestone Alerts ── */}
                   {milestones.length > 0 ? (
