@@ -6815,11 +6815,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         }
 
         /* QHD (2560px+): add proportional side-padding to the tab content
-           so the readable content line never exceeds ~1300px.
+           so the readable content line never exceeds ~1300px. Applied to
+           cpf-main-wrap (not cpf-tab-content) so the tab nav card and content
+           below are identically inset — keeping them visually aligned.
            clamp(24px, 4vw, 180px) → grows from 24px to ~180px as viewport widens. */
         @media (min-width: 2560px) {
-          .cpf-layout[data-mode="fhd"] .cpf-tab-content,
-          .cpf-layout[data-mode="auto"] .cpf-tab-content {
+          .cpf-layout[data-mode="fhd"] .cpf-main-wrap,
+          .cpf-layout[data-mode="auto"] .cpf-main-wrap {
             padding-left: clamp(24px, 4vw, 180px);
             padding-right: clamp(24px, 4vw, 180px);
           }
@@ -6870,8 +6872,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* 4K (3840px+): tighten further — content stays inside ~1600px readable zone */
         @media (min-width: 3840px) {
-          .cpf-layout[data-mode="fhd"] .cpf-tab-content,
-          .cpf-layout[data-mode="auto"] .cpf-tab-content {
+          .cpf-layout[data-mode="fhd"] .cpf-main-wrap,
+          .cpf-layout[data-mode="auto"] .cpf-main-wrap {
             padding-left: clamp(180px, 10vw, 400px);
             padding-right: clamp(180px, 10vw, 400px);
           }
@@ -10884,12 +10886,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     const nwTotal = nwSlices.reduce((s, d) => s + d.value, 0);
                     if (nwTotal === 0) return null;
                     const NW_RADIAN = Math.PI / 180;
-                    const renderNwLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                    const renderNwLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
                       if (percent < 0.07) return null;
                       const r = innerRadius + (outerRadius - innerRadius) * 0.5;
                       const x = cx + r * Math.cos(-midAngle * NW_RADIAN);
                       const y = cy + r * Math.sin(-midAngle * NW_RADIAN);
-                      return <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={9} fontWeight="bold">{`${(percent * 100).toFixed(0)}%`}</text>;
+                      return <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={9} fontWeight="bold">{name}</text>;
                     };
                     return (
                       <div style={{ marginTop: 16 }}>
@@ -10910,7 +10912,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               </RechartsPieChart>
                             </ResponsiveContainer>
                           </div>
-                          <div className="nw-mini-legend" style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 8px", justifyItems: "center" }}>
+                          <div className="nw-mini-legend" style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 8px", justifyItems: "start" }}>
                             {nwSlices.map(s => (
                               <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
@@ -11044,14 +11046,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* ── LEFT sub-cell: Milestone Alerts ── */}
                   {milestones.length > 0 ? (
                     <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 20, borderRadius: 20, height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Bell style={{ width: 16, height: 16, color: "var(--clr-amber)" }} /><h3 style={{ fontSize: 14, fontWeight: 800 }}>Milestone Alerts</h3></div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontSize: 9, background: "var(--bg-input)", color: "var(--text-muted)", padding: "3px 8px", borderRadius: 999, border: "1px solid var(--border-strong)" }}>{milestones.length} milestone{milestones.length !== 1 ? "s" : ""} detected</span>
-                          <button onClick={printMilestoneReport} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 8, fontSize: 9, fontWeight: 700, background: "rgba(var(--clr-amber3-rgb),0.1)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", color: "#fcd34d", cursor: "pointer" }}>
-                            <Printer style={{ width: 10, height: 10 }} />Print Report
-                          </button>
-                        </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                        <Bell style={{ width: 16, height: 16, color: "var(--clr-amber)" }} /><h3 style={{ fontSize: 14, fontWeight: 800 }}>Milestone Alerts</h3>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
                         {milestones.map((m, idx) => {
