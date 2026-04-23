@@ -11023,7 +11023,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     Now structured as a 2-col sub-grid: milestone fills the full left cell height;
                     stats + tax + key-stats stack in the right cell. Both cells stretch equally.
                     On mobile the sub-grid collapses to 1 column (see .summary-stats-subgrid rule). */}
-                <div className="summary-stats-subgrid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "stretch", minWidth: 0 }}>
+                <div className="summary-stats-subgrid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "stretch", minWidth: 0, gridColumn: (Number(inputs.targetMonthlyIncome) || 0) > 0 ? "1 / -1" : undefined }}>
 
                   {/* ── LEFT sub-cell: Milestone Alerts ── */}
                   {milestones.length > 0 ? (
