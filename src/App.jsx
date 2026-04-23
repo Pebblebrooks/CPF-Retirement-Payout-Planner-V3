@@ -6605,7 +6605,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           gap: 24px;
           width: 100%;
           margin: 0 auto;
-          padding: 24px 8px;
+          padding: 24px 0;
           align-items: start;
           box-sizing: border-box;
           transition: max-width 0.3s ease, grid-template-columns 0.3s ease, padding 0.3s ease;
@@ -6652,9 +6652,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
         .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
         /* ─── DESKTOP VIEWPORT MODES (HD and below — unchanged) ─────── */
-        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 12px; }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 12px; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 8px; } }
+        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 0; }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 0; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 0; } }
         /* ═══════════════════════════════════════════════════════════════
            FHD MULTI-COLUMN SIDEBAR MODULE
            Scope: data-mode="fhd" (explicit) OR auto mode on ≥1920px screens.
@@ -6670,14 +6670,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
           max-width: 100%;
           gap: 20px;
-          padding: 12px 12px 20px;
+          padding: 12px 0 20px;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] {
             grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
             max-width: 100%;
             gap: 20px;
-            padding: 12px 12px 20px;
+            padding: 12px 0 20px;
           }
         }
 
@@ -6759,13 +6759,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
            ═══════════════════════════════════════════════════════════════ */
 
         /* ─── PAGE-WIDE WRAPPER ─── */
-        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 8px; width: 100%; box-sizing: border-box; }
-        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 12px; }
-        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 12px; }
-        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 8px; }
-        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 12px; } }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 12px; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 8px; } }
+        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 0; width: 100%; box-sizing: border-box; }
+        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 0; }
+        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 0; }
+        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; }
+        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 0; } }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; } }
 
         /* ═══════════════════════════════════════════════════════════════
            QHD / 4K RIGHT-PANEL MODULE  (within FHD layout scope)
@@ -6818,12 +6818,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
            below are identically inset — keeping them visually aligned.
            clamp(24px, 4vw, 180px) → grows from 24px to ~180px as viewport widens. */
         @media (min-width: 2560px) {
-          .cpf-layout[data-mode="fhd"] .cpf-main-wrap,
-          .cpf-layout[data-mode="auto"] .cpf-main-wrap {
-            padding-left: clamp(24px, 4vw, 180px);
-            padding-right: clamp(24px, 4vw, 180px);
-          }
-
           /* Chart containers: prevent Recharts from rendering at absurd widths.
              ResponsiveContainer fills its parent — capping its parent caps the chart. */
           .cpf-layout[data-mode="fhd"] .recharts-responsive-container,
@@ -6870,16 +6864,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* 4K (3840px+): tighten further — content stays inside ~1600px readable zone */
         @media (min-width: 3840px) {
-          .cpf-layout[data-mode="fhd"] .cpf-main-wrap,
-          .cpf-layout[data-mode="auto"] .cpf-main-wrap {
-            padding-left: clamp(180px, 10vw, 400px);
-            padding-right: clamp(180px, 10vw, 400px);
-          }
-          .cpf-page-wrap[data-mode="fhd"],
-          .cpf-page-wrap[data-mode="auto"] {
-            padding-left: clamp(80px, 6vw, 260px);
-            padding-right: clamp(80px, 6vw, 260px);
-          }
           .cpf-layout[data-mode="fhd"] .recharts-responsive-container,
           .cpf-layout[data-mode="auto"] .recharts-responsive-container {
             max-width: 1600px !important;
