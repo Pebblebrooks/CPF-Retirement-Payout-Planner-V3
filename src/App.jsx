@@ -6945,6 +6945,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .desktop-only { display: none !important; }
           .rg-6, .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
           .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
+          .nw-mini-wrap { flex-direction: column !important; align-items: stretch !important; }
+          .nw-mini-chart { width: 100% !important; height: 140px !important; }
+          .nw-mini-legend { flex-direction: row !important; flex-wrap: wrap !important; gap: 8px !important; }
           /* M1 fix: collapse sub-grid on tablet too */
           .summary-stats-subgrid { grid-template-columns: 1fr !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
@@ -6982,6 +6985,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           /* M1 fix: collapse the milestone ↔ stats sub-grid to a single column on mobile */
           .summary-stats-subgrid { grid-template-columns: 1fr !important; }
           .life-plans-grid { grid-template-columns: 1fr !important; }
+          .nw-mini-wrap { flex-direction: column !important; align-items: stretch !important; }
+          .nw-mini-chart { width: 100% !important; height: 160px !important; }
+          .nw-mini-legend { flex-direction: row !important; flex-wrap: wrap !important; gap: 6px !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           .cpf-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
@@ -7012,6 +7018,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .summary-row2 { grid-template-columns: 1fr !important; }
           .summary-stats-grid { grid-template-columns: 1fr 1fr !important; }
           .rg-2, .life-plans-grid { grid-template-columns: 1fr !important; }
+          .nw-mini-chart { height: 140px !important; }
           .cpf-kpi-value { font-size: 14px !important; }
           .cpf-kpi-label { font-size: 9px !important; }
           .cpf-tab-btn { font-size: 11px !important; padding: 6px 8px !important; }
@@ -10831,6 +10838,65 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                     ))}
                   </div>
+                  {/* ── Embedded Net Worth Breakdown ── */}
+                  {(() => {
+                    const oaVal    = payoutAgeData.oa || 0;
+                    const maVal    = payoutAgeData.ma || 0;
+                    const raVal    = payoutAgeData.ra || 0;
+                    const propVal  = inputs.includeProperty ? (payoutAgeData.propertyValue || Number(inputs.propertyValue) || 0) : 0;
+                    const privAsset = payoutAgeData.privateAssets || 0;
+                    const srsVal   = payoutAgeData.srsBalance || 0;
+                    const nwSlices = [
+                      { name: "OA",       value: Math.max(0, oaVal),    color: "#1d4ed8" },
+                      { name: "MA",       value: Math.max(0, maVal),    color: "#059669" },
+                      { name: "RA",       value: Math.max(0, raVal),    color: "var(--clr-purple2)" },
+                      { name: "Property", value: Math.max(0, propVal),  color: "#f43f5e" },
+                      { name: "Private",  value: Math.max(0, privAsset),color: "var(--clr-violet2)" },
+                      { name: "SRS",      value: Math.max(0, srsVal),   color: "#0ea5e9" },
+                    ].filter(s => s.value > 0);
+                    const nwTotal = nwSlices.reduce((s, d) => s + d.value, 0);
+                    if (nwTotal === 0) return null;
+                    const NW_RADIAN = Math.PI / 180;
+                    const renderNwLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                      if (percent < 0.07) return null;
+                      const r = innerRadius + (outerRadius - innerRadius) * 0.5;
+                      const x = cx + r * Math.cos(-midAngle * NW_RADIAN);
+                      const y = cy + r * Math.sin(-midAngle * NW_RADIAN);
+                      return <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={9} fontWeight="bold">{`${(percent * 100).toFixed(0)}%`}</text>;
+                    };
+                    return (
+                      <div style={{ marginTop: 16 }}>
+                        <div style={{ height: 1, background: "var(--border-subtle)", marginBottom: 14 }} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                          <PieChart style={{ width: 13, height: 13, color: "var(--clr-blue)" }} />
+                          <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>Net Worth at Age {inputs.payoutAge}</p>
+                          <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 900, color: "var(--text-bright)", fontFamily: "monospace" }}>{formatCurrency(nwTotal)}</span>
+                        </div>
+                        <div className="nw-mini-wrap" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          <div className="nw-mini-chart" style={{ width: 160, height: 160, flexShrink: 0 }}>
+                            <ResponsiveContainer width="99%" height="100%">
+                              <RechartsPieChart>
+                                <RechartsPie isAnimationActive={false} data={nwSlices} cx="50%" cy="50%" innerRadius={38} outerRadius={72} paddingAngle={3} dataKey="value" labelLine={false} label={renderNwLabel}>
+                                  {nwSlices.map((entry, i) => <RechartsCell key={i} fill={entry.color} stroke="transparent" />)}
+                                </RechartsPie>
+                                <Tooltip formatter={(v, n) => [formatCurrency(v), n]} contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 11, padding: "6px 10px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} wrapperStyle={{ pointerEvents: "none" }} />
+                              </RechartsPieChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="nw-mini-legend" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                            {nwSlices.map(s => (
+                              <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+                                <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                                <span style={{ fontSize: 11, fontWeight: 900, color: "var(--text-main)", fontFamily: "monospace", flexShrink: 0 }}>{formatCurrency(s.value)}</span>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-subtle)", flexShrink: 0, minWidth: 28, textAlign: "right" }}>{((s.value / nwTotal) * 100).toFixed(0)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
                 )}
                 {/* S6: RSS members see a compact drawdown summary in place of CPF LIFE plans */}
@@ -11178,57 +11244,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       {raAt55Proj >= projERS55 && (
                         <p style={{ marginTop: 8, fontSize: 10, color: "var(--clr-sky)" }}>ERS achieved ✓ Maximum CPF LIFE payout unlocked.</p>
                       )}
-                    </div>
-                  );
-                })()}
-                {/* Doughnut */}
-                {(() => {
-                  const oaVal = payoutAgeData.oa || 0;
-                  const maVal = payoutAgeData.ma || 0;
-                  const raVal = payoutAgeData.ra || 0;
-                  const propVal = inputs.includeProperty ? (payoutAgeData.propertyValue || Number(inputs.propertyValue) || 0) : 0;
-                  const privAsset = payoutAgeData.privateAssets || 0;
-                  const srsVal = payoutAgeData.srsBalance || 0;
-                  const slices = [{ name: "OA", value: Math.max(0, oaVal || 0), color: "#1d4ed8" }, { name: "MA", value: Math.max(0, maVal || 0), color: "#059669" }, { name: "RA", value: Math.max(0, raVal || 0), color: "var(--clr-purple2)" }, { name: "Property", value: Math.max(0, propVal || 0), color: "#f43f5e" }, { name: "Private Assets", value: Math.max(0, privAsset || 0), color: "var(--clr-violet2)" }, { name: "SRS", value: Math.max(0, srsVal || 0), color: "#0ea5e9" }].filter(s => s.value > 0);
-                  const total = slices.reduce((s, d) => s + d.value, 0);
-                  if (total === 0) return null;
-                  const RADIAN = Math.PI / 180;
-                  const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                    if (percent < 0.05) return null;
-                    const r = innerRadius + (outerRadius - innerRadius) * 0.5;
-                    const x = cx + r * Math.cos(-midAngle * RADIAN); const y = cy + r * Math.sin(-midAngle * RADIAN);
-                    return <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold">{`${(percent * 100).toFixed(0)}%`}</text>;
-                  };
-                  return (
-                    <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                        <PieChart style={{ width: 18, height: 18, color: "var(--clr-blue)" }} /><h3 style={{ fontSize: 16, fontWeight: 800 }}>Net Worth Breakdown at Age {inputs.payoutAge}</h3>
-                      </div>
-                      <div className="pie-chart-wrap" style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
-                        <div style={{ width: 240, height: 240, flexShrink: 0, minWidth: 0 }}>
-                          <ResponsiveContainer width="99%" height="100%">
-                            <RechartsPieChart>
-                              <RechartsPie isAnimationActive={false} data={slices} cx="50%" cy="50%" innerRadius={55} outerRadius={105} paddingAngle={3} dataKey="value" labelLine={false} label={renderLabel}>
-                                {slices.map((entry, i) => <RechartsCell key={i} fill={entry.color} stroke="transparent" />)}
-                              </RechartsPie>
-                              <Tooltip formatter={(v, n) => [formatCurrency(v), n]} contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 11, padding: "6px 10px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} wrapperStyle={{ pointerEvents: "none" }} />
-                            </RechartsPieChart>
-                          </ResponsiveContainer>
-                        </div>
-                        <div className="pie-legend" style={{ flex: 1, minWidth: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                          {slices.map(s => (
-                            <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, background: "var(--bg-muted)", border: "1px solid var(--border-strong)", minWidth: 0 }}>
-                              <div style={{ width: 10, height: 10, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-                              <div style={{ flex: 1, minWidth: 0 }}><p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</p><p style={{ fontSize: 13, fontWeight: 900, color: "var(--text-main)" }}>{formatCurrency(s.value)}</p></div>
-                              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", flexShrink: 0 }}>{((s.value / total) * 100).toFixed(1)}%</span>
-                            </div>
-                          ))}
-                          <div style={{ gridColumn: "1/-1", display: "flex", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-strong)" }}>
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--clr-indigo)", flexShrink: 0 }} />
-                            <div style={{ flex: 1 }}><p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>Total Net Worth</p><p style={{ fontSize: 18, fontWeight: 900, color: "var(--text-bright)" }}>{formatCurrency(total)}</p></div>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   );
                 })()}
