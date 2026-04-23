@@ -6791,15 +6791,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
            content areas (e.g. FHD mode on a sub-1920px screen).
            min(480px, calc(50% - 7px)) = 480px when space allows, else fills half
            the available width minus half the 14px gap. justify-content: center
-           keeps the pair centred when space exceeds the combined max. */
+           keeps the pair centred when space exceeds the combined max.
+           !important overrides the inline gridTemplateColumns: "1fr 1fr" on both
+           hero-split divs (inline styles take precedence over class rules). */
         .cpf-layout[data-mode="fhd"] .hero-split {
-          grid-template-columns: repeat(2, min(480px, calc(50% - 7px)));
-          justify-content: center;
+          grid-template-columns: repeat(2, min(480px, calc(50% - 7px))) !important;
+          justify-content: center !important;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] .hero-split {
-            grid-template-columns: repeat(2, min(480px, calc(50% - 7px)));
-            justify-content: center;
+            grid-template-columns: repeat(2, min(480px, calc(50% - 7px))) !important;
+            justify-content: center !important;
           }
         }
 
@@ -10914,13 +10916,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               </RechartsPieChart>
                             </ResponsiveContainer>
                           </div>
-                          <div className="nw-mini-legend" style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 28px" }}>
+                          <div className="nw-mini-legend" style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 8px", justifyItems: "center" }}>
                             {nwSlices.map(s => (
-                              <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+                              <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-                                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-                                <span style={{ fontSize: 12, fontWeight: 900, color: "var(--text-main)", fontFamily: "monospace", flexShrink: 0 }}>{formatCurrency(s.value)}</span>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-subtle)", flexShrink: 0, minWidth: 28, textAlign: "right" }}>{((s.value / nwTotal) * 100).toFixed(0)}%</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{s.name}</span>
+                                <span style={{ fontSize: 12, fontWeight: 900, color: "var(--text-main)", fontFamily: "monospace", flexShrink: 0, marginLeft: 4 }}>{formatCurrency(s.value)}</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-subtle)", flexShrink: 0, marginLeft: 3 }}>{((s.value / nwTotal) * 100).toFixed(0)}%</span>
                               </div>
                             ))}
                           </div>
