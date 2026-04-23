@@ -6810,7 +6810,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
              Keep the 50/50 split but add a cap so neither card exceeds 720px. */
           .cpf-layout[data-mode="fhd"] .hero-split,
           .cpf-layout[data-mode="auto"] .hero-split {
-            grid-template-columns: minmax(340px, 680px) minmax(340px, 680px);
+            grid-template-columns: minmax(340px, 693px) minmax(340px, 693px);
             justify-content: center;
           }
 
@@ -10872,18 +10872,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>Net Worth at Age {inputs.payoutAge}</p>
                           <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 900, color: "var(--text-bright)", fontFamily: "monospace" }}>{formatCurrency(nwTotal)}</span>
                         </div>
-                        <div className="nw-mini-wrap" style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          <div className="nw-mini-chart" style={{ width: 160, height: 160, flexShrink: 0 }}>
+                        <div className="nw-mini-wrap" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                          <div className="nw-mini-chart" style={{ width: 180, height: 180 }}>
                             <ResponsiveContainer width="99%" height="100%">
                               <RechartsPieChart>
-                                <RechartsPie isAnimationActive={false} data={nwSlices} cx="50%" cy="50%" innerRadius={38} outerRadius={72} paddingAngle={3} dataKey="value" labelLine={false} label={renderNwLabel}>
+                                <RechartsPie isAnimationActive={false} data={nwSlices} cx="50%" cy="50%" innerRadius={42} outerRadius={80} paddingAngle={3} dataKey="value" labelLine={false} label={renderNwLabel}>
                                   {nwSlices.map((entry, i) => <RechartsCell key={i} fill={entry.color} stroke="transparent" />)}
                                 </RechartsPie>
                                 <Tooltip formatter={(v, n) => [formatCurrency(v), n]} contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 11, padding: "6px 10px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} wrapperStyle={{ pointerEvents: "none" }} />
                               </RechartsPieChart>
                             </ResponsiveContainer>
                           </div>
-                          <div className="nw-mini-legend" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                          <div className="nw-mini-legend" style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 10px" }}>
                             {nwSlices.map(s => (
                               <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
                                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
