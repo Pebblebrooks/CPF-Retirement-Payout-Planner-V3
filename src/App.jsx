@@ -6788,19 +6788,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         }
 
         /* FHD hero-split: cap each card at 480px but allow shrinking on narrower
-           content areas (e.g. FHD mode on a sub-1920px screen).
-           min(480px, calc(50% - 7px)) = 480px when space allows, else fills half
-           the available width minus half the 14px gap. justify-content: center
-           keeps the pair centred when space exceeds the combined max.
-           !important overrides the inline gridTemplateColumns: "1fr 1fr" on both
-           hero-split divs (inline styles take precedence over class rules). */
+           content areas. minmax(0, min(480px, calc(50%-7px))) = equal halves up to
+           480px each, with auto-min-sizing disabled (minmax 0 floor) so content
+           inside one column can never expand that column beyond its track size.
+           !important overrides the inline gridTemplateColumns on hero-split divs. */
         .cpf-layout[data-mode="fhd"] .hero-split {
-          grid-template-columns: repeat(2, min(480px, calc(50% - 7px))) !important;
+          grid-template-columns: repeat(2, minmax(0, min(480px, calc(50% - 7px)))) !important;
           justify-content: center !important;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] .hero-split {
-            grid-template-columns: repeat(2, min(480px, calc(50% - 7px))) !important;
+            grid-template-columns: repeat(2, minmax(0, min(480px, calc(50% - 7px)))) !important;
             justify-content: center !important;
           }
         }
@@ -10692,7 +10690,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 )}
                 {/* Hero — two-panel split */}
                 {/* ── Hero Panel: Left (deep navy + stats) + Right (account balances) ── */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="hero-split">
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }} className="hero-split">
 
                   {/* LEFT: projected total + nominal/real + 3 stat rings */}
                   <div style={{ background: "var(--hero-left-bg)", borderRadius: 16, padding: "22px", color: "var(--hero-text)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
@@ -10844,7 +10842,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 {/* H1 fix: "start" → "stretch" so the left CPF LIFE card grows to match
                     the full height of the right column. height+boxSizing on the card div
                     ensure the stretched cell is fully filled with no overflow. */}
-                <div className="summary-row2 hero-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch" }}>
+                <div className="summary-row2 hero-split" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14, alignItems: "stretch" }}>
                 {!isForeigner && !isRSSMode && (
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 24, height: "100%", boxSizing: "border-box" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -11045,7 +11043,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     Now structured as a 2-col sub-grid: milestone fills the full left cell height;
                     stats + tax + key-stats stack in the right cell. Both cells stretch equally.
                     On mobile the sub-grid collapses to 1 column (see .summary-stats-subgrid rule). */}
-                <div className="summary-stats-subgrid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "stretch" }}>
+                <div className="summary-stats-subgrid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "stretch", minWidth: 0, overflow: "hidden" }}>
 
                   {/* ── LEFT sub-cell: Milestone Alerts ── */}
                   {milestones.length > 0 ? (
