@@ -2661,7 +2661,7 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
           background: "rgba(14,165,233,0.08)", border: "1px solid rgba(14,165,233,0.25)",
           borderRadius: 3, padding: "0 6px 0 6px", height: 24 }}
           title="Number of years to apply this recurring contribution (0 or blank = indefinite ∞)">
-          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em", marginRight: 2 }}>for</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em", marginRight: 2 }}>for</span>
           <input
             type="text"
             inputMode="numeric"
@@ -2677,7 +2677,7 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
               textAlign: "center", padding: 0, lineHeight: 1
             }}
           />
-          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em" }}>yr{durVal !== 1 ? "s" : ""}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em" }}>yr{durVal !== 1 ? "s" : ""}</span>
         </span>
       )}
     </span>
@@ -6115,6 +6115,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --hero-right-bg: #162032;
           --hero-border: #2d4a6e;
           --ctrl-on-text: #c8d8f0;   /* active toggle btn text on --border-strong bg */
+          --btn-on-accent: #0f172a;  /* text on bright solid accent buttons (amber/emerald/sky/violet) */
           --ctrl-active-bg: #2563eb; /* active toggle btn bg — bright blue, 4.6:1 on --bg-panel #0d1b2e */
           --hero-text: #ffffff;
           --hero-label: rgba(255,255,255,0.55);
@@ -6190,6 +6191,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           --hero-right-bg: #bccedd;
           --hero-border: #7a9ab2;
           --ctrl-on-text: #ffffff;   /* active toggle btn text on --border-strong (#4a6680) = 5.99:1 ✓ */
+          --btn-on-accent: #ffffff;  /* text on bright solid accent buttons (dark-toned in light mode) */
           --ctrl-active-bg: #1e40af; /* active toggle btn bg — deep blue, 5.3:1 on --bg-panel #d8e4f0 */
           --hero-text: #0a1c2e;
           --hero-label: #1e3248;
@@ -6501,6 +6503,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         /* ── Font-size floor — unreadable micro-text ─────────────────
            Recharts SVG label props (fontSize: 8 as SVG attr) are not
            matched by these CSS selectors and remain unchanged.         ── */
+        /* Dark mode minimum font-size enforcement — mirrors light mode upscaling */
+        .theme-dark [style*="font-size: 7px"] { font-size: 9px !important; }
+        .theme-dark [style*="font-size: 8px"] { font-size: 10px !important; }
         .theme-light [style*="font-size: 7px"] { font-size: 11px !important; }
         .theme-light [style*="font-size: 8px"] { font-size: 11px !important; }
         .theme-light [style*="font-size: 9px"] { font-size: 11px !important; }
@@ -7564,7 +7569,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </div>
             <div>
               <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>CPF Planner Pro</div>
-              <div className="cpf-logo-sub" style={{ fontSize: 9, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
+              <div className="cpf-logo-sub" style={{ fontSize: 10, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
             </div>
           </div>
           <div className="cpf-header-actions" style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", justifyContent: "flex-end", flex: "1 1 auto", minWidth: 0 }}>
@@ -7613,7 +7618,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               {[["fhd", "FHD", "1920px"], ["hd", "HD", "1440px"], ["auto", "Auto", ""]].map(([mode, label, sub]) => (
                 <button key={mode} onClick={() => setDesktopMode(mode)} title={sub || "Follow screen width"} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3px 9px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", lineHeight: 1.3, background: desktopMode === mode ? "var(--ctrl-active-bg)" : "transparent", color: desktopMode === mode ? "#ffffff" : "var(--text-muted)" }}>
                   <span>{label}</span>
-                  {sub && <span style={{ fontSize: 7, opacity: 0.55, fontWeight: 500 }}>{sub}</span>}
+                  {sub && <span style={{ fontSize: 9, opacity: 0.55, fontWeight: 500 }}>{sub}</span>}
                 </button>
               ))}
             </div>
@@ -7711,10 +7716,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* Right: Expand All / Collapse All — only useful when sidebar is open */}
             {sidebarOpen && (
               <div style={{ display: "flex", gap: 4, marginLeft: 8 }} onClick={e => e.stopPropagation()}>
-                <button onClick={expandAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 9, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                <button onClick={expandAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
                   <ChevronDown style={{ width: 10, height: 10 }} />All
                 </button>
-                <button onClick={collapseAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 9, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                <button onClick={collapseAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
                   <ChevronUp style={{ width: 10, height: 10 }} />None
                 </button>
               </div>
@@ -7798,7 +7803,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, alignItems: "flex-end" }}>
                     {[["currentYear", "Curr Year"], ["currentAge", "Curr Age"]].map(([n, l]) => (
                       <div key={n} style={{ minWidth: 0 }}>{/* minWidth:0 lets 1fr cells shrink below content width */}
-                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 9, color: "var(--clr-red)" }}>⚠</span>}</label>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 10, color: "var(--clr-red)" }}>⚠</span>}</label>
                         <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} aria-invalid={!!inputErrors[n]} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
                         {/* Short errors (e.g. currentYear) stay inline; currentAge long errors rendered below the grid */}
                         {inputErrors[n] && n !== "currentAge" && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 4, marginBottom: 0, lineHeight: 1.4, wordBreak: "break-word" }}>⚠ {inputErrors[n]}</p>}
@@ -7815,7 +7820,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </select>
                       </div>
                       {inputs.cpfScheme === 'rss' && (
-                        <p style={{ fontSize: 9, color: "#93c5fd", margin: "3px 0 0", lineHeight: 1.5 }}>Uses RSS Payout Start Age below</p>
+                        <p style={{ fontSize: 10, color: "#93c5fd", margin: "3px 0 0", lineHeight: 1.5 }}>Uses RSS Payout Start Age below</p>
                       )}
                     </div>
                   </div>
@@ -7844,8 +7849,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       {isForeigner && <span style={{ fontSize: 9, color: "var(--clr-amber3)", marginLeft: 2 }}>🔒 CPF LIFE N/A</span>}
                     </div>
                     <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 7, gap: 2 }}>
-                      <button onClick={() => setInputs(p => ({ ...p, isMale: true }))} aria-pressed={inputs.isMale !== false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale !== false ? "var(--clr-sky)" : "transparent", color: inputs.isMale !== false ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Male</button>
-                      <button onClick={() => setInputs(p => ({ ...p, isMale: false }))} aria-pressed={inputs.isMale === false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale === false ? "var(--clr-blue)" : "transparent", color: inputs.isMale === false ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Female</button>
+                      <button onClick={() => setInputs(p => ({ ...p, isMale: true }))} aria-pressed={inputs.isMale !== false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale !== false ? "var(--clr-sky)" : "transparent", color: inputs.isMale !== false ? "var(--btn-on-accent)" : "var(--text-muted)" }}>Male</button>
+                      <button onClick={() => setInputs(p => ({ ...p, isMale: false }))} aria-pressed={inputs.isMale === false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale === false ? "var(--clr-blue)" : "transparent", color: inputs.isMale === false ? "var(--btn-on-accent)" : "var(--text-muted)" }}>Female</button>
                     </div>
                   </div>
                   </div>
@@ -7862,11 +7867,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <button onClick={() => setInputs(p => ({ ...p, citizenStatus: 'SC' }))}
                           style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: (inputs.citizenStatus || 'SC') === 'SC' ? "var(--clr-sky)" : "transparent",
-                            color: (inputs.citizenStatus || 'SC') === 'SC' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>SC</button>
+                            color: (inputs.citizenStatus || 'SC') === 'SC' ? "var(--btn-on-accent)" : "var(--text-muted)" }}>SC</button>
                         <button onClick={() => setInputs(p => ({ ...p, citizenStatus: 'PR', mrssGrant: 0, mmssGrant: 0 }))}
                           style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: (inputs.citizenStatus || 'SC') === 'PR' ? "var(--clr-amber)" : "transparent",
-                            color: (inputs.citizenStatus || 'SC') === 'PR' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>PR</button>
+                            color: (inputs.citizenStatus || 'SC') === 'PR' ? "var(--btn-on-accent)" : "var(--text-muted)" }}>PR</button>
                         <button onClick={() => {
                           setInputs(p => ({ ...p,
                             citizenStatus: 'foreigner',
@@ -7892,7 +7897,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         }}
                           style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: isForeigner ? "var(--clr-amber3)" : "transparent",
-                            color: isForeigner ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Foreigner</button>
+                            color: isForeigner ? "var(--btn-on-accent)" : "var(--text-muted)" }}>Foreigner</button>
                       </div>
                     </div>
                     {/* Foreigner info banner */}
@@ -7914,7 +7919,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <button key={val} onClick={() => setInputs(p => ({ ...p, prYear: val }))}
                                 style={{ padding: "3px 10px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                   background: (inputs.prYear || 3) === val ? "var(--clr-amber)" : "transparent",
-                                  color: (inputs.prYear || 3) === val ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                                  color: (inputs.prYear || 3) === val ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                                 {label}
                               </button>
                             ))}
@@ -7933,7 +7938,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   <button key={val} onClick={() => setInputs(p => ({ ...p, prRateType: val }))}
                                     style={{ padding: "3px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                       background: (inputs.prRateType || 'GG') === val ? "var(--clr-amber)" : "transparent",
-                                      color: (inputs.prRateType || 'GG') === val ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                                      color: (inputs.prRateType || 'GG') === val ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                                     {label}
                                   </button>
                                 ))}
@@ -7971,7 +7976,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                       <button
                         onClick={() => setInputs(p => ({ ...p, isPwD: !p.isPwD }))}
-                        style={{ padding: "3px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isPwD ? "var(--clr-violet2)" : "var(--bg-panel)", color: inputs.isPwD ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                        style={{ padding: "3px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isPwD ? "var(--clr-violet2)" : "var(--bg-panel)", color: inputs.isPwD ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                         {inputs.isPwD ? "ON" : "OFF"}
                       </button>
                     </div>
@@ -8004,14 +8009,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             onClick={() => setInputs(p => ({ ...p, cpfScheme: 'cpf_life' }))}
                             style={{ padding: "4px 10px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                               background: (inputs.cpfScheme || 'cpf_life') === 'cpf_life' ? "var(--clr-sky)" : "transparent",
-                              color: (inputs.cpfScheme || 'cpf_life') === 'cpf_life' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                              color: (inputs.cpfScheme || 'cpf_life') === 'cpf_life' ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                             CPF LIFE
                           </button>
                           <button
                             onClick={handleSwitchToRSS}
                             style={{ padding: "4px 14px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                               background: inputs.cpfScheme === 'rss' ? "var(--clr-blue)" : "transparent",
-                              color: inputs.cpfScheme === 'rss' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                              color: inputs.cpfScheme === 'rss' ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                             RSS
                           </button>
                         </div>
@@ -8030,7 +8035,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               value={inputs.rssPayoutStartAge ?? 65}
                               onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                               style={{ width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: `1px solid ${inputErrors.rssPayoutStartAge ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                            {inputErrors.rssPayoutStartAge && <p style={{ fontSize: 9, color: "var(--clr-red)", margin: "2px 0 0" }}>{inputErrors.rssPayoutStartAge}</p>}
+                            {inputErrors.rssPayoutStartAge && <p style={{ fontSize: 10, color: "var(--clr-red)", margin: "2px 0 0" }}>{inputErrors.rssPayoutStartAge}</p>}
                           </div>
 
                           {/* RSS Monthly Payout */}
@@ -8045,7 +8050,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                               placeholder="e.g. 700"
                               style={{ width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: `1px solid ${inputErrors.rssMonthlyPayout ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                            {inputErrors.rssMonthlyPayout && <p style={{ fontSize: 9, color: "var(--clr-red)", margin: "2px 0 0" }}>{inputErrors.rssMonthlyPayout}</p>}
+                            {inputErrors.rssMonthlyPayout && <p style={{ fontSize: 10, color: "var(--clr-red)", margin: "2px 0 0" }}>{inputErrors.rssMonthlyPayout}</p>}
                             {/* PMT-based estimate helper — informational only, never feeds projection */}
                             {(() => {
                               const _ra = Number(inputs.saBalance) || 0;
@@ -8055,7 +8060,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               const _n = Math.max(12, (85 - _age) * 12);
                               const _est = _r > 0 ? Math.round(_ra * _r / (1 - Math.pow(1 + _r, -_n))) : Math.round(_ra / _n);
                               return _est > 0 ? (
-                                <p style={{ fontSize: 9, color: "#93c5fd", margin: "3px 0 0", lineHeight: 1.5 }}>
+                                <p style={{ fontSize: 10, color: "#93c5fd", margin: "3px 0 0", lineHeight: 1.5 }}>
                                   💡 Estimate based on RA {formatCurrency(_ra)} at 4%/yr: <strong style={{ fontFamily: "monospace" }}>{formatCurrency(_est)}/mo</strong> — verify against your CPF statement.
                                 </p>
                               ) : null;
@@ -8074,14 +8079,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: 0 }))}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                   background: inputs.lifeMigrationAge === 0 ? "var(--clr-blue)" : "transparent",
-                                  color: inputs.lifeMigrationAge === 0 ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                                  color: inputs.lifeMigrationAge === 0 ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                                 📋 Stay on RSS
                               </button>
                               <button
                                 onClick={() => setInputs(p => ({ ...p, lifeMigrationAge: p.lifeMigrationAge > 0 ? p.lifeMigrationAge : (Number(p.currentAge) || 65) + 1 }))}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                   background: inputs.lifeMigrationAge !== 0 ? "var(--clr-purple)" : "transparent",
-                                  color: inputs.lifeMigrationAge !== 0 ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                                  color: inputs.lifeMigrationAge !== 0 ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                                 🔄 Migrate to CPF LIFE
                               </button>
                             </div>
@@ -8089,7 +8094,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             {/* Stay on RSS: informational note about depletion */}
                             {inputs.lifeMigrationAge === 0 && (
                               <div style={{ background: "rgba(var(--clr-blue-rgb),0.06)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", borderRadius: 6, padding: "6px 9px" }}>
-                                <p style={{ fontSize: 9, color: "#93c5fd", margin: 0, lineHeight: 1.6 }}>
+                                <p style={{ fontSize: 10, color: "#93c5fd", margin: 0, lineHeight: 1.6 }}>
                                   📋 RA will be drawn down at <strong>{formatCurrency(Number(inputs.rssMonthlyPayout) || 0)}/mo</strong> until balance reaches $0 — payouts stop at depletion. See the <strong>RSS tab</strong> for your projected depletion age.
                                 </p>
                               </div>
@@ -8110,7 +8115,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                     onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                                     placeholder="e.g. 72"
                                     style={{ width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: `1px solid ${inputErrors.lifeMigrationAge ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                                  {inputErrors.lifeMigrationAge && <p style={{ fontSize: 9, color: "var(--clr-red)", margin: "2px 0 0" }}>{inputErrors.lifeMigrationAge}</p>}
+                                  {inputErrors.lifeMigrationAge && <p style={{ fontSize: 10, color: "var(--clr-red)", margin: "2px 0 0" }}>{inputErrors.lifeMigrationAge}</p>}
                                 </div>
 
                                 {/* CPF LIFE plan selector at migration */}
@@ -8128,14 +8133,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                       <button key={key}
                                         onClick={() => setInputs(p => ({ ...p, lifePlanAtMigration: key }))}
                                         title={desc}
-                                        style={{ flex: 1, padding: "5px 4px", borderRadius: 5, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer", lineHeight: 1.3,
+                                        style={{ flex: 1, padding: "5px 4px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", lineHeight: 1.3,
                                           background: (inputs.lifePlanAtMigration || 'std') === key ? "var(--clr-purple)" : "transparent",
                                           color: (inputs.lifePlanAtMigration || 'std') === key ? "#ffffff" : "var(--text-muted)" }}>
                                         {label}
                                       </button>
                                     ))}
                                   </div>
-                                  <p style={{ fontSize: 9, color: "#c4b5fd", margin: "4px 0 0", lineHeight: 1.5 }}>
+                                  <p style={{ fontSize: 10, color: "#c4b5fd", margin: "4px 0 0", lineHeight: 1.5 }}>
                                     {{bas: "💼 Basic — lowest payout; RA reserve refundable to estate until depleted, then pool phase.", std: "📌 Standard — fixed payout for life. CPF Board default at migration.", esc: "📈 Escalating — starts lower, rises 2%/yr. Maximises long-run income if you live past ~80."}[inputs.lifePlanAtMigration || 'std']}
                                   </p>
                                 </div>
@@ -8275,11 +8280,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 2 }}>Salary Inputs</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       {[["salaryGross", "OW / Monthly Gross ($)"], ["salaryBonus", "AW / Annual Bonus ($)"]].map(([n, l]) => (
-                        <div key={n}><label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>{l}</label>
+                        <div key={n}><label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>{l}</label>
                           <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} /></div>
                       ))}
                     </div>
-                    <div><label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>Salary Growth Rate (% /yr)</label>
+                    <div><label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>Salary Growth Rate (% /yr)</label>
                       <input type="text" inputMode="decimal" name="salaryGrowthRate" value={inputs.salaryGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual salary growth rate" step="0.5" style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
                       <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>OW ceiling: $8,000/mo · AW ceiling: $102,000/yr</p>
                     </div>
@@ -8289,7 +8294,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           a <label> triggers double-focus on mobile tap: label activates the input AND
                           the tooltip button fires simultaneously. aria-label on the input below preserves
                           screen-reader association without the <label> wrapper. */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>
                         Retirement Sum Growth (% /yr)
                         <TooltipBox id="t-rsGrowth" text="Annual rate at which CPF Board raises the Retirement Sums (FRS, BRS, ERS) and Basic Healthcare Sum (BHS). Historically ~3%/yr. Lowering this makes future FRS targets easier to reach; raising it makes them harder. Range: 0–10%. Values above 6% are flagged as aggressive." />
                       </div>
@@ -8302,7 +8307,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         {/* Quick-set presets: Conservative / Base / Optimistic */}
                         {[["2%", 2, "var(--clr-blue)"], ["3%", 3, "var(--clr-green)"], ["4%", 4, "var(--clr-orange)"]].map(([lbl, val, clr]) => (
                           <button key={lbl} onClick={() => setInputs(p => ({ ...p, retirementSumGrowth: val }))}
-                            style={{ padding: "4px 8px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: `1px solid ${(Number(inputs.retirementSumGrowth)||3) === val ? clr : "var(--border-strong)"}`, background: (Number(inputs.retirementSumGrowth)||3) === val ? `${clr}22` : "transparent", color: (Number(inputs.retirementSumGrowth)||3) === val ? clr : "var(--text-muted)", cursor: "pointer" }}>
+                            style={{ padding: "4px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: `1px solid ${(Number(inputs.retirementSumGrowth)||3) === val ? clr : "var(--border-strong)"}`, background: (Number(inputs.retirementSumGrowth)||3) === val ? `${clr}22` : "transparent", color: (Number(inputs.retirementSumGrowth)||3) === val ? clr : "var(--text-muted)", cursor: "pointer" }}>
                             {lbl}
                           </button>
                         ))}
@@ -8317,13 +8322,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       return (
                         <div style={{ borderTop: "1px dashed var(--border-strong)", paddingTop: 8, marginTop: 2 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                            <span style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Phase 2 / Career Break</span>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Phase 2 / Career Break</span>
                             <TooltipBox id="t-phase2" text="Phase 2: model a salary growth rate change from a specified age (e.g. slower growth post-45, or 0% after a promotion plateau). Career Break: contributions and salary drop to $0 for the specified age range (e.g. a sabbatical, NS, or parental leave). Both can be used independently or together." />
                           </div>
                           {/* Phase 2 start age */}
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 6 }}>
                             <div>
-                              <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>Phase 2 Start Age</label>
+                              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>Phase 2 Start Age</label>
                               <input type="text" inputMode="decimal" name="salaryPhaseAge"
                                 value={inputs.salaryPhaseAge ?? ""}
                                 onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -8334,7 +8339,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             </div>
                             {/* Phase 2 growth rate — only show when phase age is entered */}
                             <div style={{ opacity: hasPhase ? 1 : 0.35, pointerEvents: hasPhase ? "auto" : "none" }}>
-                              <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>Phase 2 Growth %</label>
+                              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>Phase 2 Growth %</label>
                               <input type="text" inputMode="decimal" name="salaryGrowthRate2"
                                 value={inputs.salaryGrowthRate2 ?? 0}
                                 onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -8353,7 +8358,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {/* Career break */}
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                             <div>
-                              <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 3 }}>Break Start Age</label>
+                              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 3 }}>Break Start Age</label>
                               <input type="text" inputMode="decimal" name="careerBreakStartAge"
                                 value={inputs.careerBreakStartAge ?? ""}
                                 onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -8363,7 +8368,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               {inputErrors.careerBreakStartAge && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>{inputErrors.careerBreakStartAge}</p>}
                             </div>
                             <div style={{ opacity: hasBreak ? 1 : 0.35, pointerEvents: hasBreak ? "auto" : "none" }}>
-                              <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 3 }}>Break End Age</label>
+                              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 3 }}>Break End Age</label>
                               <input type="text" inputMode="decimal" name="careerBreakEndAge"
                                 value={inputs.careerBreakEndAge ?? ""}
                                 onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -8469,8 +8474,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   return (
                     <div style={{ background: "var(--bg-input)", padding: 14, borderRadius: 12, marginBottom: 14, border: "1px solid var(--border-strong)" }}>
                       <div style={{ marginTop: 4, borderRadius: 8, overflow: "hidden", border: "1px solid var(--border-strong)" }}>
-                        <div style={{ background: "var(--bg-panel)", padding: "6px 10px", fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>{tableTitle}</div>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
+                        <div style={{ background: "var(--bg-panel)", padding: "6px 10px", fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)" }}>{tableTitle}</div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
                           <thead><tr style={{ background: "var(--bg-muted)" }}>
                             <th style={{ padding: "4px 8px", textAlign: "left",   color: "var(--text-muted)" }}>Age</th>
                             <th style={{ padding: "4px 8px", textAlign: "center", color: "var(--clr-blue)" }}>OA</th>
@@ -8484,7 +8489,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               return (
                                 <tr key={bracket} style={{ borderTop: "1px solid var(--border-subtle)", background: active ? "rgba(163,230,53,0.08)" : "" }}>
                                   <td style={{ padding: "5px 8px", fontWeight: 700, color: active ? "var(--clr-lime)" : "var(--text-muted)", fontFamily: "system-ui" }}>
-                                    {bracket}{active && <span style={{ marginLeft: 4, fontSize: 7, background: "rgba(var(--clr-emerald-rgb),0.2)", color: "var(--clr-lime)", padding: "1px 4px", borderRadius: 4 }}>YOU</span>}
+                                    {bracket}{active && <span style={{ marginLeft: 4, fontSize: 9, background: "rgba(var(--clr-emerald-rgb),0.2)", color: "var(--clr-lime)", padding: "1px 4px", borderRadius: 4 }}>YOU</span>}
                                   </td>
                                   <td style={{ padding: "5px 8px", textAlign: "center", color: "#93c5fd", fontFamily: "monospace" }}>{oa}%</td>
                                   <td style={{ padding: "5px 8px", textAlign: "center", color: "#6ee7b7", fontFamily: "monospace" }}>{sa}%</td>
@@ -8496,7 +8501,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </tbody>
                         </table>
                       </div>
-                      <div style={{ marginTop: 8, padding: "7px 10px", borderRadius: 6, background: "rgba(var(--clr-amber-rgb),0.06)", border: "1px solid rgba(var(--clr-amber-rgb),0.15)", fontSize: 9, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                      <div style={{ marginTop: 8, padding: "7px 10px", borderRadius: 6, background: "rgba(var(--clr-amber-rgb),0.06)", border: "1px solid rgba(var(--clr-amber-rgb),0.15)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.7 }}>
                         <strong style={{ color: "var(--clr-amber)" }}>Salary banding (OW/month, your age band):</strong><br />
                         ≤ $50 → Nil &nbsp;|&nbsp; $51–$500 → {activeFlatRate} × OW (employer only) &nbsp;|&nbsp; $501–$750 → {activeFlatRate} × OW + {activeGradFactor} × (OW − $500) &nbsp;|&nbsp; &gt; $750 → full rates above
                         <br /><span style={{ color: "var(--text-subtle)" }}>Rates shown are combined employer + employee as % of wages (OW &gt; $750). Auto-Calc applies the correct band formula automatically.</span>
@@ -8574,17 +8579,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                         return (
                           <div style={{ marginTop: 10, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(var(--clr-amber-rgb),0.3)" }}>
-                            <div style={{ background: "rgba(var(--clr-amber-rgb),0.08)", padding: "6px 10px", fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber)", letterSpacing: "0.05em" }}>
+                            <div style={{ background: "rgba(var(--clr-amber-rgb),0.08)", padding: "6px 10px", fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber)", letterSpacing: "0.05em" }}>
                               📈 PR Tier Progression — Annual Contributions (Yr 1 → Yr 4+)
                               <span style={{ marginLeft: 6, fontWeight: 400, color: "var(--text-muted)", textTransform: "none" }}>Rate tier auto-advances each year in the engine</span>
                             </div>
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
                               <thead>
                                 <tr style={{ background: "var(--bg-muted)" }}>
                                   {["Proj. Year", "Tier (Rate)", "OA", is55Plus ? "RA" : "SA", "MA", "Total"].map((h, i) => (
                                     <th key={h} style={{ padding: "4px 8px", textAlign: i <= 1 ? "left" : "right",
                                       color: i===2?"var(--clr-blue)": i===3?"var(--clr-lime)": i===4?"var(--clr-violet)": i===5?"var(--text-highlight)":"var(--text-muted)",
-                                      fontWeight: 800, fontSize: 9 }}>{h}</th>
+                                      fontWeight: 800, fontSize: 10 }}>{h}</th>
                                   ))}
                                 </tr>
                               </thead>
@@ -8595,11 +8600,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   return (
                                     <tr key={r.label} style={{ borderTop: "1px solid var(--border-subtle)", background: isNow ? "rgba(var(--clr-amber-rgb),0.06)" : isFull ? "rgba(163,230,53,0.06)" : "" }}>
                                       <td style={{ padding: "5px 8px", fontWeight: isNow ? 800 : 600, color: isNow ? "var(--clr-amber)" : "var(--text-muted)", fontFamily: "system-ui", whiteSpace: "nowrap" }}>
-                                        {r.label}{isNow && <span style={{ marginLeft: 4, fontSize: 7, background: "rgba(163,230,53,0.25)", color: "var(--clr-lime)", padding: "1px 4px", borderRadius: 4 }}>You</span>}
-                                        {growthRate > 0 && <span style={{ marginLeft: 3, fontSize: 7, color: "var(--text-subtle)" }}>×{(Math.pow(1+growthRate, r.offset)*100).toFixed(0)}%</span>}
+                                        {r.label}{isNow && <span style={{ marginLeft: 4, fontSize: 9, background: "rgba(163,230,53,0.25)", color: "var(--clr-lime)", padding: "1px 4px", borderRadius: 4 }}>You</span>}
+                                        {growthRate > 0 && <span style={{ marginLeft: 3, fontSize: 9, color: "var(--text-subtle)" }}>×{(Math.pow(1+growthRate, r.offset)*100).toFixed(0)}%</span>}
                                       </td>
                                       <td style={{ padding: "5px 8px" }}>
-                                        <span style={{ fontSize: 8, fontWeight: 800, color: tierColor(r.tier), background: `${tierColor(r.tier)}18`, border: `1px solid ${tierColor(r.tier)}40`, borderRadius: 4, padding: "1px 5px" }}>
+                                        <span style={{ fontSize: 10, fontWeight: 800, color: tierColor(r.tier), background: `${tierColor(r.tier)}18`, border: `1px solid ${tierColor(r.tier)}40`, borderRadius: 4, padding: "1px 5px" }}>
                                           {tierLabel(r.tier)} · {r.totalPct}%
                                         </span>
                                       </td>
@@ -8612,7 +8617,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 })}
                               </tbody>
                             </table>
-                            <div style={{ padding: "5px 10px", background: "rgba(var(--clr-amber-rgb),0.04)", fontSize: 8, color: "var(--text-subtle)", lineHeight: 1.6 }}>
+                            <div style={{ padding: "5px 10px", background: "rgba(var(--clr-amber-rgb),0.04)", fontSize: 10, color: "var(--text-subtle)", lineHeight: 1.6 }}>
                               Auto-Calc fills Year 1 figures into the OA/SA/MA fields below. Year 2–4+ are projections only — the engine advances the tier automatically each year without further input.
                               {growthRate > 0 && ` Salary growth of ${inputs.salaryGrowthRate}%/yr applied.`}
                               {(inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null) && <span style={{ color: "var(--clr-amber)" }}> Phase 2 growth ({inputs.salaryGrowthRate2 || 0}%/yr from age {inputs.salaryPhaseAge}) is modelled in the projection but not reflected in this Year-1 Auto-Calc.</span>}
@@ -8698,17 +8703,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     const fc2 = v => `$${(v/1000).toFixed(1)}k`;
                     return (
                       <div style={{ marginTop: 6, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(var(--clr-amber-rgb),0.3)" }}>
-                        <div style={{ background: "rgba(var(--clr-amber-rgb),0.08)", padding: "5px 10px", fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber)", letterSpacing: "0.05em" }}>
+                        <div style={{ background: "rgba(var(--clr-amber-rgb),0.08)", padding: "5px 10px", fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber)", letterSpacing: "0.05em" }}>
                           📈 PR Tier Progression — Yr 1 → Yr 4+
                           <span style={{ marginLeft: 6, fontWeight: 400, color: "var(--text-muted)", textTransform: "none" }}>auto-advances each year</span>
                         </div>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
                           <thead>
                             <tr style={{ background: "var(--bg-muted)" }}>
                               {["Year", "Rate Tier", "OA", is55Plus ? "RA" : "SA", "MA", "Total"].map((h, i) => (
                                 <th key={h} style={{ padding: "4px 6px", textAlign: i <= 1 ? "left" : "right",
                                   color: i===2?"var(--clr-blue)":i===3?"var(--clr-lime)":i===4?"var(--clr-violet)":i===5?"var(--text-highlight)":"var(--text-muted)",
-                                  fontWeight: 800, fontSize: 8 }}>{h}</th>
+                                  fontWeight: 800, fontSize: 10 }}>{h}</th>
                               ))}
                             </tr>
                           </thead>
@@ -8718,10 +8723,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               return (
                                 <tr key={r.label} style={{ borderTop: "1px solid var(--border-subtle)", background: isNow ? "rgba(var(--clr-amber-rgb),0.07)" : r.tier >= 3 ? "rgba(163,230,53,0.06)" : "" }}>
                                   <td style={{ padding: "4px 6px", fontWeight: isNow ? 800 : 600, color: isNow ? "var(--clr-amber)" : "var(--text-muted)", whiteSpace: "nowrap" }}>
-                                    {r.label}{isNow && <span style={{ marginLeft: 4, fontSize: 7, background: "rgba(163,230,53,0.25)", color: "var(--clr-lime)", padding: "1px 3px", borderRadius: 3 }}>You</span>}
+                                    {r.label}{isNow && <span style={{ marginLeft: 4, fontSize: 9, background: "rgba(163,230,53,0.25)", color: "var(--clr-lime)", padding: "1px 3px", borderRadius: 3 }}>You</span>}
                                   </td>
                                   <td style={{ padding: "4px 6px" }}>
-                                    <span style={{ fontSize: 7, fontWeight: 800, color: tColor(r.tier), background: `${tColor(r.tier)}18`, border: `1px solid ${tColor(r.tier)}40`, borderRadius: 3, padding: "1px 4px" }}>
+                                    <span style={{ fontSize: 9, fontWeight: 800, color: tColor(r.tier), background: `${tColor(r.tier)}18`, border: `1px solid ${tColor(r.tier)}40`, borderRadius: 3, padding: "1px 4px" }}>
                                       {tLabel(r.tier)} · {r.totalPct}%
                                     </span>
                                   </td>
@@ -8734,7 +8739,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             })}
                           </tbody>
                         </table>
-                        <div style={{ padding: "4px 8px", background: "rgba(var(--clr-amber-rgb),0.04)", fontSize: 8, color: "var(--text-subtle)", lineHeight: 1.5 }}>
+                        <div style={{ padding: "4px 8px", background: "rgba(var(--clr-amber-rgb),0.04)", fontSize: 10, color: "var(--text-subtle)", lineHeight: 1.5 }}>
                           Yr 1 = auto-calc values above. Yr 2–4+ are projections — engine advances tier automatically.{_growthRate > 0 ? ` Salary growth ${inputs.salaryGrowthRate}%/yr applied.` : ""}
                         </div>
                       </div>
@@ -8757,7 +8762,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <Gift style={{ width: 14, height: 14 }} /><span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>Inflows ($/yr)</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-subtle)" }}>Limit: {formatCurrency(maxAllowableVC)}/yr</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-subtle)" }}>Limit: {formatCurrency(maxAllowableVC)}/yr</span>
                   {isVcOverLimit && <AlertTriangle style={{ width: 12, height: 12, color: "var(--clr-orange)" }} />}
                   <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700 }}>{openSections.has("topups") ? "▲" : "▼"}</span>
                 </div>
@@ -8795,7 +8800,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       return (
                         <div style={{ marginTop: 6, padding: "7px 10px", borderRadius: 7, background: barBg, border: `1px solid ${badgeCol}44` }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                            <span style={{ fontSize: 9, fontWeight: 700, color: badgeCol, textTransform: "uppercase", letterSpacing: "0.04em" }}>Annual Limit Headroom</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: badgeCol, textTransform: "uppercase", letterSpacing: "0.04em" }}>Annual Limit Headroom</span>
                             <span style={{ fontSize: 9, fontWeight: 900, color: badgeCol, fontFamily: "monospace" }}>
                               {formatCurrency(remaining)} left of {formatCurrency(maxAllowableVC)}
                             </span>
@@ -8803,7 +8808,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <div style={{ height: 4, borderRadius: 2, background: "var(--bg-muted)", overflow: "hidden" }}>
                             <div style={{ height: "100%", width: `${Math.min(100, usedPct * 100)}%`, background: badgeCol, borderRadius: 2, transition: "width 0.3s" }} />
                           </div>
-                          <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
                             Auto-split by age-band rates · no tax relief
                             {totalMandatory > 0 && ` · $${totalMandatory.toLocaleString()} mandatory already counted`}
                           </p>
@@ -8843,7 +8848,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 8, padding: "8px 10px", background: "var(--bg-base)", borderRadius: 8, border: "1px solid var(--border-subtle)" }}>
                           {[["OA", oaAmt, "var(--clr-blue)"], ["MA", maAmt, "var(--clr-violet)"], [is55Plus ? "RA" : "SA", saAmt, "var(--clr-green)"]].map(([acct, amt, col]) => (
                             <div key={acct} style={{ textAlign: "center" }}>
-                              <div style={{ fontSize: 9, fontWeight: 700, color: col, textTransform: "uppercase", marginBottom: 2 }}>{acct}</div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: col, textTransform: "uppercase", marginBottom: 2 }}>{acct}</div>
                               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-bright)", fontFamily: "monospace" }}>{formatCurrency(amt)}</div>
                             </div>
                           ))}
@@ -8880,7 +8885,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       const _saFV = Math.round(_saPortionToday * Math.pow(1.04, _yrs));
                       return (
                         <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 7, background: "rgba(var(--clr-green-rgb),0.06)", border: "1px solid rgba(var(--clr-green-rgb),0.18)" }}>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--clr-green)" }}>💡 ROI estimate · </span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--clr-green)" }}>💡 ROI estimate · </span>
                           <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
                             {is55Plus ? "RA" : "SA"} portion of <strong style={{ color: "var(--text-bright)" }}>$1,000</strong> VC3A today → <strong style={{ color: "var(--clr-green)", fontFamily: "monospace" }}>${_saPortionToday}</strong> into {is55Plus ? "RA" : "SA"} → grows to <strong style={{ color: "var(--clr-green)", fontFamily: "monospace" }}>{formatCurrency(_saFV)}</strong> at age {_pa} (4%/yr)
                           </span>
@@ -8905,8 +8910,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     {!isUnder16 && estimatedTaxSavings > 0 && (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, padding: "7px 10px", borderRadius: 7, background: "rgba(var(--clr-green-rgb),0.10)", border: "1px solid rgba(var(--clr-green-rgb),0.28)" }}>
                         <div>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", letterSpacing: "0.04em" }}>💰 Est. Tax Saved (RSTU)</span>
-                          <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", letterSpacing: "0.04em" }}>💰 Est. Tax Saved (RSTU)</span>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
                             Based on ~{Math.round(estimatedTaxRate * 100)}% marginal rate · relief capped at $8,000/yr
                             {eligibleRSTU < (Number(inputs.vcSaTopup) || 0) && ` · capped at FRS headroom ($${Math.round(eligibleRSTU).toLocaleString()})`}
                           </p>
@@ -8933,7 +8938,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       if (_yrs < 1) return null;
                       return (
                         <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 7, background: "rgba(var(--clr-green-rgb),0.06)", border: "1px solid rgba(var(--clr-green-rgb),0.18)" }}>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--clr-green)" }}>💡 ROI estimate · </span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--clr-green)" }}>💡 ROI estimate · </span>
                           <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
                             Each <strong style={{ color: "var(--text-bright)" }}>$1,000</strong> top-up today → <strong style={{ color: "var(--clr-green)", fontFamily: "monospace" }}>{formatCurrency(_fv)}</strong> in {is55Plus ? "RA" : "SA"} at age {_pa} (4%/yr) → est. <strong style={{ color: "var(--clr-green)", fontFamily: "monospace" }}>+${_monthlyAdd}/mo</strong> CPF LIFE ({inputs.isMale !== false ? "male" : "female"}, Standard plan)
                           </span>
@@ -8951,7 +8956,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <p style={{ fontSize: 10, color: gapAlert.isUrgent ? "#fca5a5" : "#fcd34d", marginBottom: 8, lineHeight: 1.4 }}>
                           {gapAlert.raLabel} is <strong>{formatCurrency(gapAlert.raForAlert)}</strong> — <strong>{formatCurrency(gapAlert.frsGap)}</strong> short of FRS ({formatCurrency(gapAlert.projFRS55)}).
                         </p>
-                        <div style={{ background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.08)", borderRadius: 6, padding: 8, fontSize: 9, fontFamily: "monospace" }}>
+                        <div style={{ background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.08)", borderRadius: 6, padding: 8, fontSize: 10, fontFamily: "monospace" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                             <span style={{ color: "var(--text-muted)" }}>Additional top-up needed*:</span>
                             <span style={{ fontWeight: 900, color: gapAlert.isUrgent ? "var(--clr-red)" : "#fcd34d" }}>{formatCurrency(gapAlert.annualTopUp)}/yr</span>
@@ -8976,7 +8981,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <span style={{ fontWeight: 900, color: gapAlert.isUrgent ? "var(--clr-red)" : "#fcd34d" }}>{formatCurrency(gapAlert.newTopUp)}/yr</span>
                             </div>
                           )}
-                          <p style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.4 }}>*Additional top-up ON TOP of current projection. {gapAlert.topupNote}.</p>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.4 }}>*Additional top-up ON TOP of current projection. {gapAlert.topupNote}.</p>
                         </div>
                         {gapAlert.annualTopUp > 0 && (
                           <button
@@ -9021,27 +9026,27 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     if (!_mrssBalOk) {
                       // Balance already at/above BRS — not eligible
                       return (
-                        <div style={{ marginTop: -6, marginBottom: 2, padding: "6px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)", fontSize: 9, color: "var(--text-muted)" }}>
+                        <div style={{ marginTop: -6, marginBottom: 2, padding: "6px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)", fontSize: 10, color: "var(--text-muted)" }}>
                           ℹ️ <strong>MRSS:</strong> {_ca >= 55 ? "RA" : "OA + SA"} is at or above BRS ({formatCurrency(_brsNow)}) — not eligible this year.
                         </div>
                       );
                     }
                     if (!_mrssIncomeOk) {
                       return (
-                        <div style={{ marginTop: -6, marginBottom: 2, padding: "6px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)", fontSize: 9, color: "var(--text-muted)" }}>
+                        <div style={{ marginTop: -6, marginBottom: 2, padding: "6px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)", fontSize: 10, color: "var(--text-muted)" }}>
                           ℹ️ <strong>MRSS:</strong> Monthly income ({formatCurrency(_income)}) exceeds $4,000 limit — not eligible.
                         </div>
                       );
                     }
                     if (_rstu === 0) {
                       return (
-                        <div style={{ marginTop: -6, marginBottom: 2, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-amber3-rgb),0.07)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", fontSize: 9, color: "var(--clr-amber)" }}>
+                        <div style={{ marginTop: -6, marginBottom: 2, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-amber3-rgb),0.07)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", fontSize: 10, color: "var(--clr-amber)" }}>
                           💡 <strong>MRSS eligible{_isPwD && _ca < 55 ? " (PwD)" : ""}:</strong> Add an RSTU top-up above to automatically receive up to <strong>$2,000/yr</strong> government match · $20,000 lifetime cap · SC only
                         </div>
                       );
                     }
                     return (
-                      <div style={{ marginTop: -6, marginBottom: 2, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-green-rgb),0.07)", border: "1px solid rgba(var(--clr-green-rgb),0.3)", fontSize: 9, color: "var(--clr-green)" }}>
+                      <div style={{ marginTop: -6, marginBottom: 2, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-green-rgb),0.07)", border: "1px solid rgba(var(--clr-green-rgb),0.3)", fontSize: 10, color: "var(--clr-green)" }}>
                         ✓ <strong>MRSS match{_isPwD && _ca < 55 ? " (PwD)" : ""}:</strong> <strong style={{ fontFamily: "monospace", fontSize: 10 }}>{formatCurrency(_mrssMatch)}/yr</strong> auto-credited to {_ca >= 55 ? "RA" : "SA"} · $20,000 lifetime cap · SC only
                         {_mrssMatch < _rstu && <span style={{ marginLeft: 6, color: "var(--text-muted)" }}>({formatCurrency(_rstu - _mrssMatch)} excess RSTU eligible for tax relief)</span>}
                       </div>
@@ -9103,27 +9108,27 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     const _mmssMatch = Math.min(_vcMa, 1000);
                     if (_maBal >= _halfBhs) {
                       return (
-                        <div style={{ marginTop: -6, marginBottom: 2, padding: "6px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)", fontSize: 9, color: "var(--text-muted)" }}>
+                        <div style={{ marginTop: -6, marginBottom: 2, padding: "6px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)", fontSize: 10, color: "var(--text-muted)" }}>
                           ℹ️ <strong>MMSS:</strong> MA ({formatCurrency(_maBal)}) is at or above half of BHS ({formatCurrency(_halfBhs)}) — not eligible.
                         </div>
                       );
                     }
                     if (_income > 4000) {
                       return (
-                        <div style={{ marginTop: -6, marginBottom: 2, padding: "6px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)", fontSize: 9, color: "var(--text-muted)" }}>
+                        <div style={{ marginTop: -6, marginBottom: 2, padding: "6px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.2)", fontSize: 10, color: "var(--text-muted)" }}>
                           ℹ️ <strong>MMSS:</strong> Monthly income ({formatCurrency(_income)}) exceeds $4,000 limit — not eligible.
                         </div>
                       );
                     }
                     if (_vcMa === 0) {
                       return (
-                        <div style={{ marginTop: -6, marginBottom: 2, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-amber3-rgb),0.07)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", fontSize: 9, color: "var(--clr-amber)" }}>
+                        <div style={{ marginTop: -6, marginBottom: 2, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-amber3-rgb),0.07)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", fontSize: 10, color: "var(--clr-amber)" }}>
                           💡 <strong>MMSS eligible:</strong> Add a VCMA top-up above to automatically receive up to <strong>$1,000/yr</strong> MediSave match · SC only · pilot ends 2030
                         </div>
                       );
                     }
                     return (
-                      <div style={{ marginTop: -6, marginBottom: 2, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-green-rgb),0.07)", border: "1px solid rgba(var(--clr-green-rgb),0.3)", fontSize: 9, color: "var(--clr-green)" }}>
+                      <div style={{ marginTop: -6, marginBottom: 2, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-green-rgb),0.07)", border: "1px solid rgba(var(--clr-green-rgb),0.3)", fontSize: 10, color: "var(--clr-green)" }}>
                         ✓ <strong>MMSS match:</strong> <strong style={{ fontFamily: "monospace", fontSize: 10 }}>{formatCurrency(_mmssMatch)}/yr</strong> auto-credited to MA · engine auto-stops when MA reaches {formatCurrency(_halfBhs)} · SC only · pilot ends 2030
                       </div>
                     );
@@ -9182,7 +9187,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {estimated !== null && (
                             <button onClick={() => setInputs(p => ({ ...p, wisAmount: estimated }))}
                               title={`Estimate based on your salary (~$${monthlyIncome.toLocaleString()}/mo)`}
-                              style={{ padding: "6px 10px", borderRadius: 7, fontSize: 9, fontWeight: 800, border: "1px solid rgba(var(--clr-green-rgb),0.4)", background: "rgba(var(--clr-green-rgb),0.1)", color: "var(--clr-green)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                              style={{ padding: "6px 10px", borderRadius: 7, fontSize: 10, fontWeight: 800, border: "1px solid rgba(var(--clr-green-rgb),0.4)", background: "rgba(var(--clr-green-rgb),0.1)", color: "var(--clr-green)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
                               ⚡ ${estimated.toLocaleString()}
                             </button>
                           )}
@@ -9203,7 +9208,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {showEligibility ? "▲ Hide eligibility criteria" : "▼ WIS eligibility criteria"}
                         </button>
                         {showEligibility && (
-                          <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 7, background: "rgba(var(--clr-green-rgb),0.05)", border: "1px solid rgba(var(--clr-green-rgb),0.2)", fontSize: 9, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                          <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 7, background: "rgba(var(--clr-green-rgb),0.05)", border: "1px solid rgba(var(--clr-green-rgb),0.2)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.6 }}>
                             <strong style={{ color: "var(--text-highlight)" }}>WIS eligibility (2025):</strong><br />
                             • Singapore Citizen · Age ≥ 30 (or any age if PWD)<br />
                             • Avg gross monthly income: $500–$3,000<br />
@@ -9425,7 +9430,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                       {[["For Self", false], ["For Loved One", true]].map(([label, val]) => (
                         <button key={label} onClick={() => setInputs(p => ({ ...p, oaToMaForLovedOne: val }))}
-                          style={{ flex: 1, padding: "5px 8px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: "1px solid", cursor: "pointer",
+                          style={{ flex: 1, padding: "5px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid", cursor: "pointer",
                             background: inputs.oaToMaForLovedOne === val ? (val ? "rgba(244,63,94,0.2)" : "rgba(var(--clr-amber-rgb),0.15)") : "transparent",
                             color: inputs.oaToMaForLovedOne === val ? (val ? "var(--clr-red)" : "var(--clr-amber)") : "var(--text-muted)",
                             borderColor: inputs.oaToMaForLovedOne === val ? (val ? "rgba(244,63,94,0.5)" : "rgba(var(--clr-amber-rgb),0.4)") : "var(--border-strong)" }}>
@@ -9456,7 +9461,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 {" "}/ BHS: <strong style={{ color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(bhsNow)}</strong>
                                 {" "}· Headroom: <strong style={{ color: maRoom === 0 ? "var(--clr-red)" : "var(--clr-amber)", fontFamily: "monospace" }}>{formatCurrency(maRoom)}</strong>
                               </p>
-                              {maRoom === 0 && <span style={{ fontSize: 9, color: "var(--clr-red)", fontWeight: 700 }}>BHS reached ✓</span>}
+                              {maRoom === 0 && <span style={{ fontSize: 10, color: "var(--clr-red)", fontWeight: 700 }}>BHS reached ✓</span>}
                             </div>
                           )}
                           {isOver && (
@@ -9485,7 +9490,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                       {[["For Self", false], ["For Loved One", true]].map(([label, val]) => (
                         <button key={label} onClick={() => setInputs(p => ({ ...p, oaToSaForLovedOne: val }))}
-                          style={{ flex: 1, padding: "5px 8px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: "1px solid", cursor: "pointer",
+                          style={{ flex: 1, padding: "5px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid", cursor: "pointer",
                             background: inputs.oaToSaForLovedOne === val ? (val ? "rgba(244,63,94,0.2)" : "rgba(var(--clr-amber-rgb),0.15)") : "transparent",
                             color: inputs.oaToSaForLovedOne === val ? (val ? "var(--clr-red)" : "var(--clr-amber)") : "var(--text-muted)",
                             borderColor: inputs.oaToSaForLovedOne === val ? (val ? "rgba(244,63,94,0.5)" : "rgba(var(--clr-amber-rgb),0.4)") : "var(--border-strong)" }}>
@@ -9494,7 +9499,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       ))}
                     </div>
                     {inputs.oaToSaForLovedOne && (
-                      <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(244,63,94,0.07)", border: "1px solid rgba(244,63,94,0.25)", fontSize: 9, color: "#fca5a5", lineHeight: 1.6 }}>
+                      <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(244,63,94,0.07)", border: "1px solid rgba(244,63,94,0.25)", fontSize: 10, color: "#fca5a5", lineHeight: 1.6 }}>
                         <strong style={{ color: "var(--clr-red)" }}>For Loved One:</strong> The entered amount is deducted from <em>your</em> OA each year and treated as an outflow. Your loved one's {is55Plus ? "RA" : "SA"} is not tracked in this tool. FRS/ERS headroom check is skipped — only your OA balance limits the transfer.
                       </div>
                     )}
@@ -9510,7 +9515,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     {/* NX4 fix: clarify SA→RA auto-transition so users entering this field at 40
                         understand the same amount continues as OA→RA after their 55th birthday */}
                     {!inputs.oaToSaForLovedOne && !is55Plus && (
-                      <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 2 }}>
+                      <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 2 }}>
                         ⚙ From age 55 this transfer automatically redirects to RA — SA closes at 55.
                       </p>
                     )}
@@ -9521,20 +9526,20 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       const { alreadyMet, crossoverAge, label: _label, capLabel: _capLabel, targetSum: _targetSum } = oaToSaCrossover;
                       if (alreadyMet) {
                         return (
-                          <p style={{ fontSize: 9, color: "var(--clr-orange)", marginTop: 2 }}>
+                          <p style={{ fontSize: 10, color: "var(--clr-orange)", marginTop: 2 }}>
                             ⚙ {_label} already at/above {_capLabel} ({formatCurrency(_targetSum)}) — transfers have no effect.
                           </p>
                         );
                       }
                       if (crossoverAge != null) {
                         return (
-                          <p style={{ fontSize: 9, color: "var(--clr-green)", marginTop: 2 }}>
+                          <p style={{ fontSize: 10, color: "var(--clr-green)", marginTop: 2 }}>
                             ⚙ Engine auto-stops transfers at est. age <strong>{crossoverAge}</strong> when {_label} reaches projected {_capLabel}.
                           </p>
                         );
                       }
                       return (
-                        <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 2 }}>
+                        <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 2 }}>
                           ⚙ {_label} does not reach {_capLabel} within the projection horizon at current inputs.
                         </p>
                       );
@@ -9578,7 +9583,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                       <label style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase" }}>Include Property in Net Worth</label>
-                      <button onClick={() => setInputs(p => ({ ...p, includeProperty: !p.includeProperty }))} aria-pressed={!!inputs.includeProperty} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.includeProperty ? "var(--clr-emerald)" : "var(--bg-input)", color: inputs.includeProperty ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>{inputs.includeProperty ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, includeProperty: !p.includeProperty }))} aria-pressed={!!inputs.includeProperty} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.includeProperty ? "var(--clr-emerald)" : "var(--bg-input)", color: inputs.includeProperty ? "var(--btn-on-accent)" : "var(--text-muted)" }}>{inputs.includeProperty ? "ON" : "OFF"}</button>
                     </div>
                     <div style={{ opacity: inputs.includeProperty ? 1 : 0.4, pointerEvents: inputs.includeProperty ? "auto" : "none", display: "flex", flexDirection: "column", gap: 8 }}>
                       <div>
@@ -9655,7 +9660,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                         <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Only BRS needed in RA at 55 · pledged sum stays in RA at 4% · withdraw as cash via CPF application</p>
                       </div>
-                      <button onClick={() => setInputs(p => ({ ...p, usePropertyPledge: !p.usePropertyPledge }))} aria-pressed={!!inputs.usePropertyPledge} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.usePropertyPledge ? "var(--clr-emerald)" : "var(--bg-input)", color: inputs.usePropertyPledge ? "var(--ctrl-on-text)" : "var(--text-muted)", flexShrink: 0, marginTop: 2 }}>{inputs.usePropertyPledge ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, usePropertyPledge: !p.usePropertyPledge }))} aria-pressed={!!inputs.usePropertyPledge} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.usePropertyPledge ? "var(--clr-emerald)" : "var(--bg-input)", color: inputs.usePropertyPledge ? "var(--btn-on-accent)" : "var(--text-muted)", flexShrink: 0, marginTop: 2 }}>{inputs.usePropertyPledge ? "ON" : "OFF"}</button>
                     </div>
                     {inputs.usePropertyPledge && (() => {
                       const ca = Number(inputs.currentAge) || 35;
@@ -9699,7 +9704,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </p>
                         <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Downgrade · LBS · Silver Housing Bonus · one-time event</p>
                       </div>
-                      <button onClick={() => setInputs(p => ({ ...p, propMonetiseEnabled: !p.propMonetiseEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.propMonetiseEnabled ? "var(--clr-blue)" : "var(--bg-input)", color: inputs.propMonetiseEnabled ? "var(--ctrl-on-text)" : "var(--text-muted)", flexShrink: 0 }}>{inputs.propMonetiseEnabled ? "ON" : "OFF"}</button>
+                      <button onClick={() => setInputs(p => ({ ...p, propMonetiseEnabled: !p.propMonetiseEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.propMonetiseEnabled ? "var(--clr-blue)" : "var(--bg-input)", color: inputs.propMonetiseEnabled ? "var(--btn-on-accent)" : "var(--text-muted)", flexShrink: 0 }}>{inputs.propMonetiseEnabled ? "ON" : "OFF"}</button>
                     </div>
                     {inputs.propMonetiseEnabled && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -9708,7 +9713,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Scheme</label>
                           <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 2 }}>
                             {[["downgrade", "Downgrade"], ["lbs", "LBS"], ["shb", "Silver HB"]].map(([val, label]) => (
-                              <button key={val} onClick={() => setInputs(p => ({ ...p, propMonetiseScheme: val }))} style={{ flex: 1, padding: "4px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer", background: (inputs.propMonetiseScheme ?? "downgrade") === val ? "var(--clr-blue)" : "transparent", color: (inputs.propMonetiseScheme ?? "downgrade") === val ? "var(--ctrl-on-text)" : "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</button>
+                              <button key={val} onClick={() => setInputs(p => ({ ...p, propMonetiseScheme: val }))} style={{ flex: 1, padding: "4px 6px", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: (inputs.propMonetiseScheme ?? "downgrade") === val ? "var(--clr-blue)" : "transparent", color: (inputs.propMonetiseScheme ?? "downgrade") === val ? "var(--btn-on-accent)" : "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</button>
                             ))}
                           </div>
                           <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
@@ -9852,8 +9857,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             return (
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", borderRadius: 7, background: "rgba(14,165,233,0.10)", border: "1px solid rgba(14,165,233,0.28)" }}>
                                 <div>
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.04em" }}>💰 Est. Tax Saved (SRS)</span>
-                                  <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.04em" }}>💰 Est. Tax Saved (SRS)</span>
+                                  <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
                                     ~{Math.round(estimatedTaxRate * 100)}% marginal rate · 50% of withdrawals taxable from 63
                                   </p>
                                 </div>
@@ -9979,7 +9984,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <Activity style={{ width: 14, height: 14, color: "#ef4444" }} />
                       <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", color: "#ef4444" }}>Life Events</span>
                       {lifeEvents.length > 0 && (
-                        <span style={{ fontSize: 9, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>
                           {enabledCount} active
                         </span>
                       )}
@@ -9993,7 +9998,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, marginTop: 4 }}>
                         <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>Overlay stress-test events on your projection — retrenchments, medical crises, windfalls, and more.</p>
                         {lifeEvents.length > 0 && (
-                          <button onClick={toggleAll} style={{ flexShrink: 0, marginLeft: 8, fontSize: 9, fontWeight: 700, padding: "3px 9px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}>
+                          <button onClick={toggleAll} style={{ flexShrink: 0, marginLeft: 8, fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}>
                             {lifeEvents.some(e => e.enabled !== false) ? "Disable All" : "Enable All"}
                           </button>
                         )}
@@ -10019,11 +10024,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   {ev.magnitude > 0 && ` · ${ev.type === 'hyperinflation' ? `${ev.magnitude}%` : `$${Number(ev.magnitude).toLocaleString()}`}${ev.type === 'medical_crisis' || ev.type === 'retrenchment' || ev.type === 'career_break' || ev.type === 'hyperinflation' ? '/yr' : ''}`}
                                 </span>
                               </div>
-                              <button onClick={() => toggleEvent(ev.id)} title={isEnabled ? "Disable" : "Enable"} style={{ fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 5, border: `1px solid ${isEnabled ? (meta.color || "#ef4444") + "60" : "var(--border-strong)"}`, background: isEnabled ? `${meta.color || "#ef4444"}18` : "transparent", color: isEnabled ? (meta.color || "#ef4444") : "var(--text-muted)", cursor: "pointer" }}>{isEnabled ? "ON" : "OFF"}</button>
+                              <button onClick={() => toggleEvent(ev.id)} title={isEnabled ? "Disable" : "Enable"} style={{ fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 5, border: `1px solid ${isEnabled ? (meta.color || "#ef4444") + "60" : "var(--border-strong)"}`, background: isEnabled ? `${meta.color || "#ef4444"}18` : "transparent", color: isEnabled ? (meta.color || "#ef4444") : "var(--text-muted)", cursor: "pointer" }}>{isEnabled ? "ON" : "OFF"}</button>
                               <button onClick={() => startEdit(ev)} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-subtle)", cursor: "pointer" }}>✎</button>
                               <button onClick={() => deleteEvent(ev.id)} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, border: "1px solid rgba(239,68,68,0.3)", background: "transparent", color: "var(--clr-red)", cursor: "pointer" }}>✕</button>
                             </div>
-                            {evErr && <p style={{ fontSize: 9, color: "var(--clr-red)", margin: "4px 0 0" }}>⚠ {Object.values(evErr).filter(v => typeof v === 'string').join(" · ")}</p>}
+                            {evErr && <p style={{ fontSize: 10, color: "var(--clr-red)", margin: "4px 0 0" }}>⚠ {Object.values(evErr).filter(v => typeof v === 'string').join(" · ")}</p>}
                           </div>
                         );
                       })}
@@ -10035,21 +10040,21 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                           {/* Type selector */}
                           <div style={{ marginBottom: 8 }}>
-                            <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Event Type</label>
+                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Event Type</label>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
                               {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => (
                                 <button key={key} onClick={() => setLeFormState(p => ({ ...p, type: key, label: meta.label, endAge: (meta.isPoint ? p.startAge : p.endAge) || p.startAge }))}
-                                  style={{ padding: "5px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700, textAlign: "left", border: `1px solid ${leFormState.type === key ? meta.color : "var(--border-strong)"}`, background: leFormState.type === key ? `${meta.color}18` : "transparent", color: leFormState.type === key ? meta.color : "var(--text-muted)", cursor: "pointer" }}>
+                                  style={{ padding: "5px 6px", borderRadius: 6, fontSize: 10, fontWeight: 700, textAlign: "left", border: `1px solid ${leFormState.type === key ? meta.color : "var(--border-strong)"}`, background: leFormState.type === key ? `${meta.color}18` : "transparent", color: leFormState.type === key ? meta.color : "var(--text-muted)", cursor: "pointer" }}>
                                   {meta.icon} {meta.label}
                                 </button>
                               ))}
                             </div>
-                            {leFormState.type && <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 5 }}>{LIFE_EVENT_TYPES[leFormState.type]?.description}</p>}
+                            {leFormState.type && <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 5 }}>{LIFE_EVENT_TYPES[leFormState.type]?.description}</p>}
                           </div>
 
                           {/* Label */}
                           <div style={{ marginBottom: 8 }}>
-                            <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>Label</label>
+                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>Label</label>
                             <input type="text" value={leFormState.label || ""} onChange={e => setLeFormState(p => ({ ...p, label: e.target.value }))}
                               style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
                           </div>
@@ -10057,19 +10062,19 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {/* Ages + Magnitude */}
                           <div style={{ display: "grid", gridTemplateColumns: isPoint ? "1fr 1fr" : "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
                             <div>
-                              <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>Start Age</label>
+                              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>Start Age</label>
                               <input type="text" inputMode="decimal" value={leFormState.startAge ?? ""} onChange={e => setLeFormState(p => ({ ...p, startAge: e.target.value === "" ? "" : Number(e.target.value) }))}
                                 style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
                             </div>
                             {!isPoint && (
                               <div>
-                                <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>End Age</label>
+                                <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>End Age</label>
                                 <input type="text" inputMode="decimal" value={leFormState.endAge ?? ""} onChange={e => setLeFormState(p => ({ ...p, endAge: e.target.value === "" ? "" : Number(e.target.value) }))}
                                   style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
                               </div>
                             )}
                             <div>
-                              <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>
+                              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>
                                 {leFormState.type === 'hyperinflation' ? "Rate (%)" : leFormState.type === 'windfall' ? "Amount ($)" : "$/yr"}
                               </label>
                               <input type="text" inputMode="decimal"
@@ -10098,11 +10103,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {/* Draw Source — medical_crisis only */}
                           {leFormState.type === 'medical_crisis' && (
                             <div style={{ marginBottom: 8 }}>
-                              <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Draw From</label>
+                              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Draw From</label>
                               <div style={{ display: "flex", gap: 4 }}>
                                 {Object.entries(DRAW_SOURCE_LABELS).map(([key, lbl]) => (
                                   <button key={key} onClick={() => setLeFormState(p => ({ ...p, drawSource: key }))}
-                                    style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 9, fontWeight: 700, border: `1px solid ${leFormState.drawSource === key ? "var(--clr-purple)" : "var(--border-strong)"}`, background: leFormState.drawSource === key ? "rgba(var(--clr-purple-rgb),0.15)" : "transparent", color: leFormState.drawSource === key ? "var(--clr-purple)" : "var(--text-muted)", cursor: "pointer" }}>{lbl}</button>
+                                    style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: `1px solid ${leFormState.drawSource === key ? "var(--clr-purple)" : "var(--border-strong)"}`, background: leFormState.drawSource === key ? "rgba(var(--clr-purple-rgb),0.15)" : "transparent", color: leFormState.drawSource === key ? "var(--clr-purple)" : "var(--text-muted)", cursor: "pointer" }}>{lbl}</button>
                                 ))}
                               </div>
                             </div>
@@ -10111,11 +10116,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {/* Destination — windfall only */}
                           {leFormState.type === 'windfall' && (
                             <div style={{ marginBottom: 8 }}>
-                              <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Deposit To</label>
+                              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>Deposit To</label>
                               <div style={{ display: "flex", gap: 4 }}>
                                 {Object.entries(WINDFALL_DEST_LABELS).map(([key, lbl]) => (
                                   <button key={key} onClick={() => setLeFormState(p => ({ ...p, destination: key }))}
-                                    style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 9, fontWeight: 700, border: `1px solid ${leFormState.destination === key ? "var(--clr-emerald)" : "var(--border-strong)"}`, background: leFormState.destination === key ? "rgba(var(--clr-emerald-rgb),0.15)" : "transparent", color: leFormState.destination === key ? "var(--clr-emerald)" : "var(--text-muted)", cursor: "pointer" }}>{lbl}</button>
+                                    style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: `1px solid ${leFormState.destination === key ? "var(--clr-emerald)" : "var(--border-strong)"}`, background: leFormState.destination === key ? "rgba(var(--clr-emerald-rgb),0.15)" : "transparent", color: leFormState.destination === key ? "var(--clr-emerald)" : "var(--text-muted)", cursor: "pointer" }}>{lbl}</button>
                                 ))}
                               </div>
                             </div>
@@ -10185,7 +10190,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>
                           {/* DwZ amber banner — shown when Die with Zero is active */}
                           {dwzOn && (
-                            <div style={{ background: "rgba(var(--clr-amber-rgb),0.08)", border: "1px solid rgba(var(--clr-amber-rgb),0.35)", borderRadius: 8, padding: "8px 12px", marginBottom: 8, fontSize: 9, color: "#fde68a", lineHeight: 1.6 }}>
+                            <div style={{ background: "rgba(var(--clr-amber-rgb),0.08)", border: "1px solid rgba(var(--clr-amber-rgb),0.35)", borderRadius: 8, padding: "8px 12px", marginBottom: 8, fontSize: 10, color: "#fde68a", lineHeight: 1.6 }}>
                               ⏳ <strong style={{ color: "var(--clr-amber)" }}>Managed by Die with Zero</strong> — the OA draw ({dwzPmt > 0 ? `${formatCurrency(dwzPmt)}/mo from age ${pa}` : "$0/mo"}) is computed automatically. Disable Die with Zero above to edit manually.
                             </div>
                           )}
@@ -10238,7 +10243,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       return (
                         <div style={{ marginBottom: 8 }}>
                           {alreadyMet ? (
-                            <div style={{ background: "rgba(var(--clr-emerald-rgb),0.08)", border: "1px solid rgba(var(--clr-emerald-rgb),0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 9, color: "#6ee7b7" }}>
+                            <div style={{ background: "rgba(var(--clr-emerald-rgb),0.08)", border: "1px solid rgba(var(--clr-emerald-rgb),0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 10, color: "#6ee7b7" }}>
                               ✓ Income target met by CPF LIFE + SRS + Private Assets — no OA drawdown needed.
                             </div>
                           ) : (
@@ -10251,7 +10256,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   // payoutAge (e.g. 55 when pa=65) is corrected, not silently preserved.
                                   oaDrawdownStartAge: Math.max(pa, p.oaDrawdownStartAge > 0 ? p.oaDrawdownStartAge : pa)
                                 }))}
-                                style={{ flex: 1, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : "var(--ctrl-on-text)", fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 10, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
+                                style={{ flex: 1, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : "var(--btn-on-accent)", fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 10, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
                               >
                                 ⚡ Fill Gap — Set Draw to {formatCurrency(requiredOADraw)}/mo
                               </button>
@@ -10287,13 +10292,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             return (
                               <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
                                 <div style={{ background: exhaustAge ? "rgba(244,63,94,0.07)" : "rgba(var(--clr-emerald-rgb),0.07)", border: `1px solid ${exhaustAge ? "rgba(244,63,94,0.25)" : "rgba(var(--clr-emerald-rgb),0.25)"}`, borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                  <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>OA Exhaustion</span>
+                                  <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>OA Exhaustion</span>
                                   <span style={{ fontSize: 11, fontWeight: 900, fontFamily: "monospace", color: exhaustAge ? "#f43f5e" : "var(--clr-emerald)" }}>
                                     {exhaustAge ? `Age ${exhaustAge}` : "Sustains to 95+"}
                                   </span>
                                 </div>
                                 {isEroding && (
-                                  <div style={{ background: "rgba(var(--clr-amber-rgb),0.07)", border: "1px solid rgba(var(--clr-amber-rgb),0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 9, color: "#fde68a", lineHeight: 1.5 }}>
+                                  <div style={{ background: "rgba(var(--clr-amber-rgb),0.07)", border: "1px solid rgba(var(--clr-amber-rgb),0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 10, color: "#fde68a", lineHeight: 1.5 }}>
                                     ⚠ Draw ({formatCurrency(effectiveOaDrawMonthly)}/mo) exceeds OA interest ({formatCurrency(Math.round(annualInterest / 12))}/mo) — principal is being depleted.{exhaustAge ? ` OA reaches floor at age ${exhaustAge}.` : ""}
                                   </div>
                                 )}
@@ -10391,7 +10396,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 <div key={lbl} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 5, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                                   <div>
                                     <span style={{ fontSize: 10, fontWeight: 700, color }}>{lbl}</span>
-                                    <p style={{ fontSize: 8, color: "var(--text-subtle)", margin: 0, marginTop: 1 }}>{note}</p>
+                                    <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0, marginTop: 1 }}>{note}</p>
                                   </div>
                                   <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 12, color }}>{val}</span>
                                 </div>
@@ -10403,7 +10408,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             </div>
                           </div>
                           {/* CPF constraints notice */}
-                          <div style={{ background: "rgba(var(--clr-amber-rgb),0.06)", border: "1px solid rgba(var(--clr-amber-rgb),0.2)", borderRadius: 8, padding: "8px 12px", fontSize: 9, color: "#fde68a", lineHeight: 1.6 }}>
+                          <div style={{ background: "rgba(var(--clr-amber-rgb),0.06)", border: "1px solid rgba(var(--clr-amber-rgb),0.2)", borderRadius: 8, padding: "8px 12px", fontSize: 10, color: "#fde68a", lineHeight: 1.6 }}>
                             {isForeigner ? (
                               <><strong style={{ color: "var(--clr-amber)" }}>Foreigner constraints:</strong> OA, RA, and MA are not applicable — only SRS and Private Assets are included in the draw schedule. SRS is capped at a 10-year withdrawal window by IRAS regardless of target age.
                               {srsWarning && <span style={{ color: "var(--clr-red)" }}> ⚠ Your Die with Zero age ({dwzAge}) exceeds your SRS window ({srsDwzStart + srsDwzYrs}) — SRS depletes at age {srsDwzStart + srsDwzYrs}.</span>}</>
@@ -10646,7 +10651,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       ];})().map(([title, desc]) => (
                         <div key={title} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 3 }}>{title}</div>
-                          <div style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
+                          <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
                         </div>
                       ))}
                     </div>
@@ -10705,7 +10710,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       const realTotal = Math.round(nominalTotal / Math.pow(1 + inflRate, years));
                       return (
                         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingBottom: 16 }}>
-                          <p style={{ fontSize: 9, fontWeight: 700, color: "var(--hero-label)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
+                          <p style={{ fontSize: 10, fontWeight: 700, color: "var(--hero-label)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
                             {isRSSMode ? `Current CPF Balance (Age ${summaryRefAge})` : `Projected Total CPF Balance at Age ${inputs.payoutAge}`}
                           </p>
                           <div className="hero-nums-row" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
@@ -10733,10 +10738,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       const startBal = (Number(inputs.oaBalance)||0) + (Number(inputs.saBalance)||0) + (Number(inputs.maBalance)||0);
                       return (
                         <details style={{ marginTop: 10, marginBottom: 6 }}>
-                          <summary style={{ fontSize: 9, fontWeight: 700, color: "var(--hero-label)", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase", listStyle: "none", outline: "none", display: "flex", alignItems: "center", gap: 4 }}>
+                          <summary style={{ fontSize: 10, fontWeight: 700, color: "var(--hero-label)", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase", listStyle: "none", outline: "none", display: "flex", alignItems: "center", gap: 4 }}>
                             <span>▸</span> How this was calculated
                           </summary>
-                          <div style={{ marginTop: 8, fontSize: 9, color: "var(--hero-label)", lineHeight: 1.8, paddingLeft: 2 }}>
+                          <div style={{ marginTop: 8, fontSize: 10, color: "var(--hero-label)", lineHeight: 1.8, paddingLeft: 2 }}>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 12px" }}>
                               <span>Opening balances (age {ca})</span><span style={{ fontFamily: "monospace", textAlign: "right" }}>+{formatCurrency(startBal)}</span>
                               <span>Contributions &amp; inflows</span><span style={{ fontFamily: "monospace", textAlign: "right" }}>+{formatCurrency(totalInj)}</span>
@@ -10745,7 +10750,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <span style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 3, fontWeight: 700, color: "var(--clr-green)" }}>= Total at age {pa}</span>
                               <span style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 3, fontFamily: "monospace", textAlign: "right", fontWeight: 700, color: "var(--clr-green)" }}>{formatCurrency(startBal + totalInj + totalInt - totalOut)}</span>
                             </div>
-                            <p style={{ marginTop: 6, fontSize: 8, opacity: 0.55, lineHeight: 1.5, margin: "6px 0 0" }}>Annual compounding · BOY convention · 2026 CPF rates · Verify with CPF Board tools</p>
+                            <p style={{ marginTop: 6, fontSize: 10, opacity: 0.55, lineHeight: 1.5, margin: "6px 0 0" }}>Annual compounding · BOY convention · 2026 CPF rates · Verify with CPF Board tools</p>
                           </div>
                         </details>
                       );
@@ -10781,7 +10786,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               </svg>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 13, fontWeight: 500, color: "var(--hero-text)" }}>{val}</div>
-                                <div style={{ fontSize: 9, color: "var(--hero-label)", marginTop: 2, lineHeight: 1.3 }}>{lbl}</div>
+                                <div style={{ fontSize: 10, color: "var(--hero-label)", marginTop: 2, lineHeight: 1.3 }}>{lbl}</div>
                               </div>
                             </div>
                           ))}
@@ -10792,7 +10797,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                   {/* RIGHT: 2×2 account balance cards with rings */}
                   <div style={{ background: "var(--hero-right-bg)", border: "1px solid var(--hero-border)", borderRadius: 16, padding: 20, color: "var(--hero-text)", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-                    <p style={{ fontSize: 9, fontWeight: 700, color: "var(--hero-label)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: "var(--hero-label)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
                       {isRSSMode ? `Current Account Balances (Age ${summaryRefAge})` : `Account Balances at Age ${inputs.payoutAge}`}
                     </p>
                     {(() => {
@@ -10812,11 +10817,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             return (
                               <div key={label} style={{ background: "var(--hero-acct-bg)", border: "1px solid var(--hero-acct-border)", borderRadius: 12, padding: 12, display: "flex", alignItems: "center", gap: 10, overflow: "hidden", opacity: closed ? 0.45 : 1 }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                  <p style={{ fontSize: 9, fontWeight: 600, color: "var(--hero-label)", textTransform: "uppercase", letterSpacing: "0.07em", margin: "0 0 3px" }}>{label}</p>
+                                  <p style={{ fontSize: 10, fontWeight: 600, color: "var(--hero-label)", textTransform: "uppercase", letterSpacing: "0.07em", margin: "0 0 3px" }}>{label}</p>
                                   {closed
                                     ? <p style={{ fontSize: 12, color: "var(--hero-label)", fontStyle: "italic", margin: 0 }}>Merged into RA</p>
                                     : <><p style={{ fontSize: 15, fontWeight: 500, color: tc, margin: 0, fontFamily: "monospace" }}>{formatCurrency(val)}</p>
-                                      <p style={{ fontSize: 9, color: "var(--hero-label)", marginTop: 3 }}>{pct}% of total</p></>
+                                      <p style={{ fontSize: 10, color: "var(--hero-label)", marginTop: 3 }}>{pct}% of total</p></>
                                   }
                                 </div>
                                 <svg width="48" height="48" viewBox="0 0 48 48" style={{ flexShrink: 0, overflow: "visible" }}>
@@ -10856,12 +10861,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-highlight)", textTransform: "capitalize" }}>{key} Plan</span>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div>
-                            <div style={{ fontSize: 9, color: inputs.isMale !== false ? "var(--clr-green)" : "var(--text-muted)", textTransform: "uppercase", fontWeight: 800, marginBottom: 2 }}>{inputs.isMale !== false ? "Male ✓" : "Male"}</div>
+                            <div style={{ fontSize: 10, color: inputs.isMale !== false ? "var(--clr-green)" : "var(--text-muted)", textTransform: "uppercase", fontWeight: 800, marginBottom: 2 }}>{inputs.isMale !== false ? "Male ✓" : "Male"}</div>
                             <div style={{ fontSize: inputs.isMale !== false ? 15 : 12, fontWeight: 900, color: inputs.isMale !== false ? "var(--clr-green)" : "var(--text-muted)" }}>{formatCurrency(applyInflation(plan.startM, inputs.payoutAge))}</div>
                           </div>
                           <div style={{ width: 1, height: 24, background: "var(--border-strong)" }}></div>
                           <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 9, color: inputs.isMale === false ? "var(--clr-blue)" : "var(--text-muted)", textTransform: "uppercase", fontWeight: 800, marginBottom: 2 }}>{inputs.isMale === false ? "Female ✓" : "Female"}</div>
+                            <div style={{ fontSize: 10, color: inputs.isMale === false ? "var(--clr-blue)" : "var(--text-muted)", textTransform: "uppercase", fontWeight: 800, marginBottom: 2 }}>{inputs.isMale === false ? "Female ✓" : "Female"}</div>
                             <div style={{ fontSize: inputs.isMale === false ? 15 : 12, fontWeight: 900, color: inputs.isMale === false ? "var(--clr-blue)" : "var(--text-muted)" }}>{formatCurrency(applyInflation(plan.startF, inputs.payoutAge))}</div>
                           </div>
                         </div>
@@ -10953,7 +10958,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           ["Est. Depletion Age", rssDepSum ? `Age ${rssDepSum}` : "—", rssDepSum && rssDepSum !== ">95" && rssDepSum < 85 ? "var(--clr-red)" : "var(--clr-green)"],
                         ].map(([label, val, color]) => (
                           <div key={label} style={{ background: "var(--bg-muted)", padding: 16, borderRadius: 12, border: "1px solid var(--border-strong)" }}>
-                            <p style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 800, marginBottom: 8 }}>{label}</p>
+                            <p style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 800, marginBottom: 8 }}>{label}</p>
                             <p style={{ fontSize: 20, fontWeight: 900, color, fontFamily: "monospace" }}>{val}</p>
                           </div>
                         ))}
@@ -11017,7 +11022,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 3px 0", textTransform: "uppercase", fontWeight: 700 }}>Projected: {formatCurrency(totalProjected)}/mo</p>
                             {/* Breakdown line — only shown when supplementary sources are active */}
                             {hasOtherSources && (
-                              <p style={{ fontSize: 9, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+                              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
                                 {highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} Plan {formatCurrency(realPlanPayout)}
                                 {oaDraw > 0  && ` + OA Draw ${formatCurrency(oaDraw)}`}
                                 {srsMo > 0   && ` + SRS ${formatCurrency(srsMo)}`}
@@ -11062,7 +11067,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>);
                         })}
                       </div>
-                      <p style={{ marginTop: 12, fontSize: 9, color: "var(--text-muted)" }}>Milestones update automatically as you adjust inputs.</p>
+                      <p style={{ marginTop: 12, fontSize: 10, color: "var(--text-muted)" }}>Milestones update automatically as you adjust inputs.</p>
                     </div>
                   ) : (
                     <div style={{ padding: "14px 16px", borderRadius: 16, background: "rgba(var(--clr-emerald-rgb),0.04)", border: "1px solid rgba(var(--clr-emerald-rgb),0.15)", display: "flex", alignItems: "center", gap: 10, height: "100%", boxSizing: "border-box" }}>
@@ -11089,17 +11094,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           : (payoutByAge.get(summaryRefAge)?.[`${highlightPlan}NetWorth`] || 0);
                         return [[`Cumulative Top-ups${isRealDollars ? ' · Nom.' : ''}`, projectionByAge.get(summaryRefAge)?.cumulativeInjected || 0, "var(--clr-green)"], [`Cumulative Outflow${isRealDollars ? ' · Nom.' : ''}`, projectionByAge.get(summaryRefAge)?.cumulativeOutflow || 0, "#f472b6"], [`Net Worth @ ${summaryRefAge}${isRealDollars ? ' · Nom.' : ''}`, rssNW, "var(--clr-blue)"], [`Net Worth @ 95${isRealDollars ? ' · Nom.' : ''}`, payoutByAge.get(95)?.[`${highlightPlan}NetWorth`] || 0, "var(--text-bright)"]].map(([label, val, color]) => (
                           <div key={label} style={{ padding: 16, borderRadius: 16, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
-                            <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
+                            <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
                             <p style={{ fontSize: 14, fontWeight: 900, color, fontFamily: "monospace" }}>{formatCurrency(val)}</p>
                           </div>
                         ));
                       })()}
                       {/* Est. Tax Savings spans both columns so the stats grid is a clean 2×3 */}
                       <div style={{ gridColumn: "1 / -1", padding: 16, borderRadius: 16, background: "rgba(var(--clr-amber3-rgb),0.05)", border: "1px solid rgba(var(--clr-amber3-rgb),0.2)" }}>
-                        <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber2)", marginBottom: 6 }}>Est. Tax Savings (RSTU)</p>
-                        <p style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>{formatCurrency(estimatedTaxSavings)}<span style={{ fontSize: 9, color: "#92400e", marginLeft: 4 }}>/ yr</span></p>
-                        {currentSaRa >= currentFRS && <p style={{ fontSize: 9, color: "var(--clr-amber2)", marginTop: 4 }}>SA/RA ≥ FRS — top-ups earn no tax relief (ERS top-ups permitted but unrelieved)</p>}
-                        {currentSaRa < currentFRS && eligibleRSTU < (Number(inputs.vcSaTopup) || 0) && <p style={{ fontSize: 9, color: "var(--clr-amber2)", marginTop: 4 }}>Relief capped at FRS headroom ({formatCurrency(Math.max(0, currentFRS - currentSaRa))})</p>}
+                        <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--clr-amber2)", marginBottom: 6 }}>Est. Tax Savings (RSTU)</p>
+                        <p style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>{formatCurrency(estimatedTaxSavings)}<span style={{ fontSize: 10, color: "#92400e", marginLeft: 4 }}>/ yr</span></p>
+                        {currentSaRa >= currentFRS && <p style={{ fontSize: 10, color: "var(--clr-amber2)", marginTop: 4 }}>SA/RA ≥ FRS — top-ups earn no tax relief (ERS top-ups permitted but unrelieved)</p>}
+                        {currentSaRa < currentFRS && eligibleRSTU < (Number(inputs.vcSaTopup) || 0) && <p style={{ fontSize: 10, color: "var(--clr-amber2)", marginTop: 4 }}>Relief capped at FRS headroom ({formatCurrency(Math.max(0, currentFRS - currentSaRa))})</p>}
                       </div>
                     </div>
                     {/* Stats Row explanation */}
@@ -11173,7 +11178,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
                         <div style={{ flex: 1, position: "relative", height: 20 }}>
                           {markers.map(age => (
-                            <div key={age} style={{ position: "absolute", left: left(age), transform: "translateX(-50%)", fontSize: 9, color: "var(--text-muted)", fontWeight: 700, fontFamily: "monospace" }}>
+                            <div key={age} style={{ position: "absolute", left: left(age), transform: "translateX(-50%)", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, fontFamily: "monospace" }}>
                               {age}
                             </div>
                           ))}
@@ -11204,7 +11209,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 borderRadius: 4,
                                 display: "flex", alignItems: "center", justifyContent: "center"
                               }}>
-                                <span style={{ fontSize: 9, fontWeight: 800, color: phase.color, whiteSpace: "nowrap" }}>
+                                <span style={{ fontSize: 10, fontWeight: 800, color: phase.color, whiteSpace: "nowrap" }}>
                                   {Math.max(phase.from, ca)}–{Math.min(phase.to, END)}
                                 </span>
                               </div>
@@ -11252,14 +11257,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           ["FRS Target @ 55", projFRS55, "var(--text-highlight)"],
                           [frsShortfall > 0 ? "FRS Shortfall" : "FRS Surplus", Math.abs(frsShortfall), frsShortfall > 0 ? "var(--clr-red)" : "var(--clr-green)"]
                         ].map(([l, v, c]) => (
-                          <div key={l} style={{ textAlign: "center" }}><p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 4 }}>{l}</p><p style={{ fontSize: 18, fontWeight: 900, color: c, fontFamily: "monospace" }}>{frsShortfall <= 0 && l.includes("Surplus") ? "+" : ""}{formatCurrency(v)}</p></div>
+                          <div key={l} style={{ textAlign: "center" }}><p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 4 }}>{l}</p><p style={{ fontSize: 18, fontWeight: 900, color: c, fontFamily: "monospace" }}>{frsShortfall <= 0 && l.includes("Surplus") ? "+" : ""}{formatCurrency(v)}</p></div>
                         ))}
                       </div>
                       <div style={{ height: 10, background: "var(--bg-input)", borderRadius: 999, overflow: "hidden", position: "relative", marginBottom: 6 }}>
                         {[25, 50].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
                         <div style={{ height: 10, borderRadius: 999, background: `linear-gradient(90deg,${statusColor},${statusColor}99)`, width: `${frsProgress}%`, transition: "width 0.8s" }} />
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", fontWeight: 700 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)", fontWeight: 700 }}>
                         <span>$0</span><span style={{ position: "relative", left: "25%" }}>BRS</span><span style={{ position: "relative", left: "25%" }}>FRS</span><span>ERS</span>
                       </div>
                       {frsShortfall > 0 && raAt55Proj < projFRS55 && raAt55Proj >= projBRS55 && (
@@ -11319,9 +11324,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           const isPayout = isRSSEstate ? age >= rssPayoutStart : age >= payoutAge65;
                           return (
                             <div key={age} style={{ background: "var(--bg-muted)", borderRadius: 12, padding: 12, border: `1px solid ${age === (isRSSEstate ? rssPayoutStart : payoutAge65) ? (isRSSEstate ? "rgba(var(--clr-blue-rgb),0.4)" : "rgba(var(--clr-violet-rgb),0.4)") : "var(--border-subtle)"}`, opacity: isPayout ? 1 : 0.5 }}>
-                              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Age {age}</div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Age {age}</div>
                               <div style={{ fontSize: 14, fontWeight: 700, color: isRSSEstate ? "var(--clr-blue)" : "var(--clr-violet)", marginBottom: 4 }}>{formatCurrency(total)}</div>
-                              <div style={{ fontSize: 8, color: "var(--text-subtle)", lineHeight: 1.5 }}>
+                              <div style={{ fontSize: 10, color: "var(--text-subtle)", lineHeight: 1.5 }}>
                                 <div>CPF: {formatCurrency(bequest + oa + ma)}</div>
                                 {prop > 0 && <div>Property: {formatCurrency(prop)}</div>}
                               </div>
@@ -11346,7 +11351,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           return <span style={{ fontSize: 16, fontWeight: 700, color: isRSSEstate ? "var(--clr-blue)" : "var(--clr-violet)", fontFamily: "monospace" }}>{formatCurrency(tot)}</span>;
                         })()}
                       </div>
-                      <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 8, gridColumn: "1/-1" }}>
+                      <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 8, gridColumn: "1/-1" }}>
                         {isRSSEstate
                           ? "* Before RSS payout start: CPF bequest = total OA + MA + RA (death benefit). After payout start: bequest = remaining RA balance (RSS has no pooled insurance — full balance passes to nominees). OA and MA pass to nominated beneficiaries in full."
                           : "* Before payout age: CPF bequest = total OA+MA+RA (death benefit). After payout age: CPF LIFE bequest = premium paid minus cumulative payouts received. OA and MA balances pass to nominated beneficiaries in full."}
@@ -11428,7 +11433,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               style={{ width: "100%", accentColor: "var(--clr-green)", cursor: "pointer" }} />
                             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
                               <span>$0</span>
-                              <span style={{ color: "var(--text-subtle)", fontSize: 8 }}>type above for any amount</span>
+                              <span style={{ color: "var(--text-subtle)", fontSize: 10 }}>type above for any amount</span>
                               <span>$40k</span>
                             </div>
                             {(() => {
@@ -11436,10 +11441,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               const headroom = ca3 < 55 ? Math.max(0, currentFRS - (currentSaRa || 0)) : Math.max(0, currentERS - (currentSaRa || 0));
                               const target = ca3 < 55 ? "FRS" : "ERS";
                               return headroom > 0 ? (
-                                <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 3 }}>
+                                <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
                                   {target} headroom remaining: <strong style={{ color: "var(--clr-green)" }}>{formatCurrency(headroom)}</strong>
                                 </p>
-                              ) : (<p style={{ fontSize: 9, color: "var(--clr-green)", marginTop: 3 }}>{target} already met ✓</p>);
+                              ) : (<p style={{ fontSize: 10, color: "var(--clr-green)", marginTop: 3 }}>{target} already met ✓</p>);
                             })()}
                           </div>
                           {/* Other original 3 sliders */}
@@ -11475,7 +11480,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
                               <span>Age {Number(inputs.currentAge) || 35}</span><span>Age 75</span>
                             </div>
-                            <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 3 }}>
+                            <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
                               Sidebar value: <strong>Age {Number(inputs.contributionStopAge) || 65}</strong>
                             </p>
                           </div>
@@ -11500,7 +11505,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
                                 <span>$0</span><span>${Math.max(5000, (Number(inputs.oaDrawdownMonthly) || 0) * 2).toLocaleString()}/mo</span>
                               </div>
-                              <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 3 }}>
+                              <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
                                 Sidebar value: <strong>${Number(inputs.oaDrawdownMonthly) || 0}/mo</strong>
                                 {(Number(inputs.oaDrawdownStartAge) || 0) === 0 && (
                                   <span style={{ color: "var(--clr-amber)", marginLeft: 4 }}>· Set OA Drawdown Start Age in sidebar to fix the start age.</span>
@@ -11526,7 +11531,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
                                 <span>$0</span><span>Max</span>
                               </div>
-                              <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 3 }}>
+                              <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
                                 Sidebar value: <strong>{formatCurrency(Number(inputs.srsAnnualContribution) || 0)}/yr</strong>
                               </p>
                             </div>
@@ -11549,11 +11554,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
                               <span>0%</span><span>12%</span>
                             </div>
-                            <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 3 }}>
+                            <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
                               Sidebar value: <strong>{Number(inputs.privateAssetGrowthRate) || 0}%</strong>
                             </p>
                             {(Number(inputs.currentPrivateAssets) || 0) === 0 && (Number(inputs.annualPrivateSaving) || 0) === 0 && (
-                              <p style={{ fontSize: 9, color: "var(--clr-amber)", marginTop: 4, lineHeight: 1.5 }}>
+                              <p style={{ fontSize: 10, color: "var(--clr-amber)", marginTop: 4, lineHeight: 1.5 }}>
                                 ⚠ No private asset balance or annual saving configured — this slider has no effect. Add a current balance or annual saving in the <strong>Private Assets</strong> sidebar section first.
                               </p>
                             )}
@@ -11564,7 +11569,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <div className="rg-4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
                             {[["Base Total", baseTotal, "var(--text-muted)"], ["What-If Total", whatIfTotal, "var(--clr-green)"], ["Difference", delta, delta >= 0 ? "var(--clr-green)" : "var(--clr-red)"], ["Change %", null, delta >= 0 ? "var(--clr-green)" : "var(--clr-red)"]].map(([label, val, color], i) => (
                               <div key={label} style={{ background: "var(--bg-base)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: 12 }}>
-                                <p style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 4 }}>{label}</p>
+                                <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{label}</p>
                                 <p style={{ fontSize: 13, fontWeight: 900, fontFamily: "monospace", color }}>{i === 3 ? baseTotal > 0 ? `${delta >= 0 ? "+" : ""}${((delta / baseTotal) * 100).toFixed(1)}%` : "N/A" : `${delta >= 0 && i === 2 ? "+" : ""}${formatCurrency(Math.abs(val))}`}</p>
                               </div>
                             ))}
@@ -11638,9 +11643,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                       <div style={{ background: "var(--tooltip-bg)", backdropFilter: "blur(8px)", border: "1px solid var(--tooltip-border)", borderRadius: 10, padding: "10px 14px", fontSize: 10, minWidth: 210 }}>
                                         <p style={{ color: "var(--clr-slate)", fontWeight: 800, marginBottom: 8, fontSize: 11 }}>Age {label}</p>
                                         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: "3px 10px", alignItems: "center" }}>
-                                          <span style={{ color: "#64748b", fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}></span>
-                                          <span style={{ color: "var(--clr-blue2)", fontSize: 9, fontWeight: 800, textAlign: "right" }}>BASE</span>
-                                          <span style={{ color: "var(--clr-emerald)", fontSize: 9, fontWeight: 800, textAlign: "right" }}>WHAT-IF</span>
+                                          <span style={{ color: "#64748b", fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}></span>
+                                          <span style={{ color: "var(--clr-blue2)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>BASE</span>
+                                          <span style={{ color: "var(--clr-emerald)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>WHAT-IF</span>
                                           {[["OA", d.baseOA, d.whatIfOA, "var(--clr-blue)"], ["SA/RA", (d.baseSA||0)+(d.baseRA||0), (d.whatIfSA||0)+(d.whatIfRA||0), "var(--clr-green)"], ["MA", d.baseMA, d.whatIfMA, "var(--clr-violet)"], ["Private", d.basePrv, d.whatIfPrv, "var(--clr-orange)"], ["SRS", d.baseSRS, d.whatIfSRS, "var(--clr-amber)"]].map(([lbl, bv, wv, c]) => (
                                             <>
                                               <span style={{ color: c, fontWeight: 700 }}>{lbl}</span>
@@ -11654,7 +11659,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                         </div>
                                         {wi?.value != null && base?.value != null && (
                                           <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                            <span style={{ fontSize: 9, color: "#64748b", fontWeight: 700 }}>Difference</span>
+                                            <span style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>Difference</span>
                                             <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 11, color: diff >= 0 ? "var(--clr-emerald)" : "var(--clr-red)" }}>{diff >= 0 ? "+" : ""}{formatCurrency(diff)}</span>
                                           </div>
                                         )}
@@ -11768,8 +11773,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           ["Probability of Sufficiency", "The % of all 200 runs where your CPF at payout age was enough to meet the FRS target. 80%+ is strong; below 50% suggests risk.", "rgba(var(--clr-green-rgb),0.1)"],
                         ].map(([title, desc, bg]) => (
                           <div key={title} style={{ padding: "8px 10px", borderRadius: 8, background: bg, border: "1px solid rgba(139,92,246,0.2)", display: "flex", flexDirection: "column" }}>
-                            <div style={{ fontSize: 9, fontWeight: 800, color: "var(--clr-violet)", marginBottom: 3 }}>{title}</div>
-                            <div style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5, flex: 1 }}>{desc}</div>
+                            <div style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-violet)", marginBottom: 3 }}>{title}</div>
+                            <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5, flex: 1 }}>{desc}</div>
                           </div>
                         ))}
                       </div>
@@ -11878,8 +11883,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           ["RA (Retirement Account)", "var(--clr-purple2)", `4.0% p.a. Being drawn down at ${formatCurrency(Number(inputs.rssMonthlyPayout) || 0)}/mo under RSS. Balance reaches $0 at depletion age.`],
                         ].map(([name, col, desc]) => (
                           <div key={name} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: `1px solid ${col}44` }}>
-                            <div style={{ fontSize: 9, fontWeight: 800, color: col, marginBottom: 3 }}>{name}</div>
-                            <div style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
+                            <div style={{ fontSize: 10, fontWeight: 800, color: col, marginBottom: 3 }}>{name}</div>
+                            <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
                           </div>
                         ))}
                       </div>
@@ -11902,8 +11907,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           ["RA (Retirement Account)", "var(--clr-purple2)", "4.0% p.a. Created at age 55 from SA. Funds the CPF LIFE pool at payout age."],
                         ].map(([name, col, desc]) => (
                           <div key={name} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: `1px solid ${col}44` }}>
-                            <div style={{ fontSize: 9, fontWeight: 800, color: col, marginBottom: 3 }}>{name}</div>
-                            <div style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
+                            <div style={{ fontSize: 10, fontWeight: 800, color: col, marginBottom: 3 }}>{name}</div>
+                            <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
                           </div>
                         ))}
                       </div>
@@ -12281,7 +12286,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         ].map(([title, desc]) => (
                           <div key={title} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
                             <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 3 }}>{title}</div>
-                            <div style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
+                            <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
                           </div>
                         ))}
                       </div>
@@ -12290,7 +12295,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </details>
                   <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 10, gap: 2, alignSelf: "flex-start" }}>
                     {["standard", "escalating", "basic"].map(plan => (
-                      <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 10, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                      <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 10, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                         {plan}
                       </button>
                     ))}
@@ -12305,7 +12310,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <span style={{ fontSize: 11, fontWeight: 800, color: "var(--clr-slate)" }}>100% (Fixed)</span>
                       </div>
                       <div style={{ height: 6, borderRadius: 999, background: "var(--clr-slate)", width: "100%", marginBottom: 4 }} />
-                      <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>Fixed at 100%. Full RA transferred to CPF Board as premium. Flat monthly payout for life.</p>
+                      <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>Fixed at 100%. Full RA transferred to CPF Board as premium. Flat monthly payout for life.</p>
                     </div>
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -12313,13 +12318,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <span style={{ fontSize: 11, fontWeight: 800, color: "var(--clr-emerald)" }}>100% (Fixed)</span>
                       </div>
                       <div style={{ height: 6, borderRadius: 999, background: "var(--clr-emerald)", width: "100%", marginBottom: 4 }} />
-                      <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>Fixed at 100%. Full RA transferred to CPF Board as premium. Payout grows 2%/yr for life.</p>
+                      <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>Fixed at 100%. Full RA transferred to CPF Board as premium. Payout grows 2%/yr for life.</p>
                     </div>
                   </div>
                 </div>
                 <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2 }}>
                   {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["bequest", "Bequest"], ["total", "Total Yield"]].map(([id, label]) => (
-                    <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 10, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                    <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 10, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                       {label}
                     </button>
                   ))}
@@ -12357,7 +12362,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <span style={{ fontSize: 12, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>{basicPremiumPct}%</span>
                       </div>
                       <input type="range" min={10} max={20} step={1} value={basicPremiumPct} onChange={e => setBasicPremiumPct(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-amber3)", margin: "2px 0" }} />
-                      <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>10%–20% of RA deducted as life-pool premium. Drag to see live impact on chart above.</p>
+                      <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>10%–20% of RA deducted as life-pool premium. Drag to see live impact on chart above.</p>
                     </div>
                   </div>
                 </div>
@@ -12374,7 +12379,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ].map(([cardTitle, label, age, color, bg, border, note]) => (
                       <div key={label} style={{ padding: 14, borderRadius: 12, background: bg, border: `1px solid ${border}` }}>
                         <p style={{ fontSize: 13, fontWeight: 900, color, marginBottom: 4 }}>{cardTitle}</p>
-                        <p style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
+                        <p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
                         <p style={{ fontSize: 22, fontWeight: 900, fontFamily: "monospace", color, marginBottom: 6 }}>{age ? `Age ${age}` : "Beyond Age 95"}</p>
                         <p style={{ fontSize: 10, color: "var(--text-muted)" }}>{note}</p>
                       </div>
@@ -12392,13 +12397,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, fontFamily: "monospace" }}>
                       <thead><tr style={{ borderBottom: "1px solid var(--border-strong)" }}>
-                        <th style={{ padding: "8px", textAlign: "left", color: "var(--text-muted)", fontWeight: 800, fontSize: 9, textTransform: "uppercase" }}>Payout Age</th>
-                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-slate)", fontWeight: 800, fontSize: 9, textTransform: "uppercase" }}>Std $/mo</th>
-                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-green)", fontWeight: 800, fontSize: 9, textTransform: "uppercase" }}>Esc $/mo</th>
-                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-orange)", fontWeight: 800, fontSize: 9, textTransform: "uppercase" }}>Bas $/mo</th>
-                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-amber)", fontWeight: 800, fontSize: 9, textTransform: "uppercase" }}>Esc&gt;Std</th>
-                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-blue)", fontWeight: 800, fontSize: 9, textTransform: "uppercase" }}>Std&gt;Bas</th>
-                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-violet2)", fontWeight: 800, fontSize: 9, textTransform: "uppercase" }}>Esc&gt;Bas</th>
+                        <th style={{ padding: "8px", textAlign: "left", color: "var(--text-muted)", fontWeight: 800, fontSize: 10, textTransform: "uppercase" }}>Payout Age</th>
+                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-slate)", fontWeight: 800, fontSize: 10, textTransform: "uppercase" }}>Std $/mo</th>
+                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-green)", fontWeight: 800, fontSize: 10, textTransform: "uppercase" }}>Esc $/mo</th>
+                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-orange)", fontWeight: 800, fontSize: 10, textTransform: "uppercase" }}>Bas $/mo</th>
+                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-amber)", fontWeight: 800, fontSize: 10, textTransform: "uppercase" }}>Esc&gt;Std</th>
+                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-blue)", fontWeight: 800, fontSize: 10, textTransform: "uppercase" }}>Std&gt;Bas</th>
+                        <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-violet2)", fontWeight: 800, fontSize: 10, textTransform: "uppercase" }}>Esc&gt;Bas</th>
                       </tr></thead>
                       <tbody>{sensitivityData.map(row => {
                         const isCurrent = row.pAge === (Number(inputs.payoutAge) || 65);
@@ -12448,7 +12453,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <input type="text" value={scenarioLabelA} onChange={e => setScenarioLabelA(e.target.value)} placeholder="Label (e.g. Retire at 65)" style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 11, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
                         {scenarioA ? (
                           <div style={{ flex: 1, marginBottom: 16 }}>
-                            <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
+                            <p style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
                               {/* BUG-47 fix: use String() coercion — JSON-imported profiles have numeric fields as strings, causing "65" !== 65 false diffs */}
                               {/* BUG-1 fix: guard against array/object values (e.g. lifeEvents) being passed as raw React children,
@@ -12500,7 +12505,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <input type="text" value={scenarioLabelB} onChange={e => setScenarioLabelB(e.target.value)} placeholder="Label (e.g. Retire at 70)" style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 11, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
                         {scenarioB ? (
                           <div style={{ flex: 1, marginBottom: 16 }}>
-                            <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
+                            <p style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
                               {/* BUG-47 fix: use String() coercion — JSON-imported profiles have numeric fields as strings, causing "65" !== 65 false diffs */}
                               {/* BUG-1 fix: same array/object guard as Scenario A — prevents crash when lifeEvents (or any future array field) is in scenarioB.inputs */}
@@ -12629,7 +12634,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                             <tr style={{ background: "var(--bg-base)", borderBottom: "2px solid var(--border-strong)" }}>
                               {["Age", "Mandatory", "Voluntary", "Grants/WIS", "OA Int.", is55Plus ? "RA Int." : "SA Int.", "MA Int.", "▶ Total In", "Housing Out", "Medical Out", "OA Draw", "Edu Loan Out", "Loved One Out", "CPFIS Out", "Events In", "Events Out", "▶ Total Out", "Net Flow"].map((h, i) => (
-                                <th key={h} style={{ padding: "6px 8px", textAlign: i === 0 ? "center" : "right", fontSize: 9, fontWeight: 800, color: i === 14 ? "var(--clr-emerald)" : i === 15 ? "var(--clr-purple)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap",
+                                <th key={h} style={{ padding: "6px 8px", textAlign: i === 0 ? "center" : "right", fontSize: 10, fontWeight: 800, color: i === 14 ? "var(--clr-emerald)" : i === 15 ? "var(--clr-purple)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap",
                                   ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--bg-base)", boxShadow: "var(--shadow-sticky)" } : {}) }}>{h}</th>
                               ))}
                             </tr>
@@ -12697,7 +12702,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               const net = totalIn - totalOut;
                               return (
                                 <tr style={{ borderTop: "2px solid var(--border-strong)", background: "var(--bg-panel)", fontWeight: 800 }}>
-                                  <td style={{ padding: "7px 8px", textAlign: "center", color: "var(--text-bright)", fontSize: 9, position: "sticky", left: 0, zIndex: 5, background: "var(--bg-panel)", boxShadow: "var(--shadow-sticky)", fontWeight: 800 }}>TOTAL</td>
+                                  <td style={{ padding: "7px 8px", textAlign: "center", color: "var(--text-bright)", fontSize: 10, position: "sticky", left: 0, zIndex: 5, background: "var(--bg-panel)", boxShadow: "var(--shadow-sticky)", fontWeight: 800 }}>TOTAL</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-green)" }}>{fc3(t.mandatory)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#6ee7b7" }}>{fc3(t.voluntary)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-violet)" }}>{fc3(t.grants)}</td>
@@ -12746,7 +12751,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ].map(([col, desc, color]) => (
                       <div key={col} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 3 }}>{col}</div>
-                        <div style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
                       </div>
                     ))}
                   </div>
@@ -12821,7 +12826,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <tr style={{ background: "var(--header-bg)", borderBottom: "1px solid var(--border-strong)" }}>
                           {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", `XIRR (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`].map((h, i) => (
                             <th key={h} style={{
-                              padding: "10px 8px", textAlign: i === 0 ? "left" : "right", fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: i >= 12 ? "var(--clr-blue)" : "var(--text-muted)", whiteSpace: "nowrap",
+                              padding: "10px 8px", textAlign: i === 0 ? "left" : "right", fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: i >= 12 ? "var(--clr-blue)" : "var(--text-muted)", whiteSpace: "nowrap",
                               ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--header-bg)", boxShadow: "var(--shadow-sticky)" } : {})
                             }}>{h}</th>
                           ))}
@@ -13085,7 +13090,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <li><strong style={{ color: "var(--text-bright)" }}>Step 4 — Outflows:</strong> Housing loan deductions and medical expenses are deducted after interest is applied.</li>
                             <li><strong style={{ color: "var(--text-bright)" }}>Step 5 — Record:</strong> End-of-year balances are recorded in the Data Table and charts.</li>
                           </ul>
-                          <p style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 6 }}>In practice CPF credits interest monthly (OA) and annually (SA/MA/RA). This model simplifies to annual compounding, which is a standard actuarial approximation. The difference from monthly compounding is less than 0.2% per year.</p>
+                          <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 6 }}>In practice CPF credits interest monthly (OA) and annually (SA/MA/RA). This model simplifies to annual compounding, which is a standard actuarial approximation. The difference from monthly compounding is less than 0.2% per year.</p>
                         </div>
                       </div>
                     </div>
@@ -13627,11 +13632,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     {target > 0 && (
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                         <div style={{ background: "rgba(var(--clr-purple-rgb),0.1)", border: "1px solid rgba(var(--clr-purple-rgb),0.3)", borderRadius: 12, padding: "8px 16px", textAlign: "center" }}>
-                          <p style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 2, textTransform: "uppercase", fontWeight: 700 }}>Target</p>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2, textTransform: "uppercase", fontWeight: 700 }}>Target</p>
                           <p style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-purple)", margin: 0 }}>{formatCurrency(target)}/mo</p>
                         </div>
                         <div style={{ background: shortfall <= 0 ? "rgba(var(--clr-emerald-rgb),0.1)" : "rgba(244,63,94,0.1)", border: `1px solid ${shortfall <= 0 ? "rgba(var(--clr-emerald-rgb),0.3)" : "rgba(244,63,94,0.3)"}`, borderRadius: 12, padding: "8px 16px", textAlign: "center" }}>
-                          <p style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 2, textTransform: "uppercase", fontWeight: 700 }}>{shortfall <= 0 ? "Surplus" : "Shortfall"}</p>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2, textTransform: "uppercase", fontWeight: 700 }}>{shortfall <= 0 ? "Surplus" : "Shortfall"}</p>
                           <p style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: shortfall <= 0 ? "var(--clr-emerald)" : "#f43f5e", margin: 0 }}>{shortfall <= 0 ? "+" : "-"}{formatCurrency(Math.abs(shortfall))}/mo</p>
                         </div>
                       </div>
@@ -13767,14 +13772,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               return (
                                 <div key={idx} title={`${ev.label || meta.label} · Age ${sa}`}
                                   style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", width: 14, height: 14, borderRadius: "50%", background: color, border: "2px solid var(--bg-muted)", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "default", ...ganttDot(sa) }}>
-                                  <span style={{ fontSize: 7, color: "#fff", fontWeight: 900 }}>{meta.icon || "⚡"}</span>
+                                  <span style={{ fontSize: 9, color: "#fff", fontWeight: 900 }}>{meta.icon || "⚡"}</span>
                                 </div>
                               );
                             }
                             return (
                               <div key={idx} title={`${ev.label || meta.label} · Age ${sa}–${ea}`}
                                 style={{ position: "absolute", top: 2, bottom: 2, borderRadius: 4, background: color, opacity: 0.75, display: "flex", alignItems: "center", paddingLeft: 3, cursor: "default", overflow: "hidden", ...ganttPct(sa, ea) }}>
-                                <span style={{ fontSize: 7, color: "#fff", fontWeight: 800, whiteSpace: "nowrap" }}>{meta.icon} {ev.label || meta.label}</span>
+                                <span style={{ fontSize: 10, color: "#fff", fontWeight: 800, whiteSpace: "nowrap" }}>{meta.icon} {ev.label || meta.label}</span>
                               </div>
                             );
                           })}
