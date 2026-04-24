@@ -10913,7 +10913,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <div style={{ display: "flex", width: "100%", marginBottom: 5 }}>
                           {nwSegments.map(s => (
                             <div key={s.name} style={{ flex: s.pct, textAlign: "center", minWidth: 0, overflow: "hidden" }}>
-                              {s.pct >= 7 && (
+                              {s.pct >= 5 && (
                                 <span style={{ fontSize: 10, fontWeight: 800, color: s.color, display: "block", lineHeight: 1.2 }}>
                                   {Math.round(s.pct)}%
                                 </span>
@@ -10946,7 +10946,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <div style={{ display: "flex", width: "100%", marginTop: 5, marginBottom: 16 }}>
                           {nwSegments.map(s => (
                             <div key={s.name} style={{ flex: s.pct, textAlign: "center", minWidth: 0, overflow: "hidden" }}>
-                              {s.pct >= 7 && s.pct < 11 && (
+                              {s.pct >= 5 && s.pct < 11 && (
                                 <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-subtle)", display: "block", lineHeight: 1.2, whiteSpace: "nowrap" }}>
                                   {s.name}
                                 </span>
@@ -11720,7 +11720,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 />
                                 <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={{ fontSize: 9, fontWeight: 600, color: "var(--text-main)" }} />
                                 <Line isAnimationActive={false} type="monotone" dataKey="baseTotal" stroke="var(--clr-blue2)" strokeWidth={2} dot={false} name="Base" activeDot={{ r: 4, fill: "var(--clr-blue2)", stroke: "#fff", strokeWidth: 1.5 }} />
-                                <Line isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="var(--clr-emerald)" strokeWidth={2.5} dot={false} name={`What-If (PA:${effPA})`} activeDot={{ r: 4, fill: "var(--clr-emerald)", stroke: "#fff", strokeWidth: 1.5 }} />
+                                <Line isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="var(--clr-emerald)" strokeWidth={2} dot={false} name={`What-If (PA:${effPA})`} activeDot={{ r: 4, fill: "var(--clr-emerald)", stroke: "#fff", strokeWidth: 1.5 }} />
                               </LineChart>
                             </ResponsiveContainer>
                           </div>
@@ -11883,10 +11883,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           stroke={color} strokeOpacity={0.4} strokeWidth={1}
                           label={{ position: "insideTop", value: labelVal, fill: color, fontSize: 8, fontWeight: "bold" }} />;
                       })}
-                      <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" fill="#1d4ed8" fillOpacity={0.85} name="OA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#b45309" fill="#b45309" fillOpacity={0.85} name="SA (pre-55)" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" fill="#059669" fillOpacity={0.85} name="MA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="var(--clr-purple2)" fill="var(--clr-purple2)" fillOpacity={0.85} name="RA (from 55)" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" strokeWidth={2} fill="#1d4ed8" fillOpacity={0.15} name="OA" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#f59e0b" strokeWidth={2} fill="#f59e0b" fillOpacity={0.15} name="SA (pre-55)" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="#059669" fillOpacity={0.15} name="MA" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="var(--clr-purple2)" fillOpacity={0.15} name="RA (from 55)" />
                       {/* MC band rendered AFTER stacked areas so it overlays on top without
                           hiding the account breakdown. P90 = semi-transparent upper bound fill;
                           no bg-base "eraser" (the old eraser covered the stacked areas entirely).
@@ -12089,8 +12089,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <AreaChart data={raChartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                         <defs>
                           <linearGradient id="rssRaGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="var(--clr-blue)" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="var(--clr-blue)" stopOpacity={0.05} />
+                            <stop offset="5%"  stopColor="var(--clr-blue)" stopOpacity={0.15} />
+                            <stop offset="95%" stopColor="var(--clr-blue)" stopOpacity={0.02} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
@@ -12391,9 +12391,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       {viewMode === "total" && intersectionEscVsStd && <ReferenceLine x={intersectionEscVsStd} stroke="var(--clr-amber3)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Break-Even Age ${intersectionEscVsStd}`, fill: "var(--clr-amber3)", fontSize: 9, fontWeight: "bold" }} />}
                       {viewMode === "total" && intersectionStdVsBasic && <ReferenceLine x={intersectionStdVsBasic} stroke="var(--clr-blue2)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideBottomRight", value: `Std>Basic Age ${intersectionStdVsBasic}`, fill: "var(--clr-blue2)", fontSize: 9, fontWeight: "bold" }} />}
                       {viewMode === "payout" && intersectionEscPayVsStdPay && <ReferenceLine x={intersectionEscPayVsStdPay} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std Pay Age ${intersectionEscPayVsStdPay}`, fill: "var(--clr-emerald)", fontSize: 9, fontWeight: "bold" }} />}
-                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "standardMonthly" : viewMode === "annualPayout" ? "standardAnnual" : viewMode === "total" ? "standardTotal" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.65} dot={false} name="Standard" />
-                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "escalatingMonthly" : viewMode === "annualPayout" ? "escalatingAnnual" : viewMode === "total" ? "escalatingTotal" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.65} dot={false} name="Escalating" />
-                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "basicMonthly" : viewMode === "annualPayout" ? "basicAnnual" : viewMode === "total" ? "basicTotal" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.65} dot={false} name="Basic" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "standardMonthly" : viewMode === "annualPayout" ? "standardAnnual" : viewMode === "total" ? "standardTotal" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.35} dot={false} name="Standard" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "escalatingMonthly" : viewMode === "annualPayout" ? "escalatingAnnual" : viewMode === "total" ? "escalatingTotal" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.35} dot={false} name="Escalating" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "basicMonthly" : viewMode === "annualPayout" ? "basicAnnual" : viewMode === "total" ? "basicTotal" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.35} dot={false} name="Basic" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -12603,8 +12603,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Cumulative Total Yield", angle: -90, position: "insideLeft", offset: 10, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 10, padding: "6px 8px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} labelStyle={{ fontSize: 10, color: "var(--tooltip-label)", marginBottom: 2 }} formatter={(v, n) => [formatCurrency(v), n]} labelFormatter={v => `Age ${v}`} wrapperStyle={{ pointerEvents: "none" }} />
                         <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{ fontSize: 10, fontWeight: 600, color: "var(--text-main)" }} />
-                        <Line isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="var(--clr-blue2)" strokeWidth={3} dot={false} name={`Slot A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
-                        <Line isAnimationActive={false} type="monotone" dataKey="yieldB" stroke="#f97316" strokeWidth={3} dot={false} name={`Slot B${scenarioLabelB ? `: ${scenarioLabelB}` : ""}`} />
+                        <Line isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="var(--clr-blue2)" strokeWidth={2} dot={false} name={`Slot A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
+                        <Line isAnimationActive={false} type="monotone" dataKey="yieldB" stroke="#f97316" strokeWidth={2} dot={false} name={`Slot B${scenarioLabelB ? `: ${scenarioLabelB}` : ""}`} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -13729,17 +13729,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {/* S4 fix: RSS payout area — shown for RSS members in place of CPF LIFE.
                               cpfLife is 0 for RSS (payoutByAge uses LIFE tables), so without this
                               Area the entire income stack chart was blank for RSS members. */}
-                          {isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="rssDrawdown" stackId="1" stroke="var(--clr-blue)" fill="var(--clr-blue)" fillOpacity={0.82} name="RSS Drawdown" />}
-                          {!isForeigner && !isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="cpfLife"      stackId="1" stroke="var(--clr-purple2)" fill="var(--clr-purple2)" fillOpacity={0.82} name="CPF LIFE" />}
-                          <Area isAnimationActive={false} type="monotone" dataKey="oaDraw"       stackId="1" stroke="var(--clr-amber2)" fill="var(--clr-amber2)" fillOpacity={0.78} name="OA Drawdown" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="srs"          stackId="1" stroke="#0369a1" fill="#0369a1" fillOpacity={0.78} name="SRS" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="privateAsset" stackId="1" stroke="#065f46" fill="#065f46" fillOpacity={0.78} name="Private Assets" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="propMon"      stackId="1" stroke="#9a3412" fill="#9a3412" fillOpacity={0.78} name="Property Mon." />
+                          {isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="rssDrawdown" stackId="1" stroke="var(--clr-blue)" strokeWidth={2} fill="var(--clr-blue)" fillOpacity={0.2} name="RSS Drawdown" />}
+                          {!isForeigner && !isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="cpfLife"      stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="var(--clr-purple2)" fillOpacity={0.2} name="CPF LIFE" />}
+                          <Area isAnimationActive={false} type="monotone" dataKey="oaDraw"       stackId="1" stroke="var(--clr-amber2)" strokeWidth={2} fill="var(--clr-amber2)" fillOpacity={0.2} name="OA Drawdown" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="srs"          stackId="1" stroke="#0ea5e9" strokeWidth={2} fill="#0ea5e9" fillOpacity={0.2} name="SRS" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="privateAsset" stackId="1" stroke="#10b981" strokeWidth={2} fill="#10b981" fillOpacity={0.2} name="Private Assets" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="propMon"      stackId="1" stroke="#f97316" strokeWidth={2} fill="#f97316" fillOpacity={0.2} name="Property Mon." />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-                      {[["CPF LIFE", "var(--clr-purple2)"], ["OA Drawdown", "var(--clr-amber2)"], ["SRS", "#0369a1"], ["Private Assets", "#065f46"], ["Property Mon.", "#9a3412"]].map(([name, color]) => (
+                      {[["CPF LIFE", "var(--clr-purple2)"], ["OA Drawdown", "var(--clr-amber2)"], ["SRS", "#0ea5e9"], ["Private Assets", "#10b981"], ["Property Mon.", "#f97316"]].map(([name, color]) => (
                         <div key={name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text-muted)" }}>
                           <div style={{ width: 10, height: 10, borderRadius: 2, background: color, opacity: 0.85 }} />
                           <span>{name}</span>
