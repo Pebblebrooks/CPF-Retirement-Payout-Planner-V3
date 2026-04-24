@@ -6965,7 +6965,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .nw-mini-wrap { flex-direction: column !important; align-items: stretch !important; }
           .nw-mini-chart { width: 100% !important; height: 140px !important; }
           .nw-mini-wrap { flex-direction: column !important; align-items: center !important; }
-          .nw-mini-chart { width: 180px !important; height: 180px !important; }
+          .nw-mini-chart { width: 100% !important; height: 220px !important; }
           .nw-mini-legend { flex-direction: row !important; flex-wrap: wrap !important; gap: 8px !important; }
           /* M1 fix: collapse sub-grid on tablet too */
           .summary-stats-subgrid { grid-template-columns: 1fr !important; }
@@ -10895,7 +10895,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     if (nwTotal === 0) return null;
                     const NW_RADIAN = Math.PI / 180;
                     const renderNwLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
-                      if (percent < 0.07) return null;
+                      if (percent < 0.05) return null;
                       const r = innerRadius + (outerRadius - innerRadius) * 0.5;
                       const x = cx + r * Math.cos(-midAngle * NW_RADIAN);
                       const y = cy + r * Math.sin(-midAngle * NW_RADIAN);
@@ -10904,37 +10904,34 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     return (
                       <div style={{ marginTop: 16 }}>
                         <div style={{ height: 1, background: "var(--border-subtle)", marginBottom: 14 }} />
-                        <div className="nw-mini-wrap" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 16 }}>
-                          {/* Left half — doughnut chart, fills the available height */}
-                          <div className="nw-mini-chart" style={{ flexShrink: 0, width: 220, height: 220 }}>
+                        {/* Title — centered at top */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                          <PieChart style={{ width: 14, height: 14, color: "var(--clr-blue)", flexShrink: 0 }} />
+                          <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>Net Worth at Age {inputs.payoutAge}</p>
+                          <span style={{ fontSize: 15, fontWeight: 900, color: "var(--text-bright)", fontFamily: "monospace" }}>{formatCurrency(nwTotal)}</span>
+                        </div>
+                        <div className="nw-mini-wrap" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                          {/* Chart — larger so all slice labels fit */}
+                          <div className="nw-mini-chart" style={{ width: "100%", height: 260 }}>
                             <ResponsiveContainer width="99%" height="100%">
                               <RechartsPieChart>
-                                <RechartsPie isAnimationActive={false} data={nwSlices} cx="50%" cy="50%" innerRadius={58} outerRadius={100} paddingAngle={3} dataKey="value" labelLine={false} label={renderNwLabel}>
+                                <RechartsPie isAnimationActive={false} data={nwSlices} cx="50%" cy="50%" innerRadius={72} outerRadius={118} paddingAngle={3} dataKey="value" labelLine={false} label={renderNwLabel}>
                                   {nwSlices.map((entry, i) => <RechartsCell key={i} fill={entry.color} stroke="transparent" />)}
                                 </RechartsPie>
                                 <Tooltip formatter={(v, n) => [formatCurrency(v), n]} contentStyle={{ background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", border: "1px solid var(--tooltip-border)", borderRadius: 8, fontSize: 11, padding: "6px 10px" }} itemStyle={{ padding: 0, color: "var(--tooltip-text)" }} wrapperStyle={{ pointerEvents: "none" }} />
                               </RechartsPieChart>
                             </ResponsiveContainer>
                           </div>
-                          {/* Right half — title + legend */}
-                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-                            {/* Title row */}
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                              <PieChart style={{ width: 14, height: 14, color: "var(--clr-blue)", flexShrink: 0 }} />
-                              <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0, whiteSpace: "nowrap" }}>Net Worth at Age {inputs.payoutAge}</p>
-                              <span style={{ fontSize: 15, fontWeight: 900, color: "var(--text-bright)", fontFamily: "monospace" }}>{formatCurrency(nwTotal)}</span>
-                            </div>
-                            {/* Legend */}
-                            <div className="nw-mini-legend" style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 8px", justifyItems: "start" }}>
-                              {nwSlices.map(s => (
-                                <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-                                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{s.name}</span>
-                                  <span style={{ fontSize: 12, fontWeight: 900, color: "var(--text-main)", fontFamily: "monospace", flexShrink: 0, marginLeft: 4 }}>{formatCurrency(s.value)}</span>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-subtle)", flexShrink: 0, marginLeft: 3 }}>{((s.value / nwTotal) * 100).toFixed(0)}%</span>
-                                </div>
-                              ))}
-                            </div>
+                          {/* Legend — below the chart */}
+                          <div className="nw-mini-legend" style={{ width: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 8px", justifyItems: "start" }}>
+                            {nwSlices.map(s => (
+                              <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+                                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{s.name}</span>
+                                <span style={{ fontSize: 12, fontWeight: 900, color: "var(--text-main)", fontFamily: "monospace", flexShrink: 0, marginLeft: 4 }}>{formatCurrency(s.value)}</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-subtle)", flexShrink: 0, marginLeft: 3 }}>{((s.value / nwTotal) * 100).toFixed(0)}%</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>
