@@ -2939,7 +2939,6 @@ export default function App() {
   // Renamed with "le" prefix to avoid collision with any future same-named locals.
   const [leEditingId, setLeEditingId] = useState(null); // null = closed; 'new' = adding new
   const [leFormState, setLeFormState] = useState({});
-  const [leMagFocused, setLeMagFocused] = useState(false);
 
   // Sidebar accordion — supports multiple open sections simultaneously
   // All section IDs — used for expand-all default and expandAllSections helper
@@ -6606,7 +6605,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           gap: 24px;
           width: 100%;
           margin: 0 auto;
-          padding: 24px 0;
+          padding: 24px 8px;
           align-items: start;
           box-sizing: border-box;
           transition: max-width 0.3s ease, grid-template-columns 0.3s ease, padding 0.3s ease;
@@ -6653,9 +6652,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
         .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
         /* ─── DESKTOP VIEWPORT MODES (HD and below — unchanged) ─────── */
-        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 0; }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 0; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 0; } }
+        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 12px; }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 12px; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 8px; } }
         /* ═══════════════════════════════════════════════════════════════
            FHD MULTI-COLUMN SIDEBAR MODULE
            Scope: data-mode="fhd" (explicit) OR auto mode on ≥1920px screens.
@@ -6671,14 +6670,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
           max-width: 100%;
           gap: 20px;
-          padding: 12px 0 20px;
+          padding: 12px 12px 20px;
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] {
             grid-template-columns: clamp(860px, 46%, 1080px) 1fr;
             max-width: 100%;
             gap: 20px;
-            padding: 12px 0 20px;
+            padding: 12px 12px 20px;
           }
         }
 
@@ -6760,13 +6759,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
            ═══════════════════════════════════════════════════════════════ */
 
         /* ─── PAGE-WIDE WRAPPER ─── */
-        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 0; width: 100%; box-sizing: border-box; }
-        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 0; }
-        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 0; }
-        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; }
-        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 0; } }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; } }
+        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 8px; width: 100%; box-sizing: border-box; }
+        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 12px; }
+        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 12px; }
+        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 8px; }
+        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 12px; } }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 12px; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 8px; } }
 
         /* ═══════════════════════════════════════════════════════════════
            QHD / 4K RIGHT-PANEL MODULE  (within FHD layout scope)
@@ -6819,6 +6818,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
            below are identically inset — keeping them visually aligned.
            clamp(24px, 4vw, 180px) → grows from 24px to ~180px as viewport widens. */
         @media (min-width: 2560px) {
+          .cpf-layout[data-mode="fhd"] .cpf-main-wrap,
+          .cpf-layout[data-mode="auto"] .cpf-main-wrap {
+            padding-left: clamp(24px, 4vw, 180px);
+            padding-right: clamp(24px, 4vw, 180px);
+          }
+
           /* Chart containers: prevent Recharts from rendering at absurd widths.
              ResponsiveContainer fills its parent — capping its parent caps the chart. */
           .cpf-layout[data-mode="fhd"] .recharts-responsive-container,
@@ -6865,6 +6870,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* 4K (3840px+): tighten further — content stays inside ~1600px readable zone */
         @media (min-width: 3840px) {
+          .cpf-layout[data-mode="fhd"] .cpf-main-wrap,
+          .cpf-layout[data-mode="auto"] .cpf-main-wrap {
+            padding-left: clamp(180px, 10vw, 400px);
+            padding-right: clamp(180px, 10vw, 400px);
+          }
+          .cpf-page-wrap[data-mode="fhd"],
+          .cpf-page-wrap[data-mode="auto"] {
+            padding-left: clamp(80px, 6vw, 260px);
+            padding-right: clamp(80px, 6vw, 260px);
+          }
           .cpf-layout[data-mode="fhd"] .recharts-responsive-container,
           .cpf-layout[data-mode="auto"] .recharts-responsive-container {
             max-width: 1600px !important;
@@ -7844,8 +7859,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       {isForeigner && <span style={{ fontSize: 9, color: "var(--clr-amber3)", marginLeft: 2 }}>🔒 CPF LIFE N/A</span>}
                     </div>
                     <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 7, gap: 2 }}>
-                      <button onClick={() => setInputs(p => ({ ...p, isMale: true }))} aria-pressed={inputs.isMale !== false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale !== false ? "var(--clr-sky)" : "transparent", color: inputs.isMale !== false ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Male</button>
-                      <button onClick={() => setInputs(p => ({ ...p, isMale: false }))} aria-pressed={inputs.isMale === false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale === false ? "var(--clr-blue)" : "transparent", color: inputs.isMale === false ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>Female</button>
+                      <button onClick={() => setInputs(p => ({ ...p, isMale: true }))} aria-pressed={inputs.isMale !== false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale !== false ? "var(--clr-sky)" : "transparent", color: inputs.isMale !== false ? (isDark ? "#0f172a" : "#ffffff") : "var(--text-muted)" }}>Male</button>
+                      <button onClick={() => setInputs(p => ({ ...p, isMale: false }))} aria-pressed={inputs.isMale === false} style={{ padding: "4px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.isMale === false ? "var(--clr-blue)" : "transparent", color: inputs.isMale === false ? (isDark ? "#0f172a" : "#ffffff") : "var(--text-muted)" }}>Female</button>
                     </div>
                   </div>
                   </div>
@@ -7862,11 +7877,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <button onClick={() => setInputs(p => ({ ...p, citizenStatus: 'SC' }))}
                           style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: (inputs.citizenStatus || 'SC') === 'SC' ? "var(--clr-sky)" : "transparent",
-                            color: (inputs.citizenStatus || 'SC') === 'SC' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>SC</button>
+                            color: (inputs.citizenStatus || 'SC') === 'SC' ? (isDark ? "#0f172a" : "#ffffff") : "var(--text-muted)" }}>SC</button>
                         <button onClick={() => setInputs(p => ({ ...p, citizenStatus: 'PR', mrssGrant: 0, mmssGrant: 0 }))}
                           style={{ padding: "4px 11px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                             background: (inputs.citizenStatus || 'SC') === 'PR' ? "var(--clr-amber)" : "transparent",
-                            color: (inputs.citizenStatus || 'SC') === 'PR' ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>PR</button>
+                            color: (inputs.citizenStatus || 'SC') === 'PR' ? (isDark ? "#0f172a" : "#ffffff") : "var(--text-muted)" }}>PR</button>
                         <button onClick={() => {
                           setInputs(p => ({ ...p,
                             citizenStatus: 'foreigner',
@@ -7914,7 +7929,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <button key={val} onClick={() => setInputs(p => ({ ...p, prYear: val }))}
                                 style={{ padding: "3px 10px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                   background: (inputs.prYear || 3) === val ? "var(--clr-amber)" : "transparent",
-                                  color: (inputs.prYear || 3) === val ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                                  color: (inputs.prYear || 3) === val ? (isDark ? "#0f172a" : "#ffffff") : "var(--text-muted)" }}>
                                 {label}
                               </button>
                             ))}
@@ -7933,7 +7948,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   <button key={val} onClick={() => setInputs(p => ({ ...p, prRateType: val }))}
                                     style={{ padding: "3px 12px", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                                       background: (inputs.prRateType || 'GG') === val ? "var(--clr-amber)" : "transparent",
-                                      color: (inputs.prRateType || 'GG') === val ? "var(--ctrl-on-text)" : "var(--text-muted)" }}>
+                                      color: (inputs.prRateType || 'GG') === val ? (isDark ? "#0f172a" : "#ffffff") : "var(--text-muted)" }}>
                                     {label}
                                   </button>
                                 ))}
@@ -9841,16 +9856,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Annual Contribution ($)</label>
                           <input type="text" inputMode="decimal" name="srsAnnualContribution" value={getDisplayValue("srsAnnualContribution", inputs.srsAnnualContribution)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsAnnualContribution"); e.target.select(); }} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsAnnualContribution ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.srsAnnualContribution && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsAnnualContribution}</p>}
-                        </div>
-                      </div>
-                      {/* Live SRS tax-saving badge — full width, below the 2-col grid */}
-                      {(() => {
-                            const _srsCap  = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
+                          {/* Live SRS tax-saving badge */}
+                          {(() => {
+                            const _srsCap  = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // P2 fix: use module constants
                             const _srsElig = Math.min(Number(inputs.srsAnnualContribution) || 0, _srsCap);
                             const _srsTax  = Math.round(_srsElig * estimatedTaxRate);
-                            if (_srsElig <= 0 || _srsTax <= 0 || !!inputErrors.srsAnnualContribution) return null;
+                            if (_srsElig <= 0 || _srsTax <= 0) return null;
                             return (
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", borderRadius: 7, background: "rgba(14,165,233,0.10)", border: "1px solid rgba(14,165,233,0.28)" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, padding: "7px 10px", borderRadius: 7, background: "rgba(14,165,233,0.10)", border: "1px solid rgba(14,165,233,0.28)" }}>
                                 <div>
                                   <span style={{ fontSize: 9, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.04em" }}>💰 Est. Tax Saved (SRS)</span>
                                   <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
@@ -9863,6 +9876,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               </div>
                             );
                           })()}
+                        </div>
+                      </div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         <div>
                           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Contrib Stop Age</label>
@@ -10072,26 +10087,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>
                                 {leFormState.type === 'hyperinflation' ? "Rate (%)" : leFormState.type === 'windfall' ? "Amount ($)" : "$/yr"}
                               </label>
-                              <input type="text" inputMode="decimal"
-                                value={
-                                  leMagFocused || leFormState.type === 'hyperinflation'
-                                    ? (leFormState.magnitude ?? "")
-                                    : leFormState.magnitude
-                                      ? "$" + Number(leFormState.magnitude).toLocaleString()
-                                      : ""
-                                }
-                                onChange={e => {
-                                  const raw = e.target.value.replace(/[$,]/g, "");
-                                  setLeFormState(p => ({ ...p, magnitude: raw === "" ? "" : Number(raw) }));
-                                }}
-                                onFocus={() => setLeMagFocused(true)}
-                                onBlur={() => {
-                                  setLeMagFocused(false);
-                                  if (leFormState.magnitude === "" || leFormState.magnitude == null)
-                                    setLeFormState(p => ({ ...p, magnitude: 0 }));
-                                }}
-                                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); saveEvent(); } }}
-                                style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
+                              <input type="text" inputMode="decimal" value={leFormState.magnitude ?? ""} onChange={e => setLeFormState(p => ({ ...p, magnitude: e.target.value === "" ? "" : Number(e.target.value) }))}
+                                style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
                             </div>
                           </div>
 
@@ -10251,7 +10248,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   // payoutAge (e.g. 55 when pa=65) is corrected, not silently preserved.
                                   oaDrawdownStartAge: Math.max(pa, p.oaDrawdownStartAge > 0 ? p.oaDrawdownStartAge : pa)
                                 }))}
-                                style={{ flex: 1, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : "var(--ctrl-on-text)", fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 10, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
+                                style={{ flex: 1, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : (isDark ? "#0f172a" : "#ffffff"), fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 10, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
                               >
                                 ⚡ Fill Gap — Set Draw to {formatCurrency(requiredOADraw)}/mo
                               </button>
@@ -10270,7 +10267,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               OA Bequest Floor ($)
                               <TooltipBox id="t-oa-floor" text="Minimum OA balance to preserve at all times. Drawdown stops when OA reaches this amount. Set to 0 to allow full depletion. When Die with Zero is active, floor is set to $0 automatically." />
                             </div>
-                            <input type="text" inputMode="decimal" name="oaDrawdownFloor" value={getDisplayValue("oaDrawdownFloor", inputs.oaDrawdownFloor)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("oaDrawdownFloor"); e.target.select(); }} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownFloor ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
+                            <input type="text" inputMode="decimal" name="oaDrawdownFloor" value={inputs.oaDrawdownFloor} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownFloor ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
                             {inputErrors.oaDrawdownFloor && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownFloor}</p>}
                             <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>0 = deplete fully · preserves bequest from OA</p>
                           </div>
@@ -11042,7 +11039,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     Now structured as a 2-col sub-grid: milestone fills the full left cell height;
                     stats + tax + key-stats stack in the right cell. Both cells stretch equally.
                     On mobile the sub-grid collapses to 1 column (see .summary-stats-subgrid rule). */}
-                <div className="summary-stats-subgrid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "stretch", minWidth: 0, gridColumn: (Number(inputs.targetMonthlyIncome) || 0) > 0 ? "1 / -1" : undefined }}>
+                <div className="summary-stats-subgrid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "stretch", minWidth: 0 }}>
 
                   {/* ── LEFT sub-cell: Milestone Alerts ── */}
                   {milestones.length > 0 ? (
@@ -11168,25 +11165,19 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <h4 style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>Contribution Timeline Overview</h4>
                         <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>Age {ca} → 95</span>
                       </div>
-                      {/* Age ruler — flex layout mirrors Life Journey Timeline: spacer + bar area */}
-                      <div style={{ display: "flex", marginBottom: 4 }}>
-                        <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
-                        <div style={{ flex: 1, position: "relative", height: 20 }}>
-                          {markers.map(age => (
-                            <div key={age} style={{ position: "absolute", left: left(age), transform: "translateX(-50%)", fontSize: 9, color: "var(--text-muted)", fontWeight: 700, fontFamily: "monospace" }}>
-                              {age}
-                            </div>
-                          ))}
-                        </div>
+                      {/* Age ruler */}
+                      <div style={{ position: "relative", height: 20, marginBottom: 4 }}>
+                        {markers.map(age => (
+                          <div key={age} style={{ position: "absolute", left: left(age), transform: "translateX(-50%)", fontSize: 9, color: "var(--text-muted)", fontWeight: 700, fontFamily: "monospace" }}>
+                            {age}
+                          </div>
+                        ))}
                       </div>
                       {/* Tick lines */}
-                      <div style={{ display: "flex", marginBottom: 8 }}>
-                        <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
-                        <div style={{ flex: 1, position: "relative", height: 4, background: "var(--border-subtle)", borderRadius: 2 }}>
-                          {markers.map(age => (
-                            <div key={age} style={{ position: "absolute", left: left(age), width: 2, height: "100%", background: "var(--text-muted)", transform: "translateX(-50%)" }} />
-                          ))}
-                        </div>
+                      <div style={{ position: "relative", height: 4, marginBottom: 8, background: "var(--border-subtle)", borderRadius: 2 }}>
+                        {markers.map(age => (
+                          <div key={age} style={{ position: "absolute", left: left(age), width: 2, height: "100%", background: "var(--text-muted)", transform: "translateX(-50%)" }} />
+                        ))}
                       </div>
                       {/* Phase bars */}
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
