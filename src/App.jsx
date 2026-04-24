@@ -2939,6 +2939,7 @@ export default function App() {
   // Renamed with "le" prefix to avoid collision with any future same-named locals.
   const [leEditingId, setLeEditingId] = useState(null); // null = closed; 'new' = adding new
   const [leFormState, setLeFormState] = useState({});
+  const [leMagFocused, setLeMagFocused] = useState(false);
 
   // Sidebar accordion — supports multiple open sections simultaneously
   // All section IDs — used for expand-all default and expandAllSections helper
@@ -9840,14 +9841,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Annual Contribution ($)</label>
                           <input type="text" inputMode="decimal" name="srsAnnualContribution" value={getDisplayValue("srsAnnualContribution", inputs.srsAnnualContribution)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsAnnualContribution"); e.target.select(); }} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsAnnualContribution ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.srsAnnualContribution && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsAnnualContribution}</p>}
-                          {/* Live SRS tax-saving badge */}
-                          {(() => {
-                            const _srsCap  = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // P2 fix: use module constants
+                        </div>
+                      </div>
+                      {/* Live SRS tax-saving badge — full width, below the 2-col grid */}
+                      {(() => {
+                            const _srsCap  = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
                             const _srsElig = Math.min(Number(inputs.srsAnnualContribution) || 0, _srsCap);
                             const _srsTax  = Math.round(_srsElig * estimatedTaxRate);
-                            if (_srsElig <= 0 || _srsTax <= 0) return null;
+                            if (_srsElig <= 0 || _srsTax <= 0 || !!inputErrors.srsAnnualContribution) return null;
                             return (
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, padding: "7px 10px", borderRadius: 7, background: "rgba(14,165,233,0.10)", border: "1px solid rgba(14,165,233,0.28)" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", borderRadius: 7, background: "rgba(14,165,233,0.10)", border: "1px solid rgba(14,165,233,0.28)" }}>
                                 <div>
                                   <span style={{ fontSize: 9, fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.04em" }}>💰 Est. Tax Saved (SRS)</span>
                                   <p style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
@@ -9860,8 +9863,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               </div>
                             );
                           })()}
-                        </div>
-                      </div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         <div>
                           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Contrib Stop Age</label>
@@ -10071,8 +10072,26 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               <label style={{ display: "block", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>
                                 {leFormState.type === 'hyperinflation' ? "Rate (%)" : leFormState.type === 'windfall' ? "Amount ($)" : "$/yr"}
                               </label>
-                              <input type="text" inputMode="decimal" value={leFormState.magnitude ?? ""} onChange={e => setLeFormState(p => ({ ...p, magnitude: e.target.value === "" ? "" : Number(e.target.value) }))}
-                                style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box" }} />
+                              <input type="text" inputMode="decimal"
+                                value={
+                                  leMagFocused || leFormState.type === 'hyperinflation'
+                                    ? (leFormState.magnitude ?? "")
+                                    : leFormState.magnitude
+                                      ? "$" + Number(leFormState.magnitude).toLocaleString()
+                                      : ""
+                                }
+                                onChange={e => {
+                                  const raw = e.target.value.replace(/[$,]/g, "");
+                                  setLeFormState(p => ({ ...p, magnitude: raw === "" ? "" : Number(raw) }));
+                                }}
+                                onFocus={() => setLeMagFocused(true)}
+                                onBlur={() => {
+                                  setLeMagFocused(false);
+                                  if (leFormState.magnitude === "" || leFormState.magnitude == null)
+                                    setLeFormState(p => ({ ...p, magnitude: 0 }));
+                                }}
+                                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); saveEvent(); } }}
+                                style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 11, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
                             </div>
                           </div>
 
@@ -10251,7 +10270,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               OA Bequest Floor ($)
                               <TooltipBox id="t-oa-floor" text="Minimum OA balance to preserve at all times. Drawdown stops when OA reaches this amount. Set to 0 to allow full depletion. When Die with Zero is active, floor is set to $0 automatically." />
                             </div>
-                            <input type="text" inputMode="decimal" name="oaDrawdownFloor" value={inputs.oaDrawdownFloor} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownFloor ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
+                            <input type="text" inputMode="decimal" name="oaDrawdownFloor" value={getDisplayValue("oaDrawdownFloor", inputs.oaDrawdownFloor)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("oaDrawdownFloor"); e.target.select(); }} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownFloor ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
                             {inputErrors.oaDrawdownFloor && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownFloor}</p>}
                             <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>0 = deplete fully · preserves bequest from OA</p>
                           </div>
