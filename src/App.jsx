@@ -11945,16 +11945,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             </div>
 
                           {/* Rev #12 — SRS Annual Contribution */}
-                          {(debouncedInputs.citizenStatus || 'SC') !== 'foreigner' && (
+                          {!isForeigner && (
                             <div>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                                 <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>
                                   SRS Annual Contribution
-                                  <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(cap ${((debouncedInputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR).toLocaleString()})</span>
+                                  <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(cap ${((inputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR).toLocaleString()})</span>
                                 </label>
                                 <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-violet)" }}>{formatCurrency(effSRS)}/yr</span>
                               </div>
-                              <input type="range" min={0} max={(debouncedInputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR} step={500} value={effSRS}
+                              <input type="range" min={0} max={(inputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR} step={500} value={effSRS}
                                 onChange={e => setWhatIfSrsContrib(Number(e.target.value))}
                                 onMouseUp={e => setWhatIfSrsContrib(Number(e.target.value))}
                                 onTouchEnd={e => setWhatIfSrsContrib(Number(e.target.value))}
@@ -12010,7 +12010,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <div style={{ height: 280 }}>
                             <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>Blue = base · Green = what-if · <span style={{ color: "var(--text-subtle)" }}>Hover for account breakdown</span></p>
                             <ResponsiveContainer width="99%" height="100%">
-                              <AreaChart data={(() => {
+                              <LineChart data={(() => {
                                 // Bug-WI3 fix: base line must terminate at payoutAge65 — the what-if
                                 // line then visibly extends beyond it when effPA > payoutAge65.
                                 // Previously both lines shared the same age range (max of the two),
@@ -12058,16 +12058,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 return chartRows;
                               })()}
                                 margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-                                <defs>
-                                  <linearGradient id="wiBaseGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.20} />
-                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
-                                  </linearGradient>
-                                  <linearGradient id="wiWhatIfGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
-                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.04} />
-                                  </linearGradient>
-                                </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                                 <XAxis dataKey="age" type="number" domain={["dataMin", "dataMax"]} stroke="var(--chart-text)" fontSize={10} tickCount={8} />
                                 <YAxis tickFormatter={v => `$${v >= 1000000 ? (v / 1000000).toFixed(1) + "M" : v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={10} width={52} />
@@ -12088,11 +12078,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                           <span style={{ color: "var(--clr-blue2)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>BASE</span>
                                           <span style={{ color: "var(--clr-emerald)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>WHAT-IF</span>
                                           {[["OA", d.baseOA, d.whatIfOA, "var(--clr-blue)"], ["SA/RA", (d.baseSA||0)+(d.baseRA||0), (d.whatIfSA||0)+(d.whatIfRA||0), "var(--clr-green)"], ["MA", d.baseMA, d.whatIfMA, "var(--clr-violet)"], ["Private", d.basePrv, d.whatIfPrv, "var(--clr-orange)"], ["SRS", d.baseSRS, d.whatIfSRS, "var(--clr-amber)"]].map(([lbl, bv, wv, c]) => (
-                                            <React.Fragment key={lbl}>
+                                            <>
                                               <span style={{ color: c, fontWeight: 700 }}>{lbl}</span>
                                               <span style={{ color: "#e2e8f0", fontFamily: "monospace", textAlign: "right" }}>{formatCurrency(bv ?? 0)}</span>
                                               <span style={{ color: wv != null ? "#e2e8f0" : "#64748b", fontFamily: "monospace", textAlign: "right" }}>{wv != null ? formatCurrency(wv) : "—"}</span>
-                                            </React.Fragment>
+                                            </>
                                           ))}
                                           <span style={{ color: "var(--mc-total-color)", fontWeight: 800, borderTop: "1px solid var(--mc-total-border)", paddingTop: 4 }}>Total</span>
                                           <span style={{ color: "var(--clr-blue2)", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>{formatCurrency(base?.value ?? 0)}</span>
@@ -12109,9 +12099,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   }}
                                 />
                                 <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={STYLES.chartLegend} />
-                                <Area isAnimationActive={false} type="monotone" dataKey="baseTotal" stroke="var(--clr-blue2)" strokeWidth={2} fill="url(#wiBaseGrad)" dot={false} name="Base" activeDot={{ r: 4, fill: "var(--clr-blue2)", stroke: "#fff", strokeWidth: 1.5 }} />
-                                <Area isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="var(--clr-emerald)" strokeWidth={2} fill="url(#wiWhatIfGrad)" dot={false} name={`What-If (PA:${effPA})`} activeDot={{ r: 4, fill: "var(--clr-emerald)", stroke: "#fff", strokeWidth: 1.5 }} />
-                              </AreaChart>
+                                <Line isAnimationActive={false} type="monotone" dataKey="baseTotal" stroke="var(--clr-blue2)" strokeWidth={2} dot={false} name="Base" activeDot={{ r: 4, fill: "var(--clr-blue2)", stroke: "#fff", strokeWidth: 1.5 }} />
+                                <Line isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="var(--clr-emerald)" strokeWidth={2} dot={false} name={`What-If (PA:${effPA})`} activeDot={{ r: 4, fill: "var(--clr-emerald)", stroke: "#fff", strokeWidth: 1.5 }} />
+                              </LineChart>
                             </ResponsiveContainer>
                           </div>
                         )}
@@ -12283,28 +12273,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           strokeWidth={1.5} strokeDasharray="6 3"
                           label={{ position: "insideTopRight", value: `📈 P2: ${p2Rate}%/yr`, fill: "var(--clr-lime)", fontSize: 8, fontWeight: "bold" }} />;
                       })()}
-                      <defs>
-                        <linearGradient id="accOaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#1d4ed8" stopOpacity={0.30} />
-                          <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0.06} />
-                        </linearGradient>
-                        <linearGradient id="accSaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.30} />
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.06} />
-                        </linearGradient>
-                        <linearGradient id="accMaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#059669" stopOpacity={0.30} />
-                          <stop offset="95%" stopColor="#059669" stopOpacity={0.06} />
-                        </linearGradient>
-                        <linearGradient id="accRaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.30} />
-                          <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.06} />
-                        </linearGradient>
-                      </defs>
-                      <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" strokeWidth={2} fill="url(#accOaGrad)" name="OA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#f59e0b" strokeWidth={2} fill="url(#accSaGrad)" name="SA (pre-55)" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="url(#accMaGrad)" name="MA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" strokeWidth={2} fill="#1d4ed8" fillOpacity={0.15} name="OA" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#f59e0b" strokeWidth={2} fill="#f59e0b" fillOpacity={0.15} name="SA (pre-55)" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="#059669" fillOpacity={0.15} name="MA" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="var(--clr-purple2)" fillOpacity={0.15} name="RA (from 55)" />
                       {/* MC band rendered AFTER stacked areas so it overlays on top without
                           hiding the account breakdown. P90 = semi-transparent upper bound fill;
                           no bg-base "eraser" (the old eraser covered the stacked areas entirely).
@@ -13015,25 +12987,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </p>
                   <div style={{ height: 350 }}>
                     <ResponsiveContainer width="99%" height="100%">
-                      <AreaChart data={comparisonData}>
-                        <defs>
-                          <linearGradient id="cmpAGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.22} />
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
-                          </linearGradient>
-                          <linearGradient id="cmpBGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#f97316" stopOpacity={0.22} />
-                            <stop offset="95%" stopColor="#f97316" stopOpacity={0.03} />
-                          </linearGradient>
-                        </defs>
+                      <LineChart data={comparisonData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                         <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 10 }} />
                         <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Cumulative Total Yield", angle: -90, position: "insideLeft", offset: 10, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={(v, n) => [formatCurrency(v), n]} labelFormatter={v => `Age ${v}`} wrapperStyle={STYLES.chartTooltipWrapper} />
                         <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={STYLES.chartLegend} />
-                        <Area isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="var(--clr-blue2)" strokeWidth={2} fill="url(#cmpAGrad)" dot={false} name={`Slot A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
-                        <Area isAnimationActive={false} type="monotone" dataKey="yieldB" stroke="#f97316"           strokeWidth={2} fill="url(#cmpBGrad)"  dot={false} name={`Slot B${scenarioLabelB ? `: ${scenarioLabelB}` : ""}`} />
-                      </AreaChart>
+                        <Line isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="var(--clr-blue2)" strokeWidth={2} dot={false} name={`Slot A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
+                        <Line isAnimationActive={false} type="monotone" dataKey="yieldB" stroke="#f97316" strokeWidth={2} dot={false} name={`Slot B${scenarioLabelB ? `: ${scenarioLabelB}` : ""}`} />
+                      </LineChart>
                     </ResponsiveContainer>
                   </div>
                   {/* Rev #24 — Export diff button */}
@@ -14139,32 +14101,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ height: 320 }}>
                       <ResponsiveContainer width="99%" height="100%">
                         <AreaChart data={strategyChartData} margin={{ top: 10, right: 14, left: 10, bottom: 0 }}>
-                          <defs>
-                            <linearGradient id="stgRssGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.32} />
-                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.06} />
-                            </linearGradient>
-                            <linearGradient id="stgCpfGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.32} />
-                              <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.06} />
-                            </linearGradient>
-                            <linearGradient id="stgOaGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.32} />
-                              <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.06} />
-                            </linearGradient>
-                            <linearGradient id="stgSrsGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%"  stopColor="#0ea5e9" stopOpacity={0.32} />
-                              <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.06} />
-                            </linearGradient>
-                            <linearGradient id="stgPrvGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%"  stopColor="#10b981" stopOpacity={0.32} />
-                              <stop offset="95%" stopColor="#10b981" stopOpacity={0.06} />
-                            </linearGradient>
-                            <linearGradient id="stgPropGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%"  stopColor="#f97316" stopOpacity={0.32} />
-                              <stop offset="95%" stopColor="#f97316" stopOpacity={0.06} />
-                            </linearGradient>
-                          </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                           <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 9 }} />
                           <YAxis tickFormatter={v => `$${v >= 1000 ? (v / 1000).toFixed(1) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Monthly Income ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
@@ -14183,25 +14119,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {/* S4 fix: RSS payout area — shown for RSS members in place of CPF LIFE.
                               cpfLife is 0 for RSS (payoutByAge uses LIFE tables), so without this
                               Area the entire income stack chart was blank for RSS members. */}
-                          {isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="rssDrawdown" stackId="1" stroke="var(--clr-blue)" strokeWidth={2} fill="url(#stgRssGrad)" name="RSS Drawdown" />}
-                          {!isForeigner && !isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="cpfLife"      stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#stgCpfGrad)" name="CPF LIFE" />}
-                          <Area isAnimationActive={false} type="monotone" dataKey="oaDraw"       stackId="1" stroke="var(--clr-amber2)" strokeWidth={2} fill="url(#stgOaGrad)"   name="OA Drawdown" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="srs"          stackId="1" stroke="#0ea5e9"           strokeWidth={2} fill="url(#stgSrsGrad)"  name="SRS" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="privateAsset" stackId="1" stroke="#10b981"           strokeWidth={2} fill="url(#stgPrvGrad)"  name="Private Assets" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="propMon"      stackId="1" stroke="#f97316"           strokeWidth={2} fill="url(#stgPropGrad)" name="Property Mon." />
+                          {isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="rssDrawdown" stackId="1" stroke="var(--clr-blue)" strokeWidth={2} fill="var(--clr-blue)" fillOpacity={0.2} name="RSS Drawdown" />}
+                          {!isForeigner && !isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="cpfLife"      stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="var(--clr-purple2)" fillOpacity={0.2} name="CPF LIFE" />}
+                          <Area isAnimationActive={false} type="monotone" dataKey="oaDraw"       stackId="1" stroke="var(--clr-amber2)" strokeWidth={2} fill="var(--clr-amber2)" fillOpacity={0.2} name="OA Drawdown" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="srs"          stackId="1" stroke="#0ea5e9" strokeWidth={2} fill="#0ea5e9" fillOpacity={0.2} name="SRS" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="privateAsset" stackId="1" stroke="#10b981" strokeWidth={2} fill="#10b981" fillOpacity={0.2} name="Private Assets" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="propMon"      stackId="1" stroke="#f97316" strokeWidth={2} fill="#f97316" fillOpacity={0.2} name="Property Mon." />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-                      {[
-                        ...(isRSSStrategy
-                          ? [["RSS Drawdown", "var(--clr-blue)"]]
-                          : (!isForeigner ? [["CPF LIFE", "var(--clr-purple2)"]] : [])),
-                        ["OA Drawdown", "var(--clr-amber2)"],
-                        ["SRS", "#0ea5e9"],
-                        ["Private Assets", "#10b981"],
-                        ["Property Mon.", "#f97316"],
-                      ].map(([name, color]) => (
+                      {[["CPF LIFE", "var(--clr-purple2)"], ["OA Drawdown", "var(--clr-amber2)"], ["SRS", "#0ea5e9"], ["Private Assets", "#10b981"], ["Property Mon.", "#f97316"]].map(([name, color]) => (
                         <div key={name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text-muted)" }}>
                           <div style={{ width: 10, height: 10, borderRadius: 2, background: color, opacity: 0.85 }} />
                           <span>{name}</span>
