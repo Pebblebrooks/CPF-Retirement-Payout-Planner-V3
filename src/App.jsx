@@ -474,6 +474,7 @@ const DEFAULT_INPUTS = {
   medicalUsage: 500, medishieldIP: 900, elderCareShield: 500,
   medicalInflationRate: 5,
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
+  propertyGoalValue: 0,       // optional target property value at payout age (0 = no goal; shows % of net worth instead)
   inflationRate: 2, includeProperty: true,
   sellPropertyAge: 0,
   // Private Assets & Goals
@@ -481,6 +482,7 @@ const DEFAULT_INPUTS = {
   currentPrivateAssets: 0,
   annualPrivateSaving: 0,
   privateAssetGrowthRate: 0,
+  privateAssetGoal: 0,        // optional target private asset value at payout age (0 = no goal; shows % of net worth instead)
   plannedDownpaymentOA: 0,
   downpaymentAge: 35,
   // OA Drawdown (post-payout-age supplementary income from OA)
@@ -684,10 +686,12 @@ const INPUT_LABELS = {
   medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
   propertyLeasehold: "Is Leasehold", propertyLeaseYears: "Lease Years",
+  propertyGoalValue: "Property Goal Value",
   inflationRate: "Inflation Rate %", includeProperty: "Include Property",
   sellPropertyAge: "Sell Property Age",
   targetMonthlyIncome: "Target Monthly Income", currentPrivateAssets: "Private Assets",
   annualPrivateSaving: "Annual Private Saving", privateAssetGrowthRate: "Private Asset Growth %",
+  privateAssetGoal: "Private Asset Goal",
   plannedDownpaymentOA: "OA Downpayment", downpaymentAge: "Downpayment Age",
   oaDrawdownStartAge: "OA Drawdown Start Age", oaDrawdownMonthly: "OA Monthly Drawdown",
   oaDrawdownFloor: "OA Drawdown Floor", propMonetiseEnabled: "Prop Monetise",
@@ -3469,6 +3473,12 @@ export default function App() {
     if (pv < 0 || pv > 50000000) errs.propertyValue = "0 – $50M";
     const pgr = Number(inp.propertyGrowthRate) || 0;
     if (pgr < -20 || pgr > 30) errs.propertyGrowthRate = "-20% to 30%";
+    const propGoal = Number(inp.propertyGoalValue) || 0;
+    if (propGoal < 0 || propGoal > 50000000) errs.propertyGoalValue = "0 – $50M";
+    else if (propGoal > 0 && propGoal < pv) errs.propertyGoalValue = "Goal is below current property value — are you targeting a downgrade?";
+    const privGoal = Number(inp.privateAssetGoal) || 0;
+    if (privGoal < 0 || privGoal > 50000000) errs.privateAssetGoal = "0 – $50M";
+    else if (privGoal > 0 && privGoal < (Number(inp.currentPrivateAssets) || 0)) errs.privateAssetGoal = "Goal is below current balance — intentional?";
     // Housing outflow: 0 – $200,000/yr
     const ho = Number(inp.housingOutflow) || 0;
     if (ho < 0 || ho > 200000) errs.housingOutflow = "0 – $200,000/yr";
@@ -6052,6 +6062,8 @@ export default function App() {
     ${(Number(inputs.sellPropertyAge) || 0) > 0 ? `<div class="row-kv"><span>Sell Property at Age</span><strong>Age ${inputs.sellPropertyAge} — CPF OA refund + 2.5%/yr interest credited to OA${inputs.usePropertyPledge ? " (pledge: RA restored to FRS first)" : ""}</strong></div>` : ''}
     ${inputs.oaToSaTransfer > 0 ? `<div class="row-kv"><span>OA→SA Transfer/yr</span><strong>${fc(inputs.oaToSaTransfer)}</strong></div>` : ''}
     ${(() => { const _rstu = Number(inputs.vcSaTopup) || 0; const _ca = Number(inputs.currentAge) || 0; const _isSC = (inputs.citizenStatus === 'SC') || !inputs.citizenStatus; const _mrssAmt = _isSC && _rstu > 0 && (_ca >= 55 || !!inputs.isPwD) ? Math.min(_rstu, 2000) : 0; return _mrssAmt > 0 ? `<div class="row-kv"><span>Est. MRSS Grant/yr</span><strong>${fc(_mrssAmt)}</strong></div>` : ''; })()}
+    ${(Number(inputs.propertyGoalValue) || 0) > 0 ? `<div class="row-kv"><span>Property Goal</span><strong>${fc(Number(inputs.propertyGoalValue))}</strong></div>` : ''}
+    ${(Number(inputs.privateAssetGoal) || 0) > 0 ? `<div class="row-kv"><span>Private Asset Goal</span><strong>${fc(Number(inputs.privateAssetGoal))}</strong></div>` : ''}
     <div class="row-kv"><span>Current Age</span><strong>${ca}</strong></div>
     <div class="row-kv"><span>Current Year</span><strong>${cy}</strong></div>
     <div class="row-kv"><span>Payout Age</span><strong>${pa}</strong></div>
@@ -9904,6 +9916,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Growth decelerates when lease &lt; 60 yrs</p>
                         </div>
                       )}
+                      {/* Property Goal — optional target value for Summary card progress bar */}
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
+                          Property Goal ($) — optional
+                          <TooltipBox id="t-prop-goal" text="Your target property value at payout age. Leave at 0 to show '% of net worth' on the Summary card instead. If set, the Summary card shows 'vs goal $X / Y%' as the progress metric." />
+                        </label>
+                        <input type="text" inputMode="decimal" name="propertyGoalValue" value={getDisplayValue("propertyGoalValue", inputs.propertyGoalValue)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("propertyGoalValue")} aria-label="Property goal value" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propertyGoalValue ? "var(--clr-amber3)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                        {inputErrors.propertyGoalValue && <p style={{ fontSize: 10, color: "var(--clr-amber3)", marginTop: 2 }}>⚠ {inputErrors.propertyGoalValue}</p>}
+                        {(Number(inputs.propertyGoalValue) || 0) > 0 && !inputErrors.propertyGoalValue && <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Target shown as progress on Summary card</p>}
+                      </div>
                     </div>
                   </div>
 
@@ -10094,6 +10116,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Growth (%)</label>
                       <input type="text" inputMode="decimal" name="privateAssetGrowthRate" value={inputs.privateAssetGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
+                  </div>
+                  {/* Private Asset Goal — optional target for Summary card progress bar */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>
+                      Private Asset Goal ($) — optional
+                      <TooltipBox id="t-priv-goal" text="Your target private asset value at payout age. Leave at 0 to show '% of net worth' on the Summary card instead. If set, the Summary card shows 'vs goal $X / Y%' as the progress metric." />
+                    </label>
+                    <input type="text" inputMode="decimal" name="privateAssetGoal" value={getDisplayValue("privateAssetGoal", inputs.privateAssetGoal)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("privateAssetGoal"); e.target.select(); }} aria-label="Private asset goal" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.privateAssetGoal ? "var(--clr-amber3)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                    {inputErrors.privateAssetGoal && <p style={{ fontSize: 10, color: "var(--clr-amber3)", marginTop: 2 }}>⚠ {inputErrors.privateAssetGoal}</p>}
+                    {(Number(inputs.privateAssetGoal) || 0) > 0 && !inputErrors.privateAssetGoal && <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Target shown as progress on Summary card</p>}
                   </div>
 
                   {/* SRS — Supplementary Retirement Scheme */}
@@ -11266,7 +11298,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             const _poly  = _svgPts.map(p => `${p.x},${p.y}`).join(' ');
                             const _area  = _poly + ` ${_svgPts[_svgPts.length - 1].x},${_SH} ${_svgPts[0].x},${_SH}`;
                             const _final = s.value;
-                            // Progress bar: MA→BHS, RA→ERS, others→% of net worth
+                            // Progress bar: MA→BHS, RA→ERS, OA→withdrawal target, Property/Private→goal, SRS→annual cap, others→% of net worth
                             let _tPct, _tLabel, _tMet;
                             if (s.name === 'MA') {
                               _tPct   = Math.min(100, Math.round((s.value / _bhsAtPa) * 100));
@@ -11276,6 +11308,46 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               _tPct   = Math.min(100, Math.round((s.value / _ersAtPa) * 100));
                               _tMet   = s.value >= _ersAtPa ? 'ERS reached ✓' : null;
                               _tLabel = `vs ERS ${formatCurrency(_ersAtPa)}`;
+                            } else if (s.name === 'OA') {
+                              // vs withdrawal target: fraction of monthly income target covered by OA draw
+                              const _oaDrawMonthly  = effectiveOaDrawMonthly || 0;
+                              const _targetMonthly  = Number(debouncedInputs.targetMonthlyIncome) || 0;
+                              if (_oaDrawMonthly > 0 && _targetMonthly > 0) {
+                                _tPct   = Math.min(100, Math.round((_oaDrawMonthly / _targetMonthly) * 100));
+                                _tLabel = 'vs withdrawal target';
+                                _tMet   = null;
+                              } else {
+                                _tPct   = Math.round((s.value / nwTotal) * 100);
+                                _tLabel = 'of net worth';
+                                _tMet   = null;
+                              }
+                            } else if (s.name === 'Property') {
+                              const _propGoal = Number(debouncedInputs.propertyGoalValue) || 0;
+                              if (_propGoal > 0) {
+                                _tPct   = Math.min(100, Math.round((s.value / _propGoal) * 100));
+                                _tLabel = `vs goal ${formatCurrency(_propGoal)}`;
+                                _tMet   = s.value >= _propGoal ? 'Goal reached ✓' : null;
+                              } else {
+                                _tPct   = Math.round((s.value / nwTotal) * 100);
+                                _tLabel = 'of net worth';
+                                _tMet   = null;
+                              }
+                            } else if (s.name === 'Private') {
+                              const _privGoal = Number(debouncedInputs.privateAssetGoal) || 0;
+                              if (_privGoal > 0) {
+                                _tPct   = Math.min(100, Math.round((s.value / _privGoal) * 100));
+                                _tLabel = `vs goal ${formatCurrency(_privGoal)}`;
+                                _tMet   = s.value >= _privGoal ? 'Goal reached ✓' : null;
+                              } else {
+                                _tPct   = Math.round((s.value / nwTotal) * 100);
+                                _tLabel = 'of net worth';
+                                _tMet   = null;
+                              }
+                            } else if (s.name === 'SRS') {
+                              const _srsCap = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
+                              _tPct   = Math.min(100, Math.round((s.value / _srsCap) * 100));
+                              _tLabel = 'vs annual cap';
+                              _tMet   = null;
                             } else {
                               _tPct   = Math.round((s.value / nwTotal) * 100);
                               _tLabel = 'of net worth';
@@ -11945,16 +12017,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             </div>
 
                           {/* Rev #12 — SRS Annual Contribution */}
-                          {!isForeigner && (
+                          {(debouncedInputs.citizenStatus || 'SC') !== 'foreigner' && (
                             <div>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                                 <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>
                                   SRS Annual Contribution
-                                  <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(cap ${((inputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR).toLocaleString()})</span>
+                                  <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(cap ${((debouncedInputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR).toLocaleString()})</span>
                                 </label>
                                 <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-violet)" }}>{formatCurrency(effSRS)}/yr</span>
                               </div>
-                              <input type="range" min={0} max={(inputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR} step={500} value={effSRS}
+                              <input type="range" min={0} max={(debouncedInputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR} step={500} value={effSRS}
                                 onChange={e => setWhatIfSrsContrib(Number(e.target.value))}
                                 onMouseUp={e => setWhatIfSrsContrib(Number(e.target.value))}
                                 onTouchEnd={e => setWhatIfSrsContrib(Number(e.target.value))}
@@ -12010,7 +12082,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <div style={{ height: 280 }}>
                             <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>Blue = base · Green = what-if · <span style={{ color: "var(--text-subtle)" }}>Hover for account breakdown</span></p>
                             <ResponsiveContainer width="99%" height="100%">
-                              <LineChart data={(() => {
+                              <AreaChart data={(() => {
                                 // Bug-WI3 fix: base line must terminate at payoutAge65 — the what-if
                                 // line then visibly extends beyond it when effPA > payoutAge65.
                                 // Previously both lines shared the same age range (max of the two),
@@ -12058,6 +12130,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 return chartRows;
                               })()}
                                 margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                                <defs>
+                                  <linearGradient id="wiBaseGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.20} />
+                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
+                                  </linearGradient>
+                                  <linearGradient id="wiWhatIfGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
+                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.04} />
+                                  </linearGradient>
+                                </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                                 <XAxis dataKey="age" type="number" domain={["dataMin", "dataMax"]} stroke="var(--chart-text)" fontSize={10} tickCount={8} />
                                 <YAxis tickFormatter={v => `$${v >= 1000000 ? (v / 1000000).toFixed(1) + "M" : v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={10} width={52} />
@@ -12078,11 +12160,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                           <span style={{ color: "var(--clr-blue2)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>BASE</span>
                                           <span style={{ color: "var(--clr-emerald)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>WHAT-IF</span>
                                           {[["OA", d.baseOA, d.whatIfOA, "var(--clr-blue)"], ["SA/RA", (d.baseSA||0)+(d.baseRA||0), (d.whatIfSA||0)+(d.whatIfRA||0), "var(--clr-green)"], ["MA", d.baseMA, d.whatIfMA, "var(--clr-violet)"], ["Private", d.basePrv, d.whatIfPrv, "var(--clr-orange)"], ["SRS", d.baseSRS, d.whatIfSRS, "var(--clr-amber)"]].map(([lbl, bv, wv, c]) => (
-                                            <>
+                                            <React.Fragment key={lbl}>
                                               <span style={{ color: c, fontWeight: 700 }}>{lbl}</span>
                                               <span style={{ color: "#e2e8f0", fontFamily: "monospace", textAlign: "right" }}>{formatCurrency(bv ?? 0)}</span>
                                               <span style={{ color: wv != null ? "#e2e8f0" : "#64748b", fontFamily: "monospace", textAlign: "right" }}>{wv != null ? formatCurrency(wv) : "—"}</span>
-                                            </>
+                                            </React.Fragment>
                                           ))}
                                           <span style={{ color: "var(--mc-total-color)", fontWeight: 800, borderTop: "1px solid var(--mc-total-border)", paddingTop: 4 }}>Total</span>
                                           <span style={{ color: "var(--clr-blue2)", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>{formatCurrency(base?.value ?? 0)}</span>
@@ -12099,9 +12181,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                   }}
                                 />
                                 <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={STYLES.chartLegend} />
-                                <Line isAnimationActive={false} type="monotone" dataKey="baseTotal" stroke="var(--clr-blue2)" strokeWidth={2} dot={false} name="Base" activeDot={{ r: 4, fill: "var(--clr-blue2)", stroke: "#fff", strokeWidth: 1.5 }} />
-                                <Line isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="var(--clr-emerald)" strokeWidth={2} dot={false} name={`What-If (PA:${effPA})`} activeDot={{ r: 4, fill: "var(--clr-emerald)", stroke: "#fff", strokeWidth: 1.5 }} />
-                              </LineChart>
+                                <Area isAnimationActive={false} type="monotone" dataKey="baseTotal" stroke="var(--clr-blue2)" strokeWidth={2} fill="url(#wiBaseGrad)" dot={false} name="Base" activeDot={{ r: 4, fill: "var(--clr-blue2)", stroke: "#fff", strokeWidth: 1.5 }} />
+                                <Area isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="var(--clr-emerald)" strokeWidth={2} fill="url(#wiWhatIfGrad)" dot={false} name={`What-If (PA:${effPA})`} activeDot={{ r: 4, fill: "var(--clr-emerald)", stroke: "#fff", strokeWidth: 1.5 }} />
+                              </AreaChart>
                             </ResponsiveContainer>
                           </div>
                         )}
@@ -12273,10 +12355,28 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           strokeWidth={1.5} strokeDasharray="6 3"
                           label={{ position: "insideTopRight", value: `📈 P2: ${p2Rate}%/yr`, fill: "var(--clr-lime)", fontSize: 8, fontWeight: "bold" }} />;
                       })()}
-                      <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" strokeWidth={2} fill="#1d4ed8" fillOpacity={0.15} name="OA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#f59e0b" strokeWidth={2} fill="#f59e0b" fillOpacity={0.15} name="SA (pre-55)" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="#059669" fillOpacity={0.15} name="MA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="var(--clr-purple2)" fillOpacity={0.15} name="RA (from 55)" />
+                      <defs>
+                        <linearGradient id="accOaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#1d4ed8" stopOpacity={0.30} />
+                          <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0.06} />
+                        </linearGradient>
+                        <linearGradient id="accSaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.30} />
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.06} />
+                        </linearGradient>
+                        <linearGradient id="accMaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#059669" stopOpacity={0.30} />
+                          <stop offset="95%" stopColor="#059669" stopOpacity={0.06} />
+                        </linearGradient>
+                        <linearGradient id="accRaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.30} />
+                          <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.06} />
+                        </linearGradient>
+                      </defs>
+                      <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" strokeWidth={2} fill="url(#accOaGrad)" name="OA" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#f59e0b" strokeWidth={2} fill="url(#accSaGrad)" name="SA (pre-55)" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="url(#accMaGrad)" name="MA" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
                       {/* MC band rendered AFTER stacked areas so it overlays on top without
                           hiding the account breakdown. P90 = semi-transparent upper bound fill;
                           no bg-base "eraser" (the old eraser covered the stacked areas entirely).
@@ -12987,15 +13087,25 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </p>
                   <div style={{ height: 350 }}>
                     <ResponsiveContainer width="99%" height="100%">
-                      <LineChart data={comparisonData}>
+                      <AreaChart data={comparisonData}>
+                        <defs>
+                          <linearGradient id="cmpAGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.22} />
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
+                          </linearGradient>
+                          <linearGradient id="cmpBGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#f97316" stopOpacity={0.22} />
+                            <stop offset="95%" stopColor="#f97316" stopOpacity={0.03} />
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                         <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 10 }} />
                         <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Cumulative Total Yield", angle: -90, position: "insideLeft", offset: 10, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
                         <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={(v, n) => [formatCurrency(v), n]} labelFormatter={v => `Age ${v}`} wrapperStyle={STYLES.chartTooltipWrapper} />
                         <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={STYLES.chartLegend} />
-                        <Line isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="var(--clr-blue2)" strokeWidth={2} dot={false} name={`Slot A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
-                        <Line isAnimationActive={false} type="monotone" dataKey="yieldB" stroke="#f97316" strokeWidth={2} dot={false} name={`Slot B${scenarioLabelB ? `: ${scenarioLabelB}` : ""}`} />
-                      </LineChart>
+                        <Area isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="var(--clr-blue2)" strokeWidth={2} fill="url(#cmpAGrad)" dot={false} name={`Slot A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
+                        <Area isAnimationActive={false} type="monotone" dataKey="yieldB" stroke="#f97316"           strokeWidth={2} fill="url(#cmpBGrad)"  dot={false} name={`Slot B${scenarioLabelB ? `: ${scenarioLabelB}` : ""}`} />
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
                   {/* Rev #24 — Export diff button */}
@@ -14101,6 +14211,32 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ height: 320 }}>
                       <ResponsiveContainer width="99%" height="100%">
                         <AreaChart data={strategyChartData} margin={{ top: 10, right: 14, left: 10, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="stgRssGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.32} />
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.06} />
+                            </linearGradient>
+                            <linearGradient id="stgCpfGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.32} />
+                              <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.06} />
+                            </linearGradient>
+                            <linearGradient id="stgOaGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.32} />
+                              <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.06} />
+                            </linearGradient>
+                            <linearGradient id="stgSrsGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#0ea5e9" stopOpacity={0.32} />
+                              <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.06} />
+                            </linearGradient>
+                            <linearGradient id="stgPrvGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#10b981" stopOpacity={0.32} />
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0.06} />
+                            </linearGradient>
+                            <linearGradient id="stgPropGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#f97316" stopOpacity={0.32} />
+                              <stop offset="95%" stopColor="#f97316" stopOpacity={0.06} />
+                            </linearGradient>
+                          </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                           <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 9 }} />
                           <YAxis tickFormatter={v => `$${v >= 1000 ? (v / 1000).toFixed(1) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Monthly Income ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
@@ -14119,17 +14255,25 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           {/* S4 fix: RSS payout area — shown for RSS members in place of CPF LIFE.
                               cpfLife is 0 for RSS (payoutByAge uses LIFE tables), so without this
                               Area the entire income stack chart was blank for RSS members. */}
-                          {isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="rssDrawdown" stackId="1" stroke="var(--clr-blue)" strokeWidth={2} fill="var(--clr-blue)" fillOpacity={0.2} name="RSS Drawdown" />}
-                          {!isForeigner && !isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="cpfLife"      stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="var(--clr-purple2)" fillOpacity={0.2} name="CPF LIFE" />}
-                          <Area isAnimationActive={false} type="monotone" dataKey="oaDraw"       stackId="1" stroke="var(--clr-amber2)" strokeWidth={2} fill="var(--clr-amber2)" fillOpacity={0.2} name="OA Drawdown" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="srs"          stackId="1" stroke="#0ea5e9" strokeWidth={2} fill="#0ea5e9" fillOpacity={0.2} name="SRS" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="privateAsset" stackId="1" stroke="#10b981" strokeWidth={2} fill="#10b981" fillOpacity={0.2} name="Private Assets" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="propMon"      stackId="1" stroke="#f97316" strokeWidth={2} fill="#f97316" fillOpacity={0.2} name="Property Mon." />
+                          {isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="rssDrawdown" stackId="1" stroke="var(--clr-blue)" strokeWidth={2} fill="url(#stgRssGrad)" name="RSS Drawdown" />}
+                          {!isForeigner && !isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="cpfLife"      stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#stgCpfGrad)" name="CPF LIFE" />}
+                          <Area isAnimationActive={false} type="monotone" dataKey="oaDraw"       stackId="1" stroke="var(--clr-amber2)" strokeWidth={2} fill="url(#stgOaGrad)"   name="OA Drawdown" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="srs"          stackId="1" stroke="#0ea5e9"           strokeWidth={2} fill="url(#stgSrsGrad)"  name="SRS" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="privateAsset" stackId="1" stroke="#10b981"           strokeWidth={2} fill="url(#stgPrvGrad)"  name="Private Assets" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="propMon"      stackId="1" stroke="#f97316"           strokeWidth={2} fill="url(#stgPropGrad)" name="Property Mon." />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-                      {[["CPF LIFE", "var(--clr-purple2)"], ["OA Drawdown", "var(--clr-amber2)"], ["SRS", "#0ea5e9"], ["Private Assets", "#10b981"], ["Property Mon.", "#f97316"]].map(([name, color]) => (
+                      {[
+                        ...(isRSSStrategy
+                          ? [["RSS Drawdown", "var(--clr-blue)"]]
+                          : (!isForeigner ? [["CPF LIFE", "var(--clr-purple2)"]] : [])),
+                        ["OA Drawdown", "var(--clr-amber2)"],
+                        ["SRS", "#0ea5e9"],
+                        ["Private Assets", "#10b981"],
+                        ["Property Mon.", "#f97316"],
+                      ].map(([name, color]) => (
                         <div key={name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text-muted)" }}>
                           <div style={{ width: 10, height: 10, borderRadius: 2, background: color, opacity: 0.85 }} />
                           <span>{name}</span>
