@@ -474,7 +474,6 @@ const DEFAULT_INPUTS = {
   medicalUsage: 500, medishieldIP: 900, elderCareShield: 500,
   medicalInflationRate: 5,
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
-  propertyGoalValue: 0,       // optional target property value at payout age (0 = no goal; shows % of net worth instead)
   inflationRate: 2, includeProperty: true,
   sellPropertyAge: 0,
   // Private Assets & Goals
@@ -482,7 +481,6 @@ const DEFAULT_INPUTS = {
   currentPrivateAssets: 0,
   annualPrivateSaving: 0,
   privateAssetGrowthRate: 0,
-  privateAssetGoal: 0,        // optional target private asset value at payout age (0 = no goal; shows % of net worth instead)
   plannedDownpaymentOA: 0,
   downpaymentAge: 35,
   // OA Drawdown (post-payout-age supplementary income from OA)
@@ -686,12 +684,10 @@ const INPUT_LABELS = {
   medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
   propertyLeasehold: "Is Leasehold", propertyLeaseYears: "Lease Years",
-  propertyGoalValue: "Property Goal Value",
   inflationRate: "Inflation Rate %", includeProperty: "Include Property",
   sellPropertyAge: "Sell Property Age",
   targetMonthlyIncome: "Target Monthly Income", currentPrivateAssets: "Private Assets",
   annualPrivateSaving: "Annual Private Saving", privateAssetGrowthRate: "Private Asset Growth %",
-  privateAssetGoal: "Private Asset Goal",
   plannedDownpaymentOA: "OA Downpayment", downpaymentAge: "Downpayment Age",
   oaDrawdownStartAge: "OA Drawdown Start Age", oaDrawdownMonthly: "OA Monthly Drawdown",
   oaDrawdownFloor: "OA Drawdown Floor", propMonetiseEnabled: "Prop Monetise",
@@ -3473,12 +3469,6 @@ export default function App() {
     if (pv < 0 || pv > 50000000) errs.propertyValue = "0 – $50M";
     const pgr = Number(inp.propertyGrowthRate) || 0;
     if (pgr < -20 || pgr > 30) errs.propertyGrowthRate = "-20% to 30%";
-    const propGoal = Number(inp.propertyGoalValue) || 0;
-    if (propGoal < 0 || propGoal > 50000000) errs.propertyGoalValue = "0 – $50M";
-    else if (propGoal > 0 && propGoal < pv) errs.propertyGoalValue = "Goal is below current property value — are you targeting a downgrade?";
-    const privGoal = Number(inp.privateAssetGoal) || 0;
-    if (privGoal < 0 || privGoal > 50000000) errs.privateAssetGoal = "0 – $50M";
-    else if (privGoal > 0 && privGoal < (Number(inp.currentPrivateAssets) || 0)) errs.privateAssetGoal = "Goal is below current balance — intentional?";
     // Housing outflow: 0 – $200,000/yr
     const ho = Number(inp.housingOutflow) || 0;
     if (ho < 0 || ho > 200000) errs.housingOutflow = "0 – $200,000/yr";
@@ -6062,8 +6052,6 @@ export default function App() {
     ${(Number(inputs.sellPropertyAge) || 0) > 0 ? `<div class="row-kv"><span>Sell Property at Age</span><strong>Age ${inputs.sellPropertyAge} — CPF OA refund + 2.5%/yr interest credited to OA${inputs.usePropertyPledge ? " (pledge: RA restored to FRS first)" : ""}</strong></div>` : ''}
     ${inputs.oaToSaTransfer > 0 ? `<div class="row-kv"><span>OA→SA Transfer/yr</span><strong>${fc(inputs.oaToSaTransfer)}</strong></div>` : ''}
     ${(() => { const _rstu = Number(inputs.vcSaTopup) || 0; const _ca = Number(inputs.currentAge) || 0; const _isSC = (inputs.citizenStatus === 'SC') || !inputs.citizenStatus; const _mrssAmt = _isSC && _rstu > 0 && (_ca >= 55 || !!inputs.isPwD) ? Math.min(_rstu, 2000) : 0; return _mrssAmt > 0 ? `<div class="row-kv"><span>Est. MRSS Grant/yr</span><strong>${fc(_mrssAmt)}</strong></div>` : ''; })()}
-    ${(Number(inputs.propertyGoalValue) || 0) > 0 ? `<div class="row-kv"><span>Property Goal</span><strong>${fc(Number(inputs.propertyGoalValue))}</strong></div>` : ''}
-    ${(Number(inputs.privateAssetGoal) || 0) > 0 ? `<div class="row-kv"><span>Private Asset Goal</span><strong>${fc(Number(inputs.privateAssetGoal))}</strong></div>` : ''}
     <div class="row-kv"><span>Current Age</span><strong>${ca}</strong></div>
     <div class="row-kv"><span>Current Year</span><strong>${cy}</strong></div>
     <div class="row-kv"><span>Payout Age</span><strong>${pa}</strong></div>
@@ -9916,16 +9904,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Growth decelerates when lease &lt; 60 yrs</p>
                         </div>
                       )}
-                      {/* Property Goal — optional target value for Summary card progress bar */}
-                      <div>
-                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                          Property Goal ($) — optional
-                          <TooltipBox id="t-prop-goal" text="Your target property value at payout age. Leave at 0 to show '% of net worth' on the Summary card instead. If set, the Summary card shows 'vs goal $X / Y%' as the progress metric." />
-                        </label>
-                        <input type="text" inputMode="decimal" name="propertyGoalValue" value={getDisplayValue("propertyGoalValue", inputs.propertyGoalValue)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("propertyGoalValue")} aria-label="Property goal value" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propertyGoalValue ? "var(--clr-amber3)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                        {inputErrors.propertyGoalValue && <p style={{ fontSize: 10, color: "var(--clr-amber3)", marginTop: 2 }}>⚠ {inputErrors.propertyGoalValue}</p>}
-                        {(Number(inputs.propertyGoalValue) || 0) > 0 && !inputErrors.propertyGoalValue && <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Target shown as progress on Summary card</p>}
-                      </div>
                     </div>
                   </div>
 
@@ -10116,16 +10094,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Growth (%)</label>
                       <input type="text" inputMode="decimal" name="privateAssetGrowthRate" value={inputs.privateAssetGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
-                  </div>
-                  {/* Private Asset Goal — optional target for Summary card progress bar */}
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>
-                      Private Asset Goal ($) — optional
-                      <TooltipBox id="t-priv-goal" text="Your target private asset value at payout age. Leave at 0 to show '% of net worth' on the Summary card instead. If set, the Summary card shows 'vs goal $X / Y%' as the progress metric." />
-                    </label>
-                    <input type="text" inputMode="decimal" name="privateAssetGoal" value={getDisplayValue("privateAssetGoal", inputs.privateAssetGoal)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("privateAssetGoal"); e.target.select(); }} aria-label="Private asset goal" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.privateAssetGoal ? "var(--clr-amber3)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                    {inputErrors.privateAssetGoal && <p style={{ fontSize: 10, color: "var(--clr-amber3)", marginTop: 2 }}>⚠ {inputErrors.privateAssetGoal}</p>}
-                    {(Number(inputs.privateAssetGoal) || 0) > 0 && !inputErrors.privateAssetGoal && <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Target shown as progress on Summary card</p>}
                   </div>
 
                   {/* SRS — Supplementary Retirement Scheme */}
@@ -11298,7 +11266,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             const _poly  = _svgPts.map(p => `${p.x},${p.y}`).join(' ');
                             const _area  = _poly + ` ${_svgPts[_svgPts.length - 1].x},${_SH} ${_svgPts[0].x},${_SH}`;
                             const _final = s.value;
-                            // Progress bar: MA→BHS, RA→ERS, OA→withdrawal target, Property/Private→goal, SRS→annual cap, others→% of net worth
+                            // Progress bar: MA→BHS, RA→ERS, others→% of net worth
                             let _tPct, _tLabel, _tMet;
                             if (s.name === 'MA') {
                               _tPct   = Math.min(100, Math.round((s.value / _bhsAtPa) * 100));
@@ -11308,46 +11276,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               _tPct   = Math.min(100, Math.round((s.value / _ersAtPa) * 100));
                               _tMet   = s.value >= _ersAtPa ? 'ERS reached ✓' : null;
                               _tLabel = `vs ERS ${formatCurrency(_ersAtPa)}`;
-                            } else if (s.name === 'OA') {
-                              // vs withdrawal target: fraction of monthly income target covered by OA draw
-                              const _oaDrawMonthly  = effectiveOaDrawMonthly || 0;
-                              const _targetMonthly  = Number(debouncedInputs.targetMonthlyIncome) || 0;
-                              if (_oaDrawMonthly > 0 && _targetMonthly > 0) {
-                                _tPct   = Math.min(100, Math.round((_oaDrawMonthly / _targetMonthly) * 100));
-                                _tLabel = 'vs withdrawal target';
-                                _tMet   = null;
-                              } else {
-                                _tPct   = Math.round((s.value / nwTotal) * 100);
-                                _tLabel = 'of net worth';
-                                _tMet   = null;
-                              }
-                            } else if (s.name === 'Property') {
-                              const _propGoal = Number(debouncedInputs.propertyGoalValue) || 0;
-                              if (_propGoal > 0) {
-                                _tPct   = Math.min(100, Math.round((s.value / _propGoal) * 100));
-                                _tLabel = `vs goal ${formatCurrency(_propGoal)}`;
-                                _tMet   = s.value >= _propGoal ? 'Goal reached ✓' : null;
-                              } else {
-                                _tPct   = Math.round((s.value / nwTotal) * 100);
-                                _tLabel = 'of net worth';
-                                _tMet   = null;
-                              }
-                            } else if (s.name === 'Private') {
-                              const _privGoal = Number(debouncedInputs.privateAssetGoal) || 0;
-                              if (_privGoal > 0) {
-                                _tPct   = Math.min(100, Math.round((s.value / _privGoal) * 100));
-                                _tLabel = `vs goal ${formatCurrency(_privGoal)}`;
-                                _tMet   = s.value >= _privGoal ? 'Goal reached ✓' : null;
-                              } else {
-                                _tPct   = Math.round((s.value / nwTotal) * 100);
-                                _tLabel = 'of net worth';
-                                _tMet   = null;
-                              }
-                            } else if (s.name === 'SRS') {
-                              const _srsCap = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
-                              _tPct   = Math.min(100, Math.round((s.value / _srsCap) * 100));
-                              _tLabel = 'vs annual cap';
-                              _tMet   = null;
                             } else {
                               _tPct   = Math.round((s.value / nwTotal) * 100);
                               _tLabel = 'of net worth';
