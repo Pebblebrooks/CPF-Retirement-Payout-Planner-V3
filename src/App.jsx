@@ -11215,27 +11215,48 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     const _yrsPa = Math.max(0, (_bYr + (payoutAge65 - (Number(inputs.currentAge) || 35))) - 2026);
                     const _bhsAtPa = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + _rsG, _yrsPa));
                     const _ersAtPa = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + _rsG, _yrsPa));
-                    // ── Per-account growth-rate labels ───────────────────────────────────────
+                    // ── Per-account growth-rate labels (H4: "+" prefix on all rates) ─────
                     const _rateLabel = {
-                      OA: '2.5% p.a. interest',       MA: '4.0% p.a. interest',
-                      RA: '4.0% p.a. interest',        Property: `${Number(inputs.propertyGrowthRate) || 0}% p.a. appreciation`,
-                      Private: `${Number(inputs.privateAssetGrowthRate) || 0}% p.a. return`,
-                      SRS: `${Number(inputs.srsReturnRate) || 0}% p.a. return`,
+                      OA: '+2.5% p.a. interest',      MA: '+4.0% p.a. interest',
+                      RA: '+4.0% p.a. interest',       Property: `+${Number(inputs.propertyGrowthRate) || 0}% p.a. appreciation`,
+                      Private: `+${Number(inputs.privateAssetGrowthRate) || 0}% p.a. return`,
+                      SRS: `+${Number(inputs.srsReturnRate) || 0}% p.a. return`,
                     };
+                    // ── H1: comparison delta — net worth now vs age-65 baseline ──────────
+                    const _compAge  = 65;
+                    const _compRow  = (displayAccumulation || []).find(r => r.age === _compAge);
+                    const _compNw   = _compRow
+                      ? Math.max(0, (_compRow.oa||0) + (_compRow.ma||0) + (_compRow.ra||0)
+                          + (inputs.includeProperty ? (_compRow.propertyValue||0) : 0)
+                          + (_compRow.privateAssets||0) + (_compRow.srsBalance||0))
+                      : 0;
+                    const _delta    = nwTotal - _compNw;
+                    const _showDelta = _compRow && payoutAge65 !== _compAge && _compNw > 0;
                     return (
                       <div style={{ marginTop: 16 }}>
                         <div style={{ height: 1, background: "var(--border-subtle)", marginBottom: 16 }} />
-                        {/* ── Title row ── */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-                          <PieChart style={{ width: 14, height: 14, color: "var(--clr-blue)", flexShrink: 0 }} />
-                          <p style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", margin: 0, letterSpacing: "0.05em" }}>Net Worth at Age {inputs.payoutAge}</p>
-                          <span style={{ fontSize: 16, fontWeight: 900, color: "var(--text-bright)", fontFamily: "monospace" }}>{formatCurrency(nwTotal)}</span>
+                        {/* ── H1: Two-tier title row ── */}
+                        <div style={{ marginBottom: 16, textAlign: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 4 }}>
+                            <PieChart style={{ width: 13, height: 13, color: "var(--text-muted)", flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.03em" }}>
+                              Net worth at age <strong style={{ color: "var(--text-bright)" }}>{inputs.payoutAge}</strong>
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 22, fontWeight: 900, color: "var(--text-bright)", fontFamily: "monospace", letterSpacing: "-0.02em" }}>{formatCurrency(nwTotal)}</span>
+                            {_showDelta && (
+                              <span style={{ fontSize: 12, fontWeight: 700, color: _delta >= 0 ? "var(--clr-green)" : "var(--clr-red)", fontFamily: "monospace" }}>
+                                {_delta >= 0 ? '+' : ''}{_delta >= 1000000 ? `$${(_delta/1000000).toFixed(1)}M` : _delta >= 1000 ? `$${Math.round(_delta/1000)}k` : formatCurrency(Math.abs(_delta))} vs age {_compAge}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        {/* ── Percentage labels row (above bar) ── */}
+                        {/* ── H2: Percentage labels above bar — show all segments ≥ 3% ── */}
                         <div style={{ display: "flex", width: "100%", marginBottom: 5 }}>
                           {nwSegments.map(s => (
                             <div key={s.name} style={{ flex: s.pct, textAlign: "center", minWidth: 0, overflow: "hidden" }}>
-                              {s.pct >= 5 && (
+                              {s.pct >= 3 && (
                                 <span style={{ fontSize: 10, fontWeight: 800, color: s.color, display: "block", lineHeight: 1.2 }}>
                                   {Math.round(s.pct)}%
                                 </span>
@@ -11243,7 +11264,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             </div>
                           ))}
                         </div>
-                        {/* ── Stacked composition bar ── */}
+                        {/* ── Stacked composition bar — H2: show name labels ≥ 5% ── */}
                         <div style={{
                           display: "flex", width: "100%", height: 34,
                           borderRadius: 10, overflow: "hidden",
@@ -11256,7 +11277,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               display: "flex", alignItems: "center", justifyContent: "center",
                               minWidth: 0, position: "relative", overflow: "hidden"
                             }}>
-                              {s.pct >= 11 && (
+                              {s.pct >= 5 && (
                                 <span style={{ color: "rgba(255,255,255,0.92)", fontSize: 10, fontWeight: 800, letterSpacing: "0.03em", pointerEvents: "none" }}>
                                   {s.name}
                                 </span>
@@ -11264,21 +11285,24 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             </div>
                           ))}
                         </div>
-                        {/* ── Pill legend — bunched left, coloured dot + tinted background ── */}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10, marginBottom: 16 }}>
+                        {/* ── H3: Pill legend — neutral white pills (not tinted) ── */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10, marginBottom: 4 }}>
                           {nwSlices.map(s => (
                             <span key={s.name} style={{
                               display: "inline-flex", alignItems: "center", gap: 4,
                               fontSize: 11, fontWeight: 600,
                               padding: "3px 9px", borderRadius: 20,
-                              background: `${s.color}22`, color: s.color,
-                              border: `1px solid ${s.color}44`,
+                              background: "rgba(255,255,255,0.08)",
+                              color: "var(--text-muted)",
+                              border: "1px solid rgba(255,255,255,0.12)",
                             }}>
                               <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.color, flexShrink: 0, display: "inline-block" }} />
                               {s.name}
                             </span>
                           ))}
                         </div>
+                        {/* ── H6: Sparkline hover hint ── */}
+                        <p style={{ fontSize: 9, color: "var(--text-subtle)", margin: "0 0 12px 0", letterSpacing: "0.02em" }}>Hover any sparkline to see values by age.</p>
                         {/* ── Enhanced cards: sparkline + progress bar — 3 columns ── */}
                         {/* Hover interaction uses direct DOM manipulation (no hooks) to avoid re-renders */}
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
