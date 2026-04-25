@@ -4390,6 +4390,11 @@ export default function App() {
   const handleImportProfile = (e) => {
     const file = e.target.files[0]; if (!file) return;
     const target = e.target;
+    // FIX-4: Reset the input value BEFORE the async read so the browser registers a
+    // value change if the user immediately re-selects the same file. Resetting inside
+    // reader.onload (the previous approach) was too late — the file picker had already
+    // closed and the second onChange was silently suppressed.
+    target.value = "";
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -4400,11 +4405,38 @@ export default function App() {
         const sanitiseInputs = (raw) => {
           const safe = { ...DEFAULT_INPUTS };
           Object.keys(DEFAULT_INPUTS).forEach(k => {
-            if (raw[k] !== undefined) safe[k] = raw[k];
+            // FIX-3: skip null values for array fields — let DEFAULT_INPUTS [] stand.
+            // Old profiles sometimes stored lifeEvents: null explicitly (before the
+            // field existed as an array). null !== undefined passes the old guard and
+            // overwrites the [] default, which causes subtle downstream issues.
+            if (raw[k] !== undefined && !(k === 'lifeEvents' && raw[k] === null)) {
+              safe[k] = raw[k];
+            }
           });
+          // FIX-5: Coerce critical boolean fields that old exports may have stored as
+          // strings ("true"/"false") or numbers (1/0). The engine uses strict === true
+          // checks, so string "true" → false silently inverts gender, employment type, etc.
+          const BOOL_FIELDS = ['isMale','isSelfEmployed','includeProperty','usePropertyPledge',
+            'oaToMaForLovedOne','oaToSaForLovedOne','propMonetiseEnabled','dieWithZeroEnabled',
+            'isPwD','propertyLeasehold','showSalaryCalc'];
+          BOOL_FIELDS.forEach(k => {
+            if (typeof safe[k] === 'string') safe[k] = safe[k] === 'true' || safe[k] === '1';
+            else if (typeof safe[k] === 'number') safe[k] = safe[k] !== 0;
+          });
+          // FIX-3b: Always guarantee lifeEvents is an array (belt-and-suspenders).
+          if (!Array.isArray(safe.lifeEvents)) safe.lifeEvents = [];
           // Legacy migration: old profiles stored a single cpfisAmount — seed OA field from it
           if (raw.cpfisAmount !== undefined && !raw.cpfisOaAmount) {
             safe.cpfisOaAmount = raw.cpfisAmount;
+          }
+          // FIX-2: srsCitizenPR → citizenStatus migration.
+          // Old profiles used srsCitizenPR (boolean) for the SRS cap gate:
+          //   true  = SC/PR ($15,300 cap)
+          //   false = foreigner ($35,700 cap)
+          // New profiles use citizenStatus: 'SC' | 'PR' | 'foreigner'.
+          // Without migration, foreigners would load as SC — wrong SRS cap + scheme gates.
+          if (raw.srsCitizenPR === false && raw.citizenStatus === undefined) {
+            safe.citizenStatus = 'foreigner';
           }
           // IMP-4: sanitise each life event object to guard against old schemas.
           // Previously the entire lifeEvents array was copied verbatim — if an event was
@@ -4453,13 +4485,15 @@ export default function App() {
           return safe;
         };
         // Support both old format (just inputs) and new full-state format.
-        // Fix 3: explicit object-type guard prevents a non-object p.inputs value
-        // (e.g. null, string) from being used as-is — falls back to p for legacy format.
-        const rawInputs = (p.inputs && typeof p.inputs === 'object') ? p.inputs : p;
-        if (!rawInputs || typeof rawInputs !== "object") {
+        // FIX-1: typeof [] === 'object' in JS, so Array.isArray must be excluded explicitly.
+        // Without this, a profile whose inputs key was accidentally stored as an array would
+        // pass the guard and sanitiseInputs would find zero matching keys → silent blank load.
+        const rawInputs = (p.inputs && typeof p.inputs === 'object' && !Array.isArray(p.inputs))
+          ? p.inputs
+          : (p && typeof p === 'object' && !Array.isArray(p) ? p : null);
+        if (!rawInputs) {
           alert("Invalid profile file — no inputs found. Make sure you are loading a CPF Planner Pro JSON export.");
-          target.value = "";
-          return;
+          return; // target.value already cleared before the read
         }
         const safeIn = sanitiseInputs(rawInputs);
         setInputs(safeIn);
@@ -4546,7 +4580,7 @@ export default function App() {
           //   no scenario keys in file → clean single-profile export, say so clearly
           const fileHadScenarios = p.scenarioA != null || p.scenarioB != null || p.scenarioAInputs != null || p.scenarioBInputs != null;
           // Career break migration notice — detect if migration fired on any sanitised input set
-          const rawForCbCheck = (p.inputs && typeof p.inputs === 'object') ? p.inputs : p;
+          const rawForCbCheck = (p.inputs && typeof p.inputs === 'object' && !Array.isArray(p.inputs)) ? p.inputs : p;
           const cbMigrated = rawForCbCheck.careerBreakStartAge !== undefined && rawForCbCheck.careerBreakStartAge !== "" &&
                              rawForCbCheck.careerBreakEndAge   !== undefined && rawForCbCheck.careerBreakEndAge   !== "";
           const baseToast = scenariosRefreshed
@@ -4566,7 +4600,6 @@ export default function App() {
       } catch (err) {
         alert(`Could not read profile file.\n\nMake sure you are loading a CPF Planner Pro JSON export (.json). If the file was saved with an older version of the app, try the Share Code import instead.\n\nTechnical detail: ${err.message}`);
       }
-      target.value = "";
     };
     reader.readAsText(file);
   };
