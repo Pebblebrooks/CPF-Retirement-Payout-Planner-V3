@@ -14488,23 +14488,34 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       );
                     })()}
 
-                    {/* Current age + payout age marker row */}
+                    {/* Current age + payout age marker row
+                        FIX: labels are staggered onto two vertical tracks so they never
+                        overlap regardless of how close ca and pa are.
+                        • "Now"      label → top tier   (top: -12 above the tick line)
+                        • "LIFE/RSS" label → bottom tier (bottom: -10 below the tick line)
+                        Container height raised 24 → 40 to accommodate both tiers.        */}
                     <div style={{ display: "flex", alignItems: "center", marginTop: 4 }}>
                       <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
-                      <div style={{ flex: 1, position: "relative", height: 24 }}>
-                        <div style={{ position: "absolute", top: 4, bottom: 0, width: 1.5, background: "var(--clr-green)", opacity: 0.9, ...ganttDot(ca) }}>
-                          <span style={{ position: "absolute", bottom: 4, left: 3, fontSize: 8, color: "var(--clr-green)", fontWeight: 800, whiteSpace: "nowrap" }}>Now ({ca})</span>
+                      <div style={{ flex: 1, position: "relative", height: 40 }}>
+
+                        {/* — Now (current age) — tick line in middle, label in top tier — */}
+                        <div style={{ position: "absolute", top: 14, bottom: 8, width: 1.5, background: "var(--clr-green)", opacity: 0.9, ...ganttDot(ca) }}>
+                          <span style={{ position: "absolute", top: -12, left: 3, fontSize: 8, color: "var(--clr-green)", fontWeight: 800, whiteSpace: "nowrap" }}>Now ({ca})</span>
                         </div>
-                        {/* R3 Gantt marker fix: show RSS payout start age for RSS members, CPF LIFE payout age otherwise */}
+
+                        {/* — LIFE / RSS payout age — tick line in middle, label in bottom tier —
+                            R3 Gantt marker fix: show RSS payout start age for RSS members,
+                            CPF LIFE payout age otherwise.                                      */}
                         {isRSSStrategy ? (
-                          <div style={{ position: "absolute", top: 4, bottom: 0, width: 1.5, background: "var(--clr-blue)", opacity: 0.9, ...ganttDot(Number(debouncedInputs.rssPayoutStartAge) || 65) }}>
-                            <span style={{ position: "absolute", bottom: 4, left: 3, fontSize: 8, color: "var(--clr-blue)", fontWeight: 800, whiteSpace: "nowrap" }}>RSS ({Number(debouncedInputs.rssPayoutStartAge) || 65})</span>
+                          <div style={{ position: "absolute", top: 14, bottom: 8, width: 1.5, background: "var(--clr-blue)", opacity: 0.9, ...ganttDot(Number(debouncedInputs.rssPayoutStartAge) || 65) }}>
+                            <span style={{ position: "absolute", bottom: -10, left: 3, fontSize: 8, color: "var(--clr-blue)", fontWeight: 800, whiteSpace: "nowrap" }}>RSS ({Number(debouncedInputs.rssPayoutStartAge) || 65})</span>
                           </div>
                         ) : (
-                          <div style={{ position: "absolute", top: 4, bottom: 0, width: 1.5, background: "var(--clr-purple)", opacity: 0.9, ...ganttDot(pa) }}>
-                            <span style={{ position: "absolute", bottom: 4, left: 3, fontSize: 8, color: "var(--clr-purple)", fontWeight: 800, whiteSpace: "nowrap" }}>LIFE ({pa})</span>
+                          <div style={{ position: "absolute", top: 14, bottom: 8, width: 1.5, background: "var(--clr-purple)", opacity: 0.9, ...ganttDot(pa) }}>
+                            <span style={{ position: "absolute", bottom: -10, left: 3, fontSize: 8, color: "var(--clr-purple)", fontWeight: 800, whiteSpace: "nowrap" }}>LIFE ({pa})</span>
                           </div>
                         )}
+
                       </div>
                     </div>
                   </div>
