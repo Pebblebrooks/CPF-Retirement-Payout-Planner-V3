@@ -3232,7 +3232,7 @@ export default function App() {
   // All section IDs — used for expand-all default and expandAllSections helper
   // BUG-2b fix: "lifeevents" was missing — section never opened on fresh load, was excluded
   // from Expand All, and its open/closed state was not persisted in localStorage.
-  const ALL_SECTION_IDS = ["profile", "contribs", "topups", "outflows", "transfers", "property", "privateAssets", "lifeevents", "decumulation"];
+  const ALL_SECTION_IDS = ["profile", "cpfBalances", "contribs", "topups", "outflows", "transfers", "property", "privateAssets", "lifeevents", "decumulation"];
   // Item 28: use localStorage (persists across tab closes) with a versioned key so
   // a future schema change can bump to 'cpf_planner_v2_sections' without reading stale data.
   const SECTIONS_STORAGE_KEY = 'cpf_planner_v1_sections';
@@ -8164,7 +8164,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 State: if any section in col is open → clicking collapses all; if all closed → expands all. */}
             {(() => {
               const colSections = {
-                1: ["profile", "contribs", "topups"],
+                1: ["profile", "cpfBalances", "contribs", "topups"],
                 2: ["outflows", "transfers", "property"],
                 3: ["privateAssets", "lifeevents", "decumulation"],
               };
@@ -8210,7 +8210,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <div className="sidebar-col sidebar-col-1">
               <div className={`sidebar-col-body${colOpen[1] ? "" : " col-collapsed"}`}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="profile" label="Profile & Balances" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} />
+              <SidebarSectionHeader id="profile" label="Profile" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} />
               {openSections.has("profile") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div><label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>Name</label>
@@ -8589,69 +8589,67 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       )}
                     </div>
                   )}
-                  {/* CPF Balances + Goal Trackers — locked for foreigners.
-                      Structure: position:relative gate → opacity/pointer-events dim → content
-                                              → overlay (absolute, inside gate) → gate closes.
-                      The overlay MUST be inside position:relative before it closes so
-                      inset:0 is contained to this block and does not cover the whole sidebar. */}
-                  <div style={{ position: "relative" }}>
-                    {/* Single opacity wrapper covers BOTH balance inputs AND goal trackers */}
-                    <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto" }}>
-                      {/* Balance inputs */}
-                      {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
-                        <div key={n}>
-                          <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
-                          <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l + ' balance'} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                        </div>
-                      ))}
-                      {/* Goal Trackers */}
-                      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-subtle)" }}>
-                        {/* SA/RA Goal */}
-                        <div style={{ marginBottom: 16 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
-                            <span>{is55Plus ? "RA" : "SA"} Goal <TooltipBox id="t-ers" text={`Basic Retirement Sum (BRS): ${formatCurrency(currentBRS)} · Full Retirement Sum (FRS): ${formatCurrency(currentFRS)} · Enhanced Retirement Sum (ERS): ${formatCurrency(currentERS)}`} /></span>
-                            <span style={{ color: currentSaRa >= currentFRS ? "var(--clr-sky)" : "var(--clr-amber)", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
-                              {Math.round((currentSaRa / currentFRS) * 100)}%{currentSaRa >= currentFRS ? " ✓" : ""}
-                            </span>
-                          </div>
-                          <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
-                            {[25, 50].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
-                            <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#3b82f6,#06b6d4)", width: `${saRaVisualWidth}%`, transition: "width 0.8s" }} />
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
-                            <span>0</span><span>BRS</span><span>FRS</span><span>ERS</span>
-                          </div>
-                        </div>
-                        {/* MA Goal */}
-                        <div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
-                            <span>MA Goal <TooltipBox id="t-bhs" text={`Basic Healthcare Sum (BHS): ${formatCurrency(currentBHS)}. MA cap — excess flows to SA (before 55) or RA (after 55).`} /></span>
-                            <span style={{ color: currentMa >= currentBHS ? "var(--clr-sky)" : "var(--clr-blue)", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
-                              {Math.round(Number(bhsPercentText))}%{currentMa >= currentBHS ? " ✓" : ""}
-                            </span>
-                          </div>
-                          <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
-                            {[25, 50, 75].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
-                            <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#8b5cf6,#6366f1)", width: `${bhsVisualWidth}%`, transition: "width 0.8s" }} />
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
-                            <span>0</span><span>25%</span><span>50%</span><span>75%</span><span>MAX</span>
-                          </div>
-                        </div>
-                      </div>{/* /Goal Trackers */}
-                    </div>{/* /opacity+pointerEvents dim wrapper — closes before overlay */}
-                    {/* Overlay: position:absolute is contained by position:relative parent above */}
-                    {isForeigner && (
-                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 10, zIndex: 10, pointerEvents: "all" }}>
-                        <div style={{ background: "rgba(15,23,42,0.82)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 16px", fontSize: 10, color: "var(--clr-amber)", fontWeight: 700, textAlign: "center" }}>
-                          🔒 No CPF account — balances &amp; goals not applicable
-                        </div>
-                      </div>
-                    )}
-                  </div>{/* /position:relative gate — overlay is contained here */}
                 </div>{/* /flex column L5279 */}
               </div>}{/* /openSections profile body */}
             </div>{/* /profile section outer */}
+
+            {/* CPF Balances — new section split from Profile & Balances */}
+            <div style={{ position: "relative" }}>
+            {isForeigner && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 10, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
+              </div>
+            )}
+            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
+              <SidebarSectionHeader id="cpfBalances" label="CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} />
+              {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {/* Balance inputs */}
+                  {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
+                    <div key={n}>
+                      <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
+                      <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l + ' balance'} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                    </div>
+                  ))}
+                  {/* Goal Trackers */}
+                  <div style={{ marginTop: 10, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}>
+                    {/* SA/RA Goal */}
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
+                        <span>{is55Plus ? "RA" : "SA"} Goal <TooltipBox id="t-ers" text={`Basic Retirement Sum (BRS): ${formatCurrency(currentBRS)} · Full Retirement Sum (FRS): ${formatCurrency(currentFRS)} · Enhanced Retirement Sum (ERS): ${formatCurrency(currentERS)}`} /></span>
+                        <span style={{ color: currentSaRa >= currentFRS ? "var(--clr-sky)" : "var(--clr-amber)", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
+                          {Math.round((currentSaRa / currentFRS) * 100)}%{currentSaRa >= currentFRS ? " ✓" : ""}
+                        </span>
+                      </div>
+                      <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
+                        {[25, 50].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
+                        <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#3b82f6,#06b6d4)", width: `${saRaVisualWidth}%`, transition: "width 0.8s" }} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
+                        <span>0</span><span>BRS</span><span>FRS</span><span>ERS</span>
+                      </div>
+                    </div>
+                    {/* MA Goal */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8 }}>
+                        <span>MA Goal <TooltipBox id="t-bhs" text={`Basic Healthcare Sum (BHS): ${formatCurrency(currentBHS)}. MA cap — excess flows to SA (before 55) or RA (after 55).`} /></span>
+                        <span style={{ color: currentMa >= currentBHS ? "var(--clr-sky)" : "var(--clr-blue)", fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
+                          {Math.round(Number(bhsPercentText))}%{currentMa >= currentBHS ? " ✓" : ""}
+                        </span>
+                      </div>
+                      <div style={{ width: "100%", background: "var(--bg-input)", borderRadius: 999, height: 10, overflow: "hidden", position: "relative" }}>
+                        {[25, 50, 75].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
+                        <div style={{ height: 10, borderRadius: 999, background: "linear-gradient(90deg,#8b5cf6,#6366f1)", width: `${bhsVisualWidth}%`, transition: "width 0.8s" }} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 4, fontFamily: "monospace" }}>
+                        <span>0</span><span>25%</span><span>50%</span><span>75%</span><span>MAX</span>
+                      </div>
+                    </div>
+                  </div>{/* /Goal Trackers */}
+                </div>
+              </div>}
+            </div>
+            </div>{/* /cpfBalances gate wrapper */}
             {/* Mandatory Contribs */}
             <div style={{ position: "relative" }}>
             {isForeigner && (
@@ -9142,6 +9140,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 </div>}
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
+                  {/* ── SUB-SECTION: CPF Voluntary ─────────────────────────────── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 6, borderBottom: "1px solid rgba(var(--clr-green-rgb),0.25)", marginBottom: 2 }}>
+                    <Gift style={{ width: 11, height: 11, color: "var(--clr-green)", flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-green)", textTransform: "uppercase", letterSpacing: "0.06em" }}>CPF Voluntary</span>
+                  </div>
+
                   {/* VC3A — single cash lump-sum + read-only breakdown */}
                   <div>
                     <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
@@ -9508,6 +9512,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
 
                   {/* Gov grants */}
+                  {/* ── SUB-SECTION: Gov Schemes ────────────────────────────────── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, paddingBottom: 6, borderTop: "1px solid rgba(var(--clr-green-rgb),0.25)", borderBottom: "1px solid rgba(var(--clr-green-rgb),0.25)", marginTop: 4, marginBottom: 2 }}>
+                    <ShieldCheck style={{ width: 11, height: 11, color: "var(--clr-green)", flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-green)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Gov Schemes</span>
+                  </div>
                   <div>
                     <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
                       Gov Grants (to {is55Plus ? "RA" : "SA"}) <FreqToggle freqKey="govGrantFreq" durKey="govGrantDur" inputs={inputs} setInputs={setInputs} />
@@ -9608,11 +9617,23 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+                  {/* ── SUB-SECTION: Medical ──────────────────────────────────── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 6, borderBottom: "1px solid rgba(244,63,94,0.25)", marginBottom: 2 }}>
+                    <MinusCircle style={{ width: 11, height: 11, color: "#f472b6", flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.06em" }}>Medical</span>
+                  </div>
+
                   {[["medicalUsage", "Medical Usage (MA) — Annual", "annual"], ["medishieldIP", "MediShield Life / IP (MA) — Annual", "annual"], ["elderCareShield", "ElderShield / CareShield (MA) — Annual", "annual"]].map(([n, l, freq]) => (
                     <div key={n}><div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>{l.replace(" — Annual","")}</div>
                       <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
                   ))}
                   {/* CPFIS — OA and SA separate fields */}
+                  {/* ── SUB-SECTION: Investment ───────────────────────────────── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, paddingBottom: 6, borderTop: "1px solid rgba(244,63,94,0.25)", borderBottom: "1px solid rgba(244,63,94,0.25)", marginTop: 4, marginBottom: 2 }}>
+                    <TrendingUp style={{ width: 11, height: 11, color: "#f472b6", flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.06em" }}>Investment</span>
+                  </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ padding: "10px 0", borderRadius: 10, background: "rgba(244,63,94,0.04)", border: "1px solid rgba(244,63,94,0.18)" }}>
                       <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4, paddingLeft: 12, paddingRight: 12 }}>
@@ -9686,6 +9707,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         );
                       })()}
                     </div>
+                  </div>
+                  {/* ── SUB-SECTION: Withdrawals ─────────────────────────────── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, paddingBottom: 6, borderTop: "1px solid rgba(244,63,94,0.25)", borderBottom: "1px solid rgba(244,63,94,0.25)", marginTop: 4, marginBottom: 2 }}>
+                    <LogOut style={{ width: 11, height: 11, color: "#f472b6", flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.06em" }}>Withdrawals</span>
                   </div>
                   {/* D1: OA Education Loan Scheme */}
                   {(() => {
@@ -10854,10 +10880,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     { label: "Payout Start", value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "var(--clr-amber)", tip: "Age when CPF Board began your RSS monthly payouts" },
                   ] : [
                     { label: "Total CPF", sublabel: "at payout age", value: formatCurrency(dispTotal), color: "var(--clr-blue)", tip: "Total CPF balance (OA+MA+RA) at your chosen payout age" },
+                    { label: "Retirement (RA)", sublabel: ra55Sublabel, value: formatCurrency(ra55), color: "var(--clr-purple)", tip: ca2 >= 55 ? "Current Retirement Account balance — determines CPF LIFE payout tier (BRS/FRS/ERS)" : "Projected RA at age 55 — determines CPF LIFE payout tier (BRS/FRS/ERS)" },
                     { label: "Standard plan", sublabel: "monthly payout", value: paRow?.standardMonthly ? formatCurrency(paRow.standardMonthly) : "—", color: "var(--clr-slate)", tip: "Standard Plan: fixed level monthly payout for life" },
                     { label: "Escalating plan", sublabel: "monthly payout", value: paRow?.escalatingMonthly ? formatCurrency(paRow.escalatingMonthly) : "—", color: "var(--clr-emerald)", tip: "Escalating Plan: starts ~20% lower, grows 2%/yr for life" },
                     { label: "Basic plan", sublabel: "monthly payout", value: paRow?.basicMonthly ? formatCurrency(paRow.basicMonthly) : "—", color: "var(--clr-amber3)", tip: "Basic Plan: RA self-funds to ~age 90, then pool phase" },
-                    { label: "Retirement (RA)", sublabel: ra55Sublabel, value: formatCurrency(ra55), color: "var(--clr-purple)", tip: ca2 >= 55 ? "Current Retirement Account balance — determines CPF LIFE payout tier (BRS/FRS/ERS)" : "Projected RA at age 55 — determines CPF LIFE payout tier (BRS/FRS/ERS)" },
                     { label: "Payout age", sublabel: "CPF LIFE start", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts. Estimates based on 2026 CPF Board data." },
                   ];
                 })().map(({ label, sublabel, value, color, tip }, i) => (
