@@ -2956,7 +2956,7 @@ function KpiCard({ label, sublabel, value, color, tip, isFirst = false, isEarly 
     : isEarly
     ? "rgba(var(--clr-emerald-rgb),0.04)"
     : "transparent";
-  const labelColor = isFirst ? "var(--clr-blue)" : "var(--text-bright)";
+  const labelColor = color;
   return (
     <div
       title={tip || ""}
@@ -9141,9 +9141,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
                   {/* ── SUB-SECTION: CPF Voluntary ─────────────────────────────── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 6, borderBottom: "1px solid rgba(var(--clr-green-rgb),0.25)", marginBottom: 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(var(--clr-green-rgb),0.10)", border: "1px solid rgba(var(--clr-green-rgb),0.22)", margin: "2px 0 4px" }}>
                     <Gift style={{ width: 11, height: 11, color: "var(--clr-green)", flexShrink: 0 }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-green)", textTransform: "uppercase", letterSpacing: "0.06em" }}>CPF Voluntary</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-green)", textTransform: "uppercase", letterSpacing: "0.07em" }}>CPF Voluntary</span>
                   </div>
 
                   {/* VC3A — single cash lump-sum + read-only breakdown */}
@@ -9513,9 +9513,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                   {/* Gov grants */}
                   {/* ── SUB-SECTION: Gov Schemes ────────────────────────────────── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, paddingBottom: 6, borderTop: "1px solid rgba(var(--clr-green-rgb),0.25)", borderBottom: "1px solid rgba(var(--clr-green-rgb),0.25)", marginTop: 4, marginBottom: 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(var(--clr-green-rgb),0.10)", border: "1px solid rgba(var(--clr-green-rgb),0.22)", margin: "6px 0 4px" }}>
                     <ShieldCheck style={{ width: 11, height: 11, color: "var(--clr-green)", flexShrink: 0 }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-green)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Gov Schemes</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-green)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Gov Schemes</span>
                   </div>
                   <div>
                     <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
@@ -9619,9 +9619,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
                   {/* ── SUB-SECTION: Medical ──────────────────────────────────── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 6, borderBottom: "1px solid rgba(244,63,94,0.25)", marginBottom: 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.22)", margin: "2px 0 4px" }}>
                     <MinusCircle style={{ width: 11, height: 11, color: "#f472b6", flexShrink: 0 }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.06em" }}>Medical</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.07em" }}>Medical</span>
                   </div>
 
                   {[["medicalUsage", "Medical Usage (MA) — Annual", "annual"], ["medishieldIP", "MediShield Life / IP (MA) — Annual", "annual"], ["elderCareShield", "ElderShield / CareShield (MA) — Annual", "annual"]].map(([n, l, freq]) => (
@@ -9630,9 +9630,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   ))}
                   {/* CPFIS — OA and SA separate fields */}
                   {/* ── SUB-SECTION: Investment ───────────────────────────────── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, paddingBottom: 6, borderTop: "1px solid rgba(244,63,94,0.25)", borderBottom: "1px solid rgba(244,63,94,0.25)", marginTop: 4, marginBottom: 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.22)", margin: "6px 0 4px" }}>
                     <TrendingUp style={{ width: 11, height: 11, color: "#f472b6", flexShrink: 0 }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.06em" }}>Investment</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.07em" }}>Investment</span>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ padding: "10px 0", borderRadius: 10, background: "rgba(244,63,94,0.04)", border: "1px solid rgba(244,63,94,0.18)" }}>
@@ -9709,9 +9709,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   </div>
                   {/* ── SUB-SECTION: Withdrawals ─────────────────────────────── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, paddingBottom: 6, borderTop: "1px solid rgba(244,63,94,0.25)", borderBottom: "1px solid rgba(244,63,94,0.25)", marginTop: 4, marginBottom: 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.22)", margin: "6px 0 4px" }}>
                     <LogOut style={{ width: 11, height: 11, color: "#f472b6", flexShrink: 0 }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.06em" }}>Withdrawals</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.07em" }}>Withdrawals</span>
                   </div>
                   {/* D1: OA Education Loan Scheme */}
                   {(() => {
