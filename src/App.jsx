@@ -7397,6 +7397,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           /* Welcome modal tablet override */
           .cpf-welcome-modal  { max-width: 620px; height: min(88vh, 680px); }
           .welcome-step3-grid { grid-template-columns: 1fr 1fr !important; }
+          /* Summary zone tablet rules — 2-col where possible */
+          .z1-cols { grid-template-columns: 1fr auto 1fr auto auto !important; }
+          .z2-z3-grid { grid-template-columns: 1fr 1fr !important; }
+          .z4-plans-grid { grid-template-columns: 1fr 1fr !important; }
+          .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
         }
 
         /* ─── MOBILE  ≤ 768 px ───────────────────────────────────────── */
@@ -7447,6 +7452,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .hero-split > div { overflow: hidden !important; min-width: 0 !important; }
           .hero-split svg { overflow: visible !important; }
           .yield-cards-grid { grid-template-columns: 1fr !important; }
+
+          /* ── Summary tab zone mobile rules (≤ 768px) ── */
+          /* Zone 1: stack 3 cols vertically, hide dividers */
+          .z1-hero { padding: 14px 14px !important; }
+          .z1-cols { grid-template-columns: 1fr !important; grid-auto-flow: row !important; gap: 14px !important; }
+          .z1-divider { display: none !important; }
+          /* Zone 2 + 3: stack vertically */
+          .z2-z3-grid { grid-template-columns: 1fr !important; }
+          /* Zone 4: stack plan cards vertically (1 col on mobile, 2 col on tablet) */
+          .z4-plans-grid { grid-template-columns: 1fr !important; }
+          /* Zone 6: keep 2-col stats grid but reduce padding */
+          .z6-stats-grid { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
         }
 
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
@@ -7465,6 +7482,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-kpi-label { font-size: 9px !important; }
           .cpf-tab-btn { font-size: 11px !important; padding: 6px 8px !important; }
           .sidebar-toggle-btn span { font-size: 9px !important; }
+          /* Summary zone overrides for very small screens */
+          .z1-hero { padding: 12px 10px !important; border-radius: 14px !important; }
+          .z4-plans-grid { grid-template-columns: 1fr !important; }
+          .z6-stats-grid { grid-template-columns: 1fr !important; }
         }
 
         /* ─── MOBILE HEADER  ≤ 640 px ───────────────────────────────── */
@@ -10825,8 +10846,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 );
               })}
             </div>
-            {/* Persistent KPI strip */}
-            {activeTab !== "welcome" && activeTab !== "notes" && (
+            {/* Persistent KPI strip — hidden on Summary tab (Zone 1 already shows these metrics) */}
+            {activeTab !== "welcome" && activeTab !== "notes" && activeTab !== "summary" && (
               <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "1fr", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
                 {(() => {
                   const pa = payoutAge65; // CQ-2 fix: use debounced value to match displayProjection/displayAccumulation
@@ -11062,15 +11083,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   const planLabel = { standard: "Standard", escalating: "Escalating", basic: "Basic" }[activePlan] || "Standard";
                   const alertCount = milestones.length;
                   return (
-                    <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: "18px 24px" }}>
+                    <div className="z1-hero" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: "18px 24px" }}>
                       {/* 3-col headline */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto auto", gap: 0, alignItems: "center" }}>
+                      <div className="z1-cols" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto auto", gap: 0, alignItems: "center" }}>
                         {/* Col 1 — Total CPF */}
                         <div style={{ paddingRight: 24 }}>
                           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>
                             {isRSSMode ? `Total CPF (age ${summaryRefAge})` : `Total CPF at age ${inputs.payoutAge}`}
                           </p>
-                          <p style={{ fontSize: 30, fontWeight: 500, margin: 0, color: "var(--text-bright)", lineHeight: 1.1, fontFamily: "monospace", letterSpacing: "-0.02em" }}>
+                          <p style={{ fontSize: "clamp(20px,4vw,30px)", fontWeight: 500, margin: 0, color: "var(--text-bright)", lineHeight: 1.1, fontFamily: "monospace", letterSpacing: "-0.02em" }}>
                             {isRealDollars ? formatCurrency(realTotal) : formatCurrency(nominalTotal)}
                           </p>
                           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
@@ -11080,12 +11101,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </p>
                         </div>
                         {/* Divider */}
-                        <div style={{ width: 1, height: 56, background: "var(--border-subtle)", margin: "0 24px" }} />
+                        <div className="z1-divider" style={{ width: 1, height: 56, background: "var(--border-subtle)", margin: "0 24px" }} />
                         {/* Col 2 — Monthly payout */}
                         {!isRSSMode && !isForeigner ? (
                           <div>
                             <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Monthly CPF LIFE payout</p>
-                            <p style={{ fontSize: 26, fontWeight: 500, margin: 0, color: "var(--clr-green)", lineHeight: 1.2, fontFamily: "monospace" }}>
+                            <p style={{ fontSize: "clamp(18px,3.5vw,26px)", fontWeight: 500, margin: 0, color: "var(--clr-green)", lineHeight: 1.2, fontFamily: "monospace" }}>
                               {activePayout ? `${formatCurrency(Math.round(displayPayout))} / mo` : "—"}
                             </p>
                             <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
@@ -11118,16 +11139,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>
                         )}
                         {/* Divider */}
-                        <div style={{ width: 1, height: 56, background: "var(--border-subtle)", margin: "0 24px" }} />
+                        <div className="z1-divider" style={{ width: 1, height: 56, background: "var(--border-subtle)", margin: "0 24px" }} />
                         {/* Col 3 — Payout age */}
                         <div style={{ paddingLeft: 4 }}>
                           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Payout starts at</p>
-                          <p style={{ fontSize: 26, fontWeight: 500, margin: 0, color: "var(--text-bright)", lineHeight: 1.2 }}>Age {isRSSMode ? (inputs.rssPayoutStartAge || 65) : inputs.payoutAge}</p>
+                          <p style={{ fontSize: "clamp(18px,3.5vw,26px)", fontWeight: 500, margin: 0, color: "var(--text-bright)", lineHeight: 1.2 }}>Age {isRSSMode ? (inputs.rssPayoutStartAge || 65) : inputs.payoutAge}</p>
                           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>{isRSSMode ? "RSS scheme" : `CPF LIFE · ${planLabel} plan`}</p>
                         </div>
                       </div>
                       {/* Footer row — nominal/real toggle + alert badge */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, paddingTop: 12, borderTop: "0.5px solid var(--border-subtle)", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, paddingTop: 12, borderTop: "0.5px solid var(--border-subtle)", flexWrap: "wrap", rowGap: 8 }}>
                         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Displaying:</span>
                         <button onClick={() => setIsRealDollars(false)}
                           style={{ padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 500, cursor: "pointer", border: "0.5px solid",
@@ -11162,7 +11183,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 })()}
 
                 {/* ── ZONE 2 + ZONE 3 side by side ── */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="z2-z3-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
                   {/* ZONE 2 — Account health */}
                   {(() => {
@@ -11381,7 +11402,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </button>
                     </div>
                     {lifePlansExpanded && (
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                      <div className="z4-plans-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                         {[
                           { key: "standard", label: "Standard Plan", desc: "Fixed monthly payout, for life", pros: ["Highest fixed payout", "Predictable income", "No payout ceiling"], cons: ["No bequest after death"] },
                           { key: "escalating", label: "Escalating Plan", desc: "Rises 2%/yr to outpace inflation", pros: ["Inflation-linked growth", "Grows every year"], cons: ["Lower starting payout", "No bequest after death"] },
@@ -11592,7 +11613,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <PieChart style={{ width: 14, height: 14, color: "var(--text-muted)" }} />
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>Supporting statistics</span>
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
+                      <div className="z6-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
                         {/* Net Worth at payout age */}
                         <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "12px 14px" }}>
                           <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
@@ -12170,9 +12191,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* ── ACCUMULATION TAB ── */}
             {activeTab === "accumulation" && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
-                {/* S1 fix: detect RSS mode — the "accumulation phase to payoutAge" framing is wrong
-                    for RSS members who are already past payout start. For them we show the full
-                    projection window (currentAge → 95) as a drawdown view instead. */}
+                {/* ── Context banners (RSS / Foreigner) ── */}
                 {(() => {
                   const isRSSGrowth = debouncedInputs.cpfScheme === 'rss';
                   const rssStartAgeG = Number(debouncedInputs.rssPayoutStartAge) || 65;
@@ -12188,7 +12207,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   ) : null;
                 })()}
-                {/* Foreigner context — CPF lines are all $0 but SRS + Private Assets still plot */}
                 {isForeigner && (
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", borderRadius: 10, background: "rgba(var(--clr-amber-rgb),0.07)", border: "1px solid rgba(var(--clr-amber-rgb),0.3)", marginBottom: 16, fontSize: 10, color: "var(--clr-amber)", lineHeight: 1.6 }}>
                     <AlertTriangle style={{ width: 14, height: 14, flexShrink: 0, marginTop: 1 }} />
@@ -12199,21 +12217,28 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </span>
                   </div>
                 )}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                  {/* S1: title adapts — RSS members are in drawdown, not accumulation */}
-                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>
-                    {debouncedInputs.cpfScheme === 'rss'
-                      ? `Full Projection — RSS Drawdown (Age ${debouncedInputs.currentAge} → 95)`
-                      : `Accumulation Phase (To Age ${inputs.payoutAge})`}
-                  </h3>
-                  <div style={{ display: "flex", gap: 8 }}>
+
+                {/* ── Title row + controls ── */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 18, fontWeight: 800, margin: "0 0 2px" }}>
+                      {debouncedInputs.cpfScheme === 'rss'
+                        ? `Full Projection — RSS Drawdown (Age ${debouncedInputs.currentAge} → 95)`
+                        : `Growth Phase — Age ${inputs.currentAge} → ${inputs.payoutAge}`}
+                    </h3>
+                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+                      {debouncedInputs.cpfScheme === 'rss'
+                        ? "Stacked area chart: RA drawn down each month — OA and MA continue accumulating."
+                        : `Stacked area chart: how your CPF grows year by year until CPF LIFE payouts begin at age ${inputs.payoutAge}.`}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={() => setShowBaseline(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 11, fontWeight: 700, border: `1px solid ${showBaseline ? "rgba(148,163,184,0.5)" : "var(--border-strong)"}`, background: showBaseline ? "rgba(148,163,184,0.12)" : "var(--bg-input)", color: showBaseline ? "var(--clr-slate)" : "var(--text-muted)", cursor: "pointer" }}>
                       <MinusCircle style={{ width: 13, height: 13 }} />{showBaseline ? "Hide" : "Show"} Baseline
                     </button>
                     <button onClick={() => setShowMonteCarlo(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 11, fontWeight: 700, border: `1px solid ${showMonteCarlo ? "rgba(139,92,246,0.5)" : "var(--border-strong)"}`, background: showMonteCarlo ? "rgba(139,92,246,0.15)" : "var(--bg-input)", color: showMonteCarlo ? "var(--clr-violet)" : "var(--text-muted)", cursor: "pointer" }}>
                       <Activity style={{ width: 13, height: 13 }} />{showMonteCarlo ? "Hide" : "Show"} Monte Carlo (200 runs)
                     </button>
-                    {/* Rev #D2: Events toggle — only shown when life events exist */}
                     {(inputs.lifeEvents || []).filter(e => e.enabled !== false).length > 0 && (
                       <button onClick={() => setShowLifeEventMarkers(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 11, fontWeight: 700, border: `1px solid ${showLifeEventMarkers ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showLifeEventMarkers ? "rgba(239,68,68,0.12)" : "var(--bg-input)", color: showLifeEventMarkers ? "#ef4444" : "var(--text-muted)", cursor: "pointer" }}>
                         <Bell style={{ width: 13, height: 13 }} />{showLifeEventMarkers ? "Hide" : "Show"} Events
@@ -12221,6 +12246,54 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     )}
                   </div>
                 </div>
+
+                {/* ── Account legend + key-transitions strip ── */}
+                {!isForeigner && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(170px,1fr))", gap: 8, marginBottom: 16 }}>
+                    {(debouncedInputs.cpfScheme === 'rss' ? [
+                      { name: "OA", col: "#378ADD", rate: "2.5% p.a.", note: "Continues growing — use OA Drawdown to supplement RSS." },
+                      { name: "MA", col: "#EF9F27", rate: "4.0% p.a.", note: "Healthcare reserve. Capped at BHS ($79,000)." },
+                      { name: "RA", col: "#7F77DD", rate: "4.0% p.a.", note: `Drawn down at ${formatCurrency(Number(inputs.rssMonthlyPayout)||0)}/mo under RSS.` },
+                    ] : [
+                      { name: "OA", col: "#378ADD", rate: "2.5% p.a.", note: "Used for housing, investments. Stops at Contrib Stop Age." },
+                      { name: "SA", col: "#b45309", rate: "4.0% p.a.", note: "Locked for retirement. Merges into RA at age 55." },
+                      { name: "MA", col: "#EF9F27", rate: "4.0% p.a.", note: "Healthcare. BHS cap ~$79k. Excess flows to SA/RA." },
+                      { name: "RA", col: "#7F77DD", rate: "4.0% p.a.", note: `Created at 55 from SA. Funds CPF LIFE at age ${inputs.payoutAge}.` },
+                    ]).map(({ name, col, rate, note }) => (
+                      <div key={name} style={{ background: "var(--bg-muted)", borderLeft: `3px solid ${col}`, borderRadius: 8, padding: "9px 11px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: col }}>{name}</span>
+                          <span style={{ fontSize: 10, color: "var(--text-muted)", background: "var(--bg-panel)", padding: "1px 6px", borderRadius: 4 }}>{rate}</span>
+                        </div>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>{note}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Key transitions callout strip ── */}
+                {!isForeigner && debouncedInputs.cpfScheme !== 'rss' && (() => {
+                  const ca_g = Number(inputs.currentAge) || 35;
+                  const frs55_g = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, Math.max(0,(Number(inputs.currentYear)||2026)+Math.max(0,55-ca_g)-2026)));
+                  return (
+                    <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                      {[
+                        { age: 55, color: "#b45309", label: "SA Closure", body: `SA merges into RA. Up to FRS (~${formatCurrency(frs55_g)}) goes to RA; excess stays in OA.` },
+                        { age: Number(inputs.housingStopAge)||55, color: "#f472b6", label: "Housing stops", body: `OA mortgage deductions end at age ${inputs.housingStopAge||55}. OA growth accelerates.` },
+                        { age: Number(inputs.contributionStopAge)||65, color: "#378ADD", label: "Contributions stop", body: `Mandatory employer + employee contributions end at age ${inputs.contributionStopAge||65}.` },
+                        { age: Number(inputs.payoutAge)||65, color: "#7F77DD", label: "CPF LIFE starts", body: `RA transfers into the CPF LIFE pool. Monthly payouts begin. Growth tab ends here.` },
+                      ].filter(t => t.age >= ca_g).map(t => (
+                        <div key={t.label} style={{ flex: "1 1 160px", background: "var(--bg-panel)", border: `1px solid var(--border-subtle)`, borderTop: `2px solid ${t.color}`, borderRadius: 10, padding: "10px 12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: t.color, fontFamily: "monospace" }}>Age {t.age}</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)" }}>{t.label}</span>
+                          </div>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>{t.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
                   {/* Rev #MC: variance preset buttons — only shown when MC is active */}
                   {showMonteCarlo && (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: -12, marginBottom: 8, flexWrap: "wrap" }}>
