@@ -11780,83 +11780,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   );
                 })()}
                 {/* FRS Tracker has moved to the Strategy tab — see Strategy → FRS Tracker section */}
-                {/* Estate Planning Panel */}
-                {(() => {
-                  const ages = [65, 70, 75, 80, 85, 90, 95];
-                  const plan = highlightPlan;
-                  const isRSSEstate = debouncedInputs.cpfScheme === 'rss';
-                  return (
-                    <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                        <Gift style={{ width: 18, height: 18, color: "var(--clr-violet)" }} />
-                        <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>Estate at Death — Bequest Projection</h3>
-                        {!isRSSEstate && <span style={{ fontSize: 9, padding: "3px 8px", borderRadius: 999, background: "rgba(var(--clr-violet-rgb),0.1)", border: "1px solid rgba(var(--clr-violet-rgb),0.3)", color: "var(--clr-violet)", textTransform: "uppercase", fontWeight: 700 }}>{plan}</span>}
-                        {isRSSEstate && <span style={{ fontSize: 9, padding: "3px 8px", borderRadius: 999, background: "rgba(var(--clr-blue-rgb),0.1)", border: "1px solid rgba(var(--clr-blue-rgb),0.3)", color: "var(--clr-blue)", textTransform: "uppercase", fontWeight: 700 }}>RSS</span>}
-                      </div>
-                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>
-                        {isRSSEstate
-                          ? "Estimated estate value if death occurs at each age. Under RSS, bequest = remaining RA balance (direct — no CPF LIFE pool mechanics) + OA + MA + property."
-                          : `Estimated estate value if death occurs at each age. Includes CPF bequest (RA premium refund minus payouts drawn), remaining OA, MA balance, and property value. Under the `}{!isRSSEstate && <strong style={{ color: "var(--text-bright)" }}>{plan}</strong>}{!isRSSEstate && " plan."}
-                      </p>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
-                        {ages.map(age => {
-                          const aRow = accumulationByAge.get(age);
-                          if (!aRow) return null;
-                          const oa   = aRow.oa || 0;
-                          const ma   = aRow.ma || 0;
-                          const ra   = aRow.ra || 0;
-                          const prop = inputs.includeProperty ? (aRow.propertyValue || 0) : 0;
-                          // RSS: bequest = RA balance (direct) + OA + MA + property
-                          // CPF LIFE: bequest from payoutProjection (premium refund mechanics)
-                          let bequest, total;
-                          if (isRSSEstate) {
-                            bequest = ra; // remaining RA balance
-                            total   = bequest + oa + ma + prop;
-                          } else {
-                            const pRow = payoutByAge.get(age);
-                            if (!pRow) return null;
-                            bequest = pRow[`${plan}Bequest`] || 0;
-                            total   = bequest + oa + ma + prop;
-                          }
-                          const rssPayoutStart = Number(debouncedInputs.rssPayoutStartAge) || 65;
-                          const isPayout = isRSSEstate ? age >= rssPayoutStart : age >= payoutAge65;
-                          return (
-                            <div key={age} style={{ background: "var(--bg-muted)", borderRadius: 12, padding: 12, border: `1px solid ${age === (isRSSEstate ? rssPayoutStart : payoutAge65) ? (isRSSEstate ? "rgba(var(--clr-blue-rgb),0.4)" : "rgba(var(--clr-violet-rgb),0.4)") : "var(--border-subtle)"}`, opacity: isPayout ? 1 : 0.5 }}>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Age {age}</div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: isRSSEstate ? "var(--clr-blue)" : "var(--clr-violet)", marginBottom: 4 }}>{formatCurrency(total)}</div>
-                              <div style={{ fontSize: 10, color: "var(--text-subtle)", lineHeight: 1.5 }}>
-                                <div>CPF: {formatCurrency(bequest + oa + ma)}</div>
-                                {prop > 0 && <div>Property: {formatCurrency(prop)}</div>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div style={{ gridColumn: "1/-1", background: "var(--bg-panel-muted)", borderRadius: 10, padding: "10px 14px", border: "1px solid var(--border-strong)", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-highlight)", textTransform: "uppercase" }}>Estimated Total Estate at Age {isRSSEstate ? (debouncedInputs.rssPayoutStartAge || 65) : inputs.payoutAge}</span>
-                        {(() => {
-                          const refAge = isRSSEstate ? (Number(debouncedInputs.rssPayoutStartAge) || 65) : payoutAge65;
-                          const ar = accumulationByAge.get(refAge);
-                          if (!ar) return null;
-                          let tot;
-                          if (isRSSEstate) {
-                            tot = (ar.ra || 0) + (ar.oa || 0) + (ar.ma || 0) + (inputs.includeProperty ? (ar.propertyValue || 0) : 0);
-                          } else {
-                            const pr = payoutByAge.get(refAge);
-                            if (!pr) return null;
-                            tot = (pr[`${highlightPlan}Bequest`] || 0) + (ar.oa || 0) + (ar.ma || 0) + (inputs.includeProperty ? (ar.propertyValue || 0) : 0);
-                          }
-                          return <span style={{ fontSize: 16, fontWeight: 700, color: isRSSEstate ? "var(--clr-blue)" : "var(--clr-violet)", fontFamily: "monospace" }}>{formatCurrency(tot)}</span>;
-                        })()}
-                      </div>
-                      <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 8, gridColumn: "1/-1" }}>
-                        {isRSSEstate
-                          ? "* Before RSS payout start: CPF bequest = total OA + MA + RA (death benefit). After payout start: bequest = remaining RA balance (RSS has no pooled insurance — full balance passes to nominees). OA and MA pass to nominated beneficiaries in full."
-                          : "* Before payout age: CPF bequest = total OA+MA+RA (death benefit). After payout age: CPF LIFE bequest = premium paid minus cumulative payouts received. OA and MA balances pass to nominated beneficiaries in full."}
-                      </p>
-                    </div>
-                  );
-                })()}
+                {/* Estate at Death has moved to the LIFE tab — see LIFE → Estate at Death section */}
 
                 {/* What-If */}
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
@@ -12459,56 +12383,30 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   );
                 })()}
-                <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.7 }}>
-                  {debouncedInputs.cpfScheme === 'rss' ? (
-                    <>
-                      <p style={{ fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8, fontSize: 12 }}>📊 How to read this chart (Age {inputs.currentAge} → 95)</p>
-                      <p style={{ marginBottom: 8 }}>This stacked area chart shows your CPF balances from your current age ({inputs.currentAge}) to age 95. Under RSS, your RA is drawn down each month by your fixed payout — watch the RA band shrink over time. OA and MA continue to accumulate interest.</p>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 8, marginBottom: 10 }}>
-                        {[
-                          ["OA (Ordinary Account)", "#1d4ed8", "2.5% p.a. Continues to grow — use OA Drawdown to supplement your RSS income."],
-                          ["MA (MediSave)", "#059669", "4.0% p.a. Healthcare reserve. Capped at BHS ($79,000)."],
-                          ["RA (Retirement Account)", "var(--clr-purple2)", `4.0% p.a. Being drawn down at ${formatCurrency(Number(inputs.rssMonthlyPayout) || 0)}/mo under RSS. Balance reaches $0 at depletion age.`],
-                        ].map(([name, col, desc]) => (
-                          <div key={name} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: `1px solid ${col}44` }}>
-                            <div style={{ fontSize: 10, fontWeight: 800, color: col, marginBottom: 3 }}>{name}</div>
-                            <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <p style={{ marginBottom: 6 }}><strong style={{ color: "var(--text-bright)" }}>Key transitions to watch for:</strong></p>
-                      <ul style={{ margin: 0, paddingLeft: 16, fontSize: 10 }}>
-                        <li><strong style={{ color: "var(--clr-purple2)" }}>RA declining:</strong> Fixed payout exceeds interest → RA balance falls. If payout &lt; interest, RA grows (amber banner on RSS tab).</li>
-                        <li><strong style={{ color: "#1d4ed8" }}>OA growth:</strong> OA continues earning 2.5% p.a. — set an OA Drawdown to supplement your RSS income after RA depletes.</li>
-                        <li><strong style={{ color: "var(--clr-green)" }}>Migration option:</strong> You can migrate to CPF LIFE at any age up to 80. See the RSS tab for the migration analysis.</li>
+                {/* ── Footer note — collapsible, compact ── */}
+                <details style={{ marginTop: 12 }}>
+                  <summary style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 6, padding: "6px 0", outline: "none", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <Info style={{ width: 12, height: 12, color: "var(--clr-blue)" }} />
+                    Chart notes &amp; assumptions
+                  </summary>
+                  <div style={{ marginTop: 8, padding: "10px 14px", borderRadius: 10, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                    {debouncedInputs.cpfScheme === 'rss' ? (
+                      <ul style={{ margin: 0, paddingLeft: 16 }}>
+                        <li>RA is drawn down monthly at your fixed RSS rate — watch the RA band shrink toward depletion age.</li>
+                        <li>OA continues earning 2.5% p.a. Set an OA Drawdown to supplement income after RA depletes.</li>
+                        <li>You can migrate to CPF LIFE at any age up to 80 — see the RSS tab for migration analysis.</li>
+                        <li>Annual compounding · BOY convention · 2026 CPF contribution rates.</li>
                       </ul>
-                    </>
-                  ) : (
-                    <>
-                      <p style={{ fontWeight: 700, color: "var(--text-highlight)", marginBottom: 8, fontSize: 12 }}>📊 How to read this chart (Age {inputs.currentAge} → {inputs.payoutAge})</p>
-                      <p style={{ marginBottom: 8 }}>This stacked area chart shows how your CPF savings accumulate year by year from your current age ({inputs.currentAge}) until your chosen payout age ({inputs.payoutAge}). Each coloured band represents one account:</p>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 8, marginBottom: 10 }}>
-                        {[
-                          ["OA (Ordinary Account)", "#1d4ed8", "2.5% p.a. Used for housing, investments. Contributions stop at Contrib Stop Age."],
-                          ["SA (Special Account)", "#b45309", "4.0% p.a. Locked for retirement — cannot be used for housing. Closed permanently at age 55 and merged into RA."],
-                          ["MA (MediSave)", "#059669", "4.0% p.a. Used for healthcare. Capped at BHS ($79,000). Excess above BHS flows to SA/RA."],
-                          ["RA (Retirement Account)", "var(--clr-purple2)", "4.0% p.a. Created at age 55 from SA. Funds the CPF LIFE pool at payout age."],
-                        ].map(([name, col, desc]) => (
-                          <div key={name} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: `1px solid ${col}44` }}>
-                            <div style={{ fontSize: 10, fontWeight: 800, color: col, marginBottom: 3 }}>{name}</div>
-                            <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <p style={{ marginBottom: 6 }}><strong style={{ color: "var(--text-bright)" }}>Key transitions to watch for:</strong></p>
-                      <ul style={{ margin: 0, paddingLeft: 16, fontSize: 10 }}>
-                        <li><strong style={{ color: "#b45309" }}>Age 55 — SA Closure:</strong> SA balance merges into RA. Only FRS (~${Math.round((RETIREMENT_SUMS_2026.FRS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, Math.max(0, (Number(inputs.currentYear) || 2026) + Math.max(0, 55 - (Number(inputs.currentAge) || 35)) - 2026))) / 1000)}k at age 55) goes to RA; any excess stays in OA.</li>
-                        <li><strong style={{ color: "#1d4ed8" }}>Housing outflow:</strong> OA may shrink if Housing Loan deductions exceed contributions. This stops at Housing Stop Age ({inputs.housingStopAge}).</li>
-                        <li><strong style={{ color: "var(--clr-purple2)" }}>Age {inputs.payoutAge} — LIFE pool:</strong> RA transfers into the CPF LIFE pool. Monthly payouts begin. The chart stops here; the LIFE tab shows payouts from age {inputs.payoutAge} to 95.</li>
+                    ) : (
+                      <ul style={{ margin: 0, paddingLeft: 16 }}>
+                        <li>SA closes at age 55 and merges into RA. Excess above FRS stays in OA.</li>
+                        <li>OA may shrink if housing loan deductions exceed contributions before age {inputs.housingStopAge}.</li>
+                        <li>At age {inputs.payoutAge} RA transfers into the CPF LIFE pool — the chart ends here. The LIFE tab shows payouts from {inputs.payoutAge} to 95.</li>
+                        <li>Annual compounding · BOY convention · 2026 CPF contribution rates. Verify with CPF Board tools.</li>
                       </ul>
-                    </>
-                  )}
-                </div>
+                    )}
+                  </div>
+                </details>
               </div>
             )}
             {/* ── RSS TAB — Full drawdown engine (PR-2) ── */}
@@ -13010,6 +12908,70 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 </div>
                   </>
                 )}
+
+                {/* ── Estate at Death — Bequest Projection ── */}
+                {!isForeigner && (() => {
+                  const ages = [65, 70, 75, 80, 85, 90, 95];
+                  const plan = highlightPlan;
+                  const isRSSEstate = debouncedInputs.cpfScheme === 'rss';
+                  const refAge = isRSSEstate ? (Number(debouncedInputs.rssPayoutStartAge) || 65) : payoutAge65;
+                  const totalAtRef = (() => {
+                    const ar = accumulationByAge.get(refAge);
+                    if (!ar) return 0;
+                    if (isRSSEstate) return (ar.ra||0)+(ar.oa||0)+(ar.ma||0)+(inputs.includeProperty?(ar.propertyValue||0):0);
+                    const pr = payoutByAge.get(refAge);
+                    if (!pr) return 0;
+                    return (pr[`${plan}Bequest`]||0)+(ar.oa||0)+(ar.ma||0)+(inputs.includeProperty?(ar.propertyValue||0):0);
+                  })();
+                  return (
+                    <div style={{ background: "var(--bg-base)", border: "1px solid var(--border-strong)", borderRadius: 16, padding: 20 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                        <Gift style={{ width: 16, height: 16, color: "var(--clr-violet)" }} />
+                        <h4 style={{ fontSize: 14, fontWeight: 900, margin: 0 }}>Estate at Death — Bequest Projection</h4>
+                        <span style={{ fontSize: 9, padding: "3px 8px", borderRadius: 999, background: "rgba(var(--clr-violet-rgb),0.1)", border: "1px solid rgba(var(--clr-violet-rgb),0.3)", color: "var(--clr-violet)", textTransform: "uppercase", fontWeight: 700 }}>{plan}</span>
+                      </div>
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>
+                        Estimated estate value if death occurs at each age — CPF bequest (RA premium refund minus payouts drawn) + remaining OA + MA + property. Under the <strong style={{ color: "var(--text-bright)" }}>{plan}</strong> plan.
+                      </p>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 8, marginBottom: 12 }}>
+                        {ages.map(age => {
+                          const aRow = accumulationByAge.get(age);
+                          if (!aRow) return null;
+                          const oa = aRow.oa||0, ma = aRow.ma||0, ra = aRow.ra||0;
+                          const prop = inputs.includeProperty ? (aRow.propertyValue||0) : 0;
+                          let bequest, total;
+                          if (isRSSEstate) {
+                            bequest = ra; total = bequest + oa + ma + prop;
+                          } else {
+                            const pRow = payoutByAge.get(age);
+                            if (!pRow) return null;
+                            bequest = pRow[`${plan}Bequest`]||0;
+                            total = bequest + oa + ma + prop;
+                          }
+                          const isPayout = isRSSEstate ? age >= (Number(debouncedInputs.rssPayoutStartAge)||65) : age >= payoutAge65;
+                          const isRef = age === refAge;
+                          return (
+                            <div key={age} style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "10px 12px", border: `1px solid ${isRef ? "rgba(var(--clr-violet-rgb),0.4)" : "var(--border-subtle)"}`, opacity: isPayout ? 1 : 0.45 }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 5 }}>Age {age}{isRef ? " ◀" : ""}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--clr-violet)", marginBottom: 3 }}>{formatCurrency(total)}</div>
+                              <div style={{ fontSize: 9, color: "var(--text-subtle)", lineHeight: 1.5 }}>
+                                <div>CPF: {formatCurrency(bequest+oa+ma)}</div>
+                                {prop > 0 && <div>Property: {formatCurrency(prop)}</div>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "var(--bg-panel-muted)", borderRadius: 10, border: "1px solid var(--border-strong)" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)", textTransform: "uppercase" }}>Est. Estate at Age {refAge}</span>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: "var(--clr-violet)", fontFamily: "monospace" }}>{formatCurrency(totalAtRef)}</span>
+                      </div>
+                      <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 8, lineHeight: 1.6 }}>
+                        Before payout age: CPF bequest = OA + MA + RA (full death benefit). After payout age: CPF LIFE bequest = premium paid minus cumulative payouts received. OA and MA balances pass to nominated beneficiaries in full. Greyed cards = before payout — LIFE pool not yet active.
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {/* ── COMPARE TAB ── */}
