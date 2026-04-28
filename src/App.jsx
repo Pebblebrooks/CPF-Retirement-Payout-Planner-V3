@@ -7464,6 +7464,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .z4-plans-grid { grid-template-columns: 1fr !important; }
           /* Zone 6: keep 2-col stats grid but reduce padding */
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+          /* Compare tab */
+          .compare-slots-grid { grid-template-columns: 1fr !important; }
+          .wi-summary-grid { grid-template-columns: 1fr !important; }
+          .wi-sliders-grid { grid-template-columns: 1fr !important; }
         }
 
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
@@ -7486,6 +7490,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .z1-hero { padding: 12px 10px !important; border-radius: 14px !important; }
           .z4-plans-grid { grid-template-columns: 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr !important; }
+          /* Docs tab sticky nav on small phones */
+          #docs-sticky-nav { position: static !important; margin: 0 !important; padding: 14px 14px 10px !important; }
+          #docs-sticky-nav h3 { font-size: 16px !important; }
         }
 
         /* ─── MOBILE HEADER  ≤ 640 px ───────────────────────────────── */
@@ -12976,163 +12983,316 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             )}
             {/* ── COMPARE TAB ── */}
             {activeTab === "compare" && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
-                <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}><Scale style={{ width: 18, height: 18, color: "var(--clr-green)" }} />Compare Scenarios</h3>
-                <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>Change your inputs, then save to Slot A or B. Both scenarios persist for comparison.</p>
-                {/* Compare tab explanation */}
-                <div style={{ padding: "12px 16px", borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 20 }}>
-                  <p style={{ fontWeight: 700, color: "var(--text-highlight)", marginBottom: 6, fontSize: 12 }}>🔀 How to use this tab</p>
-                  <ol style={{ paddingLeft: 18, margin: 0, fontSize: 10, lineHeight: 1.8 }}>
-                    <li><strong style={{ color: "var(--text-bright)" }}>Set up Scenario A:</strong> Configure your inputs in the sidebar for your first scenario (e.g. retire at 65), then click <em>Save Current as A</em>.</li>
-                    <li><strong style={{ color: "var(--text-bright)" }}>Change inputs for Scenario B:</strong> Adjust your inputs (e.g. change payout age to 70, increase RSTU top-up), then click <em>Save Current as B</em>.</li>
-                    <li><strong style={{ color: "var(--text-bright)" }}>View the chart:</strong> The line chart shows total CPF balance year-by-year for both scenarios from your current age to 95. Blue = Scenario A, Orange = Scenario B.</li>
-                    <li><strong style={{ color: "var(--text-bright)" }}>Scenario configuration:</strong> Each saved slot shows all inputs that differ from the default — so you can quickly see what changed between the two scenarios.</li>
-                  </ol>
-                  <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 6 }}>💡 <strong>Tip:</strong> Give each scenario a descriptive label (e.g. "Retire at 65" vs "Defer to 70") using the label field to make the chart legend readable.</p>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-                  {/* ── Slot A ── */}
-                  {(() => {
-                    const color = "var(--clr-blue2)", bg = "rgba(var(--clr-blue2-rgb),0.08)", border = "rgba(var(--clr-blue2-rgb),0.2)";
-                    return (
-                      <div style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                          <h4 style={{ fontWeight: 700, color, fontSize: 14 }}>Scenario A</h4>
-                          {scenarioA && <button onClick={() => { setScenarioA(null); setScenarioLabelA(""); }} style={{ fontSize: 10, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
-                        </div>
-                        <input type="text" value={scenarioLabelA} onChange={e => setScenarioLabelA(e.target.value)} placeholder="Label (e.g. Retire at 65)" style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 11, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
-                        {scenarioA ? (
-                          <div style={{ flex: 1, marginBottom: 16 }}>
-                            <p style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
-                              {/* BUG-47 fix: use String() coercion — JSON-imported profiles have numeric fields as strings, causing "65" !== 65 false diffs */}
-                              {/* BUG-1 fix: guard against array/object values (e.g. lifeEvents) being passed as raw React children,
-                                  which throws "Objects are not valid as a React child" and crashes the Compare tab.
-                                  Arrays → show count; booleans → Yes/No; objects → JSON; primitives → as-is. */}
-                              {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenarioA.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => {
-                                const rawVal = scenarioA.inputs[k];
-                                const displayVal = Array.isArray(rawVal)
-                                  ? `${rawVal.length} event${rawVal.length !== 1 ? 's' : ''}`
-                                  : typeof rawVal === 'boolean'
-                                    ? (rawVal ? 'Yes' : 'No')
-                                    : (rawVal !== null && typeof rawVal === 'object')
-                                      ? JSON.stringify(rawVal)
-                                      : rawVal;
-                                return (
-                                <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
-                                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: "var(--clr-emerald)", fontFamily: "monospace" }}>{displayVal}</span>
-                                </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 16 }}>Empty — configure inputs then save</div>
-                        )}
-                        <button onClick={() => {
-                          // BUG-42 fix: always save nominal (non-deflated) engine output — see original comment.
-                          // BUG-3 fix: compute projection from live `inputs`, not the debounce-lagged `projection`
-                          // variable. If the user clicks Save within the 180ms debounce window the stored
-                          // projection would be one step behind the stored inputs, causing the Compare chart
-                          // to show mismatched lines. runProjectionEngine is module-level — safe to call here.
-                          // payoutProj set to null: the Compare tab's getNetWorth fallback handles it correctly.
-                          const freshProj = runProjectionEngine({ ...inputs });
-                          setScenarioA({ inputs: { ...inputs }, projection: freshProj, payoutProj: null });
-                        }} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as A</button>
-                      </div>
-                    );
-                  })()}
-                  {/* ── Slot B ── */}
-                  {(() => {
-                    const color = "#f97316", bg = "rgba(249,115,22,0.08)", border = "rgba(249,115,22,0.2)";
-                    return (
-                      <div style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                          <h4 style={{ fontWeight: 700, color, fontSize: 14 }}>Scenario B</h4>
-                          {scenarioB && <button onClick={() => { setScenarioB(null); setScenarioLabelB(""); }} style={{ fontSize: 10, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
-                        </div>
-                        <input type="text" value={scenarioLabelB} onChange={e => setScenarioLabelB(e.target.value)} placeholder="Label (e.g. Retire at 70)" style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 11, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
-                        {scenarioB ? (
-                          <div style={{ flex: 1, marginBottom: 16 }}>
-                            <p style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Scenario Configuration (vs Default)</p>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, maxHeight: 180, overflowY: "auto", paddingRight: 4 }}>
-                              {/* BUG-47 fix: use String() coercion — JSON-imported profiles have numeric fields as strings, causing "65" !== 65 false diffs */}
-                              {/* BUG-1 fix: same array/object guard as Scenario A — prevents crash when lifeEvents (or any future array field) is in scenarioB.inputs */}
-                              {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenarioB.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => {
-                                const rawVal = scenarioB.inputs[k];
-                                const displayVal = Array.isArray(rawVal)
-                                  ? `${rawVal.length} event${rawVal.length !== 1 ? 's' : ''}`
-                                  : typeof rawVal === 'boolean'
-                                    ? (rawVal ? 'Yes' : 'No')
-                                    : (rawVal !== null && typeof rawVal === 'object')
-                                      ? JSON.stringify(rawVal)
-                                      : rawVal;
-                                return (
-                                <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
-                                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: "var(--clr-emerald)", fontFamily: "monospace" }}>{displayVal}</span>
-                                </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 16 }}>Empty — configure inputs then save</div>
-                        )}
-                        <button onClick={() => {
-                          // BUG-42 fix: always save nominal engine output (see Scenario A comment above).
-                          // BUG-3 fix: compute fresh projection from live inputs — same reason as Scenario A.
-                          const freshProj = runProjectionEngine({ ...inputs });
-                          setScenarioB({ inputs: { ...inputs }, projection: freshProj, payoutProj: null });
-                        }} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>Save Current as B</button>
-                      </div>
-                    );
-                  })()}
-                </div>
-                {scenarioA && scenarioB ? (<div>
-                  <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 6, lineHeight: 1.6 }}>
-                    <strong style={{ color: "var(--text-bright)" }}>Y-axis: Cumulative Total Yield ($)</strong> — the sum of all CPF LIFE payouts received to date plus the remaining bequest (death benefit) value at each age, under the <strong style={{ color: "var(--clr-green)" }}>{highlightPlan}</strong> plan. A higher line means more total financial value returned from CPF over your lifetime. The lines diverge where payout age, contribution amount, or RA size creates a lasting difference in returns.
+              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+
+                {/* ── SECTION 1: What-If Explorer — promoted to top ── */}
+                <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, flexWrap: "wrap", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <SlidersHorizontal style={{ width: 18, height: 18, color: "var(--clr-green)" }} />
+                      <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>What-If Explorer</h3>
+                      <span style={{ fontSize: 9, background: "rgba(var(--clr-emerald-rgb),0.12)", color: "var(--clr-green)", padding: "3px 8px", borderRadius: 999, border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", fontWeight: 700 }}>Live Simulation</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <button onClick={() => { setWhatIfPayoutAge(null); setWhatIfSaTopup(null); setWhatIfHousing(null); setWhatIfSalaryBump(null); setWhatIfContribStop(null); setWhatIfOaDrawdown(null); setWhatIfSrsContrib(null); setWhatIfPrivGrowth(null); }}
+                        style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "var(--bg-input)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>
+                        ↺ Reset all
+                      </button>
+                      <button onClick={() => setShowWhatIf(v => !v)}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: `1px solid ${showWhatIf ? "rgba(var(--clr-emerald-rgb),0.5)" : "var(--border-strong)"}`, background: showWhatIf ? "rgba(var(--clr-emerald-rgb),0.15)" : "var(--bg-input)", color: showWhatIf ? "var(--clr-green)" : "var(--text-muted)", cursor: "pointer" }}>
+                        <SlidersHorizontal style={{ width: 13, height: 13 }} />{showWhatIf ? "Hide sliders" : "Show sliders"}
+                      </button>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: showWhatIf ? 16 : 0, lineHeight: 1.5 }}>
+                    Drag sliders to instantly explore how changes affect your total CPF balance — without modifying your saved inputs.
                   </p>
-                  <div style={{ height: 350 }}>
-                    <ResponsiveContainer width="99%" height="100%">
-                      <AreaChart data={comparisonData}>
-                        <defs>
-                          <linearGradient id="cmpAGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.22} />
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
-                          </linearGradient>
-                          <linearGradient id="cmpBGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#f97316" stopOpacity={0.22} />
-                            <stop offset="95%" stopColor="#f97316" stopOpacity={0.03} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                        <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 10 }} />
-                        <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Cumulative Total Yield", angle: -90, position: "insideLeft", offset: 10, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
-                        <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={(v, n) => [formatCurrency(v), n]} labelFormatter={v => `Age ${v}`} wrapperStyle={STYLES.chartTooltipWrapper} />
-                        <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={STYLES.chartLegend} />
-                        <Area isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="var(--clr-blue2)" strokeWidth={2} fill="url(#cmpAGrad)" dot={false} name={`Slot A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
-                        <Area isAnimationActive={false} type="monotone" dataKey="yieldB" stroke="#f97316"           strokeWidth={2} fill="url(#cmpBGrad)"  dot={false} name={`Slot B${scenarioLabelB ? `: ${scenarioLabelB}` : ""}`} />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                  {showWhatIf && (() => {
+                    const effPA  = whatIfPayoutAge   !== null ? whatIfPayoutAge   : (Number(debouncedInputs.payoutAge) || 65);
+                    const effST  = whatIfSaTopup     !== null ? whatIfSaTopup     : (Number(debouncedInputs.vcSaTopup) || 0);
+                    const effH   = whatIfHousing     !== null ? whatIfHousing     : (Number(debouncedInputs.housingOutflow) || 0);
+                    const effSB  = whatIfSalaryBump  !== null ? whatIfSalaryBump  : 0;
+                    const effCS  = whatIfContribStop !== null ? whatIfContribStop : (Number(debouncedInputs.contributionStopAge) || 65);
+                    const effOAD = whatIfOaDrawdown  !== null ? whatIfOaDrawdown  : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
+                    const effSRS = whatIfSrsContrib  !== null ? whatIfSrsContrib  : (Number(debouncedInputs.srsAnnualContribution) || 0);
+                    const effPG  = whatIfPrivGrowth  !== null ? whatIfPrivGrowth  : (Number(debouncedInputs.privateAssetGrowthRate) || 0);
+                    const basePARow = accumulationByAge.get(effPA);
+                    const baseTotal = (basePARow?.total || 0) + (basePARow?.privateAssets || 0) + (basePARow?.srsBalance || 0);
+                    const wiLastRow = whatIfProjection?.rows[whatIfProjection.rows.length - 1];
+                    const _wiInflD = isRealDollars ? (Number(debouncedInputs.inflationRate) || 0) / 100 : 0;
+                    const _wiCaD   = Number(debouncedInputs.currentAge) || 35;
+                    const deflate  = (val) => (isRealDollars && val) ? Math.round(val / Math.pow(1 + _wiInflD, Math.max(0, effPA - _wiCaD))) : val;
+                    const whatIfTotal = wiLastRow ? deflate((wiLastRow.oa + wiLastRow.sa + wiLastRow.ma + wiLastRow.ra) + (wiLastRow.privateAssets || 0) + (wiLastRow.srsBalance || 0)) : 0;
+                    const delta = whatIfTotal - baseTotal;
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                        {/* Summary impact card */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }} className="wi-summary-grid">
+                          {[
+                            { label: "Current total (baseline)", val: formatCurrency(baseTotal), color: "var(--text-bright)" },
+                            { label: "What-if total", val: whatIfTotal ? formatCurrency(whatIfTotal) : "—", color: delta >= 0 ? "var(--clr-green)" : "var(--clr-red)" },
+                            { label: "Impact", val: whatIfTotal ? `${delta >= 0 ? "+" : ""}${formatCurrency(delta)}` : "—", color: delta >= 0 ? "var(--clr-green)" : "var(--clr-red)" },
+                          ].map(({ label, val, color }) => (
+                            <div key={label} style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 14px" }}>
+                              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</p>
+                              <p style={{ fontSize: 16, fontWeight: 700, color, fontFamily: "monospace", margin: 0 }}>{val}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Sliders grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }} className="wi-sliders-grid">
+                          {/* SA/RA Top-up */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>
+                                {is55Plus ? "Annual RA Top-up" : "Annual SA Top-up (RSTU)"}
+                                <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>{is55Plus ? "(RA → ERS)" : "(SA → FRS)"}</span>
+                              </label>
+                              <input type="text" inputMode="decimal" value={effST}
+                                onChange={e => setWhatIfSaTopup(Math.max(0, Number(e.target.value) || 0))}
+                                style={{ width: 90, padding: "3px 8px", borderRadius: 6, fontSize: 13, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-green)", background: "var(--bg-input)", border: "1px solid var(--border-strong)", outline: "none", textAlign: "right" }} />
+                            </div>
+                            <input type="range" min={0} max={40000} step={500} value={Math.min(effST, 40000)}
+                              onChange={e => setWhatIfSaTopup(Number(e.target.value))}
+                              onMouseUp={e => setWhatIfSaTopup(Number(e.target.value))}
+                              onTouchEnd={e => setWhatIfSaTopup(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "var(--clr-green)", cursor: "pointer" }} />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
+                              <span>$0</span><span style={{ fontSize: 9 }}>type above for any amount</span><span>$40k</span>
+                            </div>
+                            {(() => {
+                              const headroom = Number(inputs.currentAge) < 55 ? Math.max(0, currentFRS - (currentSaRa||0)) : Math.max(0, currentERS - (currentSaRa||0));
+                              return headroom > 0
+                                ? <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>Headroom to {Number(inputs.currentAge) < 55 ? "FRS" : "ERS"}: <strong style={{ color: "var(--clr-green)" }}>{formatCurrency(headroom)}</strong></p>
+                                : <p style={{ fontSize: 10, color: "var(--clr-green)", marginTop: 3 }}>{Number(inputs.currentAge) < 55 ? "FRS" : "ERS"} already met ✓</p>;
+                            })()}
+                          </div>
+                          {/* Payout Age */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>Payout Age</label>
+                              <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-green)" }}>{effPA}</span>
+                            </div>
+                            <input type="range" min={65} max={70} step={1} value={effPA}
+                              onChange={e => setWhatIfPayoutAge(Number(e.target.value))}
+                              onMouseUp={e => setWhatIfPayoutAge(Number(e.target.value))}
+                              onTouchEnd={e => setWhatIfPayoutAge(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "var(--clr-green)", cursor: "pointer" }} />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}><span>65</span><span>70</span></div>
+                            <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>Each year deferred adds ~7% to CPF LIFE payouts</p>
+                          </div>
+                          {/* Annual Housing Outflow */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>Annual Housing Outflow</label>
+                              <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-orange)" }}>{formatCurrency(effH)}</span>
+                            </div>
+                            <input type="range" min={0} max={Math.max(60000, (Number(inputs.housingOutflow)||0)*2)} step={500} value={effH}
+                              onChange={e => setWhatIfHousing(Number(e.target.value))}
+                              onMouseUp={e => setWhatIfHousing(Number(e.target.value))}
+                              onTouchEnd={e => setWhatIfHousing(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "var(--clr-orange)", cursor: "pointer" }} />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}><span>$0</span><span>${Math.max(60, Math.round((Number(inputs.housingOutflow)||0)*2/1000))}k</span></div>
+                          </div>
+                          {/* Salary Increase */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>One-time Salary Increase</label>
+                              <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-blue)" }}>{effSB}%</span>
+                            </div>
+                            <input type="range" min={0} max={50} step={5} value={effSB}
+                              onChange={e => setWhatIfSalaryBump(Number(e.target.value))}
+                              onMouseUp={e => setWhatIfSalaryBump(Number(e.target.value))}
+                              onTouchEnd={e => setWhatIfSalaryBump(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "var(--clr-blue)", cursor: "pointer" }} />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}><span>0%</span><span>50%</span></div>
+                          </div>
+                          {/* Contribution Stop Age */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>Contribution Stop Age</label>
+                              <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-violet)" }}>{effCS}</span>
+                            </div>
+                            <input type="range" min={Number(inputs.currentAge)||35} max={70} step={1} value={effCS}
+                              onChange={e => setWhatIfContribStop(Number(e.target.value))}
+                              onMouseUp={e => setWhatIfContribStop(Number(e.target.value))}
+                              onTouchEnd={e => setWhatIfContribStop(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "var(--clr-violet)", cursor: "pointer" }} />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}><span>{Number(inputs.currentAge)||35}</span><span>70</span></div>
+                          </div>
+                          {/* OA Drawdown */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>OA Monthly Drawdown</label>
+                              <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-amber)" }}>{formatCurrency(effOAD)}/mo</span>
+                            </div>
+                            <input type="range" min={0} max={5000} step={100} value={effOAD}
+                              onChange={e => setWhatIfOaDrawdown(Number(e.target.value))}
+                              onMouseUp={e => setWhatIfOaDrawdown(Number(e.target.value))}
+                              onTouchEnd={e => setWhatIfOaDrawdown(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "var(--clr-amber)", cursor: "pointer" }} />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}><span>$0</span><span>$5,000</span></div>
+                          </div>
+                          {/* SRS Contribution */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>Annual SRS Contribution</label>
+                              <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "#0ea5e9" }}>{formatCurrency(effSRS)}</span>
+                            </div>
+                            <input type="range" min={0} max={inputs.srsCitizenPR === false ? 35700 : 15300} step={300} value={effSRS}
+                              onChange={e => setWhatIfSrsContrib(Number(e.target.value))}
+                              onMouseUp={e => setWhatIfSrsContrib(Number(e.target.value))}
+                              onTouchEnd={e => setWhatIfSrsContrib(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "#0ea5e9", cursor: "pointer" }} />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}><span>$0</span><span>Cap</span></div>
+                          </div>
+                          {/* Private Asset Growth Rate */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>Private Asset Growth Rate</label>
+                              <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "#10b981" }}>{effPG}%</span>
+                            </div>
+                            <input type="range" min={0} max={15} step={0.5} value={effPG}
+                              onChange={e => setWhatIfPrivGrowth(Number(e.target.value))}
+                              onMouseUp={e => setWhatIfPrivGrowth(Number(e.target.value))}
+                              onTouchEnd={e => setWhatIfPrivGrowth(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "#10b981", cursor: "pointer" }} />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}><span>0%</span><span>15%</span></div>
+                          </div>
+                        </div>
+                        <p style={{ fontSize: 10, color: "var(--text-subtle)", lineHeight: 1.5 }}>
+                          Sliders run a fresh projection in real time — your saved inputs are not changed. Click <strong>Reset all</strong> to return all sliders to your current inputs.
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* ── SECTION 2: Scenario Comparison ── */}
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <Scale style={{ width: 16, height: 16, color: "var(--clr-green)" }} />
+                    <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>Compare Scenarios</h3>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>Save two input snapshots and compare total yield side by side</span>
                   </div>
-                  {/* Rev #24 — Export diff button */}
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-                    <button
-                      onClick={handleExportScenarioDiff}
-                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "rgba(var(--clr-green-rgb),0.10)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-green-rgb),0.35)", cursor: "pointer" }}
-                    >
-                      <Download style={{ width: 13, height: 13 }} />
-                      Export A vs B Diff (CSV)
-                    </button>
+                  {/* How-to strip */}
+                  <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                    {[
+                      { n: "1", text: "Configure Scenario A inputs in sidebar", color: "var(--clr-blue2)" },
+                      { n: "2", text: "Click Save Current as A", color: "var(--clr-blue2)" },
+                      { n: "3", text: "Adjust inputs for Scenario B", color: "#f97316" },
+                      { n: "4", text: "Click Save Current as B — chart appears", color: "#f97316" },
+                    ].map(({ n, text, color }) => (
+                      <div key={n} style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 180px", background: "var(--bg-muted)", borderRadius: 8, padding: "8px 12px" }}>
+                        <span style={{ width: 20, height: 20, borderRadius: "50%", background: `${color}22`, border: `1px solid ${color}55`, color, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{n}</span>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{text}</span>
+                      </div>
+                    ))}
                   </div>
-                </div>) : <div style={{ height: 280, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "var(--text-muted)", fontStyle: "italic", border: "2px dashed var(--border-strong)", borderRadius: 16 }}>Save both scenarios to view comparison chart</div>}
+                  {/* Slot cards */}
+                  <div className="compare-slots-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+                    {[
+                      { slot: "A", label: scenarioLabelA, setLabel: setScenarioLabelA, scenario: scenarioA, setScenario: setScenarioA, setLabelFn: setScenarioLabelA, color: "var(--clr-blue2)", bg: "rgba(var(--clr-blue2-rgb),0.08)", border: "rgba(var(--clr-blue2-rgb),0.2)" },
+                      { slot: "B", label: scenarioLabelB, setLabel: setScenarioLabelB, scenario: scenarioB, setScenario: setScenarioB, setLabelFn: setScenarioLabelB, color: "#f97316", bg: "rgba(249,115,22,0.08)", border: "rgba(249,115,22,0.2)" },
+                    ].map(({ slot, label, setLabel, scenario, setScenario, color, bg, border }) => (
+                      <div key={slot} style={{ padding: 16, borderRadius: 14, background: bg, border: `1px solid ${border}`, display: "flex", flexDirection: "column" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                          <h4 style={{ fontWeight: 700, color, fontSize: 14, margin: 0 }}>Scenario {slot}</h4>
+                          {scenario && <button onClick={() => { setScenario(null); setLabel(""); }} style={{ fontSize: 10, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
+                        </div>
+                        <input type="text" value={label} onChange={e => setLabel(e.target.value)}
+                          placeholder={`Label (e.g. Retire at ${slot === "A" ? 65 : 70})`}
+                          style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 11, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
+                        {scenario ? (
+                          <div style={{ flex: 1, marginBottom: 12 }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Changed inputs vs default</p>
+                            <div style={{ maxHeight: 160, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                              {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenario.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => {
+                                const rawVal = scenario.inputs[k];
+                                const displayVal = Array.isArray(rawVal) ? `${rawVal.length} event${rawVal.length !== 1 ? 's' : ''}` : typeof rawVal === 'boolean' ? (rawVal ? 'Yes' : 'No') : (rawVal !== null && typeof rawVal === 'object') ? JSON.stringify(rawVal) : rawVal;
+                                return (
+                                  <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--bg-base)", padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border-subtle)" }}>
+                                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{SCENARIO_LABELS[k] || k}</span>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: "var(--clr-emerald)", fontFamily: "monospace" }}>{displayVal}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 12 }}>
+                            Empty — configure inputs then save
+                          </div>
+                        )}
+                        <button onClick={() => {
+                          const freshProj = runProjectionEngine({ ...inputs });
+                          setScenario({ inputs: { ...inputs }, projection: freshProj, payoutProj: null });
+                        }} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>
+                          Save Current as {slot}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Chart */}
+                  {scenarioA && scenarioB ? (
+                    <div>
+                      <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8, lineHeight: 1.6 }}>
+                        <strong style={{ color: "var(--text-bright)" }}>Y-axis: Cumulative Total Yield ($)</strong> — all CPF LIFE payouts received plus remaining bequest value at each age, under the <strong style={{ color: "var(--clr-green)" }}>{highlightPlan}</strong> plan. Higher = more total financial value returned from CPF over your lifetime.
+                      </p>
+                      <div style={{ height: 320 }}>
+                        <ResponsiveContainer width="99%" height="100%">
+                          <AreaChart data={comparisonData}>
+                            <defs>
+                              <linearGradient id="cmpAGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.22} />
+                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
+                              </linearGradient>
+                              <linearGradient id="cmpBGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.22} />
+                                <stop offset="95%" stopColor="#f97316" stopOpacity={0.03} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                            <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 10 }} />
+                            <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Cumulative Total Yield", angle: -90, position: "insideLeft", offset: 10, fill: "var(--chart-text)", fontSize: 9, style: { textAnchor: "middle" } }} />
+                            <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={(v, n) => [formatCurrency(v), n]} labelFormatter={v => `Age ${v}`} wrapperStyle={STYLES.chartTooltipWrapper} />
+                            <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={STYLES.chartLegend} />
+                            <Area isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="var(--clr-blue2)" strokeWidth={2} fill="url(#cmpAGrad)" dot={false} name={`A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
+                            <Area isAnimationActive={false} type="monotone" dataKey="yieldB" stroke="#f97316" strokeWidth={2} fill="url(#cmpBGrad)" dot={false} name={`B${scenarioLabelB ? `: ${scenarioLabelB}` : ""}`} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                        <button onClick={handleExportScenarioDiff}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "rgba(var(--clr-green-rgb),0.10)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-green-rgb),0.35)", cursor: "pointer" }}>
+                          <Download style={{ width: 13, height: 13 }} />Export A vs B Diff (CSV)
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ height: 240, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "var(--text-muted)", fontStyle: "italic", border: "2px dashed var(--border-strong)", borderRadius: 16 }}>
+                      Save both scenarios above to view comparison chart
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             {/* ── DATA TABLE TAB ── */}
             {activeTab === "table" && (
               <div>
+                {/* Tab header */}
+                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: "16px 20px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <TableIcon style={{ width: 16, height: 16, color: "var(--clr-green)" }} />
+                    <div>
+                      <h3 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "var(--text-bright)" }}>Data Table</h3>
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>Year-by-year balances, cashflows and payout projections from age {inputs.currentAge} to 95</p>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", background: "var(--bg-muted)", padding: "6px 12px", borderRadius: 8, lineHeight: 1.5 }}>
+                    📱 Tip: scroll horizontally to see all columns · tap Age to pin row
+                  </div>
+                </div>
                 {/* Scenario context banner */}
                 {(scenarioA || scenarioB) && (
                   <div style={{ marginBottom: 10, padding: "8px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", fontSize: 11 }}>
@@ -13456,8 +13616,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 {/* Sticky wrapper: title + anchor nav scroll together as one bar */}
                 <div id="docs-sticky-nav" style={{ position: "sticky", top: -20, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 24, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
                   <h3 style={{ fontSize: 20, fontWeight: 900, marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}><BookOpen style={{ width: 22, height: 22, color: "var(--clr-green)" }} />User Guide & Financial Analysis</h3>
-                  {/* Anchor navigation */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10 }}>
+                  {/* Anchor navigation — scrollable horizontally on mobile */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   {[
                     ["#doc-guide", "📖 User Guide"],
                     ["#doc-engine", "⚙️ Projection Engine"],
