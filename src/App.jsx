@@ -11758,64 +11758,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   );
                 })()}
-                {/* FRS Tracker — hidden for foreigners (no CPF account, no RA) */}
-                {!isForeigner && (() => {
-                  const currentAge = Number(inputs.currentAge) || 35;
-                  const isAlreadyPast55 = currentAge >= 55;
-                  // If already past 55, use the RA from the first projection row (current state)
-                  // REM-2b fix: replaced O(n) projection.find() with O(1) projectionByAge.get()
-                  const frsRow55 = isAlreadyPast55
-                    ? projection[0]  // current balances
-                    : projectionByAge.get(55);
-                  const raAt55Proj = frsRow55 ? (isAlreadyPast55 ? (frsRow55.ra || 0) : (frsRow55.ra || 0)) : 0;
-                  const yt55 = Math.max(0, (Number(inputs.currentYear || 2026) + Math.max(0, 55 - currentAge)) - 2026);
-                  const projBRS55 = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1.03, yt55));
-                  const projFRS55 = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1.03, yt55));
-                  const projERS55 = projFRS55 * 2;
-                  const frsProgress = Math.min(100, (raAt55Proj / projERS55) * 100);
-                  const frsShortfall = projFRS55 - raAt55Proj; // negative = surplus
-                  let statusLabel = "Below BRS", statusColor = "var(--clr-red)", borderColor = "rgba(239,68,68,0.3)", bgColor = "rgba(239,68,68,0.08)";
-                  if (raAt55Proj >= projERS55) { statusLabel = "ERS Achieved ✓"; statusColor = "#38bdf8"; borderColor = "rgba(56,189,248,0.3)"; bgColor = "rgba(56,189,248,0.08)"; }
-                  else if (raAt55Proj >= projFRS55) { statusLabel = "FRS Achieved ✓"; statusColor = "var(--clr-green)"; borderColor = "rgba(var(--clr-green-rgb),0.3)"; bgColor = "rgba(var(--clr-green-rgb),0.08)"; }
-                  else if (raAt55Proj >= projBRS55) { statusLabel = "BRS Met — FRS Gap"; statusColor = "var(--clr-amber)"; borderColor = "rgba(var(--clr-amber-rgb),0.3)"; bgColor = "rgba(var(--clr-amber-rgb),0.08)"; }
-                  const trackerTitle = isAlreadyPast55 ? `Current RA vs FRS Target (Age ${currentAge})` : "FRS Tracker — Projected RA at 55";
-                  return (
-                    <div style={{ padding: 20, borderRadius: 20, border: `1px solid ${borderColor}`, background: bgColor }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Target style={{ width: 16, height: 16, color: "var(--clr-green)" }} /><span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>{trackerTitle}</span></div>
-                        <span style={{ fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 999, border: `1px solid ${borderColor}`, color: statusColor, background: bgColor }}>{statusLabel}</span>
-                      </div>
-                      <div className="rg-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-                        {[
-                          [isAlreadyPast55 ? `RA at ${currentAge}` : "Projected RA @ 55", raAt55Proj, statusColor],
-                          ["FRS Target @ 55", projFRS55, "var(--text-highlight)"],
-                          [frsShortfall > 0 ? "FRS Shortfall" : "FRS Surplus", Math.abs(frsShortfall), frsShortfall > 0 ? "var(--clr-red)" : "var(--clr-green)"]
-                        ].map(([l, v, c]) => (
-                          <div key={l} style={{ textAlign: "center" }}><p style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 4 }}>{l}</p><p style={{ fontSize: 18, fontWeight: 900, color: c, fontFamily: "monospace" }}>{frsShortfall <= 0 && l.includes("Surplus") ? "+" : ""}{formatCurrency(v)}</p></div>
-                        ))}
-                      </div>
-                      <div style={{ height: 10, background: "var(--bg-input)", borderRadius: 999, overflow: "hidden", position: "relative", marginBottom: 6 }}>
-                        {[25, 50].map(p => <div key={p} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />)}
-                        <div style={{ height: 10, borderRadius: 999, background: `linear-gradient(90deg,${statusColor},${statusColor}99)`, width: `${frsProgress}%`, transition: "width 0.8s" }} />
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)", fontWeight: 700 }}>
-                        <span>$0</span><span style={{ position: "relative", left: "25%" }}>BRS</span><span style={{ position: "relative", left: "25%" }}>FRS</span><span>ERS</span>
-                      </div>
-                      {frsShortfall > 0 && raAt55Proj < projFRS55 && raAt55Proj >= projBRS55 && (
-                        <p style={{ marginTop: 8, fontSize: 10, color: "var(--clr-amber)" }}>BRS met. Top up {formatCurrency(frsShortfall)} more to reach FRS and unlock higher LIFE payouts.</p>
-                      )}
-                      {frsShortfall > 0 && raAt55Proj < projBRS55 && (
-                        <p style={{ marginTop: 8, fontSize: 10, color: "var(--clr-red)" }}>Top up {formatCurrency(projBRS55 - raAt55Proj)} to reach BRS, then {formatCurrency(frsShortfall)} to reach FRS.</p>
-                      )}
-                      {frsShortfall <= 0 && raAt55Proj < projERS55 && (
-                        <p style={{ marginTop: 8, fontSize: 10, color: "var(--clr-green)" }}>FRS achieved ✓ Top up {formatCurrency(projERS55 - raAt55Proj)} more to reach ERS for maximum payouts.</p>
-                      )}
-                      {raAt55Proj >= projERS55 && (
-                        <p style={{ marginTop: 8, fontSize: 10, color: "var(--clr-sky)" }}>ERS achieved ✓ Maximum CPF LIFE payout unlocked.</p>
-                      )}
-                    </div>
-                  );
-                })()}
+                {/* FRS Tracker has moved to the Strategy tab — see Strategy → FRS Tracker section */}
                 {/* Estate Planning Panel */}
                 {(() => {
                   const ages = [65, 70, 75, 80, 85, 90, 95];
@@ -14232,6 +14175,89 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <p style={{ fontSize: 11, color: "var(--clr-violet2)", margin: 0 }}>Set a <strong>Target Retirement Income</strong> in the Private Assets &amp; Strategy panel (sidebar) to activate shortfall analysis and the goal line on the chart below.</p>
                     </div>
                   )}
+
+                  {/* ── FRS TRACKER (full detail) — hidden for foreigners and RSS ── */}
+                  {!isForeigner && !isRSSStrategy && (() => {
+                    const stCa = Number(inputs.currentAge) || 35;
+                    const stPast55 = stCa >= 55;
+                    const stRow55 = stPast55 ? projection[0] : projectionByAge.get(55);
+                    const stRa55  = stRow55?.ra || 0;
+                    const stYt55  = Math.max(0, (Number(inputs.currentYear || 2026) + Math.max(0, 55 - stCa)) - 2026);
+                    const stBRS   = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, stYt55));
+                    const stFRS   = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, stYt55));
+                    const stERS   = stFRS * 2;
+                    const stProgress = Math.min(100, (stRa55 / stERS) * 100);
+                    const stShortfall = stFRS - stRa55;
+                    let stStatus = "Below BRS", stColor = "var(--clr-red)", stBorder = "rgba(239,68,68,0.3)", stBg = "rgba(239,68,68,0.06)";
+                    if (stRa55 >= stERS)      { stStatus = "ERS Achieved ✓"; stColor = "#38bdf8"; stBorder = "rgba(56,189,248,0.3)"; stBg = "rgba(56,189,248,0.06)"; }
+                    else if (stRa55 >= stFRS) { stStatus = "FRS Achieved ✓"; stColor = "var(--clr-green)"; stBorder = "rgba(var(--clr-green-rgb),0.3)"; stBg = "rgba(var(--clr-green-rgb),0.06)"; }
+                    else if (stRa55 >= stBRS) { stStatus = "BRS Met — FRS Gap"; stColor = "var(--clr-amber)"; stBorder = "rgba(var(--clr-amber-rgb),0.3)"; stBg = "rgba(var(--clr-amber-rgb),0.06)"; }
+                    const stTitle = stPast55 ? `Current RA vs Retirement Sums (Age ${stCa})` : "FRS Tracker — Projected RA at Age 55";
+                    // Actionable recommendations
+                    const stRecs = [];
+                    if (stRa55 < stBRS) {
+                      stRecs.push({ icon: "🎯", color: "var(--clr-red)", title: "Priority: Reach BRS", body: `Top up ${formatCurrency(stBRS - stRa55)} via RSTU to unlock the minimum CPF LIFE payout. Without BRS you may need a cash pledge on your property to keep your home.` });
+                    }
+                    if (stRa55 >= stBRS && stRa55 < stFRS) {
+                      stRecs.push({ icon: "📈", color: "var(--clr-amber)", title: `Close the ${formatCurrency(stShortfall)} FRS gap`, body: `Annual RSTU top-up of ${formatCurrency(Math.round(stShortfall / Math.max(1, 55 - stCa)))}/yr from now to 55 would close this gap. FRS unlocks higher CPF LIFE payouts and avoids the property pledge requirement.` });
+                    }
+                    if (stRa55 >= stFRS && stRa55 < stERS) {
+                      stRecs.push({ icon: "🚀", color: "var(--clr-blue)", title: "Top up to ERS for maximum payout", body: `${formatCurrency(stERS - stRa55)} more to reach ERS — the cap for CPF LIFE enrolment and the largest possible monthly payout under all three plans.` });
+                    }
+                    if (stRa55 >= stERS) {
+                      stRecs.push({ icon: "✅", color: "var(--clr-green)", title: "ERS achieved — maximum payout unlocked", body: "RA at 55 exceeds ERS. No further SA/RA top-ups needed. Redirect surplus savings to OA drawdown, SRS, or private assets for flexibility." });
+                    }
+                    if ((Number(inputs.vcSaTopup) || 0) === 0 && stRa55 < stFRS) {
+                      stRecs.push({ icon: "💡", color: "var(--clr-violet)", title: "No RSTU top-up entered", body: `RSTU is tax-deductible up to $8,000/yr and compounds at 4% p.a. Even $3,000/yr from age ${stCa} adds ~${formatCurrency(Math.round(3000 * ((Math.pow(1.04, Math.max(1, 55 - stCa)) - 1) / 0.04)))} to RA by age 55.` });
+                    }
+                    if ((Number(inputs.vcSaTopup) || 0) > 0 && estimatedTaxSavings > 0) {
+                      stRecs.push({ icon: "🧾", color: "var(--clr-amber)", title: `Saving ${formatCurrency(estimatedTaxSavings)}/yr in tax via RSTU`, body: `Your ${formatCurrency(Number(inputs.vcSaTopup))} RSTU top-up saves ~${formatCurrency(estimatedTaxSavings)}/yr in income tax. Continue until FRS is met to maximise both compound growth and tax relief.` });
+                    }
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                        <div style={{ padding: 20, borderRadius: 18, border: `1px solid ${stBorder}`, background: stBg }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <Target style={{ width: 15, height: 15, color: stColor }} />
+                              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>{stTitle}</span>
+                            </div>
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 12px", borderRadius: 20, border: `1px solid ${stBorder}`, color: stColor, background: stBg }}>{stStatus}</span>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
+                            {[
+                              [stPast55 ? `RA at ${stCa}` : "Projected RA at 55", stRa55, stColor],
+                              ["FRS target at 55", stFRS, "var(--text-bright)"],
+                              [stShortfall > 0 ? "FRS shortfall" : "FRS surplus", Math.abs(stShortfall), stShortfall > 0 ? "var(--clr-red)" : "var(--clr-green)"],
+                            ].map(([l, v, c]) => (
+                              <div key={l} style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px" }}>
+                                <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{l}</p>
+                                <p style={{ fontSize: 17, fontWeight: 500, color: c, fontFamily: "monospace", margin: 0 }}>{stShortfall <= 0 && l.includes("surplus") ? "+" : ""}{formatCurrency(v)}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ height: 8, background: "var(--bg-input)", borderRadius: 999, overflow: "hidden", position: "relative", marginBottom: 6 }}>
+                            {[stBRS / stERS * 100, 50].map((p, i) => (
+                              <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, background: "var(--bg-base)", zIndex: 1 }} />
+                            ))}
+                            <div style={{ height: "100%", borderRadius: 999, background: `linear-gradient(90deg,${stColor},${stColor}88)`, width: `${stProgress}%`, transition: "width 0.8s ease" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>
+                            <span>$0</span><span>BRS {formatCurrency(stBRS)}</span><span>FRS {formatCurrency(stFRS)}</span><span>ERS {formatCurrency(stERS)}</span>
+                          </div>
+                        </div>
+                        {stRecs.length > 0 && (
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 10 }}>
+                            {stRecs.map((r, i) => (
+                              <div key={i} style={{ background: "var(--bg-muted)", borderLeft: `3px solid ${r.color}`, borderRadius: 10, padding: "11px 14px" }}>
+                                <p style={{ fontSize: 12, fontWeight: 600, color: r.color, margin: "0 0 5px" }}>{r.icon} {r.title}</p>
+                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>{r.body}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* ── SECTION 1: Stacked Income AreaChart ── */}
                   <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
