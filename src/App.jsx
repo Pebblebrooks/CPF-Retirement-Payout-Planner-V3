@@ -13,8 +13,7 @@ import {
   LayoutDashboard, RotateCcw, Activity, Bell, X,
   SlidersHorizontal, Percent, Link, Target,
   Moon, Sun, Monitor, Lightbulb, Copy, ChevronDown, ChevronUp,
-  ArrowRightLeft, LogOut, Users, ExternalLink, Home, Upload,
-  RefreshCw, Share2
+  ArrowRightLeft, LogOut, Users, ExternalLink, Home, Upload
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
@@ -3169,31 +3168,6 @@ function SidebarSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ── StatusDot — small filled/empty indicator shown in every sidebar section header.
-//    active = true  → glowing green dot (section has non-default user data)
-//    active = false → dim grey ring  (section is at default/empty state)
-// ─────────────────────────────────────────────────────────────────────────────
-function StatusDot({ active }) {
-  return (
-    <span
-      title={active ? "Has user data" : "No data entered yet"}
-      style={{
-        display: "inline-block",
-        width: 7,
-        height: 7,
-        borderRadius: "50%",
-        marginLeft: 6,
-        flexShrink: 0,
-        background: active ? "var(--clr-green)" : "transparent",
-        border: active ? "1.5px solid var(--clr-green)" : "1.5px solid var(--border-strong)",
-        boxShadow: active ? "0 0 5px rgba(var(--clr-emerald-rgb),0.55)" : "none",
-        transition: "all 0.2s",
-      }}
-    />
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
@@ -4006,22 +3980,6 @@ export default function App() {
   // Only VC3A counts toward the Annual Limit
   const totalVC = (Number(inputs.vc3aCash) || 0);
   const isVcOverLimit = totalVC > maxAllowableVC;
-
-  // ── Section completion indicators — derived from inputs against DEFAULT_INPUTS defaults.
-  // A section is "active" (green dot) when the user has entered at least one non-default value.
-  // Uses inputs (not debouncedInputs) so dots update immediately as the user types.
-  const sectionStatus = {
-    profile:      inputs.name !== "" || inputs.citizenStatus !== "SC" || inputs.prYear !== 3 || inputs.isPwD || inputs.isSelfEmployed,
-    cpfBalances:  (Number(inputs.oaBalance)||0) !== 50000 || (Number(inputs.saBalance)||0) !== 40000 || (Number(inputs.maBalance)||0) !== 30000,
-    contribs:     (Number(inputs.empOaCont)||0) !== 12000 || (Number(inputs.empSaCont)||0) !== 4000 || (Number(inputs.empMaCont)||0) !== 4000 || (Number(inputs.salaryGross)||0) !== 6000,
-    topups:       (Number(inputs.vc3aCash)||0) > 0 || (Number(inputs.vcSaTopup)||0) > 0 || (Number(inputs.vcMaCash)||0) > 0 || (Number(inputs.vcVhr)||0) > 0 || (Number(inputs.mrssGrant)||0) > 0 || (Number(inputs.mmssGrant)||0) > 0 || (Number(inputs.wisAmount)||0) > 0,
-    outflows:     (Number(inputs.housingOutflow)||0) !== 12000 || (Number(inputs.medicalUsage)||0) !== 500 || (Number(inputs.oaEduLoan)||0) > 0,
-    transfers:    (Number(inputs.oaToSaTransfer)||0) > 0 || (Number(inputs.oaToMaTransfer)||0) > 0 || (Number(inputs.cpfisOaAmount)||0) > 0 || (Number(inputs.cpfisSaAmount)||0) > 0 || (Number(inputs.oaWithdrawalAt55)||0) > 0,
-    property:     (Number(inputs.propertyValue)||0) !== 500000 || (Number(inputs.sellPropertyAge)||0) > 0 || inputs.propMonetiseEnabled || inputs.usePropertyPledge,
-    privateAssets:(Number(inputs.currentPrivateAssets)||0) > 0 || (Number(inputs.srsBalance)||0) > 0 || (Number(inputs.annualPrivateSaving)||0) > 0 || (Number(inputs.srsAnnualContribution)||0) > 0,
-    lifeevents:   (inputs.lifeEvents||[]).length > 0,
-    decumulation: (Number(inputs.oaDrawdownMonthly)||0) > 0 || (Number(inputs.targetMonthlyIncome)||0) > 0 || inputs.dieWithZeroEnabled || (Number(inputs.plannedDownpaymentOA)||0) > 0,
-  };
 
   const annualGross = ((Number(inputs.salaryGross) || 0) * 12) + (Number(inputs.salaryBonus) || 0);
   const estimatedTaxRate = annualGross > 320000 ? 0.22 : annualGross > 240000 ? 0.19 : annualGross > 160000 ? 0.17 : annualGross > 120000 ? 0.15 : annualGross > 80000 ? 0.115 : annualGross > 40000 ? 0.07 : 0.035;
@@ -6973,25 +6931,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         /* ── Table tbody: ensure all non-coloured cells are dark enough ── */
         .theme-light table tbody td { color: #162033 !important; }
 
-        /* ── Finance Ratios & XIRR cards (v10 additions) ────────────────
-           New cards in Zone 6 and Data Table use borderLeft: `3px solid ${color}`.
-           The border colours come from CSS variables already mapped above.
-           These rules fix the sub-text and value contrast specifically.  ── */
-        .theme-light .finance-ratio-card p { color: #162033 !important; }
-        /* StatusDot glow — reduce saturation in light mode to avoid bleed */
-        .theme-light [style*="box-shadow: 0 0 5px rgba(var(--clr-emerald-rgb)"] {
-          box-shadow: 0 0 4px rgba(6,95,70,0.40) !important;
-        }
-        /* Tablet action bar in light mode — ensure contrast */
-        .theme-light .tablet-action-bar {
-          background: rgba(196,210,222,0.98) !important;
-          border-top-color: #7a96ae !important;
-        }
-        /* Empty-state CTA banner */
-        .theme-light [style*="background: rgba(var(--clr-blue2-rgb),0.07)"] {
-          background: rgba(30,64,175,0.06) !important;
-        }
-
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
           to   { transform: translate(-50%, 0);     opacity: 1; }
@@ -7282,22 +7221,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         .cpf-header-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
         .mobile-menu-btn { display: none; }
-        /* Tablet sticky bottom action bar — hidden by default, shown via @media 769–1024px */
-        .tablet-action-bar {
-          display: none;
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          z-index: 50;
-          background: var(--bg-panel);
-          border-top: 1px solid var(--border-subtle);
-          backdrop-filter: blur(12px);
-          padding: 8px 16px;
-          gap: 8px;
-          align-items: center;
-          justify-content: space-between;
-        }
         .desktop-only { display: flex; }
         .cpf-tabs { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; touch-action: pan-x; }
         .cpf-tabs::-webkit-scrollbar { display: none; }
@@ -7451,7 +7374,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
-          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 16px 14px 72px; }
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 16px 14px; }
           /* W1 fix: remove horizontal padding from tab-content — parent cpf-main-wrap already provides
              14px inset, so adding another 14px here made content 14px narrower per side than the
              tab header panel above it. Vertical padding kept so content breathes below the KPI strip. */
@@ -7479,8 +7402,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .z2-z3-grid { grid-template-columns: 1fr 1fr !important; }
           .z4-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
-          /* Tablet sticky bottom action bar — always shown on tablet, hidden elsewhere */
-          .tablet-action-bar { display: flex !important; }
         }
 
         /* ─── MOBILE  ≤ 768 px ───────────────────────────────────────── */
@@ -8015,7 +7936,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ["Strategy", Target, "#f43f5e", "Holistic retirement income planner. Set a Target Monthly Income, then use ⚡ Fill Gap to auto-calculate the OA Drawdown needed to close the shortfall. Shows CPF LIFE + OA Drawdown + SRS + Private Assets in a Gantt timeline and income table. Displays real OA exhaustion age."],
                     ["Accumulation", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance — the active band is shown on the Probability of Sufficiency badge."],
                     ["LIFE Comparison", ShieldCheck, "var(--clr-purple)", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Basic payout = PMT formula; bequest in Phase 1 includes full premium refund. Vertical lines mark exact break-even ages."],
-                    ["Compare", Split, "var(--clr-orange)", "Two tools in one tab. (1) What-If Explorer — drag sliders to instantly simulate how payout age, SA/RA top-up, housing, salary, OA drawdown, SRS, or private growth affect your balance without modifying saved inputs. The same sliders are also accessible from the Summary tab. (2) Scenario A vs B diff — save your profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded diff of every metric that changes."],
+                    ["Compare", Split, "var(--clr-orange)", "Save two scenarios (e.g. retire at 65 vs 70) and view a colour-coded diff table showing every metric that changes between them."],
                     ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E), and IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, and interest component. Download either view as CSV."]
                   ].map(([title, Icon, color, desc]) => (
                     <div key={title}>
@@ -8318,7 +8239,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             <div className="sidebar-col sidebar-col-1">
               <div className={`sidebar-col-body${colOpen[1] ? "" : " col-collapsed"}`}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="profile" label="Profile" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} badge={<StatusDot active={sectionStatus.profile} />} />
+              <SidebarSectionHeader id="profile" label="Profile" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} />
               {openSections.has("profile") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div><label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>Name</label>
@@ -8709,7 +8630,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="cpfBalances" label="CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} badge={<StatusDot active={sectionStatus.cpfBalances} />} />
+              <SidebarSectionHeader id="cpfBalances" label="CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} />
               {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Balance inputs */}
@@ -8766,7 +8687,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="contribs" label={`Mandatory Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 9, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}<StatusDot active={sectionStatus.contribs} /></>} />
+              <SidebarSectionHeader id="contribs" label={`Mandatory Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={isSelfEmployed ? <span style={{ fontSize: 9, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null} />
               {openSections.has("contribs") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 10 }}>
                   <button onClick={() => setInputs(p => ({ ...p, isSelfEmployed: !p.isSelfEmployed, empOaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empOaCont : 0, empSaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empSaCont : 0, empMaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empMaCont : 0 }))} style={{ fontSize: 10, background: isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.15)" : "rgba(100,116,139,0.15)", color: isSelfEmployed ? "var(--clr-orange)" : "var(--text-subtle)", padding: "4px 10px", borderRadius: 6, fontWeight: 700, border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer" }}>
@@ -9236,27 +9157,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit ? "#f97316" : isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="topups" label="Inflows ($/yr)" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => toggleSection("topups")} badge={(() => {
-                const vc3aVal = Number(inputs.vc3aCash) || 0;
-                const usedPct = maxAllowableVC > 0 ? Math.min(1, vc3aVal / maxAllowableVC) : (vc3aVal > 0 ? 1 : 0);
-                const barColor = isVcOverLimit ? "#f97316" : usedPct >= 0.75 ? "var(--clr-amber)" : "var(--clr-green)";
-                return (
-                  <span style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-                    {/* Mini progress bar for Annual Limit — always visible even when section is collapsed */}
-                    <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-subtle)", lineHeight: 1 }}>Limit</span>
-                      <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                        <span style={{ width: 36, height: 4, background: "var(--bg-muted)", borderRadius: 2, overflow: "hidden", display: "block" }}>
-                          <span style={{ width: `${Math.round(usedPct * 100)}%`, height: "100%", background: barColor, borderRadius: 2, display: "block", transition: "width 0.3s ease" }} />
-                        </span>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: barColor, lineHeight: 1, whiteSpace: "nowrap" }}>{Math.round(usedPct * 100)}%</span>
-                      </span>
-                    </span>
-                    {isVcOverLimit && <AlertTriangle style={{ width: 12, height: 12, color: "var(--clr-orange)", flexShrink: 0 }} />}
-                    <StatusDot active={sectionStatus.topups} />
-                  </span>
-                );
-              })()} />
+              <SidebarSectionHeader id="topups" label="Inflows ($/yr)" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => toggleSection("topups")} badge={<><span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-subtle)" }}>Limit: {formatCurrency(maxAllowableVC)}/yr</span>{isVcOverLimit && <AlertTriangle style={{ width: 12, height: 12, color: "var(--clr-orange)" }} />}</>} />
               {openSections.has("topups") && <div style={{ padding: "0 16px 16px" }}>
                 {isSelfEmployed && (
                   <div style={{ background: "rgba(var(--clr-orange-rgb),0.08)", border: "1px solid rgba(var(--clr-orange-rgb),0.2)", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 10, color: "#fdba74", lineHeight: 1.5 }}>
@@ -9742,7 +9643,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={<StatusDot active={sectionStatus.outflows} />} />
+              <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -9916,7 +9817,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="transfers" label="CPF Transfers ($/yr)" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={<StatusDot active={sectionStatus.transfers} />} />
+              <SidebarSectionHeader id="transfers" label="CPF Transfers ($/yr)" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} />
               {openSections.has("transfers") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* OA → MA */}
@@ -10059,7 +9960,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </div>{/* /transfers gate wrapper */}
             {/* Property — consolidated section (3rd section of col2) */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="property" label="Property & Timelines" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => toggleSection("property")} badge={<StatusDot active={sectionStatus.property} />} />
+              <SidebarSectionHeader id="property" label="Property & Timelines" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => toggleSection("property")} />
               {openSections.has("property") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -10298,7 +10199,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader id="privateAssets" label="Private Assets" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={<StatusDot active={sectionStatus.privateAssets} />} />
+              <SidebarSectionHeader id="privateAssets" label="Private Assets" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} />
               {openSections.has("privateAssets") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   
@@ -10497,7 +10398,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               return (
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
                   {/* Header */}
-                  <SidebarSectionHeader id="lifeevents" label="Life Events" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 10, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}<StatusDot active={sectionStatus.lifeevents} /></>} />
+                  <SidebarSectionHeader id="lifeevents" label="Life Events" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => toggleSection("lifeevents")} badge={lifeEvents.length > 0 ? <span style={{ fontSize: 10, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null} />
 
                   {openSections.has("lifeevents") && (
                     <div style={{ padding: "0 16px 16px" }}>
@@ -10655,7 +10556,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
             {/* Decumulation & Goals — income targets, OA drawdown, Die with Zero */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={<StatusDot active={sectionStatus.decumulation} />} />
+              <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} />
               {openSections.has("decumulation") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Monthly Goal */}
@@ -11051,7 +10952,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ padding: "16px 20px" }}>
                       <p style={{ color: "var(--text-main)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8 }}>
-                        {[["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck], ["Monte Carlo stress testing", Activity], ["Milestone alerts", Bell], ["Holistic Strategy & ⚡ Fill Gap", Target], ["OA Drawdown decumulation engine", ArrowRightLeft], ["Side-by-side scenario diff", Split], ["PDF & CSV export", Download], ["SRS tax-deferred savings", BookOpen], ["Property Monetisation (LBS / downgrade)", Home], ["Die with Zero draw-down planner", Clock], ["7 sample profiles to explore instantly", Users], ["PR G/G & F/G rates with auto-advancement", Users], ["Recurring / One-Time frequency toggles", ArrowRightLeft], ["OA→SA / OA→RA For Loved One transfers", Users], ["Annual Cashflow Ledger", TableIcon], ["OA Education Loan Scheme", BookOpen], ["PwD MRSS under-55 bypass", ShieldCheck], ["MMSS 5-year pilot (2026–2030)", Gift], ["Accumulation: SA pre-55 / RA from-55 split", BarChart3], ["Life Events & Stress Testing (retrenchment, windfall…)", Activity], ["Retirement Sum Growth — adjustable FRS/BHS rate", TrendingUp], ["Phased Salary & Career Break modelling", Briefcase]].map(([text, Icon], i) => (
+                        {[["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck], ["Monte Carlo stress testing", Activity], ["Milestone alerts", Bell], ["Holistic Strategy & ⚡ Fill Gap", Target], ["OA Drawdown decumulation engine", ArrowRightLeft], ["Side-by-side scenario diff", Split], ["PDF & CSV export", Download], ["SRS tax-deferred savings", BookOpen], ["Property Monetisation (LBS / downgrade)", Home], ["Die with Zero draw-down planner", Clock], ["7 sample profiles to explore instantly", Users], ["PR G/G & F/G rates with auto-advancement", Users], ["Recurring / One-Time frequency toggles", ArrowRightLeft], ["OA→SA / OA→RA For Loved One transfers", Users], ["Annual Cashflow Ledger", TableIcon], ["OA Education Loan Scheme", BookOpen], ["PwD MRSS under-55 bypass", ShieldCheck], ["MMSS 5-year pilot (2026–2030)", Gift], ["Accumulation: SA pre-55 / RA from-55 split", BarChart3]].map(([text, Icon], i) => (
                           <div key={i} style={{ background: "var(--bg-base)", padding: "8px 12px", borderRadius: 12, display: "flex", alignItems: "center", gap: 10, border: "1px solid var(--border-subtle)" }}>
                             <Icon style={{ width: 13, height: 13, color: "var(--clr-emerald)" }} />
                             <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-highlight)" }}>{text}</span>
@@ -11063,19 +10964,57 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       </div>
                     </div>
                   </div>
-                  {/* Page 2 */}
+                  {/* Page 2 — 3-Step Quickstart */}
                   <div style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(59,130,246,0.12)" }}>
                     <div style={{ background: "linear-gradient(145deg, #0c1a3a 0%, #1e40af 45%, #3b82f6 80%, #93c5fd 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
                       <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><User style={{ width: 20, height: 20, color: "#eff6ff" }} /></div>
-                      <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#eff6ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Setting Up Your Profile</h4><p style={{ fontSize: 11, color: "rgba(239,246,255,0.8)", margin: 0 }}>Step 1 — The Input Engine (left panel)</p></div>
+                      <div>
+                        <h4 style={{ fontSize: 15, fontWeight: 900, color: "#eff6ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Get Started in 3 Steps</h4>
+                        <p style={{ fontSize: 11, color: "rgba(239,246,255,0.8)", margin: 0 }}>From zero to your first retirement projection in under 3 minutes</p>
+                      </div>
                     </div>
-                    <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[["1", "Enter your CPF balances, gender & citizenship", "Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). Select citizenship: SC or PR have full CPF access; Foreigners have no CPF account — all CPF sections lock automatically and only SRS, Property, and Private Assets apply. MRSS and MMSS are SC-only. PR members in Year 1 or 2 get lower contribution rates, with the engine automatically advancing from Yr 1 → Yr 2 → Yr 3+ rates each projection year.", "var(--clr-blue2)"], ["2", "Auto-Calc Contributions (SC / PR / SEP)", "For employed members: enter OW, AW, and Salary Growth %, then click ⚡ Auto-Calc. SC uses full rates. PR members: select tenure year (1 / 2 / 3+) and rate type — G/G (default, graduated employer) or F/G (full employer 17%, requires joint CPF application). Auto-Calc uses the correct rates and the engine advances tiers automatically year-by-year. SEP members use the Inflows (VC3A) panel instead.", "var(--clr-emerald)"], ["3", "Add voluntary top-ups & CPF Transfers", "RSTU top-ups to SA/RA, gov grants, MRSS/MMSS. Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the current year. CPF Transfers: OA→SA/RA (For Self: internal move; For Loved One: OA outflow only, no FRS cap). CPFIS: OA above $20k and SA above $40k are investible separately.", "var(--clr-purple)"], ["4", "Review the Inflows panel limit", "The Inflows panel tracks the $37,740 CPF Annual Limit for VC contributions. It turns orange if your combined VC3A/RSTU inputs exceed your remaining allowance.", "var(--clr-amber)"], ["5", "Set your life-phase timelines", "Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model transitions accurately. If selling property, enter Sell Property at Age — CPF requires refund of OA housing principal + 2.5%/yr accrued interest, credited back to OA.", "var(--clr-orange)"], ["6", "Configure SRS (optional)", "Enter your SRS balance, annual contribution (max $15,300/yr for SC/PR), and drawdown start age in the SRS panel. Contributions are tax-deductible; 50% of each withdrawal is taxable from age 63; full balance must be withdrawn within 10 years of first withdrawal. The engine models growth and drawdown separately.", "#0ea5e9"], ["7", "Plan decumulation income & Property Monetisation", "Set a Target Monthly Income in Decumulation & Goals. Click ⚡ Fill Gap to auto-set the OA Drawdown amount. If you plan to downgrade, use LBS, or sell and buy smaller, toggle Property Monetisation in the Property & Timelines section to add net cash proceeds and any RA top-up to the projection.", "#f43f5e"], ["8", "Try Die with Zero mode (optional)", "Toggle Die with Zero in Decumulation & Goals. Set a target depletion age — the tool automatically computes the exact monthly OA draw using the PMT annuity formula and applies it directly to the projection. The OA draw is shown as auto-applied in the panel. RA and CPF LIFE payouts are unaffected.", "var(--clr-green)"]].map(([num, title, desc, color]) => (
-                        <div key={num} style={{ display: "flex", gap: 12 }}>
-                          <div style={{ width: 26, height: 26, borderRadius: "50%", background: `${color}20`, color, border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{num}</div>
-                          <div><h5 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)", marginBottom: 2 }}>{title}</h5><p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</p></div>
+                    <div style={{ padding: "20px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+                      {[
+                        {
+                          num: "1", color: "var(--clr-blue2)",
+                          title: "Enter your profile & CPF balances",
+                          desc: "Fill in your current OA, SA, and MA balances in the left sidebar. Select citizenship (SC / PR / Foreigner), gender, and current age. For employed members, enter your gross monthly salary and click ⚡ Auto-Calc to have the engine set your contribution amounts automatically.",
+                          tip: "Not sure where to start? Click Samples in the header to instantly load a pre-built profile.",
+                        },
+                        {
+                          num: "2", color: "var(--clr-emerald)",
+                          title: "Set your payout age & voluntary top-ups",
+                          desc: "Choose when CPF LIFE payouts should start (age 65–70) in the Profile section. Optionally add RSTU top-ups to grow your RA faster, or set a housing outflow if you're still paying a mortgage. Every field has a Recurring / One-Time toggle for lump-sum vs annual entries.",
+                          tip: "Tip: Each year you defer CPF LIFE adds ~7% to your monthly payout.",
+                        },
+                        {
+                          num: "3", color: "var(--clr-violet)",
+                          title: "Read your Summary dashboard",
+                          desc: "Click the Summary tab. Your total CPF at payout age, monthly payout under each plan, and account breakdown are shown instantly. Check Milestone Alerts for early warnings, and visit Strategy to see if you're on track for FRS.",
+                          tip: "Full step-by-step setup guide and engine methodology are in the Docs tab.",
+                        },
+                      ].map(({ num, color, title, desc, tip }) => (
+                        <div key={num} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: `${color}20`, color, border: `1.5px solid ${color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, flexShrink: 0, marginTop: 2 }}>{num}</div>
+                          <div style={{ flex: 1 }}>
+                            <h5 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)", margin: "0 0 4px" }}>{title}</h5>
+                            <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, margin: "0 0 6px" }}>{desc}</p>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}10`, border: `1px solid ${color}30`, padding: "4px 10px", borderRadius: 8 }}>
+                              <Lightbulb style={{ width: 11, height: 11, color }} />
+                              <span style={{ fontSize: 11, color, fontStyle: "italic" }}>{tip}</span>
+                            </div>
+                          </div>
                         </div>
                       ))}
+                      {/* Link to full Docs guide */}
+                      <div style={{ marginTop: 6, paddingTop: 14, borderTop: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>Need more detail on any input or how the engine works?</p>
+                        <button onClick={() => setActiveTab("notes")}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 10, fontSize: 12, fontWeight: 700, background: "rgba(var(--clr-blue2-rgb),0.12)", color: "var(--clr-blue)", border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
+                          <BookOpen style={{ width: 13, height: 13 }} />
+                          Open full Docs guide →
+                        </button>
+                      </div>
                     </div>
                   </div>
                   {/* Page 3 */}
@@ -11085,7 +11024,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#faf5ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Exploring the Dashboard</h4><p style={{ fontSize: 11, color: "rgba(250,245,255,0.8)", margin: 0 }}>Step 2 — The right panel tabs</p></div>
                     </div>
                     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[["Summary", PieChart, "var(--clr-emerald)", "Key metrics at a glance: total CPF at payout age, net worth breakdown doughnut chart, estate planning panel, milestone alerts, 20% RA-to-OA transfer notice, and What-If Explorer with SA/RA text override."], ["Strategy", Target, "#f43f5e", "Holistic income planner for retirement. Set your Target Monthly Income, then click ⚡ Fill Gap to auto-set the OA Drawdown needed to close the income gap. Gantt timeline shows all income streams. Income table shows CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets side by side."], ["Accumulation", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance. Real vs Nominal dollar toggle adjusts for inflation."], ["LIFE Comparison", ShieldCheck, "var(--clr-purple)", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."], ["Compare", Split, "var(--clr-orange)", "Two tools in one tab. (1) What-If Explorer — drag sliders to instantly simulate how changes to payout age, SA/RA top-up, housing outflow, salary, contribution stop age, OA drawdown, SRS, or private growth affect your total balance without touching your saved inputs. (2) Scenario A vs B diff — save your current profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded side-by-side diff of every metric that changes."], ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, and interest component. Download either view as CSV."]].map(([title, Icon, color, desc]) => (
+                      {[["Summary", PieChart, "var(--clr-emerald)", "Key metrics at a glance: total CPF at payout age, net worth breakdown doughnut chart, estate planning panel, milestone alerts, 20% RA-to-OA transfer notice, and What-If Explorer with SA/RA text override."], ["Strategy", Target, "#f43f5e", "Holistic income planner for retirement. Set your Target Monthly Income, then click ⚡ Fill Gap to auto-set the OA Drawdown needed to close the income gap. Gantt timeline shows all income streams. Income table shows CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets side by side."], ["Accumulation", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance. Real vs Nominal dollar toggle adjusts for inflation."], ["LIFE Comparison", ShieldCheck, "var(--clr-purple)", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."], ["Compare", Split, "var(--clr-orange)", "Save two scenarios (e.g. retire at 65 vs 70) and view a colour-coded diff table showing every metric that changes between them."], ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Download as CSV."]].map(([title, Icon, color, desc]) => (
                         <div key={title}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}15`, border: `1px solid ${color}33`, padding: "4px 10px", borderRadius: 10, marginBottom: 5 }}>
                             <Icon style={{ width: 12, height: 12, color }} />
@@ -11125,52 +11064,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             {/* ── SUMMARY TAB ── */}
             {activeTab === "summary" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                {/* Summary tab intro — collapsible via native <details> (no hooks) */}
-                <details style={{ borderRadius: 14, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
-                  <summary style={{ padding: "10px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
-                    <p style={{ fontWeight: 700, color: "var(--text-highlight)", margin: 0, fontSize: 12 }}>📋 Summary Tab — What You're Looking At</p>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>▼ Show</span>
-                  </summary>
-                  <div style={{ padding: "0 18px 14px", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.7 }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8 }}>
-                      {(() => {
-                        // R7 fix: two items are CPF LIFE-specific — swap them for RSS-appropriate text
-                        // when RSS mode is active. All other items remain valid for both schemes.
-                        const isRssDesc = debouncedInputs.cpfScheme === 'rss';
-                        const rssPayAmt = Number(inputs.rssMonthlyPayout) || 0;
-                        return [
-                        ["💰 Projected Total CPF", isRssDesc
-                          ? "Your total OA + MA + RA balance — the nest egg being drawn down each month under RSS."
-                          : "Your total OA + MA + RA balance at your chosen payout age. This is the nest egg that funds CPF LIFE payouts."],
-                        ["📊 Account Balances", "Breakdown of OA, MA, SA, and RA at payout age. SA shows 'Merged into RA' for members aged 55+."],
-                        [isRssDesc ? "📈 RSS Drawdown Profile" : "💵 CPF LIFE Starting Payouts", isRssDesc
-                          ? `Fixed monthly RSS draw (${rssPayAmt > 0 ? formatCurrency(rssPayAmt) + "/mo" : "not yet set"}) from RA until depletion. See the RSS tab for projected depletion age and migration options.`
-                          : "Estimated monthly payout under each LIFE plan (Standard, Escalating, Basic) based on your RA at payout age."],
-                        ["📈 Key Statistics Row", "Five KPIs: total contributions made, total outflows, net worth at 65, net worth at 95, and estimated annual RSTU tax savings."],
-                        ["📅 Contribution Timeline", isRssDesc
-                          ? "Gantt chart showing when contributions, housing outflows, and RSS drawdown are active across your lifetime."
-                          : "Gantt chart showing when contributions, housing outflows, LIFE payouts, and each plan phase are active across your lifetime."],
-                        ["🎯 FRS Tracker", "Projected RA at age 55 vs BRS/FRS/ERS targets. Shows if you're on track and how much more is needed."],
-                        ["🥧 Net Worth Breakdown", "Doughnut chart of OA + MA + RA + Property at payout age. Shows how your wealth is distributed across buckets."],
-                        ["🔔 Milestone Alerts", isRssDesc
-                          ? "Automatic alerts for key events like BHS reached, OA drawdown exhaustion, RSS depletion age, and property sale."
-                          : "Automatic alerts for key events like BRS/FRS/ERS achievement, SA closure, BHS reached, OA drawdown exhaustion, and payout start."],
-                        ["🔧 What-If Explorer", isRssDesc
-                          ? "Drag sliders to test how changing RSTU top-ups, housing outflow, salary, or OA drawdown affects your total CPF balance."
-                          : "Drag sliders to test how changing payout age, RSTU top-ups, housing outflow, or salary affects your total CPF. Type any amount in the SA/RA field to override the $40k slider limit."],
-                        ["🏠 Estate Planning", "Shows estimated estate value (CPF bequest + OA + MA + property) if death occurs at each age from 65 to 95. Includes a Total Estate summary at your payout age."],
-                        ["📋 Strategy Tab", isRssDesc
-                          ? "Holistic decumulation planner — set a Target Monthly Income, use ⚡ Fill Gap to auto-calculate the OA Drawdown needed, and view all income streams (RSS, OA Drawdown, SRS, Private Assets) in a Gantt and income table."
-                          : "Holistic decumulation planner — set a Target Monthly Income, use ⚡ Fill Gap to auto-calculate the OA Drawdown needed, and view all income streams (CPF LIFE, OA Drawdown, SRS, Private Assets) in a Gantt and income table. OA Exhaustion Age shown live."],
-                      ];})().map(([title, desc]) => (
-                        <div key={title} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-highlight)", marginBottom: 3 }}>{title}</div>
-                          <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </details>
                 {/* ── ZONE 1: Headline hero ── */}
                 {(() => {
                   const rawRow = projectionByAge.get(summaryRefAge) || {};
@@ -11190,18 +11083,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   const alertCount = milestones.length;
                   return (
                     <div className="z1-hero" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: "18px 24px" }}>
-                      {/* ── Empty-state guidance banner — shown when total CPF is $0 (blank profile) ── */}
-                      {nominalTotal === 0 && !isForeigner && (
-                        <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, background: "rgba(var(--clr-blue2-rgb),0.07)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", display: "flex", alignItems: "flex-start", gap: 12 }}>
-                          <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>💡</span>
-                          <div>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", margin: "0 0 3px" }}>Get started — enter your CPF details in the sidebar</p>
-                            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
-                              Open <strong style={{ color: "var(--text-highlight)" }}>CPF Balances</strong> to add your OA/SA/MA amounts, then <strong style={{ color: "var(--text-highlight)" }}>Mandatory Contributions</strong> to add salary or use ⚡ Auto-Calc. Your projection will populate instantly.
-                            </p>
-                          </div>
-                        </div>
-                      )}
                       {/* 3-col headline */}
                       <div className="z1-cols" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto auto", gap: 0, alignItems: "center" }}>
                         {/* Col 1 — Total CPF */}
@@ -11787,88 +11668,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             </div>
                           )}
                         </div>
-
-                        {/* ── Finance Ratios row ─────────────────────────────────────── */}
-                        {(() => {
-                          // CAGR: effective growth rate of contributions → final CPF balance.
-                          // Denominator = starting balances + cumulative inflows (money actually put in).
-                          // Note: this is an approximate CAGR assuming contributions are front-loaded;
-                          // for a time-weighted return use the Yield IRR% column in the Data Table tab.
-                          const paRow6 = projectionByAge.get(summaryRefAge) || {};
-                          const startBal6 = (Number(inputs.oaBalance)||0) + (Number(inputs.saBalance)||0) + (Number(inputs.maBalance)||0);
-                          const totalInj6 = paRow6.cumulativeInjected || 0;
-                          const totalInt6 = paRow6.cumulativeInterest || 0;
-                          const totalOut6 = paRow6.cumulativeOutflow || 0;
-                          const finalCPF6 = startBal6 + totalInj6 + totalInt6 - totalOut6;
-                          const years6 = Math.max(1, summaryRefAge - (Number(inputs.currentAge) || 35));
-                          const totalPutIn6 = Math.max(1, startBal6 + totalInj6);
-                          const cagrRaw = finalCPF6 > totalPutIn6
-                            ? (Math.pow(finalCPF6 / totalPutIn6, 1 / years6) - 1) * 100
-                            : null;
-
-                          // Income Replacement Ratio: CPF LIFE payout ÷ last known monthly salary
-                          const activePlanZ6 = lifePlans?.[highlightPlan];
-                          const activePayoutZ6 = activePlanZ6
-                            ? (inputs.isMale !== false ? activePlanZ6.startM : activePlanZ6.startF)
-                            : 0;
-                          const monthlyGross6 = Number(inputs.salaryGross) || 0;
-                          const irrRatio = monthlyGross6 > 0 && activePayoutZ6 > 0
-                            ? (activePayoutZ6 / monthlyGross6) * 100
-                            : null;
-
-                          // CPF Coverage Ratio: CPF LIFE payout ÷ target monthly income
-                          const target6 = Number(inputs.targetMonthlyIncome) || 0;
-                          const coverageRatio = target6 > 0 && activePayoutZ6 > 0
-                            ? (activePayoutZ6 / target6) * 100
-                            : null;
-
-                          const ratioCards = [
-                            cagrRaw !== null && {
-                              label: "Implied CPF CAGR",
-                              value: `${cagrRaw.toFixed(2)}%`,
-                              sub: `over ${years6} yrs · contributions → balance`,
-                              color: "var(--clr-blue)",
-                              tooltip: `Approximate effective annual growth rate of your CPF from age ${Number(inputs.currentAge)||35} to ${summaryRefAge}. Computed as (total balance ÷ total put in)^(1/years) − 1. For a cash-flow-accurate return, see Yield IRR% in the Data Table tab.`,
-                              tip_id: "t-cagr6",
-                            },
-                            irrRatio !== null && {
-                              label: "Income Replacement",
-                              value: `${irrRatio.toFixed(0)}%`,
-                              sub: `CPF LIFE ÷ last salary · ${highlightPlan} plan`,
-                              color: irrRatio >= 70 ? "var(--clr-green)" : irrRatio >= 40 ? "var(--clr-amber)" : "var(--clr-red)",
-                              tooltip: `CPF LIFE starting payout (${highlightPlan} plan) ÷ current monthly gross salary. A ratio ≥ 70% is considered adequate in most retirement planning frameworks.`,
-                              tip_id: "t-irr6",
-                            },
-                            coverageRatio !== null && {
-                              label: "CPF Coverage",
-                              value: `${Math.min(coverageRatio, 999).toFixed(0)}%`,
-                              sub: `CPF LIFE ÷ target income`,
-                              color: coverageRatio >= 100 ? "var(--clr-green)" : coverageRatio >= 70 ? "var(--clr-amber)" : "var(--clr-red)",
-                              tooltip: `CPF LIFE payout (${highlightPlan} plan) as a percentage of your target monthly income of ${formatCurrency(target6)}. 100%+ means CPF LIFE alone covers your full income target.`,
-                              tip_id: "t-cov6",
-                            },
-                          ].filter(Boolean);
-
-                          if (ratioCards.length === 0) return null;
-                          return (
-                            <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--border-subtle)", paddingTop: 10, marginTop: 4 }}>
-                              <p style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Finance Ratios</p>
-                              <div style={{ display: "grid", gridTemplateColumns: `repeat(${ratioCards.length}, 1fr)`, gap: 8 }}>
-                                {ratioCards.map(({ label, value, sub, color, tooltip, tip_id }) => (
-                                  <div key={label} style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "10px 12px", borderLeft: `3px solid ${color}` }}>
-                                    <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 3px", display: "flex", alignItems: "center", gap: 4 }}>
-                                      {label}<TooltipBox id={tip_id} text={tooltip} />
-                                    </p>
-                                    <p style={{ fontSize: 18, fontWeight: 700, color, margin: 0, fontFamily: "monospace" }}>{value}</p>
-                                    <p style={{ fontSize: 9, color: "var(--text-subtle)", margin: "2px 0 0", lineHeight: 1.4 }}>{sub}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>{/* /z6-stats-grid */}
-                    </div>{/* /outer stats card */}
+                      </div>
+                    </div>
                   );
                 })()}
 
@@ -12186,7 +11987,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                         </div>
                         {whatIfProjection && (
-                          <div className="rg-4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, transition: "opacity 0.15s ease", opacity: 1 }}>
+                          <div className="rg-4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
                             {[["Base Total", baseTotal, "var(--text-muted)"], ["What-If Total", whatIfTotal, "var(--clr-green)"], ["Difference", delta, delta >= 0 ? "var(--clr-green)" : "var(--clr-red)"], ["Change %", null, delta >= 0 ? "var(--clr-green)" : "var(--clr-red)"]].map(([label, val, color], i) => (
                               <div key={label} style={{ background: "var(--bg-base)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: 12 }}>
                                 <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{label}</p>
@@ -13494,61 +13295,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <span style={{ fontSize: 10, color: "var(--text-subtle)", marginLeft: "auto" }}>Data shows current inputs · switch plans via LIFE tab</span>
                   </div>
                 )}
-                {/* ── XIRR Summary Cards — headline yields at payout age for all plans ── */}
-                {/* These cards surface the most useful single metric (XIRR at payout age)
-                    without requiring the user to hunt through the per-row Yield IRR% column. */}
-                {(() => {
-                  const pAge = payoutAge65;
-                  const isRSSxirr = debouncedInputs.cpfScheme === 'rss';
-                  if (isRSSxirr) {
-                    const xRss = xirrByAge['rss']?.[pAge];
-                    if (xRss == null) return null;
-                    return (
-                      <div style={{ marginBottom: 14, padding: "14px 16px", borderRadius: 14, background: "var(--bg-panel)", border: "1px solid rgba(var(--clr-blue-rgb),0.3)" }}>
-                        <p style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px" }}>
-                          Yield IRR at payout age {pAge} · RSS scheme
-                          <TooltipBox id="t-xirr-rss" text="XIRR (extended IRR): the single annualised return rate that equates your CPF contributions (outflows) to your projected RSS drawdown (inflows), computed using Newton-Raphson. Higher = better return on money put in." />
-                        </p>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                          <span style={{ fontSize: 28, fontWeight: 700, color: "var(--clr-blue)", fontFamily: "monospace" }}>{xRss.toFixed(2)}%</span>
-                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>p.a. · RSS drawdown</span>
-                        </div>
-                      </div>
-                    );
-                  }
-                  const plans = [
-                    { key: "standard",   label: "Standard",   color: "var(--clr-green)",  bg: "rgba(var(--clr-emerald-rgb),0.06)",  border: "rgba(var(--clr-emerald-rgb),0.3)"  },
-                    { key: "escalating", label: "Escalating", color: "var(--clr-blue)",   bg: "rgba(var(--clr-blue2-rgb),0.06)",    border: "rgba(var(--clr-blue2-rgb),0.3)"    },
-                    { key: "basic",      label: "Basic",      color: "var(--clr-amber)",  bg: "rgba(var(--clr-amber3-rgb),0.06)",   border: "rgba(var(--clr-amber3-rgb),0.3)"   },
-                  ];
-                  const hasAny = plans.some(p => xirrByAge[p.key]?.[pAge] != null);
-                  if (!hasAny) return null;
-                  return (
-                    <div style={{ marginBottom: 14, padding: "14px 16px", borderRadius: 14, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                      <p style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
-                        Yield IRR at payout age {pAge}
-                        <TooltipBox id="t-xirr-hdr" text="XIRR: the annualised rate that equates lifetime CPF contributions to total projected payouts under each CPF LIFE plan. Computed via Newton-Raphson — the same metric as the Yield IRR% column below, shown here at a single reference age. For full year-by-year detail, scroll right in the Projection Table." />
-                        <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 500, color: "var(--text-subtle)", textTransform: "none", letterSpacing: 0 }}>See Yield IRR% column in table for all ages →</span>
-                      </p>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
-                        {plans.map(({ key, label, color, bg, border }) => {
-                          const xirr = xirrByAge[key]?.[pAge];
-                          const isActive = highlightPlan === key;
-                          return (
-                            <div key={key} onClick={() => setHighlightPlan(key)} style={{ background: isActive ? bg : "var(--bg-muted)", borderRadius: 10, padding: "10px 12px", border: `1px solid ${isActive ? border : "var(--border-subtle)"}`, cursor: "pointer", transition: "all 0.15s", position: "relative" }}>
-                              {isActive && <span style={{ position: "absolute", top: -1, right: 8, fontSize: 9, fontWeight: 700, color, background: bg, padding: "1px 6px", borderRadius: "0 0 6px 6px", border: `1px solid ${border}`, borderTop: "none" }}>active</span>}
-                              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", fontWeight: 700 }}>{label}</p>
-                              <p style={{ fontSize: 20, fontWeight: 700, color: xirr != null ? color : "var(--text-subtle)", margin: 0, fontFamily: "monospace" }}>
-                                {xirr != null ? `${xirr.toFixed(2)}%` : "—"}
-                              </p>
-                              <p style={{ fontSize: 9, color: "var(--text-subtle)", margin: "2px 0 0" }}>p.a. XIRR</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
                 {/* Sub-tab toggle + guide button */}
                 <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
                   {[["projection", "📋 Projection Table"], ["ledger", "💰 Cashflow Ledger"]].map(([id, label]) => (
@@ -13869,7 +13615,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     ["#doc-engine", "⚙️ Projection Engine"],
                     ["#doc-policy", "🛡 Policy Reference"],
                     ["#doc-planning", "🎯 Planning Tools"],
-                    ["#doc-whatif", "🎛 What-If Explorer"],
                     ["#doc-srs", "💳 SRS"],
                     ["#doc-propmon", "🏠 Property Monetisation"],
                     ["#doc-dwz", "⏳ Die with Zero"],
@@ -13913,13 +13658,20 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                   {/* User Guide */}
                   <section id="doc-guide">
-                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-blue)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><LayoutDashboard style={{ width: 18, height: 18 }} />Step-by-Step User Guide</h4>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+                      <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-blue)", margin: 0, display: "flex", alignItems: "center", gap: 8 }}><LayoutDashboard style={{ width: 18, height: 18 }} />Step-by-Step User Guide</h4>
+                      <button onClick={() => setActiveTab("welcome")}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600, background: "rgba(var(--clr-blue2-rgb),0.08)", color: "var(--clr-blue)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", cursor: "pointer" }}>
+                        <Lightbulb style={{ width: 12, height: 12 }} />
+                        Welcome quickstart →
+                      </button>
+                    </div>
                     {[
                       ["1", "Setup Your Profile", "var(--clr-blue)", "rgba(var(--clr-blue2-rgb),0.08)", "rgba(var(--clr-blue2-rgb),0.2)", "Enter your current OA, SA, and MA balances. Select Male/Female (affects CPF LIFE payout ratio). Select SC or PR — PR members select their tenure year (1 / 2 / 3+) and rate type (G/G default or F/G). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates each projection year. Progress bars compare balances against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones."],
                       ["2", "Auto-Calc Contributions (SC / PR / SEP)", "var(--clr-emerald)", "rgba(var(--clr-emerald-rgb),0.08)", "rgba(var(--clr-emerald-rgb),0.2)", "Enter OW (Monthly Gross), AW (Annual Bonus), and Salary Growth %, then click ⚡ Auto-Calc. SC uses full rates. PR G/G: graduated employer — no application needed. PR F/G: full employer 17%, employee pays graduated rate — requires joint CPF application. OW ceiling $8,000/mo, AW ceiling $102,000/yr. SEP members use the Inflows (VC3A) panel. Important: if citizenship is PR (Year 1 or 2) and Monthly Gross is left at $0, a validation warning will appear — the engine derives PR contributions from salary so gross pay must be entered before Auto-Calc can apply the correct rates."],
                       ["3", "Add Voluntary Top-Ups & CPF Transfers", "var(--clr-purple)", "rgba(var(--clr-purple-rgb),0.08)", "rgba(var(--clr-purple-rgb),0.2)", "Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the first projection year. RSTU tops up SA (pre-55) or RA (post-55). CPF Transfers support For Self (internal move with FRS/ERS cap) and For Loved One (OA outflow only). CPFIS: OA above $20k and SA above $40k are investible separately with their own frequency toggles."],
                       ["4", "Compare CPF LIFE Plans", "var(--clr-amber)", "rgba(var(--clr-amber3-rgb),0.08)", "rgba(var(--clr-amber3-rgb),0.2)", "Open the LIFE Comparison tab to evaluate Standard, Escalating, and Basic plans. Vertical lines explicitly mark age intersections for total yield and payouts. Toggle between Bequest and Cumulative Payout views."],
-                      ["5", "Explore What-If & Compare Scenarios", "var(--clr-orange)", "rgba(249,115,22,0.08)", "rgba(249,115,22,0.2)", "The Compare tab contains two tools. (1) What-If Explorer (top of tab, also accessible from the Summary tab): drag sliders to instantly see how changes to payout age, SA/RA top-up, annual housing outflow, salary bump, contribution stop age, OA drawdown, SRS contribution, or private growth rate affect your total balance — without touching your saved inputs. Changes reflect immediately with a live impact delta. (2) Scenario A vs B diff: save your current inputs as Scenario A, adjust parameters (e.g. delay payout age to 70), then save as Scenario B for a colour-coded side-by-side diff of every metric."],
+                      ["5", "Save Scenarios & Compare", "var(--clr-orange)", "rgba(249,115,22,0.08)", "rgba(249,115,22,0.2)", "Go to the Compare tab. Save your current inputs as Scenario A, adjust parameters (e.g. delay payout age to 70), then save as Scenario B for a colour-coded side-by-side diff."],
                       ["6", "Share & Export", "#f43f5e", "rgba(244,63,94,0.08)", "rgba(244,63,94,0.2)", "Use Share to encode your entire profile into a URL. Download a PDF report or CSV. On mobile, all actions (Share, PDF, Export, Import, Samples, Reset) are in the ☰ hamburger menu. Keyboard shortcuts: Ctrl+S (Share), Ctrl+Shift+R (Reset), Ctrl+]/[ (switch tabs)."],
                       ["7", "Load a Sample Profile", "#0ea5e9", "rgba(14,165,233,0.08)", "rgba(14,165,233,0.2)", "Click Samples in the header (desktop) or ☰ hamburger menu (mobile) to choose from 7 pre-built scenarios: Blank Slate, Typical Employee (35), Late Starter (50), Self-Employed (40), High Earner (40), Near Retirement (54), and Post-55 RA Builder (57). Loading a sample overwrites current inputs — export your profile first."],
                       ["8", "Annual Cashflow Ledger", "#2dd4bf", "rgba(45,212,191,0.08)", "rgba(45,212,191,0.2)", "In the Data Table tab, switch to the Cashflow Ledger sub-tab for a complete year-by-year breakdown of every flow: mandatory contributions, voluntary top-ups, gov grants/WIS, OA/SA-RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with a column totals row at the bottom. Download as CSV."],
@@ -14131,46 +13883,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <li style={{ display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-violet)", marginTop: 6, flexShrink: 0 }} />
                           <div><strong style={{ color: "var(--text-highlight)" }}>CPF LIFE — Eligibility:</strong> CPF LIFE is available to <strong>Singapore Citizens and Permanent Residents</strong> born in <strong>1958 or after</strong>. Members with <strong>RA ≥ $60,000</strong> at their payout age are automatically enrolled; those below $60,000 may apply to join voluntarily. Payout start age is between 65 and 70 — deferring earns approximately <strong>+7% per year</strong> of additional monthly payout. Payouts are for life regardless of how long you live. This tool's projections assume CPF LIFE enrolment; members with very low RA balances may not qualify for auto-enrolment.</div>
-                        </li>
-                      </ul>
-                    </div>
-                  </section>
-
-                  {/* ── What-If Explorer ── */}
-                  <section id="doc-whatif">
-                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-green)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><SlidersHorizontal style={{ width: 18, height: 18 }} />What-If Explorer — Live Simulation Sliders</h4>
-                    <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
-                      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                        <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-green)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Where to find it:</strong> The What-If Explorer is accessible from two tabs — the <strong>Summary tab</strong> (scroll down, click "Open What-If Explorer") and the <strong>Compare tab</strong> (at the top, always visible). Both instances share the same live state, so sliders set in one tab are immediately reflected in the other.</div>
-                        </li>
-                        <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>What it does:</strong> The Explorer runs a live parallel projection using modified inputs — without changing your saved inputs. Drag or type values into any of the 8 sliders and the What-If total updates instantly, along with an impact delta (e.g. "+$45,200") showing how the change compares to your current baseline at payout age.</div>
-                        </li>
-                        <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-purple)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>The 8 sliders:</strong>
-                            <ul style={{ paddingLeft: 16, marginTop: 6 }}>
-                              <li><strong>Payout Age</strong> (65–70): Each year deferred adds approximately +7% to CPF LIFE monthly payouts.</li>
-                              <li><strong>Annual SA/RA Top-up (RSTU)</strong>: Extra voluntary top-up — shows how consistent annual top-ups compound over time.</li>
-                              <li><strong>Annual Housing Outflow</strong>: Reduce or increase to model mortgage overpayments or downsizing.</li>
-                              <li><strong>One-time Salary Increase</strong>: A one-off salary bump applied from the current age — raises mandatory contribution projections.</li>
-                              <li><strong>Contribution Stop Age</strong>: How long you keep contributing — directly controls the accumulation runway.</li>
-                              <li><strong>Monthly OA Drawdown</strong>: Draw from OA after CPF LIFE starts — higher draw reduces OA but raises monthly cash income.</li>
-                              <li><strong>Annual SRS Contribution</strong>: Additional tax-deferred savings — modelled separately from CPF balances.</li>
-                              <li><strong>Private Asset Growth Rate (%)</strong>: Adjust expected returns on non-CPF assets.</li>
-                            </ul>
-                          </div>
-                        </li>
-                        <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-amber)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Non-destructive:</strong> Sliders never modify your saved inputs. Click <strong>↺ Reset all</strong> to return all sliders to their baseline values. Your saved inputs are always preserved exactly as entered in the left panel.</div>
-                        </li>
-                        <li style={{ display: "flex", gap: 8 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-orange)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Difference from Scenario Compare:</strong> The What-If Explorer is a quick, frictionless exploration tool — no saving required. The Scenario A vs B Diff (below the Explorer in the Compare tab) is for structured comparisons you want to preserve: save a full input snapshot as Scenario A, modify inputs freely, then save as Scenario B. The diff table shows every metric that changed between the two saved snapshots.</div>
                         </li>
                       </ul>
                     </div>
@@ -15054,47 +14766,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           </div>{/* /tab content panels */}
         </section>
       </div>
-      {/* ── Tablet sticky bottom action bar ────────────────────────────────────
-           Shown only at 769–1024px via CSS .tablet-action-bar { display:flex }.
-           Gives tablet users persistent access to the four most-used actions
-           (Reset, Export CSV, Share, PDF) without scrolling back to the header.
-           z-index: 50 keeps it above Recharts tooltips (z-index: 1).
-           The cpf-main-wrap on tablet already has padding-bottom: 72px to prevent
-           the last chart row from being obscured by this bar.
-      ────────────────────────────────────────────────────────────────────────── */}
-      <div className="tablet-action-bar">
-        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-          Quick Actions
-        </span>
-        <div style={{ display: "flex", gap: 8, flex: "1 1 auto", justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <button onClick={handleReset}
-            style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-              background: "rgba(239,68,68,0.1)", color: "var(--clr-red)", border: "1px solid rgba(239,68,68,0.3)", cursor: "pointer" }}
-            title="Reset all inputs to defaults">
-            <RefreshCw style={{ width: 12, height: 12 }} /> Reset
-          </button>
-          <button onClick={handleExportCSV}
-            style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-              background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", cursor: "pointer" }}
-            title="Export projection data as CSV">
-            <Download style={{ width: 12, height: 12 }} /> CSV
-          </button>
-          <button onClick={handleShareLinkInit}
-            style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-              background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}
-            title="Copy shareable link with all inputs encoded">
-            <Share2 style={{ width: 12, height: 12 }} /> Share
-          </button>
-          <button onClick={generatePDF} disabled={isGeneratingPdf}
-            style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-              background: "rgba(var(--clr-emerald-rgb),0.15)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.4)", cursor: "pointer",
-              opacity: isGeneratingPdf ? 0.5 : 1 }}
-            title="Generate full PDF report">
-            <FileText style={{ width: 12, height: 12 }} /> {isGeneratingPdf ? "Generating…" : "PDF"}
-          </button>
-        </div>
-      </div>
-
       </div>{/* /rootRef */}
       </ErrorBoundary>
     </TooltipContext.Provider>
