@@ -5535,7 +5535,10 @@ export default function App() {
   }, [showBaseline, debouncedInputs, isRealDollars]);
 
   const whatIfProjection = useMemo(() => {
-    if (!showWhatIf) return null;
+    // Gate: compute when the explorer is open (showWhatIf) OR when on the compare tab
+    // so the Compare tab chart always has data without requiring showWhatIf to be true.
+    const anySliderSet = whatIfPayoutAge !== null || whatIfSaTopup !== null || whatIfHousing !== null || whatIfSalaryBump !== null || whatIfContribStop !== null || whatIfOaDrawdown !== null || whatIfSrsContrib !== null || whatIfPrivGrowth !== null;
+    if (!showWhatIf && activeTab !== "compare" && !anySliderSet) return null;
     // NX8 fix: use debouncedInputs (not live inputs) so the What-If baseline stays in sync
     // with the main projection — previously the 180ms debounce window caused the What-If
     // chart to show new input values against a stale main projection baseline.
@@ -11930,467 +11933,27 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   );
                 })()}
 
-                {/* ── Contribution Timeline Gantt ── */}
-                {(() => {
-                  const ca = Number(inputs.currentAge) || 35;
-                  const payoutAge = payoutAge65;
-                  const contribStop = Number(inputs.contributionStopAge) || 65;
-                  const housingStop = Number(inputs.housingStopAge) || 55;
-                  const END = 95;
-                  const START = ca;
-                  const totalSpan = END - START;
-                  const width = (a, b) => `${Math.max(0, Math.min(100, ((Math.min(b, END) - Math.max(a, START)) / totalSpan) * 100)).toFixed(1)}%`;
-                  const left = (a) => `${Math.max(0, ((a - START) / totalSpan) * 100).toFixed(1)}%`;
-                  const hasRSTU = (Number(inputs.vcSaTopup) || 0) > 0;
-                  const hasVC3A = (Number(inputs.vc3aCash) || 0) > 0;
-                  const hasMRSS = (Number(inputs.mrssGrant) || 0) > 0;
-                  const hasMMSS = (Number(inputs.mmssGrant) || 0) > 0;
-
-                  // ── Accumulation-phase rows ONLY ─────────────────────────────
-                  // CPF LIFE / RSS bars intentionally excluded — they are fully
-                  // covered by the Strategy tab "Life Journey Timeline" which adds
-                  // OA Drawdown, SRS, Life Events and Phase 2 context.
-                  // This Gantt answers: "When does money go IN?" (contributions phase).
-                  const phases = !isForeigner ? [
-                    { label: "Contributions Active", from: ca,  to: contribStop, color: "var(--clr-blue2)",   bg: "rgba(var(--clr-blue2-rgb),0.15)",   border: "rgba(var(--clr-blue2-rgb),0.5)" },
-                    { label: "Housing Outflow (OA)", from: ca,  to: housingStop, color: "#f472b6",             bg: "rgba(244,114,182,0.12)",             border: "rgba(244,114,182,0.5)" },
-                    ...(hasRSTU ? [{ label: `RSTU Top-up ($${Math.round((Number(inputs.vcSaTopup)||0)/1000)}k/yr)`,   from: ca, to: contribStop, color: "var(--clr-green)",   bg: "rgba(var(--clr-green-rgb),0.1)",   border: "rgba(var(--clr-green-rgb),0.4)" }] : []),
-                    ...(hasVC3A ? [{ label: `VC3A ($${Math.round((Number(inputs.vc3aCash)||0)/1000)}k/yr)`,            from: ca, to: contribStop, color: "var(--clr-violet)",  bg: "rgba(var(--clr-violet-rgb),0.1)",  border: "rgba(var(--clr-violet-rgb),0.4)" }] : []),
-                    ...(hasMRSS ? [{ label: `MRSS ($${Math.round((Number(inputs.mrssGrant)||0)/1000)}k/yr)`,           from: ca, to: Math.min(contribStop, 70), color: "var(--clr-amber)", bg: "rgba(var(--clr-amber3-rgb),0.12)", border: "rgba(var(--clr-amber3-rgb),0.5)" }] : []),
-                    ...(hasMMSS ? [{ label: `MMSS ($${Math.round((Number(inputs.mmssGrant)||0)/1000)}k/yr)`,           from: Math.max(ca, 55), to: Math.min(70, END), color: "var(--clr-orange)", bg: "rgba(var(--clr-orange-rgb),0.12)", border: "rgba(var(--clr-orange-rgb),0.5)" }] : []),
-                  ] : [
-                    // Foreigner: SRS contribution window only (no CPF)
-                    { label: "SRS Contributions",   from: ca, to: Number(inputs.srsContribStopAge) || 63, color: "#38bdf8", bg: "rgba(56,189,248,0.1)", border: "rgba(56,189,248,0.4)" },
-                  ];
-
-                  // Markers: only accumulation milestones — no LIFE start (that's Strategy's domain)
-                  const rawMarkers = !isForeigner
-                    ? [ca, contribStop, housingStop, payoutAge, END]
-                    : [ca, Number(inputs.srsContribStopAge) || 63, END];
-                  const markers = rawMarkers
-                    .filter((v, i, a) => v >= ca && v <= END && a.indexOf(v) === i)
-                    .sort((a, b) => a - b);
-
-                  return (
-                    <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 20 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <Activity style={{ width: 15, height: 15, color: "var(--clr-blue)" }} />
-                        <h4 style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>
-                          Accumulation Phase Overview
-                        </h4>
-                        <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>Age {ca} → 95</span>
-                      </div>
-                      <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "0 0 14px", lineHeight: 1.5 }}>
-                        When money flows <strong style={{ color: "var(--text-muted)" }}>into</strong> your CPF. For payout streams (CPF LIFE, OA Drawdown, SRS) see the <strong style={{ color: "var(--text-muted)" }}>Strategy tab → Life Journey Timeline</strong>.
-                      </p>
-
-                      {/* Age ruler */}
-                      <div style={{ display: "flex", marginBottom: 4 }}>
-                        <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
-                        <div style={{ flex: 1, position: "relative", height: 20 }}>
-                          {markers.map(age => (
-                            <div key={age} style={{ position: "absolute", left: left(age), transform: "translateX(-50%)", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, fontFamily: "monospace" }}>
-                              {age}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Tick line */}
-                      <div style={{ display: "flex", marginBottom: 8 }}>
-                        <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
-                        <div style={{ flex: 1, position: "relative", height: 4, background: "var(--border-subtle)", borderRadius: 2 }}>
-                          {markers.map(age => (
-                            <div key={age} style={{ position: "absolute", left: left(age), width: 2, height: "100%", background: "var(--text-muted)", transform: "translateX(-50%)" }} />
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Phase bars */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {phases.filter(p => p.from < END && p.to > ca).map((phase, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0, fontSize: 10, fontWeight: 700, color: phase.color, textAlign: "right", paddingRight: 4 }}>{phase.label}</div>
-                            <div style={{ flex: 1, position: "relative", height: 20, background: "var(--bg-muted)", borderRadius: 4 }}>
-                              <div style={{
-                                position: "absolute",
-                                left: left(Math.max(phase.from, ca)),
-                                width: width(phase.from, phase.to),
-                                height: "100%",
-                                background: phase.bg,
-                                border: `1px solid ${phase.border}`,
-                                borderRadius: 4,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}>
-                                <span style={{ fontSize: 10, fontWeight: 800, color: phase.color, whiteSpace: "nowrap" }}>
-                                  {Math.max(phase.from, ca)}–{Math.min(phase.to, END)}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Payout age marker — visual divider between accumulation and decumulation */}
-                      {!isForeigner && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-                          <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0, fontSize: 10, fontWeight: 700, color: "var(--clr-emerald)", textAlign: "right", paddingRight: 4 }}>
-                            CPF LIFE starts
-                          </div>
-                          <div style={{ flex: 1, position: "relative", height: 20, background: "var(--bg-muted)", borderRadius: 4 }}>
-                            <div style={{
-                              position: "absolute",
-                              left: left(payoutAge),
-                              transform: "translateX(-50%)",
-                              height: "100%",
-                              width: 2,
-                              background: "var(--clr-emerald)",
-                              borderRadius: 2,
-                            }} />
-                            <span style={{ position: "absolute", left: `calc(${left(payoutAge)} + 6px)`, top: "50%", transform: "translateY(-50%)", fontSize: 10, fontWeight: 800, color: "var(--clr-emerald)", whiteSpace: "nowrap" }}>
-                              Age {payoutAge} → see Strategy tab
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      <div style={{ marginTop: 12, fontSize: 10, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                        <Info style={{ width: 11, height: 11, display: "inline", marginRight: 6, color: "var(--clr-blue)" }} />
-                        Adjust <strong style={{ color: "var(--text-main)" }}>Contrib Stop Age</strong> and <strong style={{ color: "var(--text-main)" }}>Housing Stop Age</strong> in the sidebar to update these bars.
-                      </div>
-                    </div>
-                  );
-                })()}
                 {/* FRS Tracker has moved to the Strategy tab — see Strategy → FRS Tracker section */}
                 {/* Estate at Death has moved to the LIFE tab — see LIFE → Estate at Death section */}
 
-                {/* What-If */}
-                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}><SlidersHorizontal style={{ width: 18, height: 18, color: "var(--clr-green)" }} /><h3 style={{ fontSize: 16, fontWeight: 800 }}>What-If Explorer</h3><span style={{ fontSize: 9, background: "var(--bg-input)", color: "var(--text-muted)", padding: "3px 8px", borderRadius: 999, border: "1px solid var(--border-strong)" }}>Live Simulation</span></div>
-                    <button onClick={(e) => {
-                      const target = e.currentTarget;
-                      const willShow = !showWhatIf;
-                      setShowWhatIf(willShow);
-                      if (willShow) {
-                        setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-                      }
-                    }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 11, fontWeight: 700, border: `1px solid ${showWhatIf ? "rgba(var(--clr-emerald-rgb),0.5)" : "var(--border-strong)"}`, background: showWhatIf ? "rgba(var(--clr-emerald-rgb),0.15)" : "var(--bg-input)", color: showWhatIf ? "var(--clr-green)" : "var(--text-muted)", cursor: "pointer" }}>
-                      <SlidersHorizontal style={{ width: 13, height: 13 }} />{showWhatIf ? "Close Explorer" : "Open What-If Explorer"}
-                    </button>
+                {/* ── What-If Explorer redirect banner ──────────────────────────────────────
+                     The full What-If Explorer (sliders + chart) lives in the Compare tab.
+                     This banner replaces the old collapsed explorer that lived here.
+                ─────────────────────────────────────────────────────────────────────────── */}
+                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: "16px 20px", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <SlidersHorizontal style={{ width: 20, height: 20, color: "var(--clr-green)", flexShrink: 0 }} />
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 2px" }}>What-If Explorer</p>
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+                        Drag sliders to instantly test changes to payout age, SA top-ups, salary, housing, OA drawdown, SRS, and private growth — without touching your saved inputs. Includes a live base-vs-what-if chart.
+                      </p>
+                    </div>
                   </div>
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 16 }}>Drag sliders to explore how changes affect your total CPF balance — without modifying saved inputs.</p>
-                  {showWhatIf && (() => {
-                    // Bug-WI5 fix: use debouncedInputs (not live inputs) for all fallback values
-                    // so the UI effXX variables stay consistent with whatIfProjection useMemo.
-                    const effPA  = whatIfPayoutAge   !== null ? whatIfPayoutAge   : (Number(debouncedInputs.payoutAge) || 65);
-                    const effST  = whatIfSaTopup     !== null ? whatIfSaTopup     : (Number(debouncedInputs.vcSaTopup) || 0);
-                    const effH   = whatIfHousing     !== null ? whatIfHousing     : (Number(debouncedInputs.housingOutflow) || 0);
-                    const effSB  = whatIfSalaryBump  !== null ? whatIfSalaryBump  : 0;
-                    const effCS  = whatIfContribStop !== null ? whatIfContribStop : (Number(debouncedInputs.contributionStopAge) || 65);
-                    const effOAD = whatIfOaDrawdown  !== null ? whatIfOaDrawdown  : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
-                    const effSRS = whatIfSrsContrib  !== null ? whatIfSrsContrib  : (Number(debouncedInputs.srsAnnualContribution) || 0);
-                    const effPG  = whatIfPrivGrowth  !== null ? whatIfPrivGrowth  : (Number(debouncedInputs.privateAssetGrowthRate) || 0);
-                    // Bug-WI1 fix: engine row.total = oa+sa+ma+ra only — privateAssets and srsBalance
-                    // are separate fields. Add them explicitly for accurate summary totals.
-                    // Fix-SumAge: read base at effPA (not payoutAge65) so both sides compare the same age.
-                    // Fix-RD: accumulationByAge is already deflated when isRealDollars=true; apply the same
-                    // deflation to whatIfTotal so summary card and chart are on the same scale.
-                    const basePARow   = accumulationByAge.get(effPA);
-                    const baseTotal   = (basePARow?.total || 0) + (basePARow?.privateAssets || 0) + (basePARow?.srsBalance || 0);
-                    const wiLastRow   = whatIfProjection?.rows[whatIfProjection.rows.length - 1];
-                    const _wiSumInflD = isRealDollars ? (Number(debouncedInputs.inflationRate) || 0) / 100 : 0;
-                    const _wiSumCaD   = Number(debouncedInputs.currentAge) || 35;
-                    const _wiSumDeflate = (val) => (isRealDollars && val)
-                      ? Math.round(val / Math.pow(1 + _wiSumInflD, Math.max(0, effPA - _wiSumCaD)))
-                      : val;
-                    const whatIfTotal = wiLastRow
-                      ? _wiSumDeflate((wiLastRow.oa + wiLastRow.sa + wiLastRow.ma + wiLastRow.ra) + (wiLastRow.privateAssets || 0) + (wiLastRow.srsBalance || 0))
-                      : 0;
-                    const delta = whatIfTotal - baseTotal;
-                    return (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -8 }}>
-                          <button onClick={() => { setWhatIfPayoutAge(null); setWhatIfSaTopup(null); setWhatIfHousing(null); setWhatIfSalaryBump(null); setWhatIfContribStop(null); setWhatIfOaDrawdown(null); setWhatIfSrsContrib(null); setWhatIfPrivGrowth(null); }} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "var(--bg-input)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>
-                            ↺ Reset sliders
-                          </button>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                          {/* SA/RA Top-up — special: slider 0–40k + free-text override */}
-                          <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>
-                                {is55Plus ? "Annual RA Top-up" : "Annual SA Top-up"}
-                                <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>{Number(inputs.currentAge) < 55 ? "(SA → FRS)" : "(RA → ERS)"}</span>
-                              </label>
-                              <input
-                                type="text" inputMode="decimal" min={0} step={500}
-                                value={effST}
-                                onChange={e => setWhatIfSaTopup(Math.max(0, Number(e.target.value) || 0))}
-                                style={{ width: 90, padding: "3px 8px", borderRadius: 6, fontSize: 13, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-green)", background: "var(--bg-input)", border: "1px solid var(--border-strong)", outline: "none", textAlign: "right" }}
-                              />
-                            </div>
-                            <input type="range" min={0} max={40000} step={500} value={Math.min(effST, 40000)}
-                              onChange={e => setWhatIfSaTopup(Number(e.target.value))}
-                              onMouseUp={e => setWhatIfSaTopup(Number(e.target.value))}
-                              onTouchEnd={e => setWhatIfSaTopup(Number(e.target.value))}
-                              style={{ width: "100%", accentColor: "var(--clr-green)", cursor: "pointer" }} />
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
-                              <span>$0</span>
-                              <span style={{ color: "var(--text-subtle)", fontSize: 10 }}>type above for any amount</span>
-                              <span>$40k</span>
-                            </div>
-                            {(() => {
-                              const ca3 = Number(inputs.currentAge) || 35;
-                              const headroom = ca3 < 55 ? Math.max(0, currentFRS - (currentSaRa || 0)) : Math.max(0, currentERS - (currentSaRa || 0));
-                              const target = ca3 < 55 ? "FRS" : "ERS";
-                              return headroom > 0 ? (
-                                <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
-                                  {target} headroom remaining: <strong style={{ color: "var(--clr-green)" }}>{formatCurrency(headroom)}</strong>
-                                </p>
-                              ) : (<p style={{ fontSize: 10, color: "var(--clr-green)", marginTop: 3 }}>{target} already met ✓</p>);
-                            })()}
-                          </div>
-                          {/* Other original 3 sliders */}
-                          {[[`Payout Age`, effPA, 65, 70, 1, setWhatIfPayoutAge, "var(--clr-green)", `${effPA}`], [`Annual Housing Outflow`, effH, 0, Math.max(60000, (Number(inputs.housingOutflow) || 0) * 2), 500, setWhatIfHousing, "var(--clr-orange)", formatCurrency(effH)], [`Salary Increase (%)`, effSB, 0, 50, 5, setWhatIfSalaryBump, "var(--clr-blue)", `${effSB}%`]].map(([label, val, min, max, step, setter, color, display]) => (
-                            <div key={label}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>{label}</label>
-                                <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color }}>{display}</span>
-                              </div>
-                              <input type="range" min={min} max={max} step={step} value={val}
-                                onChange={e => setter(Number(e.target.value))}
-                                onMouseUp={e => setter(Number(e.target.value))}
-                                onTouchEnd={e => setter(Number(e.target.value))}
-                                style={{ width: "100%", accentColor: color, cursor: "pointer" }} />
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}><span>{min}</span><span>{max}</span></div>
-                            </div>
-                          ))}
-
-                          {/* Rev #12 — Contribution Stop Age */}
-                          <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>
-                                Contribution Stop Age
-                                <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(mandatory + voluntary)</span>
-                              </label>
-                              <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-amber)" }}>Age {effCS}</span>
-                            </div>
-                            <input type="range" min={Number(inputs.currentAge) || 35} max={75} step={1} value={effCS}
-                              onChange={e => setWhatIfContribStop(Number(e.target.value))}
-                              onMouseUp={e => setWhatIfContribStop(Number(e.target.value))}
-                              onTouchEnd={e => setWhatIfContribStop(Number(e.target.value))}
-                              style={{ width: "100%", accentColor: "var(--clr-amber)", cursor: "pointer" }} />
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
-                              <span>Age {Number(inputs.currentAge) || 35}</span><span>Age 75</span>
-                            </div>
-                            <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
-                              Sidebar value: <strong>Age {Number(inputs.contributionStopAge) || 65}</strong>
-                            </p>
-                          </div>
-
-                          {/* Rev #12 — OA Monthly Drawdown (always shown; engine injects effPA as start age when sidebar is 0) */}
-                          <div>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>
-                                  OA Monthly Drawdown
-                                  {(Number(inputs.oaDrawdownStartAge) || 0) > 0
-                                    ? <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(from age {Number(inputs.oaDrawdownStartAge)})</span>
-                                    : <span style={{ fontSize: 9, color: "var(--clr-amber)", fontWeight: 400, marginLeft: 4 }}>(start age defaults to payout age {effPA})</span>
-                                  }
-                                </label>
-                                <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-red)" }}>${effOAD}/mo</span>
-                              </div>
-                              <input type="range" min={0} max={Math.max(5000, (Number(inputs.oaDrawdownMonthly) || 0) * 2)} step={100} value={effOAD}
-                                onChange={e => setWhatIfOaDrawdown(Number(e.target.value))}
-                                onMouseUp={e => setWhatIfOaDrawdown(Number(e.target.value))}
-                                onTouchEnd={e => setWhatIfOaDrawdown(Number(e.target.value))}
-                                style={{ width: "100%", accentColor: "var(--clr-red)", cursor: "pointer" }} />
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
-                                <span>$0</span><span>${Math.max(5000, (Number(inputs.oaDrawdownMonthly) || 0) * 2).toLocaleString()}/mo</span>
-                              </div>
-                              <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
-                                Sidebar value: <strong>${Number(inputs.oaDrawdownMonthly) || 0}/mo</strong>
-                                {(Number(inputs.oaDrawdownStartAge) || 0) === 0 && (
-                                  <span style={{ color: "var(--clr-amber)", marginLeft: 4 }}>· Set OA Drawdown Start Age in sidebar to fix the start age.</span>
-                                )}
-                              </p>
-                            </div>
-
-                          {/* Rev #12 — SRS Annual Contribution */}
-                          {(debouncedInputs.citizenStatus || 'SC') !== 'foreigner' && (
-                            <div>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>
-                                  SRS Annual Contribution
-                                  <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(cap ${((debouncedInputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR).toLocaleString()})</span>
-                                </label>
-                                <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-violet)" }}>{formatCurrency(effSRS)}/yr</span>
-                              </div>
-                              <input type="range" min={0} max={(debouncedInputs.citizenStatus || "SC") === "foreigner" ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR} step={500} value={effSRS}
-                                onChange={e => setWhatIfSrsContrib(Number(e.target.value))}
-                                onMouseUp={e => setWhatIfSrsContrib(Number(e.target.value))}
-                                onTouchEnd={e => setWhatIfSrsContrib(Number(e.target.value))}
-                                style={{ width: "100%", accentColor: "var(--clr-violet)", cursor: "pointer" }} />
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
-                                <span>$0</span><span>Max</span>
-                              </div>
-                              <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
-                                Sidebar value: <strong>{formatCurrency(Number(inputs.srsAnnualContribution) || 0)}/yr</strong>
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Rev #12 — Private Asset Growth Rate */}
-                          <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>
-                                Private Asset Growth Rate
-                                <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 400, marginLeft: 4 }}>(annual %)</span>
-                              </label>
-                              <span style={{ fontSize: 16, fontWeight: 900, fontFamily: "monospace", color: "var(--clr-blue)" }}>{effPG}%</span>
-                            </div>
-                            <input type="range" min={0} max={12} step={0.5} value={effPG}
-                              onChange={e => setWhatIfPrivGrowth(Number(e.target.value))}
-                              onMouseUp={e => setWhatIfPrivGrowth(Number(e.target.value))}
-                              onTouchEnd={e => setWhatIfPrivGrowth(Number(e.target.value))}
-                              style={{ width: "100%", accentColor: "var(--clr-blue)", cursor: "pointer" }} />
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--border-strong)", marginTop: 2 }}>
-                              <span>0%</span><span>12%</span>
-                            </div>
-                            <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 3 }}>
-                              Sidebar value: <strong>{Number(inputs.privateAssetGrowthRate) || 0}%</strong>
-                            </p>
-                            {(Number(inputs.currentPrivateAssets) || 0) === 0 && (Number(inputs.annualPrivateSaving) || 0) === 0 && (
-                              <p style={{ fontSize: 10, color: "var(--clr-amber)", marginTop: 4, lineHeight: 1.5 }}>
-                                ⚠ No private asset balance or annual saving configured — this slider has no effect. Add a current balance or annual saving in the <strong>Private Assets</strong> sidebar section first.
-                              </p>
-                            )}
-                          </div>
-
-                        </div>
-                        {whatIfProjection && (
-                          <div className="rg-4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, transition: "opacity 0.15s ease", opacity: 1 }}>
-                            {[["Base Total", baseTotal, "var(--text-muted)"], ["What-If Total", whatIfTotal, "var(--clr-green)"], ["Difference", delta, delta >= 0 ? "var(--clr-green)" : "var(--clr-red)"], ["Change %", null, delta >= 0 ? "var(--clr-green)" : "var(--clr-red)"]].map(([label, val, color], i) => (
-                              <div key={label} style={{ background: "var(--bg-base)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: 12 }}>
-                                <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{label}</p>
-                                <p style={{ fontSize: 13, fontWeight: 900, fontFamily: "monospace", color }}>{i === 3 ? baseTotal > 0 ? `${delta >= 0 ? "+" : ""}${((delta / baseTotal) * 100).toFixed(1)}%` : "N/A" : `${delta >= 0 && i === 2 ? "+" : ""}${formatCurrency(Math.abs(val))}`}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {whatIfProjection && (
-                          <div style={{ height: 280 }}>
-                            <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>Blue = base · Green = what-if · <span style={{ color: "var(--text-subtle)" }}>Hover for account breakdown</span></p>
-                            <ResponsiveContainer width="99%" height="100%">
-                              <AreaChart data={(() => {
-                                // Bug-WI3 fix: base line must terminate at payoutAge65 — the what-if
-                                // line then visibly extends beyond it when effPA > payoutAge65.
-                                // Previously both lines shared the same age range (max of the two),
-                                // making the what-if extension invisible since the base line overlapped it.
-                                // Bug-WI4 fix: O(1) Map lookups replace O(n²) .find() per chart row.
-                                // Bug-WI1 fix: privateAssets + srsBalance included in both line totals
-                                // and exposed as separate fields for the breakdown tooltip.
-                                const wiRowMap  = new Map((whatIfProjection?.rows || []).map(r => [r.age, r]));
-                                const startAge  = displayAccumulation[0]?.age ?? (Number(debouncedInputs.currentAge) || 35);
-                                const endAge    = Math.max(payoutAge65, effPA);
-                                // Fix-RD: base line reads from accumulationByAge (already deflated when
-                                // isRealDollars=true). What-if rows are raw nominal engine output — apply
-                                // the identical per-age deflation factor so both lines share the same scale.
-                                const _wiChartInflD = isRealDollars ? (Number(debouncedInputs.inflationRate) || 0) / 100 : 0;
-                                const _wiChartCaD   = Number(debouncedInputs.currentAge) || 35;
-                                const _wiChartDefl  = (val, age) =>
-                                  (isRealDollars && val != null)
-                                    ? Math.round(val / Math.pow(1 + _wiChartInflD, Math.max(0, age - _wiChartCaD)))
-                                    : val;
-                                const chartRows = [];
-                                for (let age = startAge; age <= endAge; age++) {
-                                  const b = accumulationByAge.get(age);
-                                  const w = wiRowMap.get(age);
-                                  // Deflate each what-if field individually so tooltip breakdown is also correct
-                                  const wOA  = w ? _wiChartDefl(w.oa,  age) : null;
-                                  const wSA  = w ? _wiChartDefl(w.sa,  age) : null;
-                                  const wMA  = w ? _wiChartDefl(w.ma,  age) : null;
-                                  const wRA  = w ? _wiChartDefl(w.ra,  age) : null;
-                                  const wPrv = w ? _wiChartDefl(w.privateAssets || 0, age) : null;
-                                  const wSRS = w ? _wiChartDefl(w.srsBalance    || 0, age) : null;
-                                  chartRows.push({
-                                    age,
-                                    // Base line: null beyond payoutAge65 so the line terminates there
-                                    baseTotal: (b && age <= payoutAge65) ? ((b.total || 0) + (b.privateAssets || 0) + (b.srsBalance || 0)) : null,
-                                    baseOA:  b?.oa  ?? null, baseSA: b?.sa ?? null,
-                                    baseMA:  b?.ma  ?? null, baseRA: b?.ra ?? null,
-                                    basePrv: b?.privateAssets ?? null, baseSRS: b?.srsBalance ?? null,
-                                    // What-if line: deflated to match base scale when isRealDollars=true
-                                    whatIfTotal: w ? ((wOA + wSA + wMA + wRA) + wPrv + wSRS) : null,
-                                    whatIfOA: wOA, whatIfSA: wSA,
-                                    whatIfMA: wMA, whatIfRA: wRA,
-                                    whatIfPrv: wPrv, whatIfSRS: wSRS,
-                                  });
-                                }
-                                return chartRows;
-                              })()}
-                                margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-                                <defs>
-                                  <linearGradient id="wiBaseGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.20} />
-                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
-                                  </linearGradient>
-                                  <linearGradient id="wiWhatIfGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
-                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.04} />
-                                  </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                                <XAxis dataKey="age" type="number" domain={["dataMin", "dataMax"]} stroke="var(--chart-text)" fontSize={10} tickCount={8} />
-                                <YAxis tickFormatter={v => `$${v >= 1000000 ? (v / 1000000).toFixed(1) + "M" : v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={10} width={52} />
-                                <Tooltip
-                                  cursor={{ stroke: "var(--chart-cursor)", strokeWidth: 1, strokeDasharray: "4 3" }}
-                                  wrapperStyle={{ pointerEvents: "none", zIndex: 100 }}
-                                  content={({ active, payload, label }) => {
-                                    if (!active || !payload?.length) return null;
-                                    const base = payload.find(p => p.dataKey === "baseTotal");
-                                    const wi = payload.find(p => p.dataKey === "whatIfTotal");
-                                    const d = payload[0]?.payload || {};
-                                    const diff = (wi?.value ?? 0) - (base?.value ?? 0);
-                                    return (
-                                      <div style={{ background: "var(--tooltip-bg)", backdropFilter: "blur(8px)", border: "1px solid var(--tooltip-border)", borderRadius: 10, padding: "10px 14px", fontSize: 10, minWidth: 210 }}>
-                                        <p style={{ color: "var(--clr-slate)", fontWeight: 800, marginBottom: 8, fontSize: 11 }}>Age {label}</p>
-                                        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: "3px 10px", alignItems: "center" }}>
-                                          <span style={{ color: "#64748b", fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}></span>
-                                          <span style={{ color: "var(--clr-blue2)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>BASE</span>
-                                          <span style={{ color: "var(--clr-emerald)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>WHAT-IF</span>
-                                          {[["OA", d.baseOA, d.whatIfOA, "var(--clr-blue)"], ["SA/RA", (d.baseSA||0)+(d.baseRA||0), (d.whatIfSA||0)+(d.whatIfRA||0), "var(--clr-green)"], ["MA", d.baseMA, d.whatIfMA, "var(--clr-violet)"], ["Private", d.basePrv, d.whatIfPrv, "var(--clr-orange)"], ["SRS", d.baseSRS, d.whatIfSRS, "var(--clr-amber)"]].map(([lbl, bv, wv, c]) => (
-                                            <React.Fragment key={lbl}>
-                                              <span style={{ color: c, fontWeight: 700 }}>{lbl}</span>
-                                              <span style={{ color: "#e2e8f0", fontFamily: "monospace", textAlign: "right" }}>{formatCurrency(bv ?? 0)}</span>
-                                              <span style={{ color: wv != null ? "#e2e8f0" : "#64748b", fontFamily: "monospace", textAlign: "right" }}>{wv != null ? formatCurrency(wv) : "—"}</span>
-                                            </React.Fragment>
-                                          ))}
-                                          <span style={{ color: "var(--mc-total-color)", fontWeight: 800, borderTop: "1px solid var(--mc-total-border)", paddingTop: 4 }}>Total</span>
-                                          <span style={{ color: "var(--clr-blue2)", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>{formatCurrency(base?.value ?? 0)}</span>
-                                          <span style={{ color: wi?.value != null ? "var(--clr-emerald)" : "#64748b", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 4 }}>{wi?.value != null ? formatCurrency(wi.value) : "—"}</span>
-                                        </div>
-                                        {wi?.value != null && base?.value != null && (
-                                          <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                            <span style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>Difference</span>
-                                            <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 11, color: diff >= 0 ? "var(--clr-emerald)" : "var(--clr-red)" }}>{diff >= 0 ? "+" : ""}{formatCurrency(diff)}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  }}
-                                />
-                                <Legend verticalAlign="top" height={20} iconSize={6} wrapperStyle={STYLES.chartLegend} />
-                                <Area isAnimationActive={false} type="monotone" dataKey="baseTotal" stroke="var(--clr-blue2)" strokeWidth={2} fill="url(#wiBaseGrad)" dot={false} name="Base" activeDot={{ r: 4, fill: "var(--clr-blue2)", stroke: "#fff", strokeWidth: 1.5 }} />
-                                <Area isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="var(--clr-emerald)" strokeWidth={2} fill="url(#wiWhatIfGrad)" dot={false} name={`What-If (PA:${effPA})`} activeDot={{ r: 4, fill: "var(--clr-emerald)", stroke: "#fff", strokeWidth: 1.5 }} />
-                              </AreaChart>
-                            </ResponsiveContainer>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
+                  <button onClick={() => setActiveTab("compare")}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 12, fontSize: 12, fontWeight: 700, border: "1px solid rgba(var(--clr-emerald-rgb),0.5)", background: "rgba(var(--clr-emerald-rgb),0.12)", color: "var(--clr-green)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <SlidersHorizontal style={{ width: 13, height: 13 }} /> Open in Compare tab →
+                  </button>
                 </div>
               </div>
             )}
@@ -12693,6 +12256,84 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     )}
                   </div>
                 </details>
+
+                {/* ── Accumulation Phase Overview Gantt (moved from Summary tab) ── */}
+                {(() => {
+                  const ca = Number(inputs.currentAge) || 35;
+                  const payoutAge = payoutAge65;
+                  const contribStop = Number(inputs.contributionStopAge) || 65;
+                  const END = 95;
+                  const START = ca;
+                  const totalSpan = END - START;
+                  const width = (a, b) => `${Math.max(0, Math.min(100, ((Math.min(b, END) - Math.max(a, START)) / totalSpan) * 100)).toFixed(1)}%`;
+                  const left  = (a)    => `${Math.max(0, ((a - START) / totalSpan) * 100).toFixed(1)}%`;
+                  const hasRSTU = (Number(inputs.vcSaTopup) || 0) > 0;
+                  const hasVC3A = (Number(inputs.vc3aCash)  || 0) > 0;
+                  const hasMRSS = (Number(inputs.mrssGrant) || 0) > 0;
+                  const hasMMSS = (Number(inputs.mmssGrant) || 0) > 0;
+                  const phases = !isForeigner ? [
+                    { label: "Contributions Active", from: ca, to: contribStop, color: "var(--clr-blue2)", bg: "rgba(var(--clr-blue2-rgb),0.15)", border: "rgba(var(--clr-blue2-rgb),0.5)" },
+                    ...(hasRSTU ? [{ label: `RSTU ($${Math.round((Number(inputs.vcSaTopup)||0)/1000)}k/yr)`,  from: ca, to: contribStop,               color: "var(--clr-green)",   bg: "rgba(var(--clr-green-rgb),0.1)",   border: "rgba(var(--clr-green-rgb),0.4)"  }] : []),
+                    ...(hasVC3A ? [{ label: `VC3A ($${Math.round((Number(inputs.vc3aCash)||0)/1000)}k/yr)`,   from: ca, to: contribStop,               color: "var(--clr-violet)",  bg: "rgba(var(--clr-violet-rgb),0.1)",  border: "rgba(var(--clr-violet-rgb),0.4)" }] : []),
+                    ...(hasMRSS ? [{ label: `MRSS ($${Math.round((Number(inputs.mrssGrant)||0)/1000)}k/yr)`,  from: ca, to: Math.min(contribStop, 70), color: "var(--clr-amber)",   bg: "rgba(var(--clr-amber3-rgb),0.12)", border: "rgba(var(--clr-amber3-rgb),0.5)" }] : []),
+                    ...(hasMMSS ? [{ label: `MMSS ($${Math.round((Number(inputs.mmssGrant)||0)/1000)}k/yr)`,  from: Math.max(ca, 55), to: Math.min(70, END), color: "var(--clr-orange)", bg: "rgba(var(--clr-orange-rgb),0.12)", border: "rgba(var(--clr-orange-rgb),0.5)" }] : []),
+                  ] : [
+                    { label: "SRS Contributions", from: ca, to: Number(inputs.srsContribStopAge) || 63, color: "#38bdf8", bg: "rgba(56,189,248,0.1)", border: "rgba(56,189,248,0.4)" },
+                  ];
+                  const markers = [ca, contribStop, payoutAge, END].filter((v,i,a) => v >= ca && v <= END && a.indexOf(v) === i).sort((a,b) => a-b);
+                  return (
+                    <div style={{ marginTop: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 16, padding: 18 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <Activity style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />
+                        <h4 style={{ fontSize: 12, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>Accumulation Phase Overview</h4>
+                        <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>Age {ca} → 95</span>
+                      </div>
+                      <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "0 0 12px", lineHeight: 1.5 }}>
+                        When money flows <strong style={{ color: "var(--text-muted)" }}>into</strong> your CPF. Payout streams are in <strong style={{ color: "var(--text-muted)" }}>Strategy → Life Journey Timeline</strong>.
+                      </p>
+                      {/* Age ruler */}
+                      <div style={{ display: "flex", marginBottom: 4 }}>
+                        <div style={{ width: "clamp(80px,18vw,140px)", flexShrink: 0 }} />
+                        <div style={{ flex: 1, position: "relative", height: 18 }}>
+                          {markers.map(age => (
+                            <div key={age} style={{ position: "absolute", left: left(age), transform: "translateX(-50%)", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, fontFamily: "monospace" }}>{age}</div>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", marginBottom: 8 }}>
+                        <div style={{ width: "clamp(80px,18vw,140px)", flexShrink: 0 }} />
+                        <div style={{ flex: 1, position: "relative", height: 4, background: "var(--border-subtle)", borderRadius: 2 }}>
+                          {markers.map(age => (
+                            <div key={age} style={{ position: "absolute", left: left(age), width: 2, height: "100%", background: "var(--text-muted)", transform: "translateX(-50%)" }} />
+                          ))}
+                        </div>
+                      </div>
+                      {/* Phase bars */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                        {phases.filter(p => p.from < END && p.to > ca).map((phase, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: "clamp(80px,18vw,140px)", flexShrink: 0, fontSize: 10, fontWeight: 700, color: phase.color, textAlign: "right", paddingRight: 4 }}>{phase.label}</div>
+                            <div style={{ flex: 1, position: "relative", height: 18, background: "var(--bg-panel)", borderRadius: 4 }}>
+                              <div style={{ position: "absolute", left: left(Math.max(phase.from, ca)), width: width(phase.from, phase.to), height: "100%", background: phase.bg, border: `1px solid ${phase.border}`, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <span style={{ fontSize: 10, fontWeight: 800, color: phase.color, whiteSpace: "nowrap" }}>{Math.max(phase.from, ca)}–{Math.min(phase.to, END)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {/* CPF LIFE start divider */}
+                        {!isForeigner && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                            <div style={{ width: "clamp(80px,18vw,140px)", flexShrink: 0, fontSize: 10, fontWeight: 700, color: "var(--clr-emerald)", textAlign: "right", paddingRight: 4 }}>CPF LIFE starts</div>
+                            <div style={{ flex: 1, position: "relative", height: 18, background: "var(--bg-panel)", borderRadius: 4 }}>
+                              <div style={{ position: "absolute", left: left(payoutAge), transform: "translateX(-50%)", height: "100%", width: 2, background: "var(--clr-emerald)", borderRadius: 2 }} />
+                              <span style={{ position: "absolute", left: `calc(${left(payoutAge)} + 6px)`, top: "50%", transform: "translateY(-50%)", fontSize: 10, fontWeight: 800, color: "var(--clr-emerald)", whiteSpace: "nowrap" }}>Age {payoutAge} → see Strategy tab</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {/* ── RSS TAB — Full drawdown engine (PR-2) ── */}
@@ -13442,6 +13083,128 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <p style={{ fontSize: 10, color: "var(--text-subtle)", lineHeight: 1.5 }}>
                           Sliders run a fresh projection in real time — your saved inputs are not changed. Click <strong>Reset all</strong> to return all sliders to your current inputs.
                         </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── What-If chart — always visible in Compare tab (not gated by showWhatIf) ──
+                       The chart uses the same whatIfProjection useMemo as the Summary version.
+                       It renders whenever any slider differs from its baseline value.
+                  ── */}
+                  {(() => {
+                    const effPA2  = whatIfPayoutAge   !== null ? whatIfPayoutAge   : (Number(debouncedInputs.payoutAge) || 65);
+                    const basePARow2 = accumulationByAge.get(effPA2);
+                    const baseTotal2 = (basePARow2?.total || 0) + (basePARow2?.privateAssets || 0) + (basePARow2?.srsBalance || 0);
+                    const wiLastRow2 = whatIfProjection?.rows[whatIfProjection.rows.length - 1];
+                    const _inflD2 = isRealDollars ? (Number(debouncedInputs.inflationRate) || 0) / 100 : 0;
+                    const _ca2    = Number(debouncedInputs.currentAge) || 35;
+                    const _defl2  = (val, age) => isRealDollars && val != null ? Math.round(val / Math.pow(1 + _inflD2, Math.max(0, age - _ca2))) : val;
+                    const whatIfTotal2 = wiLastRow2
+                      ? _defl2((wiLastRow2.oa + wiLastRow2.sa + wiLastRow2.ma + wiLastRow2.ra) + (wiLastRow2.privateAssets || 0) + (wiLastRow2.srsBalance || 0), effPA2)
+                      : 0;
+                    const delta2 = whatIfTotal2 - baseTotal2;
+                    // Impact cards — shown regardless of slider state
+                    const anySliderActive = whatIfPayoutAge !== null || whatIfSaTopup !== null || whatIfHousing !== null || whatIfSalaryBump !== null || whatIfContribStop !== null || whatIfOaDrawdown !== null || whatIfSrsContrib !== null || whatIfPrivGrowth !== null;
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-subtle)" }}>
+                        {/* Impact summary cards */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }} className="rg-4">
+                          {[
+                            { label: "Baseline total", val: formatCurrency(baseTotal2), color: "var(--text-bright)" },
+                            { label: "What-If total",  val: whatIfTotal2 ? formatCurrency(whatIfTotal2) : "—", color: delta2 >= 0 ? "var(--clr-green)" : "var(--clr-red)" },
+                            { label: "Difference",     val: whatIfTotal2 ? `${delta2 >= 0 ? "+" : ""}${formatCurrency(delta2)}` : "—", color: delta2 >= 0 ? "var(--clr-green)" : "var(--clr-red)" },
+                            { label: "Change %",       val: whatIfTotal2 && baseTotal2 > 0 ? `${delta2 >= 0 ? "+" : ""}${((delta2 / baseTotal2) * 100).toFixed(1)}%` : "N/A", color: delta2 >= 0 ? "var(--clr-green)" : "var(--clr-red)" },
+                          ].map(({ label, val, color }) => (
+                            <div key={label} style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 14px", border: "1px solid var(--border-subtle)" }}>
+                              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</p>
+                              <p style={{ fontSize: 15, fontWeight: 700, color, fontFamily: "monospace", margin: 0 }}>{val}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Live base vs what-if area chart */}
+                        {anySliderActive && whatIfProjection && (
+                          <div style={{ height: 260 }}>
+                            <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 6 }}>
+                              <span style={{ color: "var(--clr-blue2)", fontWeight: 700 }}>━ Base</span>
+                              <span style={{ marginLeft: 12, color: "var(--clr-emerald)", fontWeight: 700 }}>━ What-If</span>
+                              <span style={{ marginLeft: 12, color: "var(--text-subtle)" }}>Hover for account breakdown</span>
+                            </p>
+                            <ResponsiveContainer width="99%" height="100%">
+                              <AreaChart data={(() => {
+                                const wiRowMap3 = new Map((whatIfProjection?.rows || []).map(r => [r.age, r]));
+                                const startAge3 = displayAccumulation[0]?.age ?? _ca2;
+                                const endAge3   = Math.max(payoutAge65, effPA2);
+                                const chartRows3 = [];
+                                for (let age = startAge3; age <= endAge3; age++) {
+                                  const b = accumulationByAge.get(age);
+                                  const w = wiRowMap3.get(age);
+                                  const wOA  = w ? _defl2(w.oa,  age) : null;
+                                  const wSA  = w ? _defl2(w.sa,  age) : null;
+                                  const wMA  = w ? _defl2(w.ma,  age) : null;
+                                  const wRA  = w ? _defl2(w.ra,  age) : null;
+                                  const wPrv = w ? _defl2(w.privateAssets || 0, age) : null;
+                                  const wSRS = w ? _defl2(w.srsBalance    || 0, age) : null;
+                                  chartRows3.push({
+                                    age,
+                                    baseTotal:   (b && age <= payoutAge65) ? ((b.total || 0) + (b.privateAssets || 0) + (b.srsBalance || 0)) : null,
+                                    whatIfTotal: w ? (wOA + wSA + wMA + wRA + wPrv + wSRS) : null,
+                                    baseOA: b?.oa, baseSA: b?.sa, baseMA: b?.ma, baseRA: b?.ra, basePrv: b?.privateAssets, baseSRS: b?.srsBalance,
+                                    whatIfOA: wOA, whatIfSA: wSA, whatIfMA: wMA, whatIfRA: wRA, whatIfPrv: wPrv, whatIfSRS: wSRS,
+                                  });
+                                }
+                                return chartRows3;
+                              })()} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                  <linearGradient id="wiBaseGrad2"   x1="0" y1="0" x2="0" y2="1"><stop offset="5%"  stopColor="var(--clr-blue2)"   stopOpacity={0.3} /><stop offset="95%" stopColor="var(--clr-blue2)"   stopOpacity={0.03} /></linearGradient>
+                                  <linearGradient id="wiWhatIfGrad2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%"  stopColor="var(--clr-emerald)" stopOpacity={0.3} /><stop offset="95%" stopColor="var(--clr-emerald)" stopOpacity={0.03} /></linearGradient>
+                                </defs>
+                                <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--chart-text)" }} axisLine={false} tickLine={false} />
+                                <YAxis tickFormatter={v => `$${Math.round(v/1000)}k`} tick={{ fontSize: 10, fill: "var(--chart-text)" }} axisLine={false} tickLine={false} width={54} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                                <Tooltip wrapperStyle={STYLES.chartTooltipWrapper} contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem}
+                                  content={({ active, payload, label }) => {
+                                    if (!active || !payload?.length) return null;
+                                    const base3 = payload.find(p => p.dataKey === "baseTotal");
+                                    const wi3   = payload.find(p => p.dataKey === "whatIfTotal");
+                                    const d3    = payload[0]?.payload || {};
+                                    const diff3 = (wi3?.value ?? 0) - (base3?.value ?? 0);
+                                    return (
+                                      <div style={{ background: "var(--tooltip-bg)", border: "1px solid var(--tooltip-border)", borderRadius: 10, padding: "10px 14px", fontSize: 10, minWidth: 200 }}>
+                                        <p style={{ color: "var(--clr-slate)", fontWeight: 800, marginBottom: 6, fontSize: 11 }}>Age {label}</p>
+                                        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: "2px 8px", alignItems: "center" }}>
+                                          <span /><span style={{ color: "var(--clr-blue2)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>BASE</span><span style={{ color: "var(--clr-emerald)", fontSize: 10, fontWeight: 800, textAlign: "right" }}>WHAT-IF</span>
+                                          {[["OA", d3.baseOA, d3.whatIfOA, "var(--clr-blue)"], ["SA/RA", (d3.baseSA||0)+(d3.baseRA||0), (d3.whatIfSA||0)+(d3.whatIfRA||0), "var(--clr-green)"], ["MA", d3.baseMA, d3.whatIfMA, "var(--clr-violet)"], ["Private", d3.basePrv, d3.whatIfPrv, "var(--clr-orange)"], ["SRS", d3.baseSRS, d3.whatIfSRS, "var(--clr-amber)"]].map(([lbl, bv, wv, c]) => (
+                                            <React.Fragment key={lbl}>
+                                              <span style={{ color: c, fontWeight: 700 }}>{lbl}</span>
+                                              <span style={{ color: "var(--text-bright)", fontFamily: "monospace", textAlign: "right" }}>{formatCurrency(bv ?? 0)}</span>
+                                              <span style={{ color: wv != null ? "var(--text-bright)" : "var(--text-subtle)", fontFamily: "monospace", textAlign: "right" }}>{wv != null ? formatCurrency(wv) : "—"}</span>
+                                            </React.Fragment>
+                                          ))}
+                                          <span style={{ fontWeight: 800, borderTop: "1px solid var(--border-subtle)", paddingTop: 4 }}>Total</span>
+                                          <span style={{ color: "var(--clr-blue2)", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid var(--border-subtle)", paddingTop: 4 }}>{formatCurrency(base3?.value ?? 0)}</span>
+                                          <span style={{ color: wi3?.value != null ? "var(--clr-emerald)" : "var(--text-subtle)", fontFamily: "monospace", fontWeight: 800, textAlign: "right", borderTop: "1px solid var(--border-subtle)", paddingTop: 4 }}>{wi3?.value != null ? formatCurrency(wi3.value) : "—"}</span>
+                                        </div>
+                                        {wi3?.value != null && base3?.value != null && (
+                                          <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between" }}>
+                                            <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 700 }}>Difference</span>
+                                            <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 11, color: diff3 >= 0 ? "var(--clr-emerald)" : "var(--clr-red)" }}>{diff3 >= 0 ? "+" : ""}{formatCurrency(diff3)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  }}
+                                />
+                                <Area isAnimationActive={false} type="monotone" dataKey="baseTotal"   stroke="var(--clr-blue2)"   strokeWidth={2} fill="url(#wiBaseGrad2)"   dot={false} name="Base"     activeDot={{ r: 4, fill: "var(--clr-blue2)",   stroke: "#fff", strokeWidth: 1.5 }} />
+                                <Area isAnimationActive={false} type="monotone" dataKey="whatIfTotal" stroke="var(--clr-emerald)" strokeWidth={2} fill="url(#wiWhatIfGrad2)" dot={false} name={`What-If (PA:${effPA2})`} activeDot={{ r: 4, fill: "var(--clr-emerald)", stroke: "#fff", strokeWidth: 1.5 }} />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+                        {!anySliderActive && (
+                          <p style={{ fontSize: 11, color: "var(--text-subtle)", textAlign: "center", padding: "16px 0", borderTop: "1px solid var(--border-subtle)" }}>
+                            Move any slider above to see the base vs what-if chart here.
+                          </p>
+                        )}
                       </div>
                     );
                   })()}
