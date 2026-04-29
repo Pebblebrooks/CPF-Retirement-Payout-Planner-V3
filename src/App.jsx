@@ -11933,58 +11933,58 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 {/* ── Contribution Timeline Gantt ── */}
                 {(() => {
                   const ca = Number(inputs.currentAge) || 35;
-                  const payoutAge = payoutAge65; // CQ-2 fix: cosmetic — keeps Gantt bar positions in sync with debounced data
+                  const payoutAge = payoutAge65;
                   const contribStop = Number(inputs.contributionStopAge) || 65;
                   const housingStop = Number(inputs.housingStopAge) || 55;
-                  const lifeStart = payoutAge;
-                  const pool90 = 90;
                   const END = 95;
                   const START = ca;
                   const totalSpan = END - START;
-                  const pct = (a, b) => `${Math.max(0, Math.min(100, ((a - START) / totalSpan) * 100)).toFixed(1)}%`;
                   const width = (a, b) => `${Math.max(0, Math.min(100, ((Math.min(b, END) - Math.max(a, START)) / totalSpan) * 100)).toFixed(1)}%`;
                   const left = (a) => `${Math.max(0, ((a - START) / totalSpan) * 100).toFixed(1)}%`;
                   const hasRSTU = (Number(inputs.vcSaTopup) || 0) > 0;
                   const hasVC3A = (Number(inputs.vc3aCash) || 0) > 0;
-                  const phases = [
-                    // Contributions and housing phases — excluded for foreigners (no CPF account)
-                    ...(!isForeigner ? [
-                      { label: "Contributions Active", from: ca, to: contribStop, color: "var(--clr-blue2)", bg: "rgba(var(--clr-blue2-rgb),0.15)", border: "rgba(var(--clr-blue2-rgb),0.5)" },
-                      { label: "Housing Outflow (OA)", from: ca, to: housingStop, color: "#f472b6", bg: "rgba(244,114,182,0.12)", border: "rgba(244,114,182,0.5)" },
-                      ...(hasRSTU ? [{ label: `RSTU Top-up ($${Math.round((Number(inputs.vcSaTopup) || 0) / 1000)}k/yr)`, from: ca, to: contribStop, color: "var(--clr-green)", bg: "rgba(var(--clr-green-rgb),0.1)", border: "rgba(var(--clr-green-rgb),0.4)" }] : []),
-                      ...(hasVC3A ? [{ label: `VC3A Lump-sum ($${Math.round((Number(inputs.vc3aCash) || 0) / 1000)}k/yr)`, from: ca, to: contribStop, color: "var(--clr-violet)", bg: "rgba(var(--clr-violet-rgb),0.1)", border: "rgba(var(--clr-violet-rgb),0.4)" }] : []),
-                      // S3 fix: for RSS members show RSS Drawdown bar instead of 5 CPF LIFE bars.
-                      // CPF LIFE bars are meaningless for RSS members and were causing the Gantt to
-                      // show "CPF LIFE Payouts" spanning the full age range at $0.
-                      ...(isRSSMode ? [
-                        { label: `RSS Drawdown (${formatCurrency(Number(inputs.rssMonthlyPayout) || 0)}/mo)`, from: Number(inputs.rssPayoutStartAge) || 65, to: END, color: "var(--clr-blue)", bg: "rgba(var(--clr-blue-rgb),0.12)", border: "rgba(var(--clr-blue-rgb),0.5)" },
-                      ] : [
-                        // CPF LIFE plan phases — SC/PR on LIFE scheme only
-                        { label: "CPF LIFE Payouts", from: lifeStart, to: END, color: "var(--clr-emerald)", bg: "rgba(var(--clr-emerald-rgb),0.12)", border: "rgba(var(--clr-emerald-rgb),0.5)" },
-                        { label: "Standard — Level Payouts", from: lifeStart, to: END, color: "var(--clr-indigo2)", bg: "rgba(var(--clr-indigo2-rgb),0.1)", border: "rgba(var(--clr-indigo2-rgb),0.4)" },
-                        { label: "Escalating — Growing Payouts", from: lifeStart, to: END, color: "var(--clr-cyan)", bg: "rgba(var(--clr-cyan-rgb),0.08)", border: "rgba(var(--clr-cyan-rgb),0.4)" },
-                        { label: "Basic — RA Self-Funds (to 90)", from: lifeStart, to: Math.min(pool90, END), color: "var(--clr-amber3)", bg: "rgba(var(--clr-amber3-rgb),0.12)", border: "rgba(var(--clr-amber3-rgb),0.5)" },
-                        { label: "Basic — Pool Phase (90+)", from: pool90, to: END, color: "var(--clr-orange)", bg: "rgba(var(--clr-orange-rgb),0.15)", border: "rgba(var(--clr-orange-rgb),0.5)" },
-                      ]),
-                    ] : [
-                      // Foreigner: show only SRS drawdown period if configured
-                      { label: "SRS Drawdown Window", from: Math.max(Number(inputs.srsDrawdownStartAge) || 63, 63), to: Math.min(Math.max(Number(inputs.srsDrawdownStartAge) || 63, 63) + (Number(inputs.srsDrawdownYears) || 10), END), color: "#0ea5e9", bg: "rgba(14,165,233,0.1)", border: "rgba(14,165,233,0.4)" },
-                    ]),
+                  const hasMRSS = (Number(inputs.mrssGrant) || 0) > 0;
+                  const hasMMSS = (Number(inputs.mmssGrant) || 0) > 0;
+
+                  // ── Accumulation-phase rows ONLY ─────────────────────────────
+                  // CPF LIFE / RSS bars intentionally excluded — they are fully
+                  // covered by the Strategy tab "Life Journey Timeline" which adds
+                  // OA Drawdown, SRS, Life Events and Phase 2 context.
+                  // This Gantt answers: "When does money go IN?" (contributions phase).
+                  const phases = !isForeigner ? [
+                    { label: "Contributions Active", from: ca,  to: contribStop, color: "var(--clr-blue2)",   bg: "rgba(var(--clr-blue2-rgb),0.15)",   border: "rgba(var(--clr-blue2-rgb),0.5)" },
+                    { label: "Housing Outflow (OA)", from: ca,  to: housingStop, color: "#f472b6",             bg: "rgba(244,114,182,0.12)",             border: "rgba(244,114,182,0.5)" },
+                    ...(hasRSTU ? [{ label: `RSTU Top-up ($${Math.round((Number(inputs.vcSaTopup)||0)/1000)}k/yr)`,   from: ca, to: contribStop, color: "var(--clr-green)",   bg: "rgba(var(--clr-green-rgb),0.1)",   border: "rgba(var(--clr-green-rgb),0.4)" }] : []),
+                    ...(hasVC3A ? [{ label: `VC3A ($${Math.round((Number(inputs.vc3aCash)||0)/1000)}k/yr)`,            from: ca, to: contribStop, color: "var(--clr-violet)",  bg: "rgba(var(--clr-violet-rgb),0.1)",  border: "rgba(var(--clr-violet-rgb),0.4)" }] : []),
+                    ...(hasMRSS ? [{ label: `MRSS ($${Math.round((Number(inputs.mrssGrant)||0)/1000)}k/yr)`,           from: ca, to: Math.min(contribStop, 70), color: "var(--clr-amber)", bg: "rgba(var(--clr-amber3-rgb),0.12)", border: "rgba(var(--clr-amber3-rgb),0.5)" }] : []),
+                    ...(hasMMSS ? [{ label: `MMSS ($${Math.round((Number(inputs.mmssGrant)||0)/1000)}k/yr)`,           from: Math.max(ca, 55), to: Math.min(70, END), color: "var(--clr-orange)", bg: "rgba(var(--clr-orange-rgb),0.12)", border: "rgba(var(--clr-orange-rgb),0.5)" }] : []),
+                  ] : [
+                    // Foreigner: SRS contribution window only (no CPF)
+                    { label: "SRS Contributions",   from: ca, to: Number(inputs.srsContribStopAge) || 63, color: "#38bdf8", bg: "rgba(56,189,248,0.1)", border: "rgba(56,189,248,0.4)" },
                   ];
-                  const markers = (!isForeigner
-                    ? (isRSSMode
-                        ? [ca, Number(inputs.rssPayoutStartAge) || 65, END]
-                        : [ca, contribStop, housingStop, lifeStart, pool90, END])
-                    : [ca, END]
-                  ).filter((v, i, a) => v >= ca && v <= END && a.indexOf(v) === i).sort((a, b) => a - b);
+
+                  // Markers: only accumulation milestones — no LIFE start (that's Strategy's domain)
+                  const rawMarkers = !isForeigner
+                    ? [ca, contribStop, housingStop, payoutAge, END]
+                    : [ca, Number(inputs.srsContribStopAge) || 63, END];
+                  const markers = rawMarkers
+                    .filter((v, i, a) => v >= ca && v <= END && a.indexOf(v) === i)
+                    .sort((a, b) => a - b);
+
                   return (
                     <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: 20 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                         <Activity style={{ width: 15, height: 15, color: "var(--clr-blue)" }} />
-                        <h4 style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>Contribution Timeline Overview</h4>
+                        <h4 style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>
+                          Accumulation Phase Overview
+                        </h4>
                         <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>Age {ca} → 95</span>
                       </div>
-                      {/* Age ruler — flex layout mirrors Life Journey Timeline: spacer + bar area */}
+                      <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "0 0 14px", lineHeight: 1.5 }}>
+                        When money flows <strong style={{ color: "var(--text-muted)" }}>into</strong> your CPF. For payout streams (CPF LIFE, OA Drawdown, SRS) see the <strong style={{ color: "var(--text-muted)" }}>Strategy tab → Life Journey Timeline</strong>.
+                      </p>
+
+                      {/* Age ruler */}
                       <div style={{ display: "flex", marginBottom: 4 }}>
                         <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
                         <div style={{ flex: 1, position: "relative", height: 20 }}>
@@ -11995,7 +11995,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           ))}
                         </div>
                       </div>
-                      {/* Tick lines */}
+
+                      {/* Tick line */}
                       <div style={{ display: "flex", marginBottom: 8 }}>
                         <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
                         <div style={{ flex: 1, position: "relative", height: 4, background: "var(--border-subtle)", borderRadius: 2 }}>
@@ -12004,6 +12005,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           ))}
                         </div>
                       </div>
+
                       {/* Phase bars */}
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {phases.filter(p => p.from < END && p.to > ca).map((phase, i) => (
@@ -12018,7 +12020,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                                 background: phase.bg,
                                 border: `1px solid ${phase.border}`,
                                 borderRadius: 4,
-                                display: "flex", alignItems: "center", justifyContent: "center"
+                                display: "flex", alignItems: "center", justifyContent: "center",
                               }}>
                                 <span style={{ fontSize: 10, fontWeight: 800, color: phase.color, whiteSpace: "nowrap" }}>
                                   {Math.max(phase.from, ca)}–{Math.min(phase.to, END)}
@@ -12028,9 +12030,33 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>
                         ))}
                       </div>
+
+                      {/* Payout age marker — visual divider between accumulation and decumulation */}
+                      {!isForeigner && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+                          <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0, fontSize: 10, fontWeight: 700, color: "var(--clr-emerald)", textAlign: "right", paddingRight: 4 }}>
+                            CPF LIFE starts
+                          </div>
+                          <div style={{ flex: 1, position: "relative", height: 20, background: "var(--bg-muted)", borderRadius: 4 }}>
+                            <div style={{
+                              position: "absolute",
+                              left: left(payoutAge),
+                              transform: "translateX(-50%)",
+                              height: "100%",
+                              width: 2,
+                              background: "var(--clr-emerald)",
+                              borderRadius: 2,
+                            }} />
+                            <span style={{ position: "absolute", left: `calc(${left(payoutAge)} + 6px)`, top: "50%", transform: "translateY(-50%)", fontSize: 10, fontWeight: 800, color: "var(--clr-emerald)", whiteSpace: "nowrap" }}>
+                              Age {payoutAge} → see Strategy tab
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       <div style={{ marginTop: 12, fontSize: 10, color: "var(--text-muted)", lineHeight: 1.6 }}>
                         <Info style={{ width: 11, height: 11, display: "inline", marginRight: 6, color: "var(--clr-blue)" }} />
-                        Adjust <strong style={{ color: "var(--text-main)" }}>Contrib Stop Age</strong>, <strong style={{ color: "var(--text-main)" }}>Housing Stop Age</strong> and <strong style={{ color: "var(--text-main)" }}>Payout Age</strong> in the sidebar to update this timeline.
+                        Adjust <strong style={{ color: "var(--text-main)" }}>Contrib Stop Age</strong> and <strong style={{ color: "var(--text-main)" }}>Housing Stop Age</strong> in the sidebar to update these bars.
                       </div>
                     </div>
                   );
