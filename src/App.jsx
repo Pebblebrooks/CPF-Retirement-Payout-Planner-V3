@@ -2839,8 +2839,9 @@ const computeXIRR = (cashFlows, guess = 0.05) => {
   if (!cashFlows || cashFlows.length < 2) return null;
   if (cashFlows.every(cf => cf.v >= 0) || cashFlows.every(cf => cf.v <= 0)) return null;
   let rate = guess;
+  let f = 0;
   for (let iter = 0; iter < 100; iter++) {
-    let f = 0, df = 0;
+    f = 0; let df = 0;
     for (const { t, v } of cashFlows) {
       const denom = Math.pow(1 + rate, t);
       f += v / denom;
@@ -2852,7 +2853,12 @@ const computeXIRR = (cashFlows, guess = 0.05) => {
     rate = newRate;
     if (rate < -0.999) rate = -0.999;
   }
-  return isFinite(rate) ? rate : null;
+  // Convergence check: if the final NPV |f| is larger than $1 the solver
+  // has not converged — return null rather than a meaningless boundary rate.
+  // This prevents clamped ±10.00% artefacts from appearing in the Data Table
+  // and XIRR summary cards when cash-flow series have no clean sign-change root.
+  if (!isFinite(rate) || Math.abs(f) > 1.0) return null;
+  return rate;
 };
 
 // ─── Item 27: React Error Boundary ───────────────────────────────────────────
@@ -5824,7 +5830,7 @@ export default function App() {
         // Terminal value = remaining RA (direct bequest) + OA + MA
         const terminalFlow = { t: row.age - ca, v: (row.ra || 0) + (row.oa || 0) + (row.ma || 0) };
         const xirr = computeXIRR([...contribFlows, ...payoutFlowsSlice, terminalFlow]);
-        result.rss[row.age] = xirr !== null ? Math.max(-0.10, Math.min(0.10, xirr)) * 100 : null;
+        result.rss[row.age] = xirr !== null ? Math.max(-0.50, Math.min(0.50, xirr)) * 100 : null;
       }
       // Mirror rss result into standard/escalating/basic slots so the Data Table
       // can read xirrByAge[highlightPlan]?.[age] without knowing the mode.
@@ -5860,7 +5866,7 @@ export default function App() {
         const payoutFlows = cumFlows[plan].slice(0, idx + 1);
         const terminalFlow = { t: row.age - ca, v: pp[`${plan}Bequest`] || 0 };
         const xirr = computeXIRR([...contribFlows, ...payoutFlows, terminalFlow]);
-        result[plan][row.age] = xirr !== null ? Math.max(-0.10, Math.min(0.10, xirr)) * 100 : null;
+        result[plan][row.age] = xirr !== null ? Math.max(-0.50, Math.min(0.50, xirr)) * 100 : null;
       }
     }
     return result;
@@ -10994,7 +11000,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             </div>
             {/* Persistent KPI strip — hidden on Summary tab (Zone 1 already shows these metrics) */}
             {activeTab !== "welcome" && activeTab !== "notes" && activeTab !== "summary" && (
-              <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "1fr", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", borderTop: `2px solid ${{"welcome":"#64748b","summary":"var(--clr-emerald)","strategy":"#f43f5e","accumulation":"var(--clr-blue2)","rss":"var(--clr-blue)","life":"var(--clr-purple)","compare":"var(--clr-amber3)","table":"var(--clr-slate)","notes":"var(--clr-blue)"}[activeTab] || "var(--border-subtle)"}`, width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+              <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "1fr", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
                 {(() => {
                   const pa = payoutAge65; // CQ-2 fix: use debounced value to match displayProjection/displayAccumulation
                   // Use displayProjection (already inflation-adjusted when isRealDollars=true)
@@ -13583,7 +13589,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <div style={{ marginBottom: 14, padding: "14px 16px", borderRadius: 14, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
                       <p style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
                         Yield IRR at payout age {pAge}
-                        <TooltipBox id="t-xirr-hdr" text="XIRR: the annualised rate that equates lifetime CPF contributions to total projected payouts under each CPF LIFE plan. Computed via Newton-Raphson — the same metric as the Yield IRR% column below, shown here at a single reference age. For full year-by-year detail, scroll right in the Projection Table." />
+                        <TooltipBox id="t-xirr-hdr" text="XIRR: the annualised rate that equates lifetime CPF contributions to total projected payouts under each CPF LIFE plan. Computed via Newton-Raphson — the same metric as the Yield IRR% column below, shown here at a single reference age. 'N/A' means the solver did not converge — this typically happens for the Basic plan when the two-phase cash-flow structure (premium-refund + longevity) produces no clean mathematical root. The Basic plan's break-even can be read from the Yield IRR% column in the Projection Table instead." />
                         <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 500, color: "var(--text-subtle)", textTransform: "none", letterSpacing: 0 }}>See Yield IRR% column in table for all ages →</span>
                       </p>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
@@ -13595,9 +13601,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               {isActive && <span style={{ position: "absolute", top: -1, right: 8, fontSize: 9, fontWeight: 700, color, background: bg, padding: "1px 6px", borderRadius: "0 0 6px 6px", border: `1px solid ${border}`, borderTop: "none" }}>active</span>}
                               <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", fontWeight: 700 }}>{label}</p>
                               <p style={{ fontSize: 20, fontWeight: 700, color: xirr != null ? color : "var(--text-subtle)", margin: 0, fontFamily: "monospace" }}>
-                                {xirr != null ? `${xirr.toFixed(2)}%` : "—"}
+                                {xirr != null ? `${xirr.toFixed(2)}%` : "N/A"}
                               </p>
-                              <p style={{ fontSize: 9, color: "var(--text-subtle)", margin: "2px 0 0" }}>p.a. XIRR</p>
+                              <p style={{ fontSize: 9, color: "var(--text-subtle)", margin: "2px 0 0" }}>
+                                {xirr != null ? "p.a. XIRR" : "solver did not converge"}
+                              </p>
                             </div>
                           );
                         })}
@@ -13891,8 +13899,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               const xirr = xirrByAge[highlightPlan]?.[row.age];
                               if (xirr == null) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>—</td>;
                               const irrColor = xirr > 4 ? "var(--clr-green)" : xirr > 2 ? "var(--clr-amber)" : "var(--clr-red)";
-                              // Sparkline: map xirr -10% to +10% to 0–100% bar width
-                              const barPct = Math.max(0, Math.min(100, ((xirr + 10) / 20) * 100));
+                              // Sparkline: map xirr -50% to +50% to 0–100% bar width
+                              const barPct = Math.max(0, Math.min(100, ((xirr + 50) / 100) * 100));
                               return (
                                 <td style={{ padding: "5px 8px", whiteSpace: "nowrap" }} title={`XIRR at age ${row.age}: ${xirr.toFixed(2)}%`}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
