@@ -6992,6 +6992,23 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           background: rgba(30,64,175,0.06) !important;
         }
 
+        /* ── Light mode: Recharts Legend text — Recharts writes color via JS style attr
+           so the CSS variable on --text-main does not cascade into legend items.         ── */
+        .theme-light .recharts-legend-item-text { color: #162033 !important; }
+        .theme-light .recharts-default-legend    { color: #162033 !important; }
+        .theme-light .recharts-cartesian-axis-tick-value { fill: #1e3350 !important; }
+
+        /* ── Light mode: scenario diff rows — hard-coded rgba dark tones ── */
+        .theme-light [style*="rgba(16,185,129,0.08)"] { background: rgba(6,95,70,0.07)     !important; }
+        .theme-light [style*="rgba(239,68,68,0.08)"]  { background: rgba(153,27,27,0.07) !important; }
+
+        /* ── Light mode: strategy income table ── */
+        .theme-light .strategy-income-table td { color: #162033 !important; }
+        .theme-light .strategy-income-table th { color: #08111e !important; background: rgba(74,102,128,0.15) !important; }
+
+        /* ── Light mode: welcome step cards — hard-coded dark bg ── */
+        .theme-light [style*="background: \"var(--bg-muted)\""] { background: var(--bg-muted); }
+
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
           to   { transform: translate(-50%, 0);     opacity: 1; }
@@ -11902,8 +11919,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             </div>
                           );
                         })()}
-                      </div>{/* /z6-stats-grid */}
-                    </div>{/* /outer stats card */}
+                      </div>
+                    </div>
                   );
                 })()}
 
@@ -12517,10 +12534,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       }));
                       let merged = base;
                       if (showMonteCarlo && monteCarloData) {
-                        merged = merged.map(row => { const mc = monteCarloData.rows.find(m => m.age === row.age); return mc ? { ...row, mcP10: mc.p10, mcP90: mc.p90, mcP50: mc.p50 } : row; });
+                        // O(1) Map lookup — replaces O(n²) .find(m => m.age === row.age) inside .map()
+                        const mcByAge = new Map((monteCarloData.rows || []).map(m => [m.age, m]));
+                        merged = merged.map(row => { const mc = mcByAge.get(row.age); return mc ? { ...row, mcP10: mc.p10, mcP90: mc.p90, mcP50: mc.p50 } : row; });
                       }
                       if (showBaseline && baselineProjection) {
-                        merged = merged.map(row => { const bl = baselineProjection.find(b => b.age === row.age); return bl ? { ...row, baselineTotal: bl.baselineTotal } : row; });
+                        // O(1) Map lookup — replaces O(n²) .find(b => b.age === row.age) inside .map()
+                        const blByAge = new Map((baselineProjection.rows || baselineProjection).map ? (baselineProjection.rows || baselineProjection).map(b => [b.age, b]) : []);
+                        merged = merged.map(row => { const bl = blByAge.get(row.age); return bl ? { ...row, baselineTotal: bl.baselineTotal } : row; });
                       }
                       return merged;
                     })()}>
