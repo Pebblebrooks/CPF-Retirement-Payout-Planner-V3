@@ -565,6 +565,10 @@ const DEFAULT_INPUTS = {
   // Must be > currentAge and ≤ 80 (CPF policy deadline for migration).
   lifeMigrationAge: 0,
   lifePlanAtMigration: 'std',  // 'std' | 'esc' | 'bas' — CPF LIFE plan chosen at migration
+  // Q2: Milestone Age — user-defined age marker on Accumulation chart + Summary callout.
+  // 0 = disabled. A teal dashed line and balance card appear when set.
+  // Useful for baby/minor profiles targeting age 21, 35, or 55.
+  milestoneAge: 0,
 };
 
 const PRESET_PROFILES = [
@@ -876,6 +880,7 @@ const INPUT_LABELS = {
   cpfScheme: "CPF Scheme", rssPayoutStartAge: "RSS Payout Start Age",
   rssMonthlyPayout: "RSS Monthly Payout ($)", lifeMigrationAge: "Migrate to CPF LIFE Age",
   lifePlanAtMigration: "CPF LIFE Plan at Migration",
+  milestoneAge: "Milestone Age",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
@@ -2818,7 +2823,7 @@ export const TooltipBox = ({ id, text }) => {
         style={{ width: 14, height: 14, display: "inline-block", verticalAlign: "middle", color: isOpen ? "var(--clr-green)" : "var(--text-muted)", transition: "color 0.15s" }}
       />
       {isOpen && rect && createPortal(
-        <span className={isDark ? "theme-dark" : "theme-light"} style={{ position: "fixed", zIndex: 999999, top: rect.top - 8, left: rect.left + (rect.width / 2), transform: "translate(-50%, -100%)", width: 280, padding: "10px 12px", background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", color: "var(--tooltip-text)", fontSize: 11, borderRadius: 8, boxShadow: "var(--tooltip-shadow-inline)", border: "1px solid var(--tooltip-border-inline)", lineHeight: 1.5, display: "block", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
+        <span className={isDark ? "theme-dark" : "theme-light"} style={{ position: "fixed", zIndex: 999999, top: rect.top - 8, left: rect.left + (rect.width / 2), transform: "translate(-50%, -100%)", width: 280, padding: "10px 12px", background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", color: "var(--tooltip-text)", fontSize: 11, borderRadius: 8, boxShadow: "var(--tooltip-shadow-inline)", border: "1px solid var(--tooltip-border-inline)", lineHeight: 1.5, display: "block", height: "auto", overflow: "visible", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
           {text}
           <span style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: "var(--tooltip-bg) transparent transparent transparent" }} />
         </span>,
@@ -3537,6 +3542,12 @@ export default function App() {
     // RSS isolation: payoutAge 65–70 rule only applies to CPF LIFE members.
     // RSS members use rssPayoutStartAge instead — validated in the RSS block below.
     if (inp.cpfScheme !== 'rss' && (pa < 65 || pa > 70)) errs.payoutAge = "Payout age must be 65–70";
+    // Q2: Milestone Age — 0 means disabled; if set must be > currentAge and ≤ 95
+    const ma_val = Number(inp.milestoneAge) || 0;
+    if (ma_val !== 0) {
+      if (ma_val <= ca) errs.milestoneAge = "Milestone age must be greater than current age";
+      else if (ma_val > 95) errs.milestoneAge = "Milestone age must be ≤ 95";
+    }
     // ── RSS-specific validations (additive block — does not touch any CPF LIFE check above) ──
     if (inp.cpfScheme === 'rss') {
       const rssStart = Number(inp.rssPayoutStartAge) || 65;
@@ -7577,14 +7588,17 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         }
 
         /* ── Field-changed highlight — applied to inputs/selects that differ from DEFAULT_INPUTS.
-           !important overrides inline background styles (CSS spec §6.4.2: !important stylesheet
-           declarations beat normal inline styles). border and border-color remain inline so
-           red error borders are fully unaffected. ── */
+           Uses !important on background so it beats the inline background on every input.
+           box-shadow inset mimics a coloured left-border without touching the border property,
+           so red error borders (set inline) are completely unaffected.
+           Two signals: background tint + left-edge accent → clearly visible in both themes. ── */
         .cpf-fc {
-          background: rgba(var(--clr-emerald-rgb), 0.11) !important;
+          background: rgba(var(--clr-emerald-rgb), 0.14) !important;
+          box-shadow: inset 3px 0 0 rgba(var(--clr-emerald-rgb), 0.85) !important;
         }
         .theme-light .cpf-fc {
-          background: rgba(6, 95, 70, 0.08) !important;
+          background: rgba(6, 95, 70, 0.13) !important;
+          box-shadow: inset 3px 0 0 rgba(6, 95, 70, 0.75) !important;
         }
 
         /* Panel card — bg-panel + border-subtle + rounded corners */
@@ -8574,6 +8588,27 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       )}
                     </div>
                   </div>
+                  {/* Q2: Milestone Age field — full-width, below the profile grid */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, background: "var(--bg-muted)", border: `1px solid ${inputErrors.milestoneAge ? "var(--clr-red)" : "rgba(34,211,238,0.25)"}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#22d3ee", textTransform: "uppercase", whiteSpace: "nowrap" }}>🎯 Milestone Age</span>
+                      <TooltipBox id="t-milestone" text="Set a personal milestone age to track on the Accumulation chart and Summary tab. A teal dashed marker appears on the chart, and a balance callout shows your projected OA/SA/MA/RA at that age. Useful for tracking age 21 (first job), 35 (peak earning), or 55 (SA closure). Set to 0 to hide." />
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                      <input
+                        type="text" inputMode="decimal" name="milestoneAge"
+                        value={inputs.milestoneAge ?? 0}
+                        onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        onFocus={(e) => e.target.select()}
+                        aria-label="Milestone age"
+                        className={fieldChanged("milestoneAge") ? "cpf-fc" : undefined}
+                        style={{ width: 64, padding: "6px 10px", background: "var(--bg-input)", border: `1px solid ${inputErrors.milestoneAge ? "var(--clr-red)" : "rgba(34,211,238,0.4)"}`, borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", textAlign: "right", boxSizing: "border-box" }}
+                      />
+                      <span style={{ fontSize: 9, color: "var(--text-muted)" }}>0 = off</span>
+                    </div>
+                  </div>
+                  {inputErrors.milestoneAge && <p className="cpf-err">⚠ {inputErrors.milestoneAge}</p>}
+
                   {/* currentAge error shown full-width below the grid — message is too long for a 1fr column */}
                   {inputErrors.currentAge && (
                     <p className="cpf-err">⚠ {inputErrors.currentAge}</p>
@@ -11567,6 +11602,104 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   );
                 })()}
 
+                {/* ── Q2: MILESTONE AGE CALLOUT — shown when milestoneAge is valid ── */}
+                {(() => {
+                  const mAge = Number(inputs.milestoneAge) || 0;
+                  const ca_m = Number(inputs.currentAge) || 0;
+                  if (mAge <= 0 || mAge <= ca_m) return null;
+                  const mRow = accumulationByAge.get(mAge) || {};
+                  const mOA  = mRow.oa  || 0;
+                  const mSA  = mRow.sa  || 0;
+                  const mMA  = mRow.ma  || 0;
+                  const mRA  = mRow.ra  || 0;
+                  const mSRS = mRow.srsBalance || 0;
+                  const mPriv = mRow.privateAssets || 0;
+                  const mTotal = mOA + mSA + mMA + mRA;
+                  const mNetWorth = mTotal + mSRS + mPriv;
+                  const inflRate  = (Number(debouncedInputs.inflationRate) || 2) / 100;
+                  const yearsToM  = Math.max(0, mAge - ca_m);
+                  const mRealTotal = Math.round(mTotal / Math.pow(1 + inflRate, yearsToM));
+                  // Has the projection reached this age?
+                  const projReached = mRow.age === mAge;
+                  if (!projReached) return null;
+                  const accts = [
+                    { label: "OA",    val: mOA,  color: "#378ADD" },
+                    { label: mAge >= 55 ? "RA" : "SA", val: mAge >= 55 ? mRA : mSA, color: mAge >= 55 ? "#7F77DD" : "#f59e0b" },
+                    { label: "MA",    val: mMA,  color: "#059669" },
+                  ];
+                  return (
+                    <div style={{ background: "var(--bg-panel)", border: "1.5px solid rgba(34,211,238,0.35)", borderRadius: 20, padding: "16px 20px" }}>
+                      {/* Header row */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 16 }}>🎯</span>
+                          <div>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: "#22d3ee", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>
+                              Milestone Balance — Age {mAge}
+                            </p>
+                            <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "2px 0 0" }}>
+                              {yearsToM} year{yearsToM !== 1 ? "s" : ""} from now · {isRealDollars ? "real $" : "nominal $"}
+                            </p>
+                          </div>
+                        </div>
+                        {/* Total CPF callout */}
+                        <div style={{ textAlign: "right" }}>
+                          <p style={{ fontSize: "clamp(16px,3vw,22px)", fontWeight: 500, margin: 0, color: "var(--text-bright)", fontFamily: "monospace", lineHeight: 1.1 }}>
+                            {formatCurrency(isRealDollars ? mRealTotal : mTotal)}
+                          </p>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "2px 0 0" }}>
+                            Total CPF{isRealDollars ? ` · ${formatCurrency(mTotal)} nominal` : ` · ${formatCurrency(mRealTotal)} today's $`}
+                          </p>
+                        </div>
+                      </div>
+                      {/* Account breakdown bar + labels */}
+                      {mTotal > 0 && (() => {
+                        const oaPct = Math.round((mOA / mTotal) * 100);
+                        const saPct = Math.round(((mAge >= 55 ? mRA : mSA) / mTotal) * 100);
+                        const maPct = 100 - oaPct - saPct;
+                        return (
+                          <>
+                            <div style={{ height: 8, borderRadius: 4, overflow: "hidden", display: "flex", marginBottom: 10 }}>
+                              <div style={{ flex: oaPct,  background: "#378ADD" }} />
+                              <div style={{ flex: saPct,  background: mAge >= 55 ? "#7F77DD" : "#f59e0b" }} />
+                              <div style={{ flex: Math.max(maPct, 0), background: "#059669" }} />
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+                              {accts.map(({ label, val, color }) => (
+                                <div key={label} style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "8px 10px", borderLeft: `3px solid ${color}` }}>
+                                  <p style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", margin: "0 0 2px", letterSpacing: "0.04em" }}>{label}</p>
+                                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-bright)", fontFamily: "monospace", margin: 0 }}>{formatCurrency(val)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
+                      {/* SRS + private assets addendum if present */}
+                      {(mSRS > 0 || mPriv > 0) && (
+                        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                          {mSRS > 0 && (
+                            <div style={{ flex: 1, background: "rgba(14,165,233,0.07)", borderRadius: 8, padding: "6px 10px", border: "1px solid rgba(14,165,233,0.2)" }}>
+                              <p style={{ fontSize: 10, color: "#0ea5e9", fontWeight: 700, margin: "0 0 1px", textTransform: "uppercase" }}>SRS</p>
+                              <p style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-bright)", margin: 0, fontWeight: 700 }}>{formatCurrency(mSRS)}</p>
+                            </div>
+                          )}
+                          {mPriv > 0 && (
+                            <div style={{ flex: 1, background: "rgba(var(--clr-green-rgb),0.07)", borderRadius: 8, padding: "6px 10px", border: "1px solid rgba(var(--clr-green-rgb),0.2)" }}>
+                              <p style={{ fontSize: 10, color: "var(--clr-green)", fontWeight: 700, margin: "0 0 1px", textTransform: "uppercase" }}>Private</p>
+                              <p style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-bright)", margin: 0, fontWeight: 700 }}>{formatCurrency(mPriv)}</p>
+                            </div>
+                          )}
+                          <div style={{ flex: 1, background: "rgba(var(--clr-amber-rgb),0.07)", borderRadius: 8, padding: "6px 10px", border: "1px solid rgba(var(--clr-amber-rgb),0.2)" }}>
+                            <p style={{ fontSize: 10, color: "var(--clr-amber)", fontWeight: 700, margin: "0 0 1px", textTransform: "uppercase" }}>Net Worth</p>
+                            <p style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-bright)", margin: 0, fontWeight: 700 }}>{formatCurrency(mNetWorth)}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* ── ZONE 2 + ZONE 3 side by side ── */}
                 <div className="z2-z3-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
@@ -12371,6 +12504,21 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           stroke={color} strokeOpacity={0.4} strokeWidth={1}
                           label={{ position: "insideTop", value: labelVal, fill: color, fontSize: 8, fontWeight: "bold" }} />;
                       })}
+                      {/* Q2: Milestone Age marker — teal dashed vertical line */}
+                      {(() => {
+                        const mAge = Number(inputs.milestoneAge) || 0;
+                        if (mAge <= 0 || mAge <= (Number(inputs.currentAge) || 0)) return null;
+                        return (
+                          <ReferenceLine
+                            key="milestone-marker"
+                            x={mAge}
+                            stroke="#22d3ee"
+                            strokeWidth={2}
+                            strokeDasharray="6 3"
+                            label={{ position: "insideTopLeft", value: `🎯 Age ${mAge}`, fill: "#22d3ee", fontSize: 9, fontWeight: "bold" }}
+                          />
+                        );
+                      })()}
                       {/* Phase 2 salary marker — shown alongside life event markers when salaryPhaseAge is set */}
                       {showLifeEventMarkers && (() => {
                         const p2Age = debouncedInputs.salaryPhaseAge !== "" && debouncedInputs.salaryPhaseAge != null
