@@ -1007,7 +1007,8 @@ function runRSSEngine(inputs, {
   const baseHousing   = overrideHousingOutflow !== undefined ? overrideHousingOutflow : (Number(inputs.housingOutflow) || 0);
   const oaEduLoanAnnual = Number(inputs.oaEduLoan)    || 0;
   const oaEduLoanFreq   = inputs.oaEduLoanFreq || 'one-time';
-  const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0) + (Number(inputs.elderCareShield) || 0);
+  const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0);
+  const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
   const medInfl     = (Number(inputs.medicalInflationRate) || 0) / 100;
   const isSEP       = inputs.isSelfEmployed === true;
   const isLeasehold = inputs.propertyLeasehold === true;
@@ -1133,7 +1134,7 @@ function runRSSEngine(inputs, {
 
     // SRS
     if (age > startAge) srsBalance = srsBalance * (1 + srsReturn);
-    if (age <= srsContribStop && age < srsDrawStart) srsBalance += srsContrib;
+    if (age >= 18 && age <= srsContribStop && age < srsDrawStart) srsBalance += srsContrib;
     if (age === srsDrawStart && !srsDrawdownApplied) {
       srsAnnualDraw = srsDrawYears > 0 ? (srsReturn > 0 ? Math.round(srsBalance * srsReturn / (1 - Math.pow(1 + srsReturn, -srsDrawYears))) : Math.round(srsBalance / srsDrawYears)) : srsBalance;
       srsDrawdownApplied = true;
@@ -1467,9 +1468,9 @@ function runRSSEngine(inputs, {
       currentPropValue = 0; refundApplied = true;
     }
 
-    // Medical outflow
+    // Medical outflow — CareShield Life (elderCareShieldAmt) only begins at age 30 per MOH policy
     const yrSince = Math.max(0, age - startAge);
-    const totalMaOut = Math.round(baseMedical * Math.pow(1 + medInfl, yrSince));
+    const totalMaOut = Math.round((baseMedical + (age >= 30 ? elderCareShieldAmt : 0)) * Math.pow(1 + medInfl, yrSince));
     ma = Math.max(0, ma - totalMaOut); yearMedOut = totalMaOut;
     totalOutSpent += activeHousing + totalMaOut;
 
@@ -1770,7 +1771,8 @@ function runProjectionEngine(inputs, {
   const baseHousing = overrideHousingOutflow !== undefined ? overrideHousingOutflow : (Number(inputs.housingOutflow) || 0);
   const oaEduLoanAnnual = Number(inputs.oaEduLoan) || 0;  // D1: OA Education Loan Scheme outflow
   const oaEduLoanFreq   = inputs.oaEduLoanFreq || 'one-time';
-  const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0) + (Number(inputs.elderCareShield) || 0);
+  const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0);
+  const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
   const medInfl = (Number(inputs.medicalInflationRate) || 0) / 100;
   const isSEP = inputs.isSelfEmployed === true;
   const isLeasehold = inputs.propertyLeasehold === true;
@@ -1989,8 +1991,8 @@ function runProjectionEngine(inputs, {
     // SRS accumulation and drawdown
     // 1. Growth on existing balance (always, even during drawdown — on remaining balance)
     if (age > startAge) srsBalance = srsBalance * (1 + srsReturn);
-    // 2. Annual contribution (up to stop age, only before drawdown starts)
-    if (age <= srsContribStop && age < srsDrawStart) srsBalance += srsContrib;
+    // 2. Annual contribution (age 18+ only per IRAS rules; up to stop age, only before drawdown starts)
+    if (age >= 18 && age <= srsContribStop && age < srsDrawStart) srsBalance += srsContrib;
     // 3. Drawdown: compute fixed annual draw at drawdown start, then deplete over srsDrawYears
     if (age === srsDrawStart && !srsDrawdownApplied) {
       // Divide balance evenly over the drawdown window — growth continues on remaining balance
@@ -2602,8 +2604,9 @@ function runProjectionEngine(inputs, {
       currentPropValue = 0;
       refundApplied = true;
     }
+    // Medical outflow — CareShield Life (elderCareShieldAmt) only begins at age 30 per MOH policy
     const yrSince = Math.max(0, age - startAge);
-    const totalMaOut = Math.round(baseMedical * Math.pow(1 + medInfl, yrSince));
+    const totalMaOut = Math.round((baseMedical + (age >= 30 ? elderCareShieldAmt : 0)) * Math.pow(1 + medInfl, yrSince));
     ma = Math.max(0, ma - totalMaOut);
     yearMedOut = totalMaOut;
     const yearTotalOut = activeHousing + totalMaOut;
@@ -3525,7 +3528,7 @@ export default function App() {
     const hs = Number(inp.housingStopAge) || 55;
     if (ca < 0 || ca > 95) errs.currentAge = "Age must be 0–95";
     // D3: under-16 info note — cash top-ups locked, CPF nominations and CPFIS not yet available
-    if (!errs.currentAge && ca >= 0 && ca < 16) errs.currentAge = "Members under 16 are managed by a parent or guardian. Cash top-ups to SA/MA, OA→SA, and OA→RA transfers are supported by a parent/guardian. CPF nominations require age 16+. CPFIS requires age 18+. Both are locked in this simulation.";
+    if (!errs.currentAge && ca >= 0 && ca < 16) errs.currentAge = "Members under 16 are managed by a parent or guardian. Cash top-ups to SA/MA (VC3A, RSTU, VCMA) can be entered here on the child's behalf. CPF nominations require age 16+. CPFIS requires age 18+ and is locked in the Outflows section.";
     // D3: age 16–17 info note — nominations OK, CPFIS still locked
     if (!errs.currentAge && ca >= 16 && ca < 18) errs.currentAge = "CPF nominations are available from age 16. CPFIS requires age 18+ and is locked in the Outflows section.";
     // A7: soft warning when current age is at or beyond payout age (no hard block)
@@ -3695,6 +3698,18 @@ export default function App() {
       const v = Number(inp[k]) || 0;
       if (v < 0 || v > 100000) errs[k] = "0 – $100,000/yr";
     });
+    // Q1-C: CareShield Life premiums only begin at age 30 (SC/PR born on or after 1 Oct 1980)
+    if (!errs.elderCareShield && (Number(inp.elderCareShield) || 0) > 0 && ca < 30) {
+      errs.elderCareShield = `CareShield Life premiums begin at age 30. Engine will not deduct this before age 30. Value will take effect from year ${30 - ca} of the projection.`;
+    }
+    // Q1-D: Housing outflow soft warning for minors (member must be a legal purchaser)
+    if (!errs.housingOutflow && ho > 0 && ca < 21) {
+      errs.housingOutflow = `Housing CPF usage requires the member to be a legal purchaser (typically age 21+). This outflow will be applied from age 0 in the projection — verify this is intentional.`;
+    }
+    // Q1-D: WIS soft warning — requires employment and age 18+ (WIS scheme: workers 35+ in practice, but 18+ as a minimum)
+    if (wis > 0 && !errs.wisAmount && ca < 18) {
+      errs.wisAmount = `WIS (Workfare Income Supplement) requires employment and age 35+ (minimum 18+). Not applicable for members under 18.`;
+    }
     // CPFIS OA tranche: only OA savings above $20,000 are investible; requires age 18+
     const cpfisOaVal = Number(inp.cpfisOaAmount) || 0;
     if (cpfisOaVal < 0) errs.cpfisOaAmount = "Must be ≥ 0";
@@ -4114,7 +4129,8 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const is55Plus     = (Number(inputs.currentAge) || 0) >= 55;
-  const isUnder16    = (Number(inputs.currentAge) || 0) < 16;   // CPF minor gate: cash top-ups require age 16+
+  const isUnder16    = (Number(inputs.currentAge) || 0) < 16;   // CPF minor gate: informational note for cash top-ups
+  const isUnder18    = (Number(inputs.currentAge) || 0) < 18;   // SRS gate (IRAS: account requires age 18+) + CPFIS gate
   const isSelfEmployed = inputs.isSelfEmployed === true;
   // BUG-NEW-1 fix: isForeigner must be declared at component scope so JSX references in the
   // LIFE tab (line ~8140) and elsewhere resolve correctly. Previously only existed inside a
@@ -8565,7 +8581,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* A9: Age-conditional info banners for minors */}
                   {(Number(inputs.currentAge) || 0) < 16 && (Number(inputs.currentAge) || 0) >= 0 && (
                     <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", border: "1px solid rgba(var(--clr-amber-rgb),0.35)", fontSize: 10, color: "var(--clr-amber)", lineHeight: 1.5 }}>
-                      👶 <strong>Under 16:</strong> Parents or guardians manage CPF transactions on the member's behalf. Cash top-ups to SA/MA and OA→SA transfers are supported. CPFIS (age 18+) and CPF nominations (age 16+) are not available.
+                      👶 <strong>Under 16:</strong> Parents or guardians manage CPF transactions on the member's behalf. Cash top-ups (VC3A, RSTU, VCMA) can be entered directly — amounts represent the parent's contribution. CPFIS (age 18+) and CPF nominations (age 16+) are not available.
                     </div>
                   )}
                   {(Number(inputs.currentAge) || 0) >= 16 && (Number(inputs.currentAge) || 0) < 18 && (
@@ -9497,13 +9513,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <TooltipBox id="t-vc3a" text="Voluntary Contribution to 3 Accounts — cash only. Auto-split across OA/SA/MA using your age-band allocation rates. Counts toward the $37,740 Annual Limit. No tax relief for employees." />
                     </div>
                     <input type="text" inputMode="decimal" name="vc3aCash" value={getDisplayValue("vc3aCash", inputs.vc3aCash)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                      readOnly={isUnder16} tabIndex={isUnder16 ? -1 : undefined}
-                      aria-label="VC3A annual cash contribution" onFocus={() => setFocusedField("vc3aCash")} className={fieldChanged("vc3aCash") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${isVcOverLimit ? "#f97316" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box", opacity: isUnder16 ? 0.4 : 1, cursor: isUnder16 ? "not-allowed" : "text" }} />
+                      aria-label="VC3A annual cash contribution" onFocus={() => setFocusedField("vc3aCash")} className={fieldChanged("vc3aCash") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${isVcOverLimit ? "#f97316" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     {isUnder16
-                      ? <p style={{ fontSize: 10, color: "var(--clr-amber)", marginTop: 2 }}>⚠ Cash top-ups require age 16+. A parent/guardian may action this on the member's behalf.</p>
+                      ? <p style={{ fontSize: 10, color: "var(--clr-amber)", marginTop: 2 }}>👶 Parent/guardian top-up — enter amount on behalf of child. Counts toward the $37,740 Annual Limit.</p>
                       : inputErrors.vc3aCash && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.vc3aCash}</p>}
                     {/* Annual Limit headroom badge — colour-coded: green → amber → red */}
-                    {!isUnder16 && (() => {
+                    {(() => {
                       const vc3aVal   = Number(inputs.vc3aCash) || 0;
                       const usedPct   = maxAllowableVC > 0 ? Math.min(1, vc3aVal / maxAllowableVC) : (vc3aVal > 0 ? 1 : 0);
                       const badgeCol  = usedPct >= 1 ? "var(--clr-red)" : usedPct >= 0.75 ? "var(--clr-orange)" : "var(--clr-green)";
@@ -9568,7 +9583,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       );
                     })()}
                     {/* Rev #21 — VC3A per-dollar SA ROI heuristic */}
-                    {!isUnder16 && !isForeigner && (Number(inputs.vc3aCash) || 0) > 0 && (() => {
+                    {!isForeigner && (Number(inputs.vc3aCash) || 0) > 0 && (() => {
                       const _ca  = Number(inputs.currentAge) || 35;
                       const _pa  = Number(inputs.payoutAge)  || 65;
                       const _yrs = Math.max(0, _pa - _ca);
@@ -9611,15 +9626,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <TooltipBox id="t-rstu" text={`Retirement Sum Topping-Up Scheme — cash top-up to your ${is55Plus ? "RA" : "SA"} directly (not split across accounts). Eligible for up to $8,000/yr tax relief (own account) + $8,000 for loved ones. Capped at FRS (SA) or ERS (RA). NOT counted in Annual Limit.`} />
                     </div>
                     <input type="text" inputMode="decimal" name="vcSaTopup" value={getDisplayValue("vcSaTopup", inputs.vcSaTopup)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                      readOnly={isUnder16} tabIndex={isUnder16 ? -1 : undefined}
-                      aria-label="RSTU annual cash top-up" onFocus={() => setFocusedField("vcSaTopup")} className={fieldChanged("vcSaTopup") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.vcSaTopup ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box", opacity: isUnder16 ? 0.4 : 1, cursor: isUnder16 ? "not-allowed" : "text" }} />
+                      aria-label="RSTU annual cash top-up" onFocus={() => setFocusedField("vcSaTopup")} className={fieldChanged("vcSaTopup") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.vcSaTopup ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     {isUnder16
-                      ? <p style={{ fontSize: 10, color: "var(--clr-amber)", marginTop: 2 }}>⚠ Cash top-ups require age 16+. A parent/guardian may action this on the member's behalf.</p>
+                      ? <p style={{ fontSize: 10, color: "var(--clr-amber)", marginTop: 2 }}>👶 Parent/guardian top-up — enter amount on behalf of child. Not in Annual Limit · capped at {is55Plus ? "ERS" : "FRS"}.</p>
                       : inputErrors.vcSaTopup && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.vcSaTopup}</p>}
                     {!isUnder16 && <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>Tax relief up to $8,000/yr · not in Annual Limit · capped at {is55Plus ? "ERS" : "FRS"}</p>}
 
                     {/* Live tax-saving badge — shows estimated annual tax saved via RSTU relief */}
-                    {!isUnder16 && estimatedTaxSavings > 0 && (
+                    {estimatedTaxSavings > 0 && (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, padding: "7px 10px", borderRadius: 7, background: "rgba(var(--clr-green-rgb),0.10)", border: "1px solid rgba(var(--clr-green-rgb),0.28)" }}>
                         <div>
                           <span style={{ fontSize: 10, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", letterSpacing: "0.04em" }}>💰 Est. Tax Saved (RSTU)</span>
@@ -9635,7 +9649,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     )}
 
                     {/* Rev #21 — RSTU per-dollar ROI heuristic */}
-                    {!isUnder16 && !isForeigner && (Number(inputs.vcSaTopup) || 0) > 0 && (() => {
+                    {!isForeigner && (Number(inputs.vcSaTopup) || 0) > 0 && (() => {
                       const _ca  = Number(inputs.currentAge) || 35;
                       const _pa  = Number(inputs.payoutAge)  || 65;
                       const _yrs = Math.max(0, _pa - _ca);
@@ -9791,18 +9805,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       return (
                         <>
                           <input type="text" inputMode="decimal" name="vcMaCash" value={getDisplayValue("vcMaCash", inputs.vcMaCash)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                            readOnly={isUnder16} tabIndex={isUnder16 ? -1 : undefined}
-                            aria-label="VCMA annual cash top-up to MA" onFocus={() => setFocusedField("vcMaCash")} className={fieldChanged("vcMaCash") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: isOver ? "rgba(var(--clr-orange-rgb),0.07)" : "var(--bg-muted)", border: `1px solid ${inputErrors.vcMaCash ? "var(--clr-red)" : isOver ? "rgba(var(--clr-orange-rgb),0.5)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box", opacity: isUnder16 ? 0.4 : 1, cursor: isUnder16 ? "not-allowed" : "text" }} />
+                            aria-label="VCMA annual cash top-up to MA" onFocus={() => setFocusedField("vcMaCash")} className={fieldChanged("vcMaCash") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: isOver ? "rgba(var(--clr-orange-rgb),0.07)" : "var(--bg-muted)", border: `1px solid ${inputErrors.vcMaCash ? "var(--clr-red)" : isOver ? "rgba(var(--clr-orange-rgb),0.5)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {isUnder16
-                            ? <p style={{ fontSize: 10, color: "var(--clr-amber)", marginTop: 2 }}>⚠ Cash top-ups require age 16+. A parent/guardian may action this on the member's behalf.</p>
+                            ? <p style={{ fontSize: 10, color: "var(--clr-amber)", marginTop: 2 }}>👶 Parent/guardian top-up — enter amount on behalf of child. Not in Annual Limit · no tax relief.</p>
                             : inputErrors.vcMaCash && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.vcMaCash}</p>}
-                          {!isUnder16 && (
-                            <p style={{ fontSize: 10, color: maHeadroom === 0 ? "var(--clr-red)" : "var(--text-muted)", marginTop: 3 }}>
-                              MA headroom to BHS: <strong style={{ color: maHeadroom === 0 ? "var(--clr-red)" : "var(--clr-green)", fontFamily: "monospace" }}>{formatCurrency(maHeadroom)}</strong>
-                              {maHeadroom === 0 && <span style={{ marginLeft: 4, fontWeight: 700 }}>BHS reached ✓</span>}
-                              {" "}· not in Annual Limit · no tax relief
-                            </p>
-                          )}
+                          <p style={{ fontSize: 10, color: maHeadroom === 0 ? "var(--clr-red)" : "var(--text-muted)", marginTop: 3 }}>
+                            MA headroom to BHS: <strong style={{ color: maHeadroom === 0 ? "var(--clr-red)" : "var(--clr-green)", fontFamily: "monospace" }}>{formatCurrency(maHeadroom)}</strong>
+                            {maHeadroom === 0 && <span style={{ marginLeft: 4, fontWeight: 700 }}>BHS reached ✓</span>}
+                            {" "}· not in Annual Limit · no tax relief
+                          </p>
                         </>
                       );
                     })()}
@@ -10596,15 +10607,20 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         <div>
                           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Current Balance ($)</label>
-                          <input type="text" inputMode="decimal" name="srsBalance" value={getDisplayValue("srsBalance", inputs.srsBalance)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsBalance"); e.target.select(); }} className={fieldChanged("srsBalance") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsBalance ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          <input type="text" inputMode="decimal" name="srsBalance" value={getDisplayValue("srsBalance", inputs.srsBalance)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsBalance"); e.target.select(); }}
+                            readOnly={isUnder18} tabIndex={isUnder18 ? -1 : undefined}
+                            className={fieldChanged("srsBalance") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsBalance ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box", opacity: isUnder18 ? 0.4 : 1, cursor: isUnder18 ? "not-allowed" : "text" }} />
                           {inputErrors.srsBalance && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsBalance}</p>}
                         </div>
                         <div>
                           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Annual Contribution ($)</label>
-                          <input type="text" inputMode="decimal" name="srsAnnualContribution" value={getDisplayValue("srsAnnualContribution", inputs.srsAnnualContribution)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsAnnualContribution"); e.target.select(); }} className={fieldChanged("srsAnnualContribution") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsAnnualContribution ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          <input type="text" inputMode="decimal" name="srsAnnualContribution" value={getDisplayValue("srsAnnualContribution", inputs.srsAnnualContribution)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsAnnualContribution"); e.target.select(); }}
+                            readOnly={isUnder18} tabIndex={isUnder18 ? -1 : undefined}
+                            className={fieldChanged("srsAnnualContribution") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsAnnualContribution ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box", opacity: isUnder18 ? 0.4 : 1, cursor: isUnder18 ? "not-allowed" : "text" }} />
                           {inputErrors.srsAnnualContribution && <p style={{ fontSize: 10, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsAnnualContribution}</p>}
                         </div>
                       </div>
+                      {isUnder18 && <p style={{ fontSize: 10, color: "var(--clr-amber)", marginTop: 4 }}>🔒 SRS accounts require age 18+ (IRAS rules). Not available for minors.</p>}
                       {/* Live SRS tax-saving badge — full width, below the 2-col grid */}
                       {(() => {
                             const _srsCap  = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
@@ -14395,7 +14411,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-green)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Under 16 — Parent/Guardian Managed:</strong> CPF accounts for members under 16 are administered by a parent or guardian. Cash top-ups to SA and MA (VC3A, RSTU, VCMA), and OA→SA/RA transfers are supported. CPF nominations require age 16+. CPFIS requires age 18+. The app locks cash top-up fields and shows a field-level note when current age is below 16.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>Under 16 — Parent/Guardian Managed:</strong> CPF accounts for members under 16 are administered by a parent or guardian. Cash top-ups to SA and MA (VC3A, RSTU, VCMA) can be entered directly to represent the parent's contributions. CPF nominations require age 16+. CPFIS requires age 18+ and is locked in the Outflows section. SRS requires age 18+ and is locked. CareShield Life premiums begin at age 30.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
