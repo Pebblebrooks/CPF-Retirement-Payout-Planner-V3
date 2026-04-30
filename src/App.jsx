@@ -2823,10 +2823,24 @@ export const TooltipBox = ({ id, text }) => {
         style={{ width: 14, height: 14, display: "inline-block", verticalAlign: "middle", color: isOpen ? "var(--clr-green)" : "var(--text-muted)", transition: "color 0.15s" }}
       />
       {isOpen && rect && createPortal(
-        <span className={isDark ? "theme-dark" : "theme-light"} style={{ position: "fixed", zIndex: 999999, top: rect.top - 8, left: rect.left + (rect.width / 2), transform: "translate(-50%, -100%)", width: 280, padding: "10px 12px", background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", color: "var(--tooltip-text)", fontSize: 11, borderRadius: 8, boxShadow: "var(--tooltip-shadow-inline)", border: "1px solid var(--tooltip-border-inline)", lineHeight: 1.5, display: "block", height: "auto", overflow: "visible", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
-          {text}
-          <span style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: "var(--tooltip-bg) transparent transparent transparent" }} />
-        </span>,
+        (() => {
+          // Viewport-aware horizontal clamping so the tooltip never clips outside the
+          // left or right edge of the screen. The caret is repositioned to always point
+          // directly at the HelpCircle icon regardless of how far the box was nudged.
+          const TIP_W    = 280;
+          const MARGIN   = 8;  // minimum gap from either viewport edge
+          const iconCX   = rect.left + rect.width / 2;          // horizontal centre of the icon
+          const rawLeft  = iconCX - TIP_W / 2;                  // ideal left edge (unclamped)
+          const tipLeft  = Math.max(MARGIN, Math.min(rawLeft, (window.innerWidth - TIP_W - MARGIN)));
+          // Clamp caret within the box so it never hangs off an edge
+          const caretPx  = Math.max(12, Math.min(iconCX - tipLeft, TIP_W - 12));
+          return (
+            <span className={isDark ? "theme-dark" : "theme-light"} style={{ position: "fixed", zIndex: 999999, top: rect.top - 8, left: tipLeft, transform: "translateY(-100%)", width: TIP_W, padding: "10px 12px", background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", color: "var(--tooltip-text)", fontSize: 11, borderRadius: 8, boxShadow: "var(--tooltip-shadow-inline)", border: "1px solid var(--tooltip-border-inline)", lineHeight: 1.5, display: "block", height: "auto", overflow: "visible", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
+              {text}
+              <span style={{ position: "absolute", top: "100%", left: caretPx, transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: "var(--tooltip-bg) transparent transparent transparent" }} />
+            </span>
+          );
+        })(),
         document.body
       )}
     </span>
