@@ -2879,6 +2879,24 @@ export const TooltipBox = ({ id, text }) => {
       />
       {isOpen && rect && createPortal(
         (() => {
+          // ── Inline theme tokens ─────────────────────────────────────────────────
+          // The portal is appended to document.body, which is OUTSIDE the
+          // .theme-dark / .theme-light root div. We previously gave the portal span
+          // className="theme-dark/light" so that var(--tooltip-bg) etc. would
+          // resolve — but that class also triggers:
+          //   line 6798: .theme-dark,.theme-light { height:100dvh; overflow:hidden }
+          //   line 6801: @media(≤1024px) { …height !important; min-height !important }
+          // The !important beats the inline height:"auto", making the span 100dvh
+          // tall. translateY(-100%) then moves it one full viewport off-screen →
+          // tooltip is present in the DOM but completely invisible on mobile/tablet.
+          //
+          // Fix: NEVER assign a theme class to the portal. Inline every colour value
+          // explicitly based on isDark so no CSS variable resolution is needed.
+          const tipBg     = isDark ? "rgba(6,13,31,0.95)"          : "rgba(216,228,240,0.99)";
+          const tipText   = isDark ? "#ffffff"                      : "#0d1520";
+          const tipBorder = isDark ? "rgba(255,255,255,0.15)"       : "rgba(20,40,70,0.25)";
+          const tipShadow = isDark ? "0 8px 24px rgba(0,0,0,0.65)" : "0 8px 24px rgba(0,0,0,0.18)";
+
           // Viewport-aware horizontal clamping so the tooltip never clips outside the
           // left or right edge of the screen. The caret is repositioned to always point
           // directly at the HelpCircle icon regardless of how far the box was nudged.
@@ -2903,11 +2921,11 @@ export const TooltipBox = ({ id, text }) => {
 
           // Caret: if above → downward triangle at bottom of tooltip; if below → upward triangle at top
           const caretStyle = showBelow
-            ? { position: "absolute", bottom: "100%", left: caretPx, transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: "transparent transparent var(--tooltip-bg) transparent" }
-            : { position: "absolute", top: "100%",   left: caretPx, transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: "var(--tooltip-bg) transparent transparent transparent" };
+            ? { position: "absolute", bottom: "100%", left: caretPx, transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: `transparent transparent ${tipBg} transparent` }
+            : { position: "absolute", top: "100%",   left: caretPx, transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: `${tipBg} transparent transparent transparent` };
 
           return (
-            <span className={isDark ? "theme-dark" : "theme-light"} style={{ position: "fixed", zIndex: 999999, top: tipTop, left: tipLeft, transform: tipTransform, width: TIP_W, padding: "10px 12px", background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", color: "var(--tooltip-text)", fontSize: 11, borderRadius: 8, boxShadow: "var(--tooltip-shadow-inline)", border: "1px solid var(--tooltip-border-inline)", lineHeight: 1.5, display: "block", height: "auto", overflow: "visible", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
+            <span style={{ position: "fixed", zIndex: 999999, top: tipTop, left: tipLeft, transform: tipTransform, width: TIP_W, padding: "10px 12px", background: tipBg, backdropFilter: "blur(4px)", color: tipText, fontSize: 11, borderRadius: 8, boxShadow: tipShadow, border: `1px solid ${tipBorder}`, lineHeight: 1.5, display: "block", height: "auto", overflow: "visible", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
               {text}
               <span style={caretStyle} />
             </span>
