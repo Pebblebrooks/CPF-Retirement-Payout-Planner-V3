@@ -2850,9 +2850,17 @@ export const TooltipBox = ({ id, text }) => {
     set(isOpen ? null : id); 
   };
 
-  const handleMouseEnter = () => {
+  // Mobile/tablet fix: onPointerEnter/Leave with pointerType === 'mouse' guard so that
+  // synthesised mouseenter/mouseleave events fired by touch browsers are completely ignored.
+  // Touch devices use onClick (tap-to-toggle) only; hover is mouse-only.
+  const handlePointerEnter = (e) => {
+    if (e.pointerType !== 'mouse') return;
     if (iconRef.current) setRect(iconRef.current.getBoundingClientRect());
     set(id);
+  };
+  const handlePointerLeave = (e) => {
+    if (e.pointerType !== 'mouse') return;
+    set(null);
   };
 
   return (
@@ -2861,8 +2869,8 @@ export const TooltipBox = ({ id, text }) => {
       style={{ position: "relative", display: "inline-block", marginLeft: 4, verticalAlign: "middle", lineHeight: 1, cursor: "pointer" }}
       onClick={handleToggle}
       onTouchStart={(e) => e.stopPropagation()}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={() => set(null)}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
       role="button"
       tabIndex={-1}
     >
@@ -11671,7 +11679,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           <div>
                             <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Monthly CPF LIFE payout</p>
                             <p style={{ fontSize: "clamp(18px,3.5vw,26px)", fontWeight: 500, margin: 0, color: "var(--clr-green)", lineHeight: 1.2, fontFamily: "monospace" }}>
-                              {activePayout ? `${formatCurrency(Math.round(displayPayout))} / mo` : "—"}
+                              {activePayout ? `${formatCurrency(Math.round(displayPayout))}` : "—"}
                             </p>
                             <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
                               {["standard", "escalating", "basic"].map(p => (
