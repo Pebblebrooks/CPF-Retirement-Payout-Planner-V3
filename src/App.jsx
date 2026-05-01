@@ -2881,10 +2881,27 @@ export const TooltipBox = ({ id, text }) => {
           const tipLeft  = Math.max(MARGIN, Math.min(rawLeft, (window.innerWidth - TIP_W - MARGIN)));
           // Clamp caret within the box so it never hangs off an edge
           const caretPx  = Math.max(12, Math.min(iconCX - tipLeft, TIP_W - 12));
+
+          // Mobile/tablet fix: if the tooltip would render above the viewport (rect.top is
+          // small and the tooltip is taller than the available space), flip it BELOW the icon
+          // instead of above. Estimate tooltip height at ~120px (content varies, but this
+          // comfortably covers all sidebar labels). Caret arrow is also flipped accordingly.
+          const ESTIMATED_TIP_H = 120;
+          const spaceAbove = rect.top - MARGIN;
+          const showBelow  = spaceAbove < ESTIMATED_TIP_H;
+
+          const tipTop       = showBelow ? rect.bottom + 8 : rect.top - 8;
+          const tipTransform = showBelow ? "none" : "translateY(-100%)";
+
+          // Caret: if above → downward triangle at bottom of tooltip; if below → upward triangle at top
+          const caretStyle = showBelow
+            ? { position: "absolute", bottom: "100%", left: caretPx, transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: "transparent transparent var(--tooltip-bg) transparent" }
+            : { position: "absolute", top: "100%",   left: caretPx, transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: "var(--tooltip-bg) transparent transparent transparent" };
+
           return (
-            <span className={isDark ? "theme-dark" : "theme-light"} style={{ position: "fixed", zIndex: 999999, top: rect.top - 8, left: tipLeft, transform: "translateY(-100%)", width: TIP_W, padding: "10px 12px", background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", color: "var(--tooltip-text)", fontSize: 11, borderRadius: 8, boxShadow: "var(--tooltip-shadow-inline)", border: "1px solid var(--tooltip-border-inline)", lineHeight: 1.5, display: "block", height: "auto", overflow: "visible", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
+            <span className={isDark ? "theme-dark" : "theme-light"} style={{ position: "fixed", zIndex: 999999, top: tipTop, left: tipLeft, transform: tipTransform, width: TIP_W, padding: "10px 12px", background: "var(--tooltip-bg)", backdropFilter: "blur(4px)", color: "var(--tooltip-text)", fontSize: 11, borderRadius: 8, boxShadow: "var(--tooltip-shadow-inline)", border: "1px solid var(--tooltip-border-inline)", lineHeight: 1.5, display: "block", height: "auto", overflow: "visible", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
               {text}
-              <span style={{ position: "absolute", top: "100%", left: caretPx, transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: "var(--tooltip-bg) transparent transparent transparent" }} />
+              <span style={caretStyle} />
             </span>
           );
         })(),
@@ -6981,6 +6998,21 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .theme-light input[type="number"]::placeholder,
         .theme-light input[type="text"]::placeholder { color: #4a6480 !important; }
 
+        /* ── Select: suppress browser-native white background after option selection ── */
+        /* Without appearance:none, Chrome/Safari reset the select background to white  */
+        /* after the dropdown closes, overriding our CSS variable theming.             */
+        select {
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+          background: var(--bg-input);
+          color: var(--text-bright);
+        }
+        select option {
+          background: var(--bg-input);
+          color: var(--text-bright);
+        }
+
         /* ── Table ── */
         .theme-light table thead th {
           color: #162033 !important; font-weight: 800 !important;
@@ -8672,8 +8704,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         {inputs.cpfScheme === 'rss' && <span style={{ fontSize: 9, color: "var(--clr-amber3)", marginLeft: 4 }}>🔒 RSS only</span>}
                       </div>
                       <div style={{ opacity: (isForeigner || inputs.cpfScheme === 'rss') ? 0.3 : 1, pointerEvents: (isForeigner || inputs.cpfScheme === 'rss') ? "none" : "auto", position: "relative" }}>
-                        <select name="payoutAge" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" disabled={inputs.cpfScheme === 'rss'} className={fieldChanged("payoutAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }}>
-                          {[65, 66, 67, 68, 69, 70].map(a => <option key={a} value={a}>{a}</option>)}
+                        <select name="payoutAge" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" disabled={inputs.cpfScheme === 'rss'} className={fieldChanged("payoutAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none", MozAppearance: "none" }}>
+                          {[65, 66, 67, 68, 69, 70].map(a => <option key={a} value={a} style={{ background: "var(--bg-input)", color: "var(--text-bright)" }}>{a}</option>)}
                         </select>
                       </div>
                       {inputs.cpfScheme === 'rss' && (
@@ -11402,9 +11434,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     // Zone 1 KPI strip: 3 metrics only — Total CPF | Active plan payout | Payout age
                     const activePlan = highlightPlan || "standard";
                     const activePlanObj = lifePlans?.[activePlan];
-                    const activePayout = activePlanObj
+                    const activePayoutRaw = activePlanObj
                       ? (inputs.isMale !== false ? activePlanObj.startM : activePlanObj.startF)
                       : 0;
+                    // B1-KPI fix: Basic plan raw value is unscaled — apply the same premium scaling
+                    // used in payoutProjection: start × (1 − pct/100) / 0.90. Standard/Escalating
+                    // are already at the correct unscaled table value so no adjustment needed.
+                    const activePayout = (activePlan === 'basic' && activePayoutRaw > 0)
+                      ? activePayoutRaw * (1 - basicPremiumPct / 100) / 0.90
+                      : activePayoutRaw;
                     const planLabel = { standard: "Standard plan", escalating: "Escalating plan", basic: "Basic plan" }[activePlan] || "Standard plan";
                     return [
                       { label: "Total CPF", sublabel: `at payout age ${inputs.payoutAge}`, value: formatCurrency(dispTotal), color: "var(--clr-blue)", tip: "Total CPF balance (OA+MA+RA) at your chosen payout age — the nest egg that funds CPF LIFE payouts" },
@@ -11572,9 +11610,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   const realTotal = Math.round(nominalTotal / Math.pow(1 + inflRate, years));
                   const activePlan = highlightPlan || "standard";
                   const activePlanObj = lifePlans?.[activePlan];
-                  const activePayout = activePlanObj
+                  const activePayoutRaw2 = activePlanObj
                     ? (inputs.isMale !== false ? activePlanObj.startM : activePlanObj.startF)
                     : 0;
+                  // B1-Hero fix: apply same basicPremiumPct scaling as payoutProjection for Basic plan
+                  const activePayout = (activePlan === 'basic' && activePayoutRaw2 > 0)
+                    ? activePayoutRaw2 * (1 - basicPremiumPct / 100) / 0.90
+                    : activePayoutRaw2;
                   const displayPayout = isRealDollars
                     ? applyInflation(activePayout, inputs.payoutAge)
                     : activePayout;
