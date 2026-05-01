@@ -1543,10 +1543,14 @@ function runRSSEngine(inputs, {
     // guard added in PR-1). This avoids double-applying the transfer.
     if (migrationAge > 0 && age === migrationAge && !migrationActivated) {
       if (ra >= 60000) {
-        // Step 1: Apply 20% RA-to-OA transfer on the eligible base
-        // (same formula as the main engine useMemo for CPF LIFE members)
-        const migRaTransferBase = Math.max(0, ra - cumRaCashTopUps - cumRaInterest);
-        const migRaOaTransfer   = Math.round(migRaTransferBase * 0.20);
+        // Step 1: Apply birth-year-gated RA-to-OA transfer on the eligible base.
+        // Eligible base excludes only cash top-ups, OA→RA transfers, and gov grants — NOT interest.
+        // Born 1958+: 20% of eligible base − $5,000; Born 1957: 10%; Born ≤1956: not eligible.
+        const migBirthYear      = baseYear - startAge; // approximate; D4 birth-month will refine
+        const migRaTransferBase = Math.max(0, ra - cumRaCashTopUps);
+        const migTransferPct    = migBirthYear >= 1958 ? 0.20 : migBirthYear === 1957 ? 0.10 : 0;
+        const migRaTransferRaw  = Math.round(migRaTransferBase * migTransferPct);
+        const migRaOaTransfer   = migBirthYear >= 1958 ? Math.max(0, migRaTransferRaw - 5000) : migRaTransferRaw;
         oa += migRaOaTransfer;
         ra -= migRaOaTransfer;
         // Step 2: Compute CPF LIFE payout for the chosen plan from remaining RA at current age.
@@ -5412,22 +5416,32 @@ export default function App() {
   // CQ-2 perf: use projectionByAge Map (O(1)) instead of projection.find() (O(n))
   const raAtPayout = projectionByAge.get(payoutAge65)?.ra || 0;
 
-  // 20% RA-to-OA transfer at payout age (CPF policy):
-  // Transfer base = RA at payout − (cumulative cash top-ups to SA/RA + interest earned on SA/RA)
-  // Cash top-ups: voluntary SA top-ups, gov grants, MRSS grants credited to SA/RA
-  // Interest: interest accruing to SA (pre-55) and RA (post-55) accounts over the full period
-  // These deductions are sourced directly from the projection engine's per-row tracking.
+  // RA-to-OA transfer at payout age (CPF policy — cpf.gov.sg/A55):
+  // Per CPF Board infographic, only "cash top-ups, CPF transfers and government grants"
+  // are excluded from the eligible base. Interest earned on SA/RA is NOT excluded —
+  // it remains part of the eligible pool (confirmed by the John example: $220k RA,
+  // $20k excluded = cash top-ups/transfers/grants only, leaving $200k eligible base).
   //
-  // RSS guard: pure RSS members (no migration) never undergo this CPF Board transfer.
+  // Birth-year gating (CPF Board 2026):
+  //   Born 1958 or after → 20% of eligible base − $5,000 (floor $0)
+  //   Born 1957          → 10% of eligible base (no $5,000 deduction)
+  //   Born 1956 or earlier → not eligible (transfer = $0)
+  //
+  // RSS guard: pure RSS members (no migration) never undergo this transfer.
   // When migration is active the transfer is computed inside runRSSEngine at lifeMigrationAge,
-  // so this block is also skipped here to avoid double-applying it.
+  // so this block is skipped here to avoid double-applying it.
   const _isRSSForTransfer = debouncedInputs.cpfScheme === 'rss';
   const payoutRow65 = _isRSSForTransfer ? null : projectionByAge.get(payoutAge65);
   const cumulativeCashTopUps = payoutRow65?.cumRaCashTopUps ?? 0;
-  const cumulativeRaInterest = payoutRow65?.cumRaInterest ?? 0;
-  const raTransferBase = _isRSSForTransfer ? 0 : Math.max(0, raAtPayout - cumulativeCashTopUps - cumulativeRaInterest);
-  const raOaTransfer = _isRSSForTransfer ? 0 : Math.round(raTransferBase * 0.20);
-  // RA after 20% transfer (before CPF LIFE premium deduction)
+  // Birth year approximation: currentYear − currentAge (±1 yr; D4 birth-month will refine).
+  const _birthYear = (Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35);
+  const raTransferBase = _isRSSForTransfer ? 0 : Math.max(0, raAtPayout - cumulativeCashTopUps);
+  const _raTransferPct    = _birthYear >= 1958 ? 0.20 : _birthYear === 1957 ? 0.10 : 0;
+  const _raOaTransferRaw  = Math.round(raTransferBase * _raTransferPct);
+  const raOaTransfer = _isRSSForTransfer ? 0
+    : _birthYear >= 1958 ? Math.max(0, _raOaTransferRaw - 5000)
+    : _raOaTransferRaw;
+  // RA after birth-year-gated transfer (before CPF LIFE premium deduction)
   const raAfterTransfer = raAtPayout - raOaTransfer;
 
   const lifePlans = useMemo(() => {
@@ -5828,10 +5842,15 @@ export default function App() {
       const pa = Number(scenario.inputs?.payoutAge) || 65;
       const raRow = projMap?.get(pa); // E4 fix: O(1)
       const raAtPa = raRow?.ra || 0;
-      // BUG-19 fix: at payout age, CPF Board transfers 20% of RA to OA before LIFE payouts begin.
-      // Ignoring this overstates LIFE payouts (higher raAtPa → higher interpolated monthly).
-      const raForLife = Math.round(raAtPa * 0.8);       // RA remaining after 20% transfer
-      const oaFromTransfer = Math.round(raAtPa * 0.2);  // 20% lump-sum credited to OA
+      // Apply the corrected birth-year-gated transfer formula (same rules as raOaTransfer useMemo).
+      // Fallback path: old-format scenario exports may lack cumRaCashTopUps — treat as 0.
+      const _scBirthYear    = (Number(scenario.inputs?.currentYear) || 2026) - (Number(scenario.inputs?.currentAge) || 35);
+      const _scTopUps       = raRow?.cumRaCashTopUps || 0;
+      const _scTransferBase = Math.max(0, raAtPa - _scTopUps);
+      const _scTransferPct  = _scBirthYear >= 1958 ? 0.20 : _scBirthYear === 1957 ? 0.10 : 0;
+      const _scTransferRaw  = Math.round(_scTransferBase * _scTransferPct);
+      const oaFromTransfer  = _scBirthYear >= 1958 ? Math.max(0, _scTransferRaw - 5000) : _scTransferRaw;
+      const raForLife       = raAtPa - oaFromTransfer;
       // Approximate monthly payout using CPF Estimator lookup (male baseline) on corrected RA
       const monthlyEst = interpolateCpfLife(raForLife, 'std', scenario.inputs?.isMale !== false);
       // Cumulative payout since payout age
@@ -5928,15 +5947,20 @@ export default function App() {
       const raRow = projectionByAge.get(pAge);
       if (!raRow) return { pAge, stdMonthly: 0, escMonthly: 0, basMonthly: 0, escVsStd: null, stdVsBasic: null, escVsBasic: null };
       const raVal = raRow.ra || 0;
-      // E2 fix: apply the same 20% RA-to-OA transfer deduction used by lifePlans and payoutProjection.
-      const raTransferBaseSens  = Math.max(0, raVal - (raRow.cumRaCashTopUps || 0) - (raRow.cumRaInterest || 0));
-      const raOaTransferSens    = Math.round(raTransferBaseSens * 0.20);
+      // Apply the corrected transfer formula: exclude only cash top-ups (not interest).
+      // Birth-year gating and $5,000 deduction mirror the main raOaTransfer block.
+      const _sensBirthYear      = (Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35);
+      const raTransferBaseSens  = Math.max(0, raVal - (raRow.cumRaCashTopUps || 0));
+      const _sensTransferPct    = _sensBirthYear >= 1958 ? 0.20 : _sensBirthYear === 1957 ? 0.10 : 0;
+      const _sensRawTransfer    = Math.round(raTransferBaseSens * _sensTransferPct);
+      const raOaTransferSens    = _sensBirthYear >= 1958 ? Math.max(0, _sensRawTransfer - 5000) : _sensRawTransfer;
       const raAfterTransferSens = Math.max(0, raVal - raOaTransferSens);
       return computeSensitivityRow(pAge, raAfterTransferSens, isMaleSens, basicPremiumPct);
     });
   }, [projection, projectionByAge, basicPremiumPct, debouncedInputs.isMale,
       debouncedInputs.cpfScheme, debouncedInputs.rssMonthlyPayout,
-      debouncedInputs.rssPayoutStartAge, debouncedInputs.saBalance]);
+      debouncedInputs.rssPayoutStartAge, debouncedInputs.saBalance,
+      debouncedInputs.currentYear, debouncedInputs.currentAge]);
 
   // R7: formatCurrency hoisted to module level
 
@@ -11903,7 +11927,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <div style={{ background: "rgba(var(--clr-emerald-rgb),0.08)", border: "1px solid rgba(var(--clr-emerald-rgb),0.25)", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                     <ShieldCheck style={{ width: 16, height: 16, color: "var(--clr-green)", flexShrink: 0 }} />
                     <p style={{ fontSize: 11, color: "var(--clr-green)", lineHeight: 1.5, margin: 0 }}>
-                      <strong>CPF Policy — 20% RA-to-OA Transfer at Age {inputs.payoutAge}:</strong> Approx. {formatCurrency(raOaTransfer)} is transferred from RA to OA. CPF LIFE payouts are calculated on <strong>RA after transfer ({formatCurrency(raAfterTransfer)})</strong> — the 20% deducted to OA reduces the RA balance and correspondingly lowers your monthly payout.
+                      <strong>CPF Policy — RA-to-OA Transfer at Age {inputs.payoutAge}:</strong> Approx. {formatCurrency(raOaTransfer)} transferred from RA to OA ({
+                        _birthYear >= 1958 ? `20% of eligible base − $5,000 (born ≈${_birthYear})`
+                        : _birthYear === 1957 ? `10% of eligible base (born 1957)`
+                        : `n/a — born ≤1956 not eligible`
+                      }). Eligible base = RA at payout minus cumulative cash top-ups, OA→RA transfers, and government grants. CPF LIFE payouts are calculated on <strong>RA after transfer ({formatCurrency(raAfterTransfer)})</strong>.
                     </p>
                   </div>
                 )}
@@ -14295,7 +14323,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>20% RA-to-OA Transfer:</strong> At payout age, CPF transfers 20% of the <em>eligible</em> RA to OA. Eligible RA = RA at payout − cumulative SA/RA cash top-ups (RSTU, gov grants, MRSS, MMSS, housing grants, all voluntary SA/RA top-ups) − cumulative interest earned on SA/RA. <strong>CPF LIFE payouts are calculated on the RA remaining after this transfer</strong> — the deducted 20% reduces the RA balance and lowers monthly payouts accordingly. The Summary tab shows all components.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>RA-to-OA Transfer at Payout Age:</strong> At payout age, CPF transfers a birth-year-gated amount from RA to OA. <strong>Eligible base</strong> = RA at payout − cumulative cash top-ups (RSTU), OA→RA CPF transfers, and government grants. Interest earned on SA/RA is <em>not</em> excluded. <strong>Transfer by birth year:</strong> Born 1958 or after → 20% of eligible base − $5,000 (floor $0); Born 1957 → 10% of eligible base; Born 1956 or earlier → not eligible ($0). <strong>CPF LIFE payouts are calculated on RA after this transfer</strong> — the transferred sum moves to OA (freely accessible), reducing the RA pool and correspondingly lowering monthly payouts. The Summary tab shows all components.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-purple)", marginTop: 6, flexShrink: 0 }} />
