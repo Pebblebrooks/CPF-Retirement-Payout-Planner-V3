@@ -698,7 +698,7 @@ const PRESET_PROFILES = [
     id: "baby_stratA",
     label: "Baby Millionaire A — Full Launch, 0",
     icon: "👶",
-    desc: "Newborn SC: one-time RSTU $220,400 + VCMA $79,000 at birth, then annual VC3A $37,740. Hits $1M at age 10, ~$2.06M at 21.",
+    desc: "Newborn SC: one-time RSTU $220,400 + VCMA $79,000 at birth, then annual VC3A $37,740. Engine auto-credits $5,000 MediSave Grant for Newborns (MGN) to MA in year 0. Hits $1M at age 10, ~$2.06M at 21.",
     inputs: {
       name: "Baby — Full Launch",
       currentAge: 0, currentYear: 2026, payoutAge: 65,
@@ -779,7 +779,7 @@ const PRESET_PROFILES = [
     id: "baby_stratB",
     label: "Baby Millionaire B — Annual Only, 0",
     icon: "🍼",
-    desc: "Newborn SC: annual VC3A $37,740 only — no birth lump sums. Hits $1M at age 15, ~$1.51M at 21.",
+    desc: "Newborn SC: annual VC3A $37,740 only — no birth lump sums. Engine auto-credits $5,000 MediSave Grant for Newborns (MGN) to MA in year 0. Hits $1M at age 15, ~$1.51M at 21.",
     inputs: {
       name: "Baby — Annual Only",
       currentAge: 0, currentYear: 2026, payoutAge: 65,
@@ -1124,6 +1124,21 @@ function runRSSEngine(inputs, {
     const effHousingFreq = housingFreq === 'one-time' && !isFirstYear ? 0 : (housingDur > 0 && yearIdx >= housingDur) ? 0 : 1;
     const effOaToMaFreq  = oaToMaFreq  === 'one-time' && !isFirstYear ? 0 : (oaToMaDur  > 0 && yearIdx >= oaToMaDur)  ? 0 : 1;
     const effOaToSaFreq  = oaToSaFreq  === 'one-time' && !isFirstYear ? 0 : (oaToSaDur  > 0 && yearIdx >= oaToSaDur)  ? 0 : 1;
+
+    // MediSave Grant for Newborns (MGN): $5,000 one-time credit to MA at birth.
+    // Eligibility: SC only · fires once when startAge === 0 in the first projection year.
+    // Source: CPF Board — auto-credited to every SC child's MA upon registration of birth.
+    // Capped at BHS headroom so it doesn't overflow (effectively never for a newborn, but safe-guarded).
+    if (isFirstYear && startAge === 0 && isSC) {
+      const mgnBhs = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+      const mgnAmount = Math.min(5000, Math.max(0, mgnBhs - ma));
+      if (mgnAmount > 0) {
+        ma += mgnAmount;
+        yearGovGrants += mgnAmount;
+        yearInflow += mgnAmount;
+        totalInjected += mgnAmount;
+      }
+    }
 
     // Opening balances for mid-year interest
     const oaOpen = oa, saOpen = sa, maOpen = ma, raOpen = ra;
@@ -1972,6 +1987,21 @@ function runProjectionEngine(inputs, {
     const effHousingFreq  = housingFreq  === 'one-time' && !isFirstYear ? 0 : (housingDur  > 0 && yearIdx >= housingDur)  ? 0 : 1;
     const effOaToMaFreq   = oaToMaFreq   === 'one-time' && !isFirstYear ? 0 : (oaToMaDur   > 0 && yearIdx >= oaToMaDur)   ? 0 : 1;
     const effOaToSaFreq   = oaToSaFreq   === 'one-time' && !isFirstYear ? 0 : (oaToSaDur   > 0 && yearIdx >= oaToSaDur)   ? 0 : 1;
+
+    // MediSave Grant for Newborns (MGN): $5,000 one-time credit to MA at birth.
+    // Eligibility: SC only · fires once when startAge === 0 in the first projection year.
+    // Source: CPF Board — auto-credited to every SC child's MA upon registration of birth.
+    // Capped at BHS headroom so it never causes overflow (practically $5,000 for any newborn).
+    if (isFirstYear && startAge === 0 && isSC) {
+      const mgnBhs = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+      const mgnAmount = Math.min(5000, Math.max(0, mgnBhs - ma));
+      if (mgnAmount > 0) {
+        ma += mgnAmount;
+        yearGovGrants += mgnAmount;
+        yearInflow += mgnAmount;
+        totalInjected += mgnAmount;
+      }
+    }
 
     let yearCpfisOut = 0;    // CPFIS outflow from OA + SA this year
     let yearEduOut = 0;      // D1: OA Education Loan Scheme outflow this year
