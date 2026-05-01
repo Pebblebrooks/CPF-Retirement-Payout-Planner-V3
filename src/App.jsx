@@ -388,17 +388,13 @@ const computeBasicPlanYearPayout = (age, phase1bTrigger, phase1aAnnual, phase2An
 //   basicPremiumPct  — premium percentage for Basic Plan (usually ~10)
 //
 // Returns: { pAge, stdMonthly, escMonthly, basMonthly, escVsStd, stdVsBasic, escVsBasic }
-// basicPremiumPct param removed — each sensitivity row derives its own age-appropriate premium
-// from CPF policy: 10% at 65, +2%/yr of deferral, capped at 20% (age 70).
-// This ensures the sensitivity table shows the correct payout for each payout-age scenario
-// (e.g. age-68 row uses 16% premium, not the global slider value).
+// basicPremiumPct param removed — each row derives its own age-appropriate premium per CPF policy.
 const computeSensitivityRow = (pAge, raAfterTransfer, isMale) => {
   const stdStart = interpolateCpfLife(raAfterTransfer, 'std', isMale);
   const escStart = interpolateCpfLife(raAfterTransfer, 'esc', isMale);
 
-  // Age-appropriate premium: CPF policy dictates premium by payout age, not user choice.
+  // Age-appropriate premium: 10% at 65, +2%/yr, capped at 20% (age 70).
   const agePct = Math.min(20, Math.max(10, 10 + (pAge - 65) * 2));
-  // Scale the table lookup payout by the actual pool fraction vs the 10%-calibration baseline.
   const basStartScaled = interpolateCpfLife(raAfterTransfer, 'bas', isMale) * (1 - agePct / 100) / 0.90;
 
   const { premium: basicPremS, pv: basicPVS,
@@ -441,7 +437,7 @@ const computeSensitivityRow = (pAge, raAfterTransfer, isMale) => {
     pAge,
     stdMonthly: Math.round(stdStart),
     escMonthly: Math.round(escStart),
-    basMonthly: Math.round(basStartScaled), // scaled payout at age-appropriate premium
+    basMonthly: Math.round(basStartScaled), // scaled at age-appropriate premium
     escVsStd, stdVsBasic, escVsBasic
   };
 };
@@ -465,6 +461,7 @@ const DEFAULT_INPUTS = {
   vcVhr: 0,
   // Gov grants / MRSS / MMSS / WIS
   annualGovGrant: 500,
+  govGrantMa: 0,               // Gov grants to MA (e.g. MediSave Grant for Newborns $5,000, CHAS, ElderFund). BHS-capped.
   mrssGrant: 0,               // MRSS: govt matches RSTU RA top-up, up to $2,000/yr (lifetime cap $20,000), age 55+, RA below BRS
   mmssGrant: 0,               // MMSS: govt matches MA top-up, up to $1,000/yr, age 55-70
   wisAmount: 0,               // WIS: Workfare Income Supplement — 60% CPF (age-band), 40% cash (employees); 90% MA (SEP)
@@ -523,14 +520,14 @@ const DEFAULT_INPUTS = {
   oaToSaForLovedOne: false,
   // Frequency toggles — 'annual' (recurring each year) or 'one-time' (applied in first year only)
   vc3aFreq: 'annual', vcSaFreq: 'annual', vcMaFreq: 'annual', vcVhrFreq: 'annual',
-  govGrantFreq: 'annual', wisFreq: 'annual',
+  govGrantFreq: 'annual', govGrantMaFreq: 'annual', wisFreq: 'annual',
   cpfisOaFreq: 'annual', cpfisSaFreq: 'annual', housingFreq: 'annual',
   oaWithdrawalFreq: 'one-time', oaToMaFreq: 'annual', oaToSaFreq: 'annual',
   // Duration for recurring fields (0 = indefinite/∞; N = apply for first N projection years from current age).
   // Ignored when the paired *Freq is 'one-time' — one-time fields already fire only in year 1.
   // SRS excluded — its stop is controlled precisely by srsContribStopAge instead.
   vc3aDur: 0, vcSaDur: 0, vcMaDur: 0, vcVhrDur: 0,
-  govGrantDur: 0, wisDur: 0,
+  govGrantDur: 0, govGrantMaDur: 0, wisDur: 0,
   cpfisOaDur: 0, cpfisSaDur: 0, housingDur: 0,
   oaToMaDur: 0, oaToSaDur: 0, oaEduLoanDur: 0,
   // PR tenure year — 1, 2, or 3+ (3 = full rates). Only shown/relevant when citizenStatus === 'PR'.
@@ -599,7 +596,7 @@ const PRESET_PROFILES = [
       netTradeIncome: 0,
       // ── Voluntary Top-ups & Grants ────────────────────────────────────────
       vc3aCash: 0, vcSaTopup: 0, vcVhr: 0, vcMaCash: 0,
-      annualGovGrant: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
+      annualGovGrant: 0, govGrantMa: 0, govGrantMaFreq: 'annual', govGrantMaDur: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
       // ── CPF Transfers ─────────────────────────────────────────────────────
       oaToSaTransfer: 0, oaToMaTransfer: 0, oaToMaForLovedOne: false,
       // ── CPFIS ─────────────────────────────────────────────────────────────
@@ -738,7 +735,10 @@ const PRESET_PROFILES = [
 
       // ── Other voluntary / grants (none for a child) ───────────────────────
       vcVhr: 0, vcVhrFreq: 'annual', vcVhrDur: 0,
-      annualGovGrant: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
+      annualGovGrant: 0,                               // no SA/RA govt grant for newborn
+      // MediSave Grant for Newborns (MGN): $5,000 one-time credit to MA at birth (SC only).
+      govGrantMa: 5000, govGrantMaFreq: 'one-time', govGrantMaDur: 0,
+      mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
 
       // ── CPF transfers (not applicable) ───────────────────────────────────
       oaToSaTransfer: 0, oaToSaFreq: 'annual', oaToSaDur: 0,
@@ -816,7 +816,10 @@ const PRESET_PROFILES = [
 
       // ── Other voluntary / grants (none for a child) ───────────────────────
       vcVhr: 0, vcVhrFreq: 'annual', vcVhrDur: 0,
-      annualGovGrant: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
+      annualGovGrant: 0,                               // no SA/RA govt grant for newborn
+      // MediSave Grant for Newborns (MGN): $5,000 one-time credit to MA at birth (SC only).
+      govGrantMa: 5000, govGrantMaFreq: 'one-time', govGrantMaDur: 0,
+      mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
 
       // ── CPF transfers (not applicable) ───────────────────────────────────
       oaToSaTransfer: 0, oaToSaFreq: 'annual', oaToSaDur: 0,
@@ -853,7 +856,8 @@ const INPUT_LABELS = {
   salaryPhaseAge: "Phase 2 Start Age", salaryGrowthRate2: "Phase 2 Growth %",
   empOaCont: "Emp OA Contrib", empSaCont: "Emp SA Contrib", empMaCont: "Emp MA Contrib",
   vc3aCash: "VC3A Cash (Annual)", vcSaTopup: "RSTU SA/RA Top-up", vcVhr: "Housing Refund (VHR)",
-  annualGovGrant: "Annual Gov Grant", // BUG-E fix: removed dead mrssGrant/mmssGrant labels
+  annualGovGrant: "Annual Gov Grant (to SA/RA)", // BUG-E fix: removed dead mrssGrant/mmssGrant labels
+  govGrantMa: "Gov Grant (to MA)",
   wisAmount: "WIS (Workfare)", oaToSaTransfer: "OA→SA Transfer",
   oaToMaTransfer: "OA→MA Transfer", oaWithdrawalAt55: "OA Withdrawal at 55",
   usePropertyPledge: "Property Pledge", cpfisOaAmount: "CPFIS OA Invested", cpfisSaAmount: "CPFIS SA Invested",
@@ -894,7 +898,7 @@ const INPUT_LABELS = {
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
   vc3aDur: "VC3A Duration (yrs)", vcSaDur: "RSTU Duration (yrs)", vcMaDur: "VCMA Duration (yrs)",
-  vcVhrDur: "VHR Duration (yrs)", govGrantDur: "Gov Grant Duration (yrs)",
+  vcVhrDur: "VHR Duration (yrs)", govGrantDur: "Gov Grant Duration (yrs)", govGrantMaDur: "Gov Grant MA Duration (yrs)",
   wisDur: "WIS Duration (yrs)", // mrssDur removed — MRSS frequency mirrors RSTU by CPF policy
   cpfisOaDur: "CPFIS OA Duration (yrs)", cpfisSaDur: "CPFIS SA Duration (yrs)",
   housingDur: "Housing Duration (yrs)", oaToMaDur: "OA-MA Duration (yrs)",
@@ -991,7 +995,8 @@ function runRSSEngine(inputs, {
   const vcSaFreq      = inputs.vcSaFreq     || 'annual';
   const vcMaFreq      = inputs.vcMaFreq     || 'annual';
   const vcVhrFreq     = inputs.vcVhrFreq    || 'annual';
-  const govGrantFreq  = inputs.govGrantFreq || 'annual';
+  const govGrantFreq   = inputs.govGrantFreq   || 'annual';
+  const govGrantMaFreq = inputs.govGrantMaFreq || 'annual';
   const wisFreq       = inputs.wisFreq      || 'annual';
   const cpfisOaFreq   = inputs.cpfisOaFreq  || 'annual';
   const cpfisSaFreq   = inputs.cpfisSaFreq  || 'annual';
@@ -1003,7 +1008,8 @@ function runRSSEngine(inputs, {
   const vcSaDur   = Number(inputs.vcSaDur)   || 0;
   const vcMaDur   = Number(inputs.vcMaDur)   || 0;
   const vcVhrDur  = Number(inputs.vcVhrDur)  || 0;
-  const govGrantDur = Number(inputs.govGrantDur) || 0;
+  const govGrantDur   = Number(inputs.govGrantDur)   || 0;
+  const govGrantMaDur = Number(inputs.govGrantMaDur) || 0;
   const wisDur    = Number(inputs.wisDur)    || 0;
   const cpfisOaDur  = Number(inputs.cpfisOaDur)  || 0;
   const cpfisSaDur  = Number(inputs.cpfisSaDur)  || 0;
@@ -1126,7 +1132,8 @@ function runRSSEngine(inputs, {
     const effVcSaFreq  = vcSaFreq  === 'one-time' && !isFirstYear ? 0 : (vcSaDur  > 0 && yearIdx >= vcSaDur)  ? 0 : 1;
     const effVcMaFreq  = vcMaFreq  === 'one-time' && !isFirstYear ? 0 : (vcMaDur  > 0 && yearIdx >= vcMaDur)  ? 0 : 1;
     const effVcVhrFreq = vcVhrFreq === 'one-time' && !isFirstYear ? 0 : (vcVhrDur > 0 && yearIdx >= vcVhrDur) ? 0 : 1;
-    const effGovGrantFreq = govGrantFreq === 'one-time' && !isFirstYear ? 0 : (govGrantDur > 0 && yearIdx >= govGrantDur) ? 0 : 1;
+    const effGovGrantFreq   = govGrantFreq   === 'one-time' && !isFirstYear ? 0 : (govGrantDur   > 0 && yearIdx >= govGrantDur)   ? 0 : 1;
+    const effGovGrantMaFreq = govGrantMaFreq === 'one-time' && !isFirstYear ? 0 : (govGrantMaDur > 0 && yearIdx >= govGrantMaDur) ? 0 : 1;
     const effWisFreq   = wisFreq   === 'one-time' && !isFirstYear ? 0 : (wisDur   > 0 && yearIdx >= wisDur)   ? 0 : 1;
     const effCpfisOaFreq = cpfisOaFreq === 'one-time' && !isFirstYear ? 0 : (cpfisOaDur > 0 && yearIdx >= cpfisOaDur) ? 0 : 1;
     const effCpfisSaFreq = cpfisSaFreq === 'one-time' && !isFirstYear ? 0 : (cpfisSaDur > 0 && yearIdx >= cpfisSaDur) ? 0 : 1;
@@ -1134,19 +1141,16 @@ function runRSSEngine(inputs, {
     const effOaToMaFreq  = oaToMaFreq  === 'one-time' && !isFirstYear ? 0 : (oaToMaDur  > 0 && yearIdx >= oaToMaDur)  ? 0 : 1;
     const effOaToSaFreq  = oaToSaFreq  === 'one-time' && !isFirstYear ? 0 : (oaToSaDur  > 0 && yearIdx >= oaToSaDur)  ? 0 : 1;
 
-    // MediSave Grant for Newborns (MGN): $5,000 one-time credit to MA at birth.
-    // Eligibility: SC only · fires once when startAge === 0 in the first projection year.
-    // Source: CPF Board — auto-credited to every SC child's MA upon registration of birth.
-    // Capped at BHS headroom so it doesn't overflow (effectively never for a newborn, but safe-guarded).
-    if (isFirstYear && startAge === 0 && isSC) {
-      const mgnBhs = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-      const mgnAmount = Math.min(5000, Math.max(0, mgnBhs - ma));
-      if (mgnAmount > 0) {
-        ma += mgnAmount;
-        yearGovGrants += mgnAmount;
-        yearInflow += mgnAmount;
-        totalInjected += mgnAmount;
-      }
+
+    // Gov Grant to MA (e.g. MediSave Grant for Newborns, CHAS, ElderFund).
+    // Previously the MGN was hardcoded; now driven by govGrantMa input.
+    const bhsNow = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+    const govGrantMaAmt = Math.min((Number(inputs.govGrantMa) || 0) * effGovGrantMaFreq, Math.max(0, bhsNow - ma));
+    if (govGrantMaAmt > 0) {
+      ma += govGrantMaAmt;
+      yearGovGrants += govGrantMaAmt;
+      yearInflow    += govGrantMaAmt;
+      totalInjected += govGrantMaAmt;
     }
 
     // Opening balances for mid-year interest
@@ -1754,7 +1758,8 @@ function runProjectionEngine(inputs, {
   const vcSaFreq     = inputs.vcSaFreq     || 'annual';
   const vcMaFreq     = inputs.vcMaFreq     || 'annual';
   const vcVhrFreq    = inputs.vcVhrFreq    || 'annual';
-  const govGrantFreq = inputs.govGrantFreq || 'annual';
+  const govGrantFreq   = inputs.govGrantFreq   || 'annual';
+  const govGrantMaFreq = inputs.govGrantMaFreq || 'annual';
   // mmssFreq removed — MMSS ties to effVcMaFreq, not a separate toggle
   const wisFreq      = inputs.wisFreq      || 'annual';
   const cpfisOaFreq   = inputs.cpfisOaFreq   || 'annual';
@@ -1768,7 +1773,8 @@ function runProjectionEngine(inputs, {
   const vcSaDur      = Number(inputs.vcSaDur)      || 0;
   const vcMaDur      = Number(inputs.vcMaDur)      || 0;
   const vcVhrDur     = Number(inputs.vcVhrDur)     || 0;
-  const govGrantDur  = Number(inputs.govGrantDur)  || 0;
+  const govGrantDur    = Number(inputs.govGrantDur)    || 0;
+  const govGrantMaDur  = Number(inputs.govGrantMaDur)  || 0;
   // mrssDur removed — MRSS frequency mirrors RSTU (vcSaFreq) by CPF policy; no separate freq/dur control needed
   // mmssDur removed — dead field, never read by MMSS engine block
   const wisDur       = Number(inputs.wisDur)       || 0;
@@ -1989,7 +1995,8 @@ function runProjectionEngine(inputs, {
     const effVcSaFreq    = vcSaFreq     === 'one-time' && !isFirstYear ? 0 : (vcSaDur     > 0 && yearIdx >= vcSaDur)     ? 0 : 1;
     const effVcMaFreq    = vcMaFreq     === 'one-time' && !isFirstYear ? 0 : (vcMaDur     > 0 && yearIdx >= vcMaDur)     ? 0 : 1;
     const effVcVhrFreq   = vcVhrFreq    === 'one-time' && !isFirstYear ? 0 : (vcVhrDur    > 0 && yearIdx >= vcVhrDur)    ? 0 : 1;
-    const effGovGrantFreq= govGrantFreq === 'one-time' && !isFirstYear ? 0 : (govGrantDur > 0 && yearIdx >= govGrantDur) ? 0 : 1;
+    const effGovGrantFreq   = govGrantFreq   === 'one-time' && !isFirstYear ? 0 : (govGrantDur   > 0 && yearIdx >= govGrantDur)   ? 0 : 1;
+    const effGovGrantMaFreq = govGrantMaFreq === 'one-time' && !isFirstYear ? 0 : (govGrantMaDur > 0 && yearIdx >= govGrantMaDur) ? 0 : 1;
     const effWisFreq     = wisFreq      === 'one-time' && !isFirstYear ? 0 : (wisDur      > 0 && yearIdx >= wisDur)      ? 0 : 1;
     const effCpfisOaFreq  = cpfisOaFreq  === 'one-time' && !isFirstYear ? 0 : (cpfisOaDur  > 0 && yearIdx >= cpfisOaDur)  ? 0 : 1;
     const effCpfisSaFreq  = cpfisSaFreq  === 'one-time' && !isFirstYear ? 0 : (cpfisSaDur  > 0 && yearIdx >= cpfisSaDur)  ? 0 : 1;
@@ -1997,19 +2004,16 @@ function runProjectionEngine(inputs, {
     const effOaToMaFreq   = oaToMaFreq   === 'one-time' && !isFirstYear ? 0 : (oaToMaDur   > 0 && yearIdx >= oaToMaDur)   ? 0 : 1;
     const effOaToSaFreq   = oaToSaFreq   === 'one-time' && !isFirstYear ? 0 : (oaToSaDur   > 0 && yearIdx >= oaToSaDur)   ? 0 : 1;
 
-    // MediSave Grant for Newborns (MGN): $5,000 one-time credit to MA at birth.
-    // Eligibility: SC only · fires once when startAge === 0 in the first projection year.
-    // Source: CPF Board — auto-credited to every SC child's MA upon registration of birth.
-    // Capped at BHS headroom so it never causes overflow (practically $5,000 for any newborn).
-    if (isFirstYear && startAge === 0 && isSC) {
-      const mgnBhs = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-      const mgnAmount = Math.min(5000, Math.max(0, mgnBhs - ma));
-      if (mgnAmount > 0) {
-        ma += mgnAmount;
-        yearGovGrants += mgnAmount;
-        yearInflow += mgnAmount;
-        totalInjected += mgnAmount;
-      }
+
+    // Gov Grant to MA (e.g. MediSave Grant for Newborns, CHAS, ElderFund).
+    // Previously hardcoded as MGN; now driven by govGrantMa input. BHS-capped.
+    const bhsNow = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+    const govGrantMaAmt = Math.min((Number(inputs.govGrantMa) || 0) * effGovGrantMaFreq, Math.max(0, bhsNow - ma));
+    if (govGrantMaAmt > 0) {
+      ma += govGrantMaAmt;
+      yearGovGrants += govGrantMaAmt;
+      yearInflow    += govGrantMaAmt;
+      totalInjected += govGrantMaAmt;
     }
 
     let yearCpfisOut = 0;    // CPFIS outflow from OA + SA this year
@@ -3468,15 +3472,15 @@ export default function App() {
   const [showWhatIf, setShowWhatIf] = useState(false);
   const [lifePlansExpanded, setLifePlansExpanded] = useState(true);
   // Payout premium percentages for CPF LIFE plans (Basic: 10-20%, Standard: 100%, Escalating: 100%)
-  // CPF policy: premium is age-dictated — 10% at 65, +2% per year of deferral, capped at 20% (age 70).
+  // CPF policy: premium is age-dictated — 10% at 65, +2%/yr of deferral, capped at 20% (age 70).
   const [basicPremiumPct, setBasicPremiumPct] = useState(10);
-  // Auto-sync slider to payout age whenever it changes (CPF policy — not a free user choice).
-  // User may still drag the slider manually to explore "what-if" scenarios; the auto-set fires
-  // again only on the next payoutAge change, overriding any manual adjustment.
+  // TDZ-safe: uses `inputs` (not `debouncedInputs`) because this useEffect is declared before
+  // debouncedInputs is defined in the component body. `inputs` is live — the slider snaps
+  // immediately when payout age changes, which is preferable to a 180ms debounce lag.
   useEffect(() => {
-    const pa = Number(debouncedInputs.payoutAge) || 65;
+    const pa = Number(inputs.payoutAge) || 65;
     setBasicPremiumPct(Math.min(20, Math.max(10, 10 + (pa - 65) * 2)));
-  }, [debouncedInputs.payoutAge]);
+  }, [inputs.payoutAge]);
   const [pdfOrientation, setPdfOrientation] = useState("portrait");
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -4227,7 +4231,7 @@ export default function App() {
     'housingOutflow','medicalUsage','medishieldIP','elderCareShield',
     'propertyValue',
     'vc3aCash','vcSaTopup','vcVhr','vcMaCash',
-    'annualGovGrant','wisAmount',                  // BUG-E fix: removed dead mrssGrant/mmssGrant (engine ignores them; always 0)
+    'annualGovGrant','govGrantMa','wisAmount',     // BUG-E fix: removed dead mrssGrant/mmssGrant (engine ignores them; always 0)
     'oaToSaTransfer','oaToMaTransfer','oaWithdrawalAt55',
     'oaDrawdownMonthly','oaDrawdownFloor',        // BUG-A fix: corrected from oaMonthlyDraw / oaBequestFloor
     'srsBalance','srsAnnualContribution',
@@ -5290,7 +5294,7 @@ export default function App() {
       currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
       isSelfEmployed, isMale, oaBalance, saBalance, maBalance,
       empOaCont, empSaCont, empMaCont, vc3aCash, vcSaTopup, vcVhr,
-      annualGovGrant, wisAmount,
+      annualGovGrant, govGrantMa, wisAmount,
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
       cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
@@ -5307,9 +5311,9 @@ export default function App() {
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
       vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD,
-      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, wisFreq, // mrssFreq removed — mirrors vcSaFreq by CPF policy
+      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq, // mrssFreq removed — mirrors vcSaFreq by CPF policy
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
-      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, wisDur, // mrssDur removed — no separate MRSS duration control
+      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, govGrantMaDur, wisDur, // mrssDur removed — no separate MRSS duration control
       cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur,
       dieWithZeroEnabled, dieWithZeroAge,
       retirementSumGrowth, // Rev #5: changing this rate changes all FRS/BHS/BRS/ERS projections
@@ -5321,7 +5325,7 @@ export default function App() {
       currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
       isSelfEmployed, isMale, oaBalance, saBalance, maBalance,
       empOaCont, empSaCont, empMaCont, vc3aCash, vcSaTopup, vcVhr,
-      annualGovGrant, wisAmount,
+      annualGovGrant, govGrantMa, wisAmount,
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
       cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
@@ -5338,9 +5342,9 @@ export default function App() {
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
       vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD,
-      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, wisFreq,
+      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq,
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
-      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, wisDur,
+      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, govGrantMaDur, wisDur,
       cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur,
       dieWithZeroEnabled, dieWithZeroAge,
       retirementSumGrowth, // Rev #5
@@ -5552,7 +5556,6 @@ export default function App() {
     // CPF_LIFE_TABLE 'bas' column is calibrated at the standard 10% premium (payout age 65).
     // When basicPremiumPct differs, the RA entering the annuity pool changes from 90% to
     // (100-P)% of RA, so the payout scales proportionally: payout × (1-P/100) / 0.90.
-    // This keeps the pmt/pool ratio constant so effR (Newton-Raphson rate) is unaffected.
     const basicPhase1aMonthly = lifePlans.basic.start * (1 - basicPremiumPct / 100) / 0.90;
     const { premium: basicPremium, pv: basicPV,
             phase1aAnnual: basicPhase1aAnnual, phase2Annual: basicPhase2Annual,
@@ -5789,7 +5792,7 @@ export default function App() {
       ...debouncedInputs,
       // Zero all voluntary inflows
       vc3aCash: 0, vcSaTopup: 0, vcVhr: 0, vcMaCash: 0,
-      annualGovGrant: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
+      annualGovGrant: 0, govGrantMa: 0, govGrantMaFreq: 'annual', govGrantMaDur: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
       // Zero all CPF transfers
       oaToSaTransfer: 0, oaToMaTransfer: 0,
       // Zero CPFIS
@@ -6296,8 +6299,7 @@ export default function App() {
       const dateStr = new Date().toLocaleDateString("en-SG", { day: "2-digit", month: "long", year: "numeric" });
       const stdMonthly = Math.round(lifePlans.standard.start);
       const escMonthly = Math.round(lifePlans.escalating.start);
-      // Apply same premium scaling as payoutProjection: table calibrated at 10% (age 65);
-      // scale by (1-pct/100)/0.90 to reflect actual pool RA at the current premium level.
+      // Apply same premium scaling as payoutProjection: table calibrated at 10% (age 65).
       const basMonthly = Math.round(lifePlans.basic.start * (1 - basicPremiumPct / 100) / 0.90);
       const memberType = isSelfEmployed ? "Self-Employed" : "Employed";
       const genderLabel = inputs.isMale !== false ? "Male" : "Female";
@@ -8755,7 +8757,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             oaBalance: 0, saBalance: 0, maBalance: 0,
                             empOaCont: 0, empSaCont: 0, empMaCont: 0,
                             vc3aCash: 0, vcSaTopup: 0, vcMaCash: 0, vcVhr: 0,
-                            annualGovGrant: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
+                            annualGovGrant: 0, govGrantMa: 0, govGrantMaFreq: 'annual', govGrantMaDur: 0, mrssGrant: 0, mmssGrant: 0, wisAmount: 0,
                             cpfisOaAmount: 0, cpfisSaAmount: 0,
                             oaToSaTransfer: 0, oaToMaTransfer: 0,
                             housingOutflow: 0, oaEduLoan: 0, oaWithdrawalAt55: 0,
@@ -10027,6 +10029,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <TooltipBox id="t-govgrant" text="Government grants credited to SA (pre-55) or RA (post-55). Tracked separately for the 20% RA transfer base calculation." />
                     </div>
                     <input type="text" inputMode="decimal" name="annualGovGrant" value={getDisplayValue("annualGovGrant", inputs.annualGovGrant)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual government grant" onFocus={() => setFocusedField("annualGovGrant")} className={fieldChanged("annualGovGrant") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                  </div>
+
+                  {/* Gov Grants (to MA) — e.g. MediSave Grant for Newborns, CHAS, ElderFund */}
+                  <div>
+                    <div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
+                      Gov Grants (to MA) <FreqToggle freqKey="govGrantMaFreq" durKey="govGrantMaDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-govgrantma" text="Government grants credited directly to MediSave (MA). BHS-capped. Examples: MediSave Grant for Newborns $5,000 (SC, age 0, one-time), CHAS MediSave, ElderFund payouts." />
+                    </div>
+                    <input type="text" inputMode="decimal" name="govGrantMa" value={getDisplayValue("govGrantMa", inputs.govGrantMa)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Government grant to MediSave (MA)" onFocus={() => setFocusedField("govGrantMa")} className={fieldChanged("govGrantMa") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                   </div>
 
                   {/* WIS — W2: Estimate button + W3: eligibility panel */}
@@ -13222,17 +13233,15 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, color: "var(--clr-amber3)", display: "flex", alignItems: "center", gap: 4 }}>
                           <SlidersHorizontal style={{ width: 11, height: 11 }} />Basic Premium
-                          {/* AUTO badge — shown when slider matches the CPF policy value for the current payout age */}
-                          {basicPremiumPct === Math.min(20, Math.max(10, 10 + ((Number(debouncedInputs.payoutAge) || 65) - 65) * 2)) && (
+                          {/* AUTO badge: shown when slider matches CPF policy value for the current payout age */}
+                          {basicPremiumPct === Math.min(20, Math.max(10, 10 + ((Number(inputs.payoutAge) || 65) - 65) * 2)) && (
                             <span style={{ fontSize: 9, fontWeight: 700, background: "rgba(var(--clr-amber3-rgb),0.2)", color: "var(--clr-amber3)", borderRadius: 4, padding: "1px 5px", marginLeft: 2 }}>AUTO</span>
                           )}
                         </span>
                         <span style={{ fontSize: 12, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>{basicPremiumPct}%</span>
                       </div>
                       <input type="range" min={10} max={20} step={1} value={basicPremiumPct} onChange={e => setBasicPremiumPct(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-amber3)", margin: "2px 0" }} />
-                      <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                        CPF policy: 10% at age 65, +2% per year of deferral (12% at 66 → 20% at 70). Auto-set from your payout age. Drag to explore other scenarios — resets on next payout age change.
-                      </p>
+                      <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>CPF policy: 10% at age 65, +2% per year of deferral (12% at 66 → 20% at 70). Auto-set from your payout age. Drag to explore — resets on next payout age change.</p>
                     </div>
                   </div>
                 </div>
