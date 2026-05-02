@@ -11706,28 +11706,24 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         {/* ── Col 2 — Monthly payout (hero column) ── */}
                         {!isRSSMode && !isForeigner ? (
                           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                            {/* Label row: label left, plan selector right — tightly coupled */}
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
-                              <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: 0, letterSpacing: "0.06em", textTransform: "uppercase" }}>Monthly CPF LIFE payout</p>
-                              <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                                {[["standard","Std"],["escalating","Esc"],["basic","Bas"]].map(([p, abbr]) => (
-                                  <button key={p} onClick={() => setHighlightPlan(p)}
-                                    title={p.charAt(0).toUpperCase() + p.slice(1)}
-                                    style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600, cursor: "pointer", border: "0.5px solid", transition: "all 0.15s", lineHeight: 1.5,
-                                      background: highlightPlan === p ? "rgba(var(--clr-blue2-rgb),0.15)" : "transparent",
-                                      color: highlightPlan === p ? "var(--clr-blue)" : "var(--text-muted)",
-                                      borderColor: highlightPlan === p ? "rgba(var(--clr-blue2-rgb),0.45)" : "var(--border-strong)" }}>
-                                    {abbr}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            {/* Number — larger than the other two KPIs to establish visual hierarchy */}
-                            <p style={{ fontSize: "clamp(24px,4vw,34px)", fontWeight: 700, margin: 0, color: "var(--clr-green)", lineHeight: 1.05, letterSpacing: "-0.03em", fontFamily: "monospace" }}>
+                            {/* Label row: plain label only — plan selector moved below the number */}
+                            <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>Monthly CPF LIFE payout</p>
+                            {/* Number — consistent size with other KPI columns */}
+                            <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-green)", lineHeight: 1.05, letterSpacing: "-0.03em", fontFamily: "monospace" }}>
                               {activePayout ? formatCurrency(Math.round(displayPayout)) : "—"}
-                              {activePayout ? <span style={{ fontSize: 13, fontWeight: 400, color: "var(--text-muted)", marginLeft: 3 }}>/mo</span> : null}
                             </p>
-                            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0" }}>{planLabel} plan · CPF LIFE</p>
+                            {/* Plan selector — directly below the number, full names spelled out */}
+                            <div style={{ display: "flex", gap: 4, marginTop: 7 }}>
+                              {[["standard","Standard"],["escalating","Escalating"],["basic","Basic"]].map(([p, label]) => (
+                                <button key={p} onClick={() => setHighlightPlan(p)}
+                                  style={{ padding: "2px 10px", borderRadius: 20, fontSize: 10, fontWeight: 600, cursor: "pointer", border: "0.5px solid", transition: "all 0.15s", lineHeight: 1.5,
+                                    background: highlightPlan === p ? "rgba(var(--clr-blue2-rgb),0.15)" : "transparent",
+                                    color: highlightPlan === p ? "var(--clr-blue)" : "var(--text-muted)",
+                                    borderColor: highlightPlan === p ? "rgba(var(--clr-blue2-rgb),0.45)" : "var(--border-strong)" }}>
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         ) : isRSSMode ? (
                           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
