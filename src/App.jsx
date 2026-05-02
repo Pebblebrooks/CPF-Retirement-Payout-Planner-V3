@@ -7915,7 +7915,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-welcome-modal  { max-width: 620px; height: min(88vh, 680px); }
           .welcome-step3-grid { grid-template-columns: 1fr 1fr !important; }
           /* Summary zone tablet rules — 2-col where possible */
-          .z1-cols { grid-template-columns: 1fr auto 1fr auto auto !important; }
+          .z1-cols { grid-template-columns: 1fr auto 1fr auto 1fr !important; }
           .z2-z3-grid { grid-template-columns: 1fr 1fr !important; }
           .z4-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
@@ -11741,7 +11741,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           - Payout-age number: accent the age digit in blue; "Age" prefix stays in text-bright
                           - Dividers: 1px with linear-gradient fade top/bottom (lighter, less visual weight)
                           - Sub-labels: 11px / muted — consistent across all 3 cols */}
-                      <div className="z1-cols" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto auto", gap: 0, alignItems: "stretch" }}>
+                      <div className="z1-cols" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", gap: 0, alignItems: "stretch" }}>
 
                         {/* ── Col 1 — Total CPF ── */}
                         <div style={{ paddingRight: 24, display: "flex", flexDirection: "column", justifyContent: "center" }}>
@@ -11770,7 +11770,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-green)", lineHeight: 1.05, letterSpacing: "-0.03em", fontFamily: "monospace" }}>
                               {activePayout ? formatCurrency(Math.round(displayPayout)) : "—"}
                             </p>
-                            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0" }}>{planLabel} plan · CPF LIFE</p>
+                            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0", whiteSpace: "nowrap" }}>{planLabel} plan · CPF LIFE</p>
                           </div>
                         ) : isRSSMode ? (
                           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
@@ -11794,20 +11794,21 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         <div className="z1-divider" style={{ width: 1, background: "linear-gradient(to bottom, transparent, var(--border-subtle) 20%, var(--border-subtle) 80%, transparent)", margin: "4px 24px" }} />
 
                         {/* ── Col 3 — Payout age ── */}
-                        <div style={{ paddingLeft: 4, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                          <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>Payout starts at</p>
+                        <div style={{ paddingLeft: 4, display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+                          <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Payout starts at</p>
                           {/* "Age" stays neutral; the number gets the blue accent so it reads as a clickable/notable value */}
-                          <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--text-bright)", lineHeight: 1.05, letterSpacing: "-0.02em" }}>
+                          <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--text-bright)", lineHeight: 1.05, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
                             Age <span style={{ color: "var(--clr-blue)" }}>{isRSSMode ? (inputs.rssPayoutStartAge || 65) : inputs.payoutAge}</span>
                           </p>
-                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0" }}>{isRSSMode ? "RSS scheme" : `CPF LIFE · ${planLabel} plan`}</p>
+                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0", whiteSpace: "nowrap" }}>{isRSSMode ? "RSS scheme" : `CPF LIFE · ${planLabel} plan`}</p>
                         </div>
                       </div>
 
                       {/* ── Footer row — display toggle (Col 1) + plan selector (Col 2, aligned under monthly payout) + alert (Col 3) ── */}
-                      {/* Grid mirrors z1-cols: "1fr auto 1fr auto auto" so the plan pill sits directly under the monthly payout number.
+                      {/* Grid mirrors z1-cols: "1fr auto 1fr auto 1fr" — all three content columns are 1fr so widths are
+                          stable regardless of plan label length. Alert badge sits in the last 1fr cell, right-aligned.
                           "Plan" label removed — pill position is self-explanatory in context of the payout number above it. */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto auto", alignItems: "center", gap: 0, marginTop: 14, paddingTop: 12, borderTop: "0.5px solid var(--border-subtle)" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", alignItems: "center", gap: 0, marginTop: 14, paddingTop: 12, borderTop: "0.5px solid var(--border-subtle)" }}>
                         {/* Col 1 — Nominal/Real toggle */}
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>Display</span>
@@ -11843,8 +11844,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                         {/* Spacer */}
                         <div style={{ width: 49 }} />
-                        {/* Col 3 — alert badge */}
-                        <div>
+                        {/* Col 3 — alert badge, right-aligned inside its 1fr cell */}
+                        <div style={{ display: "flex", justifyContent: "flex-end" }}>
                           {alertCount > 0 ? (
                             <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.08)", border: "0.5px solid rgba(239,68,68,0.3)", borderRadius: 20, padding: "4px 13px", cursor: "pointer" }}
                               onClick={() => { const el = document.getElementById('zone5-alerts'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
