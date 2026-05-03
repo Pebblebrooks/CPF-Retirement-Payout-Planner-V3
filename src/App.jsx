@@ -724,127 +724,103 @@ const PRESET_PROFILES = [
     }
   },
   // ─────────────────────────────────────────────────────────────────────────
-  // HOUSEHOLD SAMPLE — Tan Family (Primary 38 + Spouse 36, two children aged 8 & 5)
+  // YOUNG FAMILY — Dual-income couple, early 30s, two young children
   //
-  // Profile overview:
-  //   Primary (Wei Ming, 38, SC, male):  $7k gross, HDB 5-room, OA funding mortgage
-  //   Spouse  (Hui Ling, 36, SC, female): $4.5k gross, part-time career break possible
-  //   Children: Ethan (8, born 2018), Sophie (5, born 2021) — ages drive OA loan timing
+  // Household composition:
+  //   Primary  — Adam, male, 32, SC.  Salary $5,500/mo + $11k bonus.
+  //   Spouse   — Priya, female, 30, SC. Salary $4,200/mo + $8,400 bonus.
+  //   Children — Child 1 (age 4) and Child 2 (age 2). Not modelled as CPF
+  //              members; university costs projected as Life Events on Adam.
   //
-  // Housing: $1,800/mo combined ($21,600/yr) split 55% primary / 45% spouse
-  //   → Primary OA pays $11,880/yr, Spouse OA pays $9,720/yr
-  //   → housingOutflow on PRIMARY only; spouse carries 0 housing (split handled via housingSharePct=55)
+  // Housing:
+  //   HDB 4-room purchased 2 years ago. Full $14,400/yr mortgage runs through
+  //   Adam's OA (housingStopAge 55, i.e. paid off in 23 years).
+  //   Housing split slider set to 50/50 for Household tab attribution.
+  //   Adam's OA bears the deduction; Priya's OA accumulates undisturbed.
   //
-  // Life events modelled:
-  //   Primary:  Promotion windfall at 42 (+$20k one-off private savings)
-  //   Spouse:   Career break 39–41 (retrenchment proxy — contributions paused for 2 yrs)
-  //             Returns to work at 41 with slight salary bump
+  // CPF balances reflect:
+  //   - ~10 years of contributions for Adam (since age 22)
+  //   - ~7 years for Priya (since age 23)
+  //   - OA balances drawn down for HDB downpayment 2 years ago
   //
-  // Children milestone guide (shown in Household tab, no engine run):
-  //   Ethan:  Poly/Uni OA loan window 2033–2037 (primary age 45–49)
-  //   Sophie: Poly/Uni OA loan window 2036–2040 (primary age 48–52)
-  //   Both reach 55 well after parents are in retirement — CPF LIFE payouts overlap cleanly
+  // Contribution figures are auto-calc values (total employer + employee):
+  //   Adam:  OA $17,714 / SA $4,617 / MA $6,159  (age <=35 rates, salary + bonus)
+  //   Priya: OA $13,524 / SA $3,527 / MA $4,705  (age <=35 rates, salary + bonus)
   //
-  // Household retirement income at both payout ages (65):
-  //   Primary CPF LIFE Std:  ~$1,650/mo  (RA ~$360k at 65)
-  //   Spouse  CPF LIFE Std:  ~$1,050/mo  (RA ~$230k at 65)
-  //   Combined:              ~$2,700/mo CPF LIFE + OA drawdown buffer
+  // Life Events on Adam (child uni costs drawn from private assets):
+  //   Age 49-52  ->  $25,000/yr  (Child 1 at university, child turns 21 at Adam 49)
+  //   Age 51-54  ->  $25,000/yr  (Child 2 at university, child turns 21 at Adam 51)
+  //   Ages 51-52 overlap -- both children at university simultaneously ($50k/yr).
+  //
+  // Household tab enabled: true  |  Housing split: 50%
   // ─────────────────────────────────────────────────────────────────────────
   {
-    id: "household_tanfamily",
-    label: "Household — Tan Family (38 & 36, 2 children)",
-    icon: "🏠",
-    desc: "Dual-income HDB couple, two school-age kids. Spouse career break at 39. Combined CPF LIFE ~$2,700/mo at 65.",
+    id: "young_family_32",
+    label: "Young Family — Adam & Priya, 32/30",
+    icon: "\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67\u200d\ud83d\udc66",
+    desc: "Dual-income couple, 2 children (ages 4 & 2). HDB loan on Adam's OA; split 50/50 in Household view. Child uni costs modelled as Life Events (private draw) at ages 49\u201352 and 51\u201354.",
     householdEnabled: true,
-    housingSharePct: 55,
-    children: [
-      { id: "child-ethan",  name: "Ethan",  birthYear: 2018 },
-      { id: "child-sophie", name: "Sophie", birthYear: 2021 },
-    ],
+    housingSharePct: 50,
     inputs: {
-      // ── Primary member: Wei Ming, 38, SC male ────────────────────────────
-      name: "Wei Ming", currentAge: 38, currentYear: 2026, payoutAge: 65,
-      contributionStopAge: 65, housingStopAge: 55,
-      isMale: true, citizenStatus: "sc", prYear: 3, prRateType: "GG",
-      isSelfEmployed: false,
-      // CPF balances — typical 38yo with 15 yrs working history
-      oaBalance: 98000, saBalance: 62000, maBalance: 42000,
-      // Salary: $7,000/mo gross, $14,000 annual bonus (2 months)
-      salaryGross: 7000, salaryBonus: 14000, salaryGrowthRate: 2.5,
-      // Mandatory contributions (computed at $7k cap, age 38, SC GG rates)
-      empOaCont: 17640, empSaCont: 5040, empMaCont: 5040,
-      // Housing: 5-room HDB $1,800/mo combined; primary pays 55% = ~$990/mo = $11,880/yr
-      housingOutflow: 21600,   // full household amount — housingSharePct=55 splits it in household view
+      // \u2500\u2500 Adam \u2014 Primary Member \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+      name: "Adam",
+      currentAge: 32, currentYear: 2026, payoutAge: 65,
+      contributionStopAge: 65,
       housingStopAge: 55,
-      // MediShield Life + IP rider (Integrated Shield)
-      medicalUsage: 600, medishieldIP: 1200, elderCareShield: 500,
-      // HDB 5-room: est. $650k, leasehold 99yr, not selling near-term
-      propertyValue: 650000, propertyGrowthRate: 2, includeProperty: true,
-      propertyLeasehold: true, propertyLeaseYears: 99, sellPropertyAge: 0,
-      // VC — RSTU $800/yr to top up SA (below FRS headroom)
-      vcSaTopup: 800,
-      // OA→SA transfer $5k/yr while OA has headroom
-      oaToSaTransfer: 5000,
-      // SRS — started recently, modest contribution
-      srsBalance: 8000, srsAnnualContribution: 5000, srsReturnRate: 4,
+      isMale: true, isSelfEmployed: false,
+      citizenStatus: "SC", prYear: 3, prRateType: "GG",
+      oaBalance: 28000, saBalance: 22000, maBalance: 19000,
+      salaryGross: 5500, salaryBonus: 11000, salaryGrowthRate: 2,
+      showSalaryCalc: false,
+      empOaCont: 17714, empSaCont: 4617, empMaCont: 6159,
+      housingOutflow: 14400,
+      medicalUsage: 400, medishieldIP: 900, elderCareShield: 500, medicalInflationRate: 2,
+      propertyValue: 520000, propertyGrowthRate: 2,
+      includeProperty: true, propertyLeasehold: true, propertyLeaseYears: 99,
+      vc3aCash: 0, vcSaTopup: 0, vcMaCash: 0, vcVhr: 0,
+      annualGovGrant: 500,
+      currentPrivateAssets: 60000, annualPrivateSaving: 8400, privateAssetGrowthRate: 4,
+      targetMonthlyIncome: 3500,
+      oaToSaTransfer: 0, oaToMaTransfer: 0,
+      cpfisOaAmount: 0, cpfisSaAmount: 0,
+      srsBalance: 0, srsAnnualContribution: 0, srsReturnRate: 0,
       srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10,
-      // Private assets
-      currentPrivateAssets: 35000, annualPrivateSaving: 6000, privateAssetGrowthRate: 4,
-      // Target retirement income
-      targetMonthlyIncome: 4500,
-      // Life events
       lifeEvents: [
         {
-          id: "le-wm-windfall", type: "windfall",
-          label: "Promotion Bonus", startAge: 42, endAge: 42,
-          magnitude: 20000, enabled: true,
+          id: "le-hh-child1-uni",
+          type: "medical_crisis",
+          label: "Child 1 Uni Fees (child age 21)",
+          startAge: 49, endAge: 52,
+          magnitude: 25000, enabled: true,
+          drawSource: "private",
         },
         {
-          id: "le-wm-education1", type: "retrenchment",
-          label: "Ethan Poly/Uni Fees (OA Loan)", startAge: 45, endAge: 49,
-          magnitude: 8000, enabled: true,
-        },
-        {
-          id: "le-wm-education2", type: "retrenchment",
-          label: "Sophie Poly/Uni Fees (OA Loan)", startAge: 48, endAge: 52,
-          magnitude: 8000, enabled: true,
+          id: "le-hh-child2-uni",
+          type: "medical_crisis",
+          label: "Child 2 Uni Fees (child age 21)",
+          startAge: 51, endAge: 54,
+          magnitude: 25000, enabled: true,
+          drawSource: "private",
         },
       ],
     },
     spouseInputs: {
-      // ── Spouse: Hui Ling, 36, SC female ─────────────────────────────────
-      name: "Hui Ling", currentAge: 36, currentYear: 2026, payoutAge: 65,
-      contributionStopAge: 65, housingStopAge: 55,
-      isMale: false, citizenStatus: "sc", prYear: 3, prRateType: "GG",
-      isSelfEmployed: false,
-      // CPF balances — 36yo, slightly lower due to career break in late 20s
-      oaBalance: 68000, saBalance: 44000, maBalance: 36000,
-      // Salary: $4,500/mo gross (part-time equivalent, in workforce now)
-      salaryGross: 4500, salaryBonus: 4500, salaryGrowthRate: 2,
-      // Mandatory contributions at $4,500, age 36, SC
-      empOaCont: 10800, empSaCont: 3240, empMaCont: 3240,
-      // Spouse has 0 housing outflow — primary carries full $21,600; split done via housingSharePct
+      // \u2500\u2500 Priya \u2014 Spouse / Partner \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+      name: "Priya",
+      currentAge: 30, payoutAge: 65,
+      contributionStopAge: 65,
+      isMale: false, isSelfEmployed: false,
+      citizenStatus: "SC", prYear: 3, prRateType: "GG",
+      oaBalance: 20000, saBalance: 14000, maBalance: 15000,
+      salaryGross: 4200, salaryBonus: 8400, salaryGrowthRate: 2,
+      empOaCont: 13524, empSaCont: 3527, empMaCont: 4705,
       housingOutflow: 0,
-      // Medical
-      medicalUsage: 400, medishieldIP: 900, elderCareShield: 500,
-      // No property on spouse (shared asset tracked on primary)
+      medicalUsage: 300, medishieldIP: 800, elderCareShield: 400, medicalInflationRate: 2,
       propertyValue: 0, includeProperty: false,
-      // VC — RSTU $800/yr
-      vcSaTopup: 800,
-      // Private savings
-      currentPrivateAssets: 15000, annualPrivateSaving: 3000, privateAssetGrowthRate: 4,
-      // SRS
-      srsBalance: 3000, srsAnnualContribution: 3000, srsReturnRate: 4,
-      srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10,
-      targetMonthlyIncome: 0,
-      // Life events: career break age 39–41 (second child care)
-      lifeEvents: [
-        {
-          id: "le-hl-break", type: "retrenchment",
-          label: "Career Break (childcare)", startAge: 39, endAge: 41,
-          magnitude: 0, enabled: true,
-        },
-      ],
+      vc3aCash: 0, vcSaTopup: 0, vcMaCash: 0, vcVhr: 0,
+      annualGovGrant: 500,
+      currentPrivateAssets: 35000, annualPrivateSaving: 5000, privateAssetGrowthRate: 4,
+      targetMonthlyIncome: 2500,
     },
   },
   // ─────────────────────────────────────────────────────────────────────────
@@ -3665,6 +3641,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("summary");
   activeTabRef.current = activeTab; // keep ref current for keyboard shortcut handler
   const [highlightPlan, setHighlightPlan] = useState("standard");
+  const [spouseHighlightPlan, setSpouseHighlightPlan] = useState("standard"); // spouse CPF LIFE plan — independent of primary
   const [viewMode, setViewMode] = useState("bequest");
   const [showTooltipId, setShowTooltipId] = useState(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -3685,10 +3662,7 @@ export default function App() {
   const [spouseInputs, setSpouseInputs] = useState({ ...SPOUSE_DEFAULT_INPUTS });
   const [debouncedSpouseInputs, setDebouncedSpouseInputs] = useState({ ...SPOUSE_DEFAULT_INPUTS });
   const [spouseOpenSections, setSpouseOpenSections] = useState(new Set(["spouseProfile"]));
-  const [housingSharePct, setHousingSharePct] = useState(50);
-  // householdChildren: up to 3 children — lightweight, no engine run, used for milestone display only
-  // Each child: { id, name, birthYear } — age derived from currentYear - birthYear
-  const [householdChildren, setHouseholdChildren] = useState([]); // primary member pays 50% by default
+  const [housingSharePct, setHousingSharePct] = useState(50); // primary member pays 50% by default
 
   const [showMonteCarlo, setShowMonteCarlo] = useState(false);
   const [showBaseline, setShowBaseline] = useState(false);
@@ -4301,7 +4275,6 @@ export default function App() {
         // Household restore from share link
         if (fullState.householdEnabled != null) setHouseholdEnabled(!!fullState.householdEnabled);
         if (fullState.housingSharePct != null) setHousingSharePct(Number(fullState.housingSharePct) || 50);
-        if (Array.isArray(fullState.householdChildren)) setHouseholdChildren(fullState.householdChildren);
         if (fullState.spouseInputs && typeof fullState.spouseInputs === 'object') {
           const safeSpouse = { ...SPOUSE_DEFAULT_INPUTS };
           Object.keys(SPOUSE_DEFAULT_INPUTS).forEach(k => { if (fullState.spouseInputs[k] !== undefined) safeSpouse[k] = fullState.spouseInputs[k]; });
@@ -4850,7 +4823,6 @@ export default function App() {
         setSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
         setDebouncedSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
         setHousingSharePct(50);
-        setHouseholdChildren([]);
         setWhatIfPayoutAge(null);
         setWhatIfSaTopup(null);
         setWhatIfHousing(null);
@@ -4968,7 +4940,6 @@ export default function App() {
       householdEnabled,
       spouseInputs: householdEnabled ? spouseInputs : null,
       housingSharePct,
-      householdChildren: householdEnabled ? householdChildren : [],
       whatIfPayoutAge,
       whatIfSaTopup,
       whatIfHousing,
@@ -5122,7 +5093,6 @@ export default function App() {
           try {
             if (p.householdEnabled != null) setHouseholdEnabled(!!p.householdEnabled);
             if (p.housingSharePct != null) setHousingSharePct(Number(p.housingSharePct) || 50);
-            if (Array.isArray(p.householdChildren)) setHouseholdChildren(p.householdChildren);
             if (p.spouseInputs && typeof p.spouseInputs === 'object') {
               const safeSpouse = { ...SPOUSE_DEFAULT_INPUTS };
               Object.keys(SPOUSE_DEFAULT_INPUTS).forEach(k => {
@@ -5791,11 +5761,14 @@ export default function App() {
       Number(debouncedInputs.currentAge)       || 35,
       Number(debouncedSpouseInputs.currentAge) || 35
     );
-    // Cache RA at payout age for one-time LIFE interpolation (Standard plan)
+    // Cache RA at payout age for one-time LIFE interpolation.
+    // Use the active plan for each member so the Household tab reflects plan changes.
+    const pPlanKey = (['std','esc','bas'].includes(highlightPlan)) ? highlightPlan : 'std';
+    const sPlanKey = (['std','esc','bas'].includes(spouseHighlightPlan)) ? spouseHighlightPlan : 'std';
     const pRaAtPA = projectionByAge.get(primaryPa)?.ra || 0;
     const sRaAtPA = spouseProjectionByAge.get(spousePa)?.ra || 0;
-    const pLifeStdAtPA = Math.round(interpolateCpfLife(pRaAtPA, 'std', pIsMale));
-    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'std', sIsMale));
+    const pLifeStdAtPA = Math.round(interpolateCpfLife(pRaAtPA, pPlanKey, pIsMale));
+    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaAtPA, sPlanKey, sIsMale));
     const rows = [];
     for (let age = startAge; age <= 95; age++) {
       const pRow = projectionByAge.get(age) || {};
@@ -5825,7 +5798,8 @@ export default function App() {
   }, [householdEnabled, projection, spouseProjection, projectionByAge, spouseProjectionByAge,
       debouncedInputs.payoutAge, debouncedSpouseInputs.payoutAge,
       debouncedInputs.currentAge, debouncedSpouseInputs.currentAge,
-      debouncedInputs.isMale, debouncedSpouseInputs.isMale]);
+      debouncedInputs.isMale, debouncedSpouseInputs.isMale,
+      highlightPlan, spouseHighlightPlan]);
 
   const householdByAge = useMemo(
     () => new Map((householdData || []).map(r => [r.age, r])),
@@ -8684,23 +8658,26 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   setWhatIfOaDrawdown(null);
                   setWhatIfSrsContrib(null);
                   setWhatIfPrivGrowth(null);
-                  // Household preset support — load spouse inputs if present in the preset,
-                  // otherwise reset to defaults so previous household data doesn't bleed in.
-                  if (p.householdEnabled && p.spouseInputs) {
-                    const mergedSpouse = { ...SPOUSE_DEFAULT_INPUTS, ...p.spouseInputs };
-                    setHouseholdEnabled(true);
-                    setSpouseInputs(mergedSpouse);
-                    setDebouncedSpouseInputs(mergedSpouse);
-                    setHousingSharePct(p.housingSharePct ?? 50);
-                    if (p.children) setHouseholdChildren(p.children);
-                    setActiveTab("household");
+                  // ── Household state — restore or reset cleanly ──────────────────────
+                  // Always reset first so loading a non-household preset never leaves
+                  // stale spouse data from a prior session bleeding into the new profile.
+                  const presetHouseholdOn = !!p.householdEnabled;
+                  setHouseholdEnabled(presetHouseholdOn);
+                  setHousingSharePct(p.housingSharePct != null ? Number(p.housingSharePct) : 50);
+                  if (p.spouseInputs && typeof p.spouseInputs === 'object') {
+                    const safeSpouse = { ...SPOUSE_DEFAULT_INPUTS };
+                    Object.keys(SPOUSE_DEFAULT_INPUTS).forEach(k => {
+                      if (p.spouseInputs[k] !== undefined) safeSpouse[k] = p.spouseInputs[k];
+                    });
+                    setSpouseInputs(safeSpouse);
+                    setDebouncedSpouseInputs(safeSpouse);
                   } else {
-                    setHouseholdEnabled(false);
                     setSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
                     setDebouncedSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
-                    setHousingSharePct(50);
-                    setHouseholdChildren([]);
                   }
+                  // Navigate to Household tab when loading a household preset (mirrors
+                  // the Enable toggle's behaviour: if (next) setActiveTab("household")).
+                  if (presetHouseholdOn) setActiveTab("household");
                   setShowPresets(false);
                   showToast(`✓ Loaded: ${p.label}`);
                 }} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%", transition: "border-color 0.15s" }}
@@ -12081,7 +12058,29 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         : `Projected age when RA reaches $0 under RSS — read directly from the engine projection (4% base + 1% extra on first $60k + 1% extra on first $30k). Matches the RSS tab depletion age exactly.` },
                     { label: "Migration", value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge} · ${{ bas: 'Basic', std: 'Std', esc: 'Esc' }[inputs.lifePlanAtMigration || 'std']}` : "None", color: inputs.lifeMigrationAge > 0 ? "var(--clr-purple)" : "var(--text-muted)", tip: inputs.lifeMigrationAge > 0 ? `Migrating to CPF LIFE ${{ bas: 'Basic', std: 'Standard', esc: 'Escalating' }[inputs.lifePlanAtMigration || 'std']} plan at age ${inputs.lifeMigrationAge}` : "Staying on RSS until RA depletes — no CPF LIFE migration planned" },
                     { label: "Payout Start", value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "var(--clr-amber)", tip: "Age when CPF Board began your RSS monthly payouts" },
-                  ] : (() => {
+                  ] : activeTab === "household" && householdEnabled && householdData?.length ? (() => {
+                    // Household KPI strip — 3 combined metrics that mirror the Household tab cards.
+                    // Reads from householdByAge so plan changes on either member update live.
+                    const laterPa   = Math.max(
+                      Number(debouncedInputs.payoutAge) || 65,
+                      Number(debouncedSpouseInputs.payoutAge) || 65
+                    );
+                    const hhAtLater = householdByAge.get(laterPa) || {};
+                    const combinedCpfAtLater = (hhAtLater.combinedOA || 0) + (hhAtLater.combinedSA || 0)
+                                            + (hhAtLater.combinedMA || 0) + (hhAtLater.combinedRA || 0);
+                    const combinedLifeMonthly = hhAtLater.combinedLifeMonthly || 0;
+                    const hhAt95    = householdByAge.get(95) || {};
+                    const combinedAt95 = hhAt95.combinedTotal || 0;
+                    const pPlanLabel = { standard: "Std", escalating: "Esc", basic: "Basic" }[highlightPlan] || "Std";
+                    const sPlanLabel = { standard: "Std", escalating: "Esc", basic: "Basic" }[spouseHighlightPlan] || "Std";
+                    const primaryName  = debouncedInputs.name || "Primary";
+                    const spouseName   = debouncedSpouseInputs.name || "Spouse";
+                    return [
+                      { label: "Combined CPF", sublabel: `at payout age ${laterPa}`, value: formatCurrency(combinedCpfAtLater), color: "var(--clr-blue)", tip: `Total CPF across both members (OA+SA/RA+MA) at the later payout age (${laterPa}). Reads from householdData — updates when either member's plan changes.` },
+                      { label: "Est. combined CPF LIFE", sublabel: "monthly payout", value: combinedLifeMonthly ? formatCurrency(Math.round(combinedLifeMonthly)) + "/mo" : "—", color: "var(--clr-emerald)", tip: `Combined CPF LIFE monthly at payout age — ${primaryName}: ${pPlanLabel} plan · ${spouseName}: ${sPlanLabel} plan. Change either plan with the toggle in each member's card below.` },
+                      { label: "Combined at Age 95", sublabel: "Private + CPF", value: formatCurrency(combinedAt95), color: "var(--clr-purple)", tip: "Total household net worth (CPF + private assets for both members) projected to age 95. Based on primary member's age axis." },
+                    ];
+                  })() : (() => {
                     // Zone 1 KPI strip: 3 metrics only — Total CPF | Active plan payout | Payout age
                     const activePlan = highlightPlan || "standard";
                     const activePlanObj = lifePlans?.[activePlan];
@@ -14688,7 +14687,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
                     {[
                       { label: "Combined CPF at Later Payout Age", value: fmtM((pAtPA.total || 0) + (sAtPA.total || 0)), sub: `Age ${combinedPA}`, color: "#8b5cf6" },
-                      { label: "Est. Combined CPF LIFE", value: `${fmt(combinedMonthly)}/mo`, sub: "Standard plan", color: "var(--clr-green)" },
+                      { label: "Est. Combined CPF LIFE", value: `${fmt(combinedMonthly)}/mo`, sub: `${({ standard: "Std", escalating: "Esc", basic: "Basic" }[highlightPlan])} / ${({ standard: "Std", escalating: "Esc", basic: "Basic" }[spouseHighlightPlan])} plan`, color: "var(--clr-green)" },
                       { label: "Combined at Age 95", value: fmtM(hAt95.combinedTotal || 0), sub: "Private + CPF", color: "var(--clr-blue2)" },
                       { label: "Housing Split", value: `${housingSharePct}% / ${100 - housingSharePct}%`, sub: `${pName} / ${sName}`, color: "var(--clr-amber)" },
                     ].map(({ label, value, sub, color }) => (
@@ -14703,20 +14702,26 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                   {/* Side-by-side payout comparison */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    {[[pName, pPA, pAtPA, "var(--clr-blue2)", debouncedInputs, "pLifeMonthly"],
-                      [sName, sPA, sAtPA, "#8b5cf6", debouncedSpouseInputs, "sLifeMonthly"]].map(([name, pa, atPA, color, inp, lifeKey]) => {
-                      // Use pre-computed LIFE monthly from householdByAge (avoids _lifeMonthlyStd — not stored on engine rows)
-                      const hRowAtPA = householdByAge.get(pa) || {};
+                    {[
+                      { name: pName, pa, atPA: pAtPA, color: "var(--clr-blue2)", inp: debouncedInputs, lifeKey: "pLifeMonthly",
+                        plan: highlightPlan, setPlan: setHighlightPlan },
+                      { name: sName, pa: sPA, atPA: sAtPA, color: "#8b5cf6", inp: debouncedSpouseInputs, lifeKey: "sLifeMonthly",
+                        plan: spouseHighlightPlan, setPlan: setSpouseHighlightPlan },
+                    ].map(({ name, pa: memberPa, atPA, color, inp, lifeKey, plan, setPlan }) => {
+                      // Read the plan-sensitive monthly from householdByAge (householdData now
+                      // computes pLifeMonthly / sLifeMonthly using the active plan key for each member).
+                      const hRowAtPA = householdByAge.get(memberPa) || {};
                       const lifeMonthly = hRowAtPA[lifeKey] || 0;
                       const oaDraw = Number(inp.oaDrawdownMonthly) || 0;
                       const totalMonthly = lifeMonthly + oaDraw;
+                      const planLabels = { standard: "Standard", escalating: "Escalating", basic: "Basic" };
                       return (
                         <div key={name} style={{ background: "var(--bg-panel)", border: `1px solid ${color}33`,
                           borderRadius: 16, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
                             <h3 style={{ fontSize: 14, fontWeight: 800, color, margin: 0 }}>{name}</h3>
-                            <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>Payout Age {pa}</span>
+                            <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>Payout Age {memberPa}</span>
                           </div>
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                             {[
@@ -14729,9 +14734,22 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                               </div>
                             ))}
                           </div>
+                          {/* ── CPF LIFE plan toggle — per member ──────────────────────── */}
+                          <div style={{ display: "flex", gap: 4, background: "var(--bg-muted)", borderRadius: 8, padding: 3 }}>
+                            {["basic", "standard", "escalating"].map(p => (
+                              <button key={p} onClick={() => setPlan(p)}
+                                style={{ flex: 1, padding: "3px 0", borderRadius: 6, fontSize: 9, fontWeight: 700,
+                                  border: "none", cursor: "pointer", letterSpacing: "0.02em",
+                                  background: plan === p ? color : "transparent",
+                                  color: plan === p ? "#fff" : "var(--text-muted)",
+                                  transition: "background 0.15s, color 0.15s" }}>
+                                {p.charAt(0).toUpperCase() + p.slice(1, 3)}
+                              </button>
+                            ))}
+                          </div>
                           <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
                             <div style={{ display: "flex", justifyContent: "space-between" }}>
-                              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>CPF LIFE (Std)</span>
+                              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>CPF LIFE ({planLabels[plan]})</span>
                               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-green)", fontFamily: "monospace" }}>{lifeMonthly > 0 ? `${fmt(lifeMonthly)}/mo` : "—"}</span>
                             </div>
                             {oaDraw > 0 && (
@@ -14839,146 +14857,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </table>
                   </div>
 
-                  {/* ── Children & Dependants ────────────────────────────── */}
-                  {(() => {
-                    const currentYear = Number(debouncedInputs.currentYear) || 2026;
-                    const primaryAge  = Number(debouncedInputs.currentAge) || 38;
-
-                    // Compute education milestones for each child
-                    const withMilestones = householdChildren.map(child => {
-                      const childAge  = currentYear - Number(child.birthYear || currentYear);
-                      const polyStart = 18;  // poly entry age
-                      const uniStart  = 18;  // uni entry (alt path)
-                      const polyEnd   = 21;
-                      const uniEnd    = 22;
-                      // Primary's age when child starts/ends tertiary education
-                      const primAgeAtPolyStart = primaryAge + (polyStart - childAge);
-                      const primAgeAtPolyEnd   = primaryAge + (polyEnd   - childAge);
-                      const primAgeAtUniEnd    = primaryAge + (uniEnd    - childAge);
-                      const secStart  = 13;
-                      const primAgeAtSec = primaryAge + (secStart - childAge);
-                      return {
-                        ...child,
-                        childAge: Math.max(0, childAge),
-                        primAgeAtPolyStart: Math.round(primAgeAtPolyStart),
-                        primAgeAtPolyEnd:   Math.round(primAgeAtPolyEnd),
-                        primAgeAtUniEnd:    Math.round(primAgeAtUniEnd),
-                        primAgeAtSec:       Math.round(primAgeAtSec),
-                        oaLoanRisk: primAgeAtPolyStart >= pPA,  // OA loan while in payout phase?
-                      };
-                    });
-
-                    return (
-                      <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                          <h3 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: "var(--text-bright)", display: "flex", alignItems: "center", gap: 8 }}>
-                            <Users style={{ width: 14, height: 14, color: "#8b5cf6" }} />
-                            Children &amp; Dependants
-                            <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-muted)" }}>— education milestone tracker (no engine run)</span>
-                          </h3>
-                          {householdChildren.length < 3 && (
-                            <button onClick={() => setHouseholdChildren(prev => [
-                              ...prev,
-                              { id: `child-${Date.now()}`, name: `Child ${prev.length + 1}`, birthYear: currentYear - 5 }
-                            ])} style={{ fontSize: 11, padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontWeight: 700,
-                              background: "rgba(139,92,246,0.1)", color: "#8b5cf6", border: "1px solid rgba(139,92,246,0.3)" }}>
-                              + Add Child
-                            </button>
-                          )}
-                        </div>
-
-                        {householdChildren.length === 0 && (
-                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
-                            Add up to 3 children to see education milestones and OA loan timing relative to {pName}'s retirement projection.
-                          </p>
-                        )}
-
-                        {/* Child input rows + milestone cards */}
-                        {withMilestones.map(child => (
-                          <div key={child.id} style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-                            {/* Child name + birth year inputs */}
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 18 }}>👶</span>
-                              <input type="text" value={child.name}
-                                onChange={e => setHouseholdChildren(prev => prev.map(c => c.id === child.id ? { ...c, name: e.target.value } : c))}
-                                style={{ flex: 1, padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, fontWeight: 700, outline: "none" }} />
-                              <label style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
-                                Born
-                                <input type="number" min="2000" max={currentYear} value={child.birthYear}
-                                  onChange={e => setHouseholdChildren(prev => prev.map(c => c.id === child.id ? { ...c, birthYear: Number(e.target.value) } : c))}
-                                  style={{ width: 70, padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
-                              </label>
-                              <button onClick={() => setHouseholdChildren(prev => prev.filter(c => c.id !== child.id))}
-                                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2, fontSize: 14, lineHeight: 1 }}>✕</button>
-                            </div>
-
-                            {/* Age badge + milestone chips */}
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(139,92,246,0.12)", color: "#8b5cf6", fontWeight: 700 }}>
-                                Age {child.childAge} now
-                              </span>
-                              {[
-                                { label: `Pri school`, age: child.childAge < 7 ? `in ${7 - child.childAge}yr` : "done", pAge: primaryAge + (7 - child.childAge), color: "#64748b" },
-                                { label: `Sec school`, age: child.childAge < 13 ? `${child.primAgeAtSec > 0 && child.childAge < 13 ? `you'll be ${child.primAgeAtSec}` : ""}` : "done", pAge: child.primAgeAtSec, color: "#0ea5e9" },
-                                { label: `Poly/Uni start`, age: child.childAge < 18 ? `you'll be ${child.primAgeAtPolyStart}` : "done", pAge: child.primAgeAtPolyStart, color: "#f59e0b",
-                                  warn: child.oaLoanRisk },
-                                { label: `OA Loan window`, age: `Age ${child.primAgeAtPolyStart}–${child.primAgeAtUniEnd} (you)`, pAge: null, color: child.oaLoanRisk ? "#ef4444" : "#10b981",
-                                  warn: child.oaLoanRisk },
-                              ].map(m => (
-                                <span key={m.label} style={{ fontSize: 9, padding: "2px 8px", borderRadius: 10, fontWeight: 600,
-                                  background: m.warn ? "rgba(239,68,68,0.1)" : "rgba(100,116,139,0.1)",
-                                  color: m.warn ? "#ef4444" : m.color,
-                                  border: m.warn ? "1px solid rgba(239,68,68,0.3)" : "none" }}>
-                                  {m.label}: {m.age || m.pAge}
-                                  {m.warn ? " ⚠ in payout!" : ""}
-                                </span>
-                              ))}
-                            </div>
-
-                            {/* OA loan warning */}
-                            {child.oaLoanRisk && (
-                              <p style={{ fontSize: 10, color: "#ef4444", margin: 0, lineHeight: 1.4 }}>
-                                ⚠ {child.name}'s tertiary education OA loan window ({child.primAgeAtPolyStart}–{child.primAgeAtUniEnd}) falls <strong>after your payout age {pPA}</strong>. OA funds available for loans reduce significantly once CPF LIFE begins drawing from RA. Consider a sinking fund or cash reserves for education costs.
-                              </p>
-                            )}
-
-                            {/* Education cost timeline bar */}
-                            <div style={{ position: "relative", height: 6, borderRadius: 3, background: "var(--border-subtle)", overflow: "hidden" }}>
-                              {/* Show child's school phases as coloured segments */}
-                              {[
-                                { from: 0,  to: 6,  color: "#94a3b8", label: "Primary" },
-                                { from: 7,  to: 10, color: "#0ea5e9", label: "Secondary" },
-                                { from: 13, to: 16, color: "#f59e0b", label: "JC/ITE/Poly" },
-                                { from: 18, to: 21, color: "#8b5cf6", label: "Poly/Uni" },
-                              ].map(seg => {
-                                const totalSpan = 25;
-                                const left  = (seg.from / totalSpan) * 100;
-                                const width = ((seg.to - seg.from) / totalSpan) * 100;
-                                const isActive = child.childAge >= seg.from && child.childAge <= seg.to;
-                                return (
-                                  <div key={seg.label} style={{ position: "absolute", left: `${left}%`, width: `${width}%`, height: "100%",
-                                    background: seg.color, opacity: isActive ? 1 : 0.35 }} title={seg.label} />
-                                );
-                              })}
-                              {/* Current age marker */}
-                              <div style={{ position: "absolute", left: `${Math.min(100, (child.childAge / 25) * 100)}%`,
-                                width: 2, height: "100%", background: "white", opacity: 0.9 }} />
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "var(--text-muted)" }}>
-                              <span>Birth</span><span>Pri</span><span>Sec</span><span>JC/Poly</span><span>Uni</span><span>Age 25</span>
-                            </div>
-                          </div>
-                        ))}
-
-                        {householdChildren.length > 0 && (
-                          <p style={{ fontSize: 9, color: "var(--text-muted)", margin: 0, lineHeight: 1.4 }}>
-                            OA Education Loan (CPF policy): max 40% of member's accumulated OA savings. Model education outflows via Life Events → "Retrenchment" on {pName}'s profile to see the OA impact on the Growth chart.
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })()}
-
                   {/* Loved-one transfer note */}
                   {(debouncedInputs.oaToSaForLovedOne || debouncedInputs.oaToMaForLovedOne) && (
                     <div style={{ background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.2)", borderRadius: 12, padding: "12px 16px" }}>
@@ -14989,7 +14867,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   )}
 
                   <p style={{ fontSize: 9, color: "var(--text-muted)", margin: 0, lineHeight: 1.4 }}>
-                    ⚠ CPF LIFE estimates use the Standard plan interpolation. Property value and shared private assets are tracked on {pName}'s profile only. Monthly income projections assume both members receive CPF LIFE from their respective payout ages.
+                    ⚠ CPF LIFE estimates use each member's selected plan (toggle in the member cards above). Property value and shared private assets are tracked on {pName}'s profile only. Monthly income projections assume both members receive CPF LIFE from their respective payout ages.
                   </p>
                 </div>
               );
