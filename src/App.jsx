@@ -14703,7 +14703,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   {/* Side-by-side payout comparison */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     {[
-                      { name: pName, pa, atPA: pAtPA, color: "var(--clr-blue2)", inp: debouncedInputs, lifeKey: "pLifeMonthly",
+                      { name: pName, pa: pPA, atPA: pAtPA, color: "var(--clr-blue2)", inp: debouncedInputs, lifeKey: "pLifeMonthly",
                         plan: highlightPlan, setPlan: setHighlightPlan },
                       { name: sName, pa: sPA, atPA: sAtPA, color: "#8b5cf6", inp: debouncedSpouseInputs, lifeKey: "sLifeMonthly",
                         plan: spouseHighlightPlan, setPlan: setSpouseHighlightPlan },
