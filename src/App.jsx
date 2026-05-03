@@ -724,6 +724,106 @@ const PRESET_PROFILES = [
     }
   },
   // ─────────────────────────────────────────────────────────────────────────
+  // YOUNG FAMILY — Dual-income couple, early 30s, two young children
+  //
+  // Household composition:
+  //   Primary  — Adam, male, 32, SC.  Salary $5,500/mo + $11k bonus.
+  //   Spouse   — Priya, female, 30, SC. Salary $4,200/mo + $8,400 bonus.
+  //   Children — Child 1 (age 4) and Child 2 (age 2). Not modelled as CPF
+  //              members; university costs projected as Life Events on Adam.
+  //
+  // Housing:
+  //   HDB 4-room purchased 2 years ago. Full $14,400/yr mortgage runs through
+  //   Adam's OA (housingStopAge 55, i.e. paid off in 23 years).
+  //   Housing split slider set to 50/50 for Household tab attribution.
+  //   Adam's OA bears the deduction; Priya's OA accumulates undisturbed.
+  //
+  // CPF balances reflect:
+  //   - ~10 years of contributions for Adam (since age 22)
+  //   - ~7 years for Priya (since age 23)
+  //   - OA balances drawn down for HDB downpayment 2 years ago
+  //
+  // Contribution figures are auto-calc values (total employer + employee):
+  //   Adam:  OA $17,714 / SA $4,617 / MA $6,159  (age <=35 rates, salary + bonus)
+  //   Priya: OA $13,524 / SA $3,527 / MA $4,705  (age <=35 rates, salary + bonus)
+  //
+  // Life Events on Adam (child uni costs drawn from private assets):
+  //   Age 49-52  ->  $25,000/yr  (Child 1 at university, child turns 21 at Adam 49)
+  //   Age 51-54  ->  $25,000/yr  (Child 2 at university, child turns 21 at Adam 51)
+  //   Ages 51-52 overlap -- both children at university simultaneously ($50k/yr).
+  //
+  // Household tab enabled: true  |  Housing split: 50%
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: "young_family_32",
+    label: "Young Family — Adam & Priya, 32/30",
+    icon: "\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67\u200d\ud83d\udc66",
+    desc: "Dual-income couple, 2 children (ages 4 & 2). HDB loan on Adam's OA; split 50/50 in Household view. Child uni costs modelled as Life Events (private draw) at ages 49\u201352 and 51\u201354.",
+    householdEnabled: true,
+    housingSharePct: 50,
+    inputs: {
+      // \u2500\u2500 Adam \u2014 Primary Member \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+      name: "Adam",
+      currentAge: 32, currentYear: 2026, payoutAge: 65,
+      contributionStopAge: 65,
+      housingStopAge: 55,
+      isMale: true, isSelfEmployed: false,
+      citizenStatus: "SC", prYear: 3, prRateType: "GG",
+      oaBalance: 28000, saBalance: 22000, maBalance: 19000,
+      salaryGross: 5500, salaryBonus: 11000, salaryGrowthRate: 2,
+      showSalaryCalc: false,
+      empOaCont: 17714, empSaCont: 4617, empMaCont: 6159,
+      housingOutflow: 14400,
+      medicalUsage: 400, medishieldIP: 900, elderCareShield: 500, medicalInflationRate: 2,
+      propertyValue: 520000, propertyGrowthRate: 2,
+      includeProperty: true, propertyLeasehold: true, propertyLeaseYears: 99,
+      vc3aCash: 0, vcSaTopup: 0, vcMaCash: 0, vcVhr: 0,
+      annualGovGrant: 500,
+      currentPrivateAssets: 60000, annualPrivateSaving: 8400, privateAssetGrowthRate: 4,
+      targetMonthlyIncome: 3500,
+      oaToSaTransfer: 0, oaToMaTransfer: 0,
+      cpfisOaAmount: 0, cpfisSaAmount: 0,
+      srsBalance: 0, srsAnnualContribution: 0, srsReturnRate: 0,
+      srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10,
+      lifeEvents: [
+        {
+          id: "le-hh-child1-uni",
+          type: "medical_crisis",
+          label: "Child 1 Uni Fees (child age 21)",
+          startAge: 49, endAge: 52,
+          magnitude: 25000, enabled: true,
+          drawSource: "private",
+        },
+        {
+          id: "le-hh-child2-uni",
+          type: "medical_crisis",
+          label: "Child 2 Uni Fees (child age 21)",
+          startAge: 51, endAge: 54,
+          magnitude: 25000, enabled: true,
+          drawSource: "private",
+        },
+      ],
+    },
+    spouseInputs: {
+      // \u2500\u2500 Priya \u2014 Spouse / Partner \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+      name: "Priya",
+      currentAge: 30, payoutAge: 65,
+      contributionStopAge: 65,
+      isMale: false, isSelfEmployed: false,
+      citizenStatus: "SC", prYear: 3, prRateType: "GG",
+      oaBalance: 20000, saBalance: 14000, maBalance: 15000,
+      salaryGross: 4200, salaryBonus: 8400, salaryGrowthRate: 2,
+      empOaCont: 13524, empSaCont: 3527, empMaCont: 4705,
+      housingOutflow: 0,
+      medicalUsage: 300, medishieldIP: 800, elderCareShield: 400, medicalInflationRate: 2,
+      propertyValue: 0, includeProperty: false,
+      vc3aCash: 0, vcSaTopup: 0, vcMaCash: 0, vcVhr: 0,
+      annualGovGrant: 500,
+      currentPrivateAssets: 35000, annualPrivateSaving: 5000, privateAssetGrowthRate: 4,
+      targetMonthlyIncome: 2500,
+    },
+  },
+  // ─────────────────────────────────────────────────────────────────────────
   // BABY MILLIONAIRE — Strategy A: Full Launch (birth lump sums + annual VC3A)
   //
   // How it works:
@@ -8553,6 +8653,26 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   setWhatIfOaDrawdown(null);
                   setWhatIfSrsContrib(null);
                   setWhatIfPrivGrowth(null);
+                  // ── Household state — restore or reset cleanly ──────────────────────
+                  // Always reset first so loading a non-household preset never leaves
+                  // stale spouse data from a prior session bleeding into the new profile.
+                  const presetHouseholdOn = !!p.householdEnabled;
+                  setHouseholdEnabled(presetHouseholdOn);
+                  setHousingSharePct(p.housingSharePct != null ? Number(p.housingSharePct) : 50);
+                  if (p.spouseInputs && typeof p.spouseInputs === 'object') {
+                    const safeSpouse = { ...SPOUSE_DEFAULT_INPUTS };
+                    Object.keys(SPOUSE_DEFAULT_INPUTS).forEach(k => {
+                      if (p.spouseInputs[k] !== undefined) safeSpouse[k] = p.spouseInputs[k];
+                    });
+                    setSpouseInputs(safeSpouse);
+                    setDebouncedSpouseInputs(safeSpouse);
+                  } else {
+                    setSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
+                    setDebouncedSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
+                  }
+                  // Navigate to Household tab when loading a household preset (mirrors
+                  // the Enable toggle's behaviour: if (next) setActiveTab("household")).
+                  if (presetHouseholdOn) setActiveTab("household");
                   setShowPresets(false);
                   showToast(`✓ Loaded: ${p.label}`);
                 }} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%", transition: "border-color 0.15s" }}
