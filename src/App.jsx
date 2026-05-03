@@ -6856,7 +6856,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
       <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{ width: "100%", display: "flex", flexDirection: "column", background: "var(--bg-base)", color: "var(--text-main)", fontFamily: "system-ui,sans-serif" }}>
       <style>{`
         /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
-        html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow-x: hidden !important; }
+        html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow-x: clip !important; }
         #root { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; display: flex; min-height: 100vh; min-height: 100dvh; }
         :root { --app-height: 100vh; --viewport-height: 100vh; }
         @supports (height: 100dvh) { :root { --app-height: 100dvh; --viewport-height: 100dvh; } }
@@ -7496,7 +7496,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
            permanent gutter space, so header and content stay visually aligned. */
         .cpf-tab-content {
           overflow-y: auto;
-          overflow-x: hidden;
+          overflow-x: clip;
           scrollbar-width: thin;
           scrollbar-color: var(--border-strong) transparent;
           padding: 12px 0;
@@ -7913,7 +7913,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           /* Revert to normal page flow — no sticky panels on tablet */
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
-          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
+          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; padding-top: 44px !important; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 16px 14px 72px; }
           /* W1 fix: remove horizontal padding from tab-content — parent cpf-main-wrap already provides
              14px inset, so adding another 14px here made content 14px narrower per side than the
@@ -7921,7 +7921,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
-          .sidebar-toggle-btn { display: flex !important; position: sticky; top: 0; z-index: 40; background: var(--bg-panel); }
+          /* Tablet: fix the sidebar toggle the same way mobile does — position:sticky cannot work
+             when the parent is overflow:visible; use fixed so it stays reachable at all times. */
+          .sidebar-toggle-btn { display: flex !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; z-index: 48 !important; background: var(--bg-panel); }
           .desktop-only { display: none !important; }
           .rg-6, .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
           .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
@@ -7944,10 +7946,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
           /* Tablet sticky bottom action bar — always shown on tablet, hidden elsewhere */
           .tablet-action-bar { display: flex !important; }
-          /* Docs tab: re-enable sticky nav — body is the scroll container on tablet (cpf-tab-content
-             is overflow:visible here), so top:0 sticks to the viewport top. Desktop uses top:-20
-             inside its own scroll container; tablet needs top:0 relative to the viewport. */
-          #docs-sticky-nav { position: sticky !important; top: 0 !important; }
+          /* Docs tab sticky nav: inline style has marginTop:-28 so sticky "top" is relative to the
+             margin edge (28px above the border). Override margin-top to 0 so "top" = exact pixel
+             from viewport top. Tablet has no fixed header so top:0 = stick right at viewport top. */
+          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
         }
 
         /* ─── MOBILE  ≤ 768 px ───────────────────────────────────────── */
@@ -7988,7 +7990,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
           .cpf-kpi-value { font-size: 12px !important; }
           .cpf-kpi-label { font-size: 8px !important; }
-          body { overflow-x: hidden !important; }
+          /* overflow-x: clip (not hidden) — clips horizontal bleed WITHOUT creating a scroll
+             container. overflow:hidden would trap position:sticky descendants and prevent them
+             from sticking to the viewport. clip has the same visual effect with no side-effects. */
+          body { overflow-x: clip !important; }
           .pie-chart-wrap { flex-direction: column !important; align-items: stretch !important; }
           .pie-chart-wrap > div:first-child { width: 100% !important; }
           .pie-legend { grid-template-columns: 1fr 1fr !important; }
@@ -8014,9 +8019,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .compare-slots-grid { grid-template-columns: 1fr !important; }
           .wi-summary-grid { grid-template-columns: 1fr !important; }
           .wi-sliders-grid { grid-template-columns: 1fr !important; }
-          /* Docs tab: body is the scroll container on mobile (cpf-tab-content is overflow:visible).
-             top:0 is correct here; the ≤640px rule below bumps it to 48px for the fixed header. */
-          #docs-sticky-nav { position: sticky !important; top: 0 !important; }
+          /* Docs tab: same margin-top:0 fix as tablet. No fixed header at 641–768px so top:0 is correct. */
+          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
         }
 
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
@@ -8039,8 +8043,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .z1-hero { padding: 12px 10px !important; border-radius: 14px !important; }
           .z4-plans-grid { grid-template-columns: 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr !important; }
-          /* Docs tab sticky nav on small phones — fixed header is 48px tall so offset by that */
-          #docs-sticky-nav { position: sticky !important; top: 48px !important; margin: 0 !important; padding: 14px 14px 10px !important; }
+          /* Docs tab sticky nav on small phones — fixed header is 48px tall so offset by that.
+             Use margin-top:0 only (not margin:0) so the -28px left/right margins that make the
+             bar edge-to-edge inside the 28px-padded parent are preserved. top:48px is then exact. */
+          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 48px !important; padding: 14px 14px 10px !important; }
           #docs-sticky-nav h3 { font-size: 16px !important; }
         }
 
@@ -8065,7 +8071,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
           .cpf-sidebar-wrap { padding-top: 44px; }
           .desktop-only { display: none !important; }
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
-          /* Docs sticky nav: header is fixed at 48px on mobile — bump top so it sits below it */
+          /* Docs sticky nav: fixed header is 48px; margin-top:0 already set by ≤768px rule above,
+             so top:48px places the border edge exactly at 48px — flush below the fixed header. */
           #docs-sticky-nav { top: 48px !important; }
         }
         @media (min-width: 641px) {
@@ -8075,7 +8082,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* ─── GLOBAL OVERFLOW GUARD (Fixed for Recharts) ───────────── */
         @media (max-width: 1024px) {
-          body, html, #root, .cpf-page-wrap, .cpf-layout, .cpf-main-wrap { max-width: 100vw; box-sizing: border-box; overflow-x: hidden; }
+          /* overflow-x: clip — prevents Recharts horizontal bleed without creating implicit scroll
+             containers (which overflow:hidden does). Scroll containers on these ancestors break
+             position:sticky on all descendant elements including the docs sticky nav. */
+          body, html, #root, .cpf-page-wrap, .cpf-layout, .cpf-main-wrap { max-width: 100vw; box-sizing: border-box; overflow-x: clip; }
           img { max-width: 100%; height: auto; }
           pre, code { white-space: pre-wrap; word-break: break-word; }
           input, select, textarea { max-width: 100%; }
