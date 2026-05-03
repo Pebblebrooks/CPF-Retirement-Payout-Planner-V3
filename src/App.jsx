@@ -5647,27 +5647,35 @@ export default function App() {
   const spousePayoutAge = Number(debouncedSpouseInputs.payoutAge) || 65;
 
   // householdData: post-hoc combination of primary + spouse projections.
-  // Computes combined totals, combined CPF LIFE monthly (rough interpolation),
+  // Computes combined totals, combined CPF LIFE monthly (via interpolateCpfLife),
   // and combined net worth at key ages. Consumed only by the Household tab.
+  // NOTE: payoutAge65 is declared ~44 lines below — use inline calc here to avoid TDZ.
   const householdData = useMemo(() => {
     if (!householdEnabled || !spouseProjection.length || !projection?.length) return null;
-    const primaryPa  = payoutAge65;
-    const spousePa   = spousePayoutAge;
+    const primaryPa  = Number(debouncedInputs.payoutAge) || 65;   // inline — avoids TDZ with payoutAge65
+    const spousePa   = Number(debouncedSpouseInputs.payoutAge) || 65;
+    const pIsMale    = debouncedInputs.isMale !== false;
+    const sIsMale    = debouncedSpouseInputs.isMale !== false;
     const startAge   = Math.min(
       Number(debouncedInputs.currentAge)       || 35,
       Number(debouncedSpouseInputs.currentAge) || 35
     );
+    // Cache RA at payout age for one-time LIFE interpolation (Standard plan)
+    const pRaAtPA = projectionByAge.get(primaryPa)?.ra || 0;
+    const sRaAtPA = spouseProjectionByAge.get(spousePa)?.ra || 0;
+    const pLifeStdAtPA = Math.round(interpolateCpfLife(pRaAtPA, 'std', pIsMale));
+    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'std', sIsMale));
     const rows = [];
     for (let age = startAge; age <= 95; age++) {
       const pRow = projectionByAge.get(age) || {};
       const sRow = spouseProjectionByAge.get(age) || {};
       const pInPayout = age >= primaryPa;
       const sInPayout = age >= spousePa;
-      // CPF LIFE rough monthly (use engine's stored value if available)
-      const pLifeMonthly = pInPayout ? (pRow._lifeMonthlyStd || 0) : 0;
-      const sLifeMonthly = sInPayout ? (sRow._lifeMonthlyStd || 0) : 0;
+      // CPF LIFE monthly — use interpolated value fixed at payout age (Standard plan)
+      const pLifeMonthly = pInPayout ? pLifeStdAtPA : 0;
+      const sLifeMonthly = sInPayout ? sLifeStdAtPA : 0;
       const combinedLifeMonthly = pLifeMonthly + sLifeMonthly;
-      // Combined account balances
+      // Combined account balances (engine rows: .oa .sa .ma .ra .total .privateAssets)
       const combinedOA  = (pRow.oa  || 0) + (sRow.oa  || 0);
       const combinedSA  = (pRow.sa  || 0) + (sRow.sa  || 0);
       const combinedMA  = (pRow.ma  || 0) + (sRow.ma  || 0);
@@ -5679,11 +5687,14 @@ export default function App() {
         age, combinedOA, combinedSA, combinedMA, combinedRA,
         combinedPrivate, combinedTotal, combinedLifeMonthly,
         primaryTotal: pRow.total || 0, spouseTotal: sRow.total || 0,
+        pLifeMonthly, sLifeMonthly,   // expose per-member for Household tab table
       });
     }
     return rows;
   }, [householdEnabled, projection, spouseProjection, projectionByAge, spouseProjectionByAge,
-      payoutAge65, spousePayoutAge, debouncedInputs.currentAge, debouncedSpouseInputs.currentAge]);
+      debouncedInputs.payoutAge, debouncedSpouseInputs.payoutAge,
+      debouncedInputs.currentAge, debouncedSpouseInputs.currentAge,
+      debouncedInputs.isMale, debouncedSpouseInputs.isMale]);
 
   const householdByAge = useMemo(
     () => new Map((householdData || []).map(r => [r.age, r])),
@@ -14486,8 +14497,10 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               const hAt95  = householdByAge.get(95) || {};
 
               // Combined monthly income at the later payout age
-              const pLifeStd   = pAtPA._lifeMonthlyStd  || 0;
-              const sLifeStd   = sAtPA._lifeMonthlyStd  || 0;
+              // Use pre-computed interpolateCpfLife values stored in householdData rows
+              const hAtCombinedPA = householdByAge.get(combinedPA) || {};
+              const pLifeStd   = hAtCombinedPA.pLifeMonthly || 0;
+              const sLifeStd   = hAtCombinedPA.sLifeMonthly || 0;
               const pOaDraw    = (Number(debouncedInputs.oaDrawdownMonthly) || 0);
               const sOaDraw    = (Number(debouncedSpouseInputs.oaDrawdownMonthly) || 0);
               const combinedMonthly = pLifeStd + sLifeStd + pOaDraw + sOaDraw;
@@ -14542,9 +14555,11 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                   {/* Side-by-side payout comparison */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    {[[pName, pPA, pAtPA, "var(--clr-blue2)", debouncedInputs],
-                      [sName, sPA, sAtPA, "#8b5cf6", debouncedSpouseInputs]].map(([name, pa, atPA, color, inp]) => {
-                      const lifeMonthly = atPA._lifeMonthlyStd || 0;
+                    {[[pName, pPA, pAtPA, "var(--clr-blue2)", debouncedInputs, "pLifeMonthly"],
+                      [sName, sPA, sAtPA, "#8b5cf6", debouncedSpouseInputs, "sLifeMonthly"]].map(([name, pa, atPA, color, inp, lifeKey]) => {
+                      // Use pre-computed LIFE monthly from householdByAge (avoids _lifeMonthlyStd — not stored on engine rows)
+                      const hRowAtPA = householdByAge.get(pa) || {};
+                      const lifeMonthly = hRowAtPA[lifeKey] || 0;
                       const oaDraw = Number(inp.oaDrawdownMonthly) || 0;
                       const totalMonthly = lifeMonthly + oaDraw;
                       return (
@@ -14653,8 +14668,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             const hRow = householdByAge.get(age) || {};
                             const pInPayout = age >= pPA;
                             const sInPayout = age >= sPA;
-                            const pLifeM = pInPayout ? (projectionByAge.get(age)?._lifeMonthlyStd || 0) : 0;
-                            const sLifeM = sInPayout ? (spouseProjectionByAge.get(age)?._lifeMonthlyStd || 0) : 0;
+                            // Use pre-computed LIFE monthly stored in householdData rows
+                            const pLifeM = pInPayout ? (hRow.pLifeMonthly || 0) : 0;
+                            const sLifeM = sInPayout ? (hRow.sLifeMonthly || 0) : 0;
                             const pOaM   = pInPayout ? pOaDraw : 0;
                             const sOaM   = sInPayout ? sOaDraw : 0;
                             const isHighlight = age === pPA || age === sPA;
