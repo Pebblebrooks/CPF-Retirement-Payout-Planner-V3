@@ -592,6 +592,8 @@ const DEFAULT_INPUTS = {
   milestoneAge: 0,
   milestoneAge2: 0,
   milestoneAge3: 0,
+  milestoneAge4: 0,
+  milestoneAge5: 0,
 };
 
 const PRESET_PROFILES = [
@@ -910,7 +912,7 @@ const INPUT_LABELS = {
   cpfScheme: "CPF Scheme", rssPayoutStartAge: "RSS Payout Start Age",
   rssMonthlyPayout: "RSS Monthly Payout ($)", lifeMigrationAge: "Migrate to CPF LIFE Age",
   lifePlanAtMigration: "CPF LIFE Plan at Migration",
-  milestoneAge: "Milestone Age 1", milestoneAge2: "Milestone Age 2", milestoneAge3: "Milestone Age 3",
+  milestoneAge: "Milestone Age 1", milestoneAge2: "Milestone Age 2", milestoneAge3: "Milestone Age 3", milestoneAge4: "Milestone Age 4", milestoneAge5: "Milestone Age 5",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
@@ -3695,6 +3697,16 @@ export default function App() {
     if (ma3_val !== 0) {
       if (ma3_val <= ca) errs.milestoneAge3 = "Milestone age must be greater than current age";
       else if (ma3_val > 95) errs.milestoneAge3 = "Milestone age must be ≤ 95";
+    }
+    const ma4_val = Number(inp.milestoneAge4) || 0;
+    if (ma4_val !== 0) {
+      if (ma4_val <= ca) errs.milestoneAge4 = "Milestone age must be greater than current age";
+      else if (ma4_val > 95) errs.milestoneAge4 = "Milestone age must be ≤ 95";
+    }
+    const ma5_val = Number(inp.milestoneAge5) || 0;
+    if (ma5_val !== 0) {
+      if (ma5_val <= ca) errs.milestoneAge5 = "Milestone age must be greater than current age";
+      else if (ma5_val > 95) errs.milestoneAge5 = "Milestone age must be ≤ 95";
     }
     // ── RSS-specific validations (additive block — does not touch any CPF LIFE check above) ──
     if (inp.cpfScheme === 'rss') {
@@ -8827,16 +8839,18 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     </div>
                   </div>
                   {/* Q2: Milestone Ages — 3 slots, compact side-by-side */}
-                  <div style={{ padding: "10px 12px", borderRadius: 10, background: "var(--bg-muted)", border: `1px solid ${inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3 ? "var(--clr-red)" : "rgba(34,211,238,0.25)"}` }}>
+                  <div style={{ padding: "10px 12px", borderRadius: 10, background: "var(--bg-muted)", border: `1px solid ${inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3 || inputErrors.milestoneAge4 || inputErrors.milestoneAge5 ? "var(--clr-red)" : "rgba(34,211,238,0.25)"}` }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#22d3ee", textTransform: "uppercase", whiteSpace: "nowrap" }}>🎯 Milestone Ages</span>
-                      <TooltipBox id="t-milestone" text="Set up to 3 personal milestone ages to track on the Accumulation chart and Summary tab. A teal dashed marker appears for each, with a balance callout showing projected OA/SA/MA/RA. Useful for age 21 (first job), 35 (peak earning), 55 (SA closure). Leave at 0 to disable a slot." />
+                      <TooltipBox id="t-milestone" text="Set up to 5 personal milestone ages to track on the Accumulation chart and Summary tab. A teal dashed marker appears for each, with a balance callout showing projected OA/SA/MA/RA. Useful for age 21 (first job), 35 (peak earning), 55 (SA closure). Leave at 0 to disable a slot." />
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 6 }}>
                       {[
                         { name: "milestoneAge",  label: "#1", err: inputErrors.milestoneAge  },
                         { name: "milestoneAge2", label: "#2", err: inputErrors.milestoneAge2 },
                         { name: "milestoneAge3", label: "#3", err: inputErrors.milestoneAge3 },
+                        { name: "milestoneAge4", label: "#4", err: inputErrors.milestoneAge4 },
+                        { name: "milestoneAge5", label: "#5", err: inputErrors.milestoneAge5 },
                       ].map(({ name, label, err }) => (
                         <div key={name} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                           <span style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
@@ -8852,8 +8866,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         </div>
                       ))}
                     </div>
-                    {(inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3) && (
-                      <p className="cpf-err" style={{ marginTop: 4 }}>⚠ {inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3}</p>
+                    {(inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3 || inputErrors.milestoneAge4 || inputErrors.milestoneAge5) && (
+                      <p className="cpf-err" style={{ marginTop: 4 }}>⚠ {inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3 || inputErrors.milestoneAge4 || inputErrors.milestoneAge5}</p>
                     )}
                   </div>
 
@@ -11907,11 +11921,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 {(() => {
                   const ca_m = Number(inputs.currentAge) || 0;
                   const inflRate = (Number(debouncedInputs.inflationRate) || 2) / 100;
-                  const markerColors = ["#22d3ee", "#67e8f9", "#a5f3fc"];
+                  const markerColors = ["#22d3ee", "#67e8f9", "#a5f3fc", "#cffafe", "#e0f2fe"];
                   const slots = [
                     Number(inputs.milestoneAge)  || 0,
                     Number(inputs.milestoneAge2) || 0,
                     Number(inputs.milestoneAge3) || 0,
+                    Number(inputs.milestoneAge4) || 0,
+                    Number(inputs.milestoneAge5) || 0,
                   ].filter(age => age > 0 && age > ca_m).sort((a, b) => a - b);
                   if (slots.length === 0) return null;
 
@@ -13227,6 +13243,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           { age: Number(inputs.milestoneAge)  || 0, stroke: "#22d3ee" },
                           { age: Number(inputs.milestoneAge2) || 0, stroke: "#67e8f9" },
                           { age: Number(inputs.milestoneAge3) || 0, stroke: "#a5f3fc" },
+                          { age: Number(inputs.milestoneAge4) || 0, stroke: "#cffafe" },
+                          { age: Number(inputs.milestoneAge5) || 0, stroke: "#e0f2fe" },
                         ];
                         return slots
                           .filter(s => s.age > 0 && s.age > ca_m)
