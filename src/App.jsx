@@ -3533,7 +3533,7 @@ export default function App() {
   const [whatIfOaDrawdown, setWhatIfOaDrawdown]   = useState(null);   // Rev #12
   const [whatIfSrsContrib, setWhatIfSrsContrib]   = useState(null);   // Rev #12
   const [whatIfPrivGrowth, setWhatIfPrivGrowth]   = useState(null);   // Rev #12
-  const [showWhatIf, setShowWhatIf] = useState(false);
+
   const [lifePlansExpanded, setLifePlansExpanded] = useState(true);
   // Summary tab collapsible zone states
   const [z2z3Expanded, setZ2z3Expanded] = useState(true);
@@ -4121,7 +4121,7 @@ export default function App() {
         if (fullState.whatIfOaDrawdown != null) setWhatIfOaDrawdown(fullState.whatIfOaDrawdown);
         if (fullState.whatIfSrsContrib != null) setWhatIfSrsContrib(fullState.whatIfSrsContrib);
         if (fullState.whatIfPrivGrowth != null) setWhatIfPrivGrowth(fullState.whatIfPrivGrowth);
-        if (fullState.showWhatIf != null) setShowWhatIf(fullState.showWhatIf);
+
         if (fullState.isRealDollars != null) setIsRealDollars(fullState.isRealDollars);
         if (fullState.pdfOrientation) setPdfOrientation(fullState.pdfOrientation);
         // Fix 3 + Fix 4: Scenario slot restoration from share link.
@@ -4652,7 +4652,6 @@ export default function App() {
         setScenarioB(null);
         setScenarioLabelA("");
         setScenarioLabelB("");
-        setShowWhatIf(false);
         setWhatIfPayoutAge(null);
         setWhatIfSaTopup(null);
         setWhatIfHousing(null);
@@ -4775,7 +4774,6 @@ export default function App() {
       whatIfOaDrawdown,
       whatIfSrsContrib,
       whatIfPrivGrowth,
-      showWhatIf,
       // Display preferences
       isRealDollars,
       pdfOrientation,
@@ -4930,7 +4928,7 @@ export default function App() {
           try { if (p.whatIfOaDrawdown !== undefined) setWhatIfOaDrawdown(p.whatIfOaDrawdown); } catch {}
           try { if (p.whatIfSrsContrib !== undefined) setWhatIfSrsContrib(p.whatIfSrsContrib); } catch {}
           try { if (p.whatIfPrivGrowth !== undefined) setWhatIfPrivGrowth(p.whatIfPrivGrowth); } catch {}
-          try { if (p.showWhatIf != null) setShowWhatIf(p.showWhatIf); } catch {}
+
           try { if (p.isRealDollars != null) setIsRealDollars(p.isRealDollars); } catch {}
           try { if (p.pdfOrientation) setPdfOrientation(p.pdfOrientation); } catch {}
           // Fix 1: Restore scenario slots — if payoutProj is missing (old export format),
@@ -5039,7 +5037,7 @@ export default function App() {
         scenarioBInputs: scenarioB?.inputs ?? null,
         whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump,
         whatIfContribStop, whatIfOaDrawdown, whatIfSrsContrib, whatIfPrivGrowth,
-        showWhatIf, isRealDollars, pdfOrientation, appVersion: "V4-2026"
+        isRealDollars, pdfOrientation, appVersion: "V4-2026"
       };
       const compressed = lzCompress(JSON.stringify(fullState));
       const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
@@ -5909,10 +5907,10 @@ export default function App() {
   }, [showBaseline, debouncedInputs, isRealDollars]);
 
   const whatIfProjection = useMemo(() => {
-    // Gate: compute when the explorer is open (showWhatIf) OR when on the compare tab
-    // so the Compare tab chart always has data without requiring showWhatIf to be true.
+    // Gate: compute when any slider is set OR when on the compare/summary tab.
+    // anySliderSet already handles the "don't compute when nothing is set" case cleanly.
     const anySliderSet = whatIfPayoutAge !== null || whatIfSaTopup !== null || whatIfHousing !== null || whatIfSalaryBump !== null || whatIfContribStop !== null || whatIfOaDrawdown !== null || whatIfSrsContrib !== null || whatIfPrivGrowth !== null;
-    if (!showWhatIf && activeTab !== "compare" && activeTab !== "summary" && !anySliderSet) return null;
+    if (activeTab !== "compare" && activeTab !== "summary" && !anySliderSet) return null;
     // NX8 fix: use debouncedInputs (not live inputs) so the What-If baseline stays in sync
     // with the main projection — previously the 180ms debounce window caused the What-If
     // chart to show new input values against a stale main projection baseline.
@@ -5959,7 +5957,7 @@ export default function App() {
           overridePrivGrowthRate: effPG,
         });
     return { rows, effPA, effST, effH, effSB, effCS, effOAD, effSRS, effPG };
-  }, [showWhatIf, whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump,
+  }, [whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump,
       whatIfContribStop, whatIfOaDrawdown, whatIfSrsContrib, whatIfPrivGrowth,
       debouncedInputs]);
 
@@ -8182,7 +8180,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     if (parsed.whatIfSaTopup != null) setWhatIfSaTopup(parsed.whatIfSaTopup);
                     if (parsed.whatIfHousing != null) setWhatIfHousing(parsed.whatIfHousing);
                     if (parsed.whatIfSalaryBump != null) setWhatIfSalaryBump(parsed.whatIfSalaryBump);
-                    if (parsed.showWhatIf != null) setShowWhatIf(parsed.showWhatIf);
+
                     if (parsed.isRealDollars != null) setIsRealDollars(parsed.isRealDollars);
                     // Scenario restore — handle both formats:
                     //   New format (V4-2026+): scenarioAInputs key holds just inputs; projection recalculated.
@@ -8380,7 +8378,6 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   setScenarioLabelA("");
                   setScenarioLabelB("");
                   // Clear What-If overrides — old values are meaningless against new inputs.
-                  setShowWhatIf(false);
                   setWhatIfPayoutAge(null);
                   setWhatIfSaTopup(null);
                   setWhatIfHousing(null);
@@ -11915,7 +11912,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     Number(inputs.milestoneAge)  || 0,
                     Number(inputs.milestoneAge2) || 0,
                     Number(inputs.milestoneAge3) || 0,
-                  ].filter(age => age > 0 && age > ca_m);
+                  ].filter(age => age > 0 && age > ca_m).sort((a, b) => a - b);
                   if (slots.length === 0) return null;
 
                   // ── Geometry ──────────────────────────────────────────────
@@ -12866,7 +12863,14 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                     <SlidersHorizontal style={{ width: 16, height: 16, color: "var(--clr-green)", flexShrink: 0 }} />
                     <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>What-If Explorer</span>
                     <span style={{ fontSize: 9, background: "rgba(var(--clr-emerald-rgb),0.12)", color: "var(--clr-green)", padding: "2px 8px", borderRadius: 999, border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", fontWeight: 700, marginLeft: 2 }}>Live Simulation</span>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>Drag sliders · no inputs changed</span>
+                    <span style={{ fontSize: 11, marginLeft: "auto" }}>
+                      {(() => {
+                        const nChanged = [whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump, whatIfContribStop, whatIfOaDrawdown, whatIfSrsContrib, whatIfPrivGrowth].filter(v => v !== null).length;
+                        return nChanged === 0
+                          ? <span style={{ color: "var(--text-muted)" }}>No sliders changed · drag to explore</span>
+                          : <span style={{ color: "var(--clr-green)", fontWeight: 700 }}>{nChanged} slider{nChanged > 1 ? "s" : ""} changed</span>;
+                      })()}
+                    </span>
                   </summary>
                   <div style={{ padding: "0 20px 20px" }}>
                     {/* Reset + toggle row */}
@@ -12879,13 +12883,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 8, fontSize: 10, fontWeight: 700, background: "var(--bg-input)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>
                           ↺ Reset all
                         </button>
-                        <button onClick={() => setShowWhatIf(v => !v)}
-                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: `1px solid ${showWhatIf ? "rgba(var(--clr-emerald-rgb),0.5)" : "var(--border-strong)"}`, background: showWhatIf ? "rgba(var(--clr-emerald-rgb),0.15)" : "var(--bg-input)", color: showWhatIf ? "var(--clr-green)" : "var(--text-muted)", cursor: "pointer" }}>
-                          <SlidersHorizontal style={{ width: 13, height: 13 }} />{showWhatIf ? "Hide sliders" : "Show sliders"}
-                        </button>
                       </div>
                     </div>
-                    {showWhatIf && (() => {
+                    {(() => {
                       const effPA  = whatIfPayoutAge   !== null ? whatIfPayoutAge   : (Number(debouncedInputs.payoutAge) || 65);
                       const effST  = whatIfSaTopup     !== null ? whatIfSaTopup     : (Number(debouncedInputs.vcSaTopup) || 0);
                       const effH   = whatIfHousing     !== null ? whatIfHousing     : (Number(debouncedInputs.housingOutflow) || 0);
