@@ -3738,6 +3738,11 @@ export default function App() {
   const [leEditingId, setLeEditingId] = useState(null); // null = closed; 'new' = adding new
   const [leFormState, setLeFormState] = useState({});
   const [leMagFocused, setLeMagFocused] = useState(false);
+  // BUG-3 fix: Household tab "How this tab works" explainer toggle hoisted from IIFE to top-level.
+  // Same Rules-of-Hooks violation as BUG-2: React.useState was called inside a conditional IIFE
+  // (only executed when activeTab === "household"), causing hook count to differ between renders
+  // and throwing React Error #310 (too many re-renders) → blank page on Household sample load.
+  const [hhExplainerExpanded, setHhExplainerExpanded] = useState(false);
 
   // Sidebar accordion — supports multiple open sections simultaneously
   // All section IDs — used for expand-all default and expandAllSections helper
@@ -14750,19 +14755,19 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                   </div>
 
                   {/* HH-4: Collapsible "How this tab works" explainer */}
+                  {/* BUG-3 fix: state hoisted to top-level hhExplainerExpanded — no React.useState here */}
                   {(() => {
-                    const [hhExpanded, setHhExpanded] = React.useState(false);
                     return (
                       <div style={{ background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.18)", borderRadius: 12 }}>
-                        <button onClick={() => setHhExpanded(v => !v)}
+                        <button onClick={() => setHhExplainerExpanded(v => !v)}
                           style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
                             padding: "10px 16px", background: "none", border: "none", cursor: "pointer", color: "#a78bfa" }}>
                           <span style={{ fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
                             <HelpCircle style={{ width: 13, height: 13 }} /> How does this tab work?
                           </span>
-                          {hhExpanded ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />}
+                          {hhExplainerExpanded ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />}
                         </button>
-                        {hhExpanded && (
+                        {hhExplainerExpanded && (
                           <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
                             {[
                               ["🔵 Independent engines", "Each member (primary + spouse) runs a completely separate full CPF projection. Balances, contributions, top-ups, outflows, and CPF LIFE payouts are all computed independently."],
