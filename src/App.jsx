@@ -3665,6 +3665,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("summary");
   activeTabRef.current = activeTab; // keep ref current for keyboard shortcut handler
   const [highlightPlan, setHighlightPlan] = useState("standard");
+  const [householdPlan, setHouseholdPlan] = useState("standard"); // Fix 2: per-Household-tab plan selector
   const [viewMode, setViewMode] = useState("bequest");
   const [showTooltipId, setShowTooltipId] = useState(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -5791,21 +5792,44 @@ export default function App() {
       Number(debouncedInputs.currentAge)       || 35,
       Number(debouncedSpouseInputs.currentAge) || 35
     );
-    // Cache RA at payout age for one-time LIFE interpolation (Standard plan)
-    const pRaAtPA = projectionByAge.get(primaryPa)?.ra || 0;
+    // ── Fix 1A: use post-OA-transfer RA for accurate CPF LIFE interpolation ──────
+    // Primary: raAfterTransfer (component-scope) already deducts the birth-year-gated
+    // 20% OA transfer that reduces the RA entering the CPF LIFE pool. Previously the
+    // raw projection RA was used here, overstating the monthly payout by ~$500–800.
     const sRaAtPA = spouseProjectionByAge.get(spousePa)?.ra || 0;
-    const pLifeStdAtPA = Math.round(interpolateCpfLife(pRaAtPA, 'std', pIsMale));
-    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'std', sIsMale));
+    // Spouse: mirror the component-scope OA-transfer logic inline.
+    const sBirthYear    = (Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35);
+    const sCumTopUps    = spouseProjectionByAge.get(spousePa)?.cumRaCashTopUps ?? 0;
+    const sTransferBase = Math.max(0, sRaAtPA - sCumTopUps);
+    const sTransferPct  = sBirthYear >= 1958 ? 0.20 : sBirthYear === 1957 ? 0.10 : 0;
+    const sRaOaXferRaw  = Math.round(sTransferBase * sTransferPct);
+    const sRaOaXfer     = sBirthYear >= 1958 ? Math.max(0, sRaOaXferRaw - 5000) : sRaOaXferRaw;
+    const sRaForLife    = sRaAtPA - sRaOaXfer;
+    // Basic plan premium % — primary uses user-adjustable basicPremiumPct slider;
+    // spouse uses the default formula (10 + 2*(payoutAge−65), clamped 10–20).
+    const sBasPct = Math.min(20, Math.max(10, 10 + (spousePa - 65) * 2));
+    // ── Fix 2: compute all three plan payouts per member ─────────────────────────
+    const pLifeStdAtPA = Math.round(interpolateCpfLife(raAfterTransfer, 'std', pIsMale));
+    const pLifeEscAtPA = Math.round(interpolateCpfLife(raAfterTransfer, 'esc', pIsMale));
+    const pLifeBasAtPA = Math.round(interpolateCpfLife(raAfterTransfer, 'bas', pIsMale) * (1 - basicPremiumPct / 100) / 0.90);
+    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaForLife, 'std', sIsMale));
+    const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaForLife, 'esc', sIsMale));
+    const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaForLife, 'bas', sIsMale) * (1 - sBasPct / 100) / 0.90);
     const rows = [];
     for (let age = startAge; age <= 95; age++) {
       const pRow = projectionByAge.get(age) || {};
       const sRow = spouseProjectionByAge.get(age) || {};
       const pInPayout = age >= primaryPa;
       const sInPayout = age >= spousePa;
-      // CPF LIFE monthly — use interpolated value fixed at payout age (Standard plan)
-      const pLifeMonthly = pInPayout ? pLifeStdAtPA : 0;
-      const sLifeMonthly = sInPayout ? sLifeStdAtPA : 0;
-      const combinedLifeMonthly = pLifeMonthly + sLifeMonthly;
+      // Per-plan monthly values (0 before each member's payout age)
+      const pLifeStd = pInPayout ? pLifeStdAtPA : 0;
+      const pLifeEsc = pInPayout ? pLifeEscAtPA : 0;
+      const pLifeBas = pInPayout ? pLifeBasAtPA : 0;
+      const sLifeStd = sInPayout ? sLifeStdAtPA : 0;
+      const sLifeEsc = sInPayout ? sLifeEscAtPA : 0;
+      const sLifeBas = sInPayout ? sLifeBasAtPA : 0;
+      // combinedLifeMonthly: Standard plan baseline (used by the accumulation chart tooltip)
+      const combinedLifeMonthly = pLifeStd + sLifeStd;
       // Combined account balances (engine rows: .oa .sa .ma .ra .total .privateAssets)
       const combinedOA  = (pRow.oa  || 0) + (sRow.oa  || 0);
       const combinedSA  = (pRow.sa  || 0) + (sRow.sa  || 0);
@@ -5818,14 +5842,21 @@ export default function App() {
         age, combinedOA, combinedSA, combinedMA, combinedRA,
         combinedPrivate, combinedTotal, combinedLifeMonthly,
         primaryTotal: pRow.total || 0, spouseTotal: sRow.total || 0,
-        pLifeMonthly, sLifeMonthly,   // expose per-member for Household tab table
+        // Legacy keys preserved (always Standard) for any backward-compat reads
+        pLifeMonthly: pLifeStd, sLifeMonthly: sLifeStd,
+        // Plan-specific keys consumed by the Household plan selector (Fix 2)
+        pLifeStd, pLifeEsc, pLifeBas,
+        sLifeStd, sLifeEsc, sLifeBas,
       });
     }
     return rows;
   }, [householdEnabled, projection, spouseProjection, projectionByAge, spouseProjectionByAge,
       debouncedInputs.payoutAge, debouncedSpouseInputs.payoutAge,
       debouncedInputs.currentAge, debouncedSpouseInputs.currentAge,
-      debouncedInputs.isMale, debouncedSpouseInputs.isMale]);
+      debouncedInputs.isMale, debouncedSpouseInputs.isMale,
+      // Fix 1A: raAfterTransfer for primary; spouse birth-year fields for OA-transfer calc
+      raAfterTransfer, basicPremiumPct,
+      debouncedSpouseInputs.currentYear]);
 
   const householdByAge = useMemo(
     () => new Map((householdData || []).map(r => [r.age, r])),
@@ -14644,14 +14675,21 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               const hAtPA  = householdByAge.get(combinedPA) || {};
               const hAt95  = householdByAge.get(95) || {};
 
+              // Fix 2: resolve which plan key to read from householdData rows
+              const hhPlanKey = { standard: 'Std', escalating: 'Esc', basic: 'Bas' }[householdPlan] || 'Std';
+              const hhPlanLabel = { standard: 'Standard plan', escalating: 'Escalating plan', basic: 'Basic plan' }[householdPlan] || 'Standard plan';
+
               // Combined monthly income at the later payout age
-              // Use pre-computed interpolateCpfLife values stored in householdData rows
+              // Fix 1A + 1B: read plan-keyed fields (correct RA base) then apply applyInflation
               const hAtCombinedPA = householdByAge.get(combinedPA) || {};
-              const pLifeStd   = hAtCombinedPA.pLifeMonthly || 0;
-              const sLifeStd   = hAtCombinedPA.sLifeMonthly || 0;
-              const pOaDraw    = (Number(debouncedInputs.oaDrawdownMonthly) || 0);
-              const sOaDraw    = (Number(debouncedSpouseInputs.oaDrawdownMonthly) || 0);
-              const combinedMonthly = pLifeStd + sLifeStd + pOaDraw + sOaDraw;
+              const pLifeHHNom = hAtCombinedPA[`pLife${hhPlanKey}`] || 0;
+              const sLifeHHNom = hAtCombinedPA[`sLife${hhPlanKey}`] || 0;
+              // Apply same inflation adjustment as the KPI strip (deflates when Real Dollars is ON)
+              const pLifeHH = Math.round(applyInflation(pLifeHHNom, pPA));
+              const sLifeHH = Math.round(applyInflation(sLifeHHNom, sPA));
+              const pOaDraw = (Number(debouncedInputs.oaDrawdownMonthly) || 0);
+              const sOaDraw = (Number(debouncedSpouseInputs.oaDrawdownMonthly) || 0);
+              const combinedMonthly = pLifeHH + sLifeHH + pOaDraw + sOaDraw;
 
               if (!householdEnabled || !spouseProjection.length) {
                 return (
@@ -14674,7 +14712,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                       display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <Users style={{ width: 20, height: 20, color: "#8b5cf6" }} />
                     </div>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: "var(--text-bright)" }}>
                         Household View — {pName} &amp; {sName}
                       </h2>
@@ -14682,13 +14720,28 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                         Combined CPF projections · Property on {pName}'s profile · Independent engines
                       </p>
                     </div>
+                    {/* Fix 2: CPF LIFE plan selector — drives all monthly payout figures in this tab */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                      <span style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>CPF LIFE Plan</span>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {[["standard","Std"],["escalating","Esc"],["basic","Bas"]].map(([key, lbl]) => (
+                          <button key={key} onClick={() => setHouseholdPlan(key)}
+                            style={{ padding: "4px 11px", borderRadius: 16, fontSize: 11, fontWeight: householdPlan === key ? 700 : 400,
+                              cursor: "pointer", border: "none", transition: "all 0.15s",
+                              background: householdPlan === key ? "rgba(139,92,246,0.22)" : "var(--bg-muted)",
+                              color: householdPlan === key ? "#c4b5fd" : "var(--text-muted)" }}>
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Combined KPI row */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
                     {[
                       { label: "Combined CPF at Later Payout Age", value: fmtM((pAtPA.total || 0) + (sAtPA.total || 0)), sub: `Age ${combinedPA}`, color: "#8b5cf6" },
-                      { label: "Est. Combined CPF LIFE", value: `${fmt(combinedMonthly)}/mo`, sub: "Standard plan", color: "var(--clr-green)" },
+                      { label: "Est. Combined CPF LIFE", value: `${fmt(combinedMonthly)}/mo`, sub: hhPlanLabel, color: "var(--clr-green)" },
                       { label: "Combined at Age 95", value: fmtM(hAt95.combinedTotal || 0), sub: "Private + CPF", color: "var(--clr-blue2)" },
                       { label: "Housing Split", value: `${housingSharePct}% / ${100 - housingSharePct}%`, sub: `${pName} / ${sName}`, color: "var(--clr-amber)" },
                     ].map(({ label, value, sub, color }) => (
@@ -14703,11 +14756,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                   {/* Side-by-side payout comparison */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    {[[pName, pPA, pAtPA, "var(--clr-blue2)", debouncedInputs, "pLifeMonthly"],
-                      [sName, sPA, sAtPA, "#8b5cf6", debouncedSpouseInputs, "sLifeMonthly"]].map(([name, pa, atPA, color, inp, lifeKey]) => {
-                      // Use pre-computed LIFE monthly from householdByAge (avoids _lifeMonthlyStd — not stored on engine rows)
+                    {[[pName, pPA, pAtPA, "var(--clr-blue2)", debouncedInputs, "p"],
+                      [sName, sPA, sAtPA, "#8b5cf6", debouncedSpouseInputs, "s"]].map(([name, pa, atPA, color, inp, memberPrefix]) => {
+                      // Fix 1A+1B: read plan-keyed field and apply inflation (aligns with KPI strip)
                       const hRowAtPA = householdByAge.get(pa) || {};
-                      const lifeMonthly = hRowAtPA[lifeKey] || 0;
+                      const lifeMonthlyNom = hRowAtPA[`${memberPrefix}Life${hhPlanKey}`] || 0;
+                      const lifeMonthly = Math.round(applyInflation(lifeMonthlyNom, pa));
                       const oaDraw = Number(inp.oaDrawdownMonthly) || 0;
                       const totalMonthly = lifeMonthly + oaDraw;
                       return (
@@ -14731,7 +14785,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                           </div>
                           <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
                             <div style={{ display: "flex", justifyContent: "space-between" }}>
-                              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>CPF LIFE (Std)</span>
+                              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>CPF LIFE ({hhPlanKey})</span>
                               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-green)", fontFamily: "monospace" }}>{lifeMonthly > 0 ? `${fmt(lifeMonthly)}/mo` : "—"}</span>
                             </div>
                             {oaDraw > 0 && (
@@ -14816,9 +14870,9 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                             const hRow = householdByAge.get(age) || {};
                             const pInPayout = age >= pPA;
                             const sInPayout = age >= sPA;
-                            // Use pre-computed LIFE monthly stored in householdData rows
-                            const pLifeM = pInPayout ? (hRow.pLifeMonthly || 0) : 0;
-                            const sLifeM = sInPayout ? (hRow.sLifeMonthly || 0) : 0;
+                            // Fix 1A+1B: read plan-keyed fields and apply inflation
+                            const pLifeM = pInPayout ? Math.round(applyInflation(hRow[`pLife${hhPlanKey}`] || 0, pPA)) : 0;
+                            const sLifeM = sInPayout ? Math.round(applyInflation(hRow[`sLife${hhPlanKey}`] || 0, sPA)) : 0;
                             const pOaM   = pInPayout ? pOaDraw : 0;
                             const sOaM   = sInPayout ? sOaDraw : 0;
                             const isHighlight = age === pPA || age === sPA;
