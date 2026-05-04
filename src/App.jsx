@@ -3659,8 +3659,9 @@ export default function App() {
   const handleShareLinkInitRef = useRef(null);
   const handleResetRef = useRef(null);
   const activeTabRef = useRef("summary");
-  const isForeignerRef = useRef(false); // stable ref so keyboard nav can read current citizenship
-  const cpfSchemeRef   = useRef('cpf_life'); // stable ref so keyboard nav can read current scheme
+  const isForeignerRef      = useRef(false);        // stable ref so keyboard nav can read current citizenship
+  const cpfSchemeRef        = useRef('cpf_life');   // stable ref so keyboard nav can read current scheme
+  const householdEnabledRef = useRef(false);        // stable ref so keyboard nav can read current household state
 
   const [activeTab, setActiveTab] = useState("summary");
   activeTabRef.current = activeTab; // keep ref current for keyboard shortcut handler
@@ -4468,12 +4469,12 @@ export default function App() {
         handleResetRef.current?.();
       } else if (e.ctrlKey && e.key === ']') {
         e.preventDefault();
-        const tabs = ["summary", "strategy", "accumulation", ...(cpfSchemeRef.current === 'rss' ? ["rss"] : isForeignerRef.current ? [] : ["life"]), "compare", ...(householdEnabled ? ["household"] : []), "table", "notes"];
+        const tabs = ["summary", "strategy", "accumulation", ...(cpfSchemeRef.current === 'rss' ? ["rss"] : isForeignerRef.current ? [] : ["life"]), "compare", ...(householdEnabledRef.current ? ["household"] : []), "table", "notes"];
         const idx = tabs.indexOf(activeTabRef.current);
         setActiveTab(tabs[(idx + 1) % tabs.length]);
       } else if (e.ctrlKey && e.key === '[') {
         e.preventDefault();
-        const tabs = ["summary", "strategy", "accumulation", ...(cpfSchemeRef.current === 'rss' ? ["rss"] : isForeignerRef.current ? [] : ["life"]), "compare", ...(householdEnabled ? ["household"] : []), "table", "notes"];
+        const tabs = ["summary", "strategy", "accumulation", ...(cpfSchemeRef.current === 'rss' ? ["rss"] : isForeignerRef.current ? [] : ["life"]), "compare", ...(householdEnabledRef.current ? ["household"] : []), "table", "notes"];
         const idx = tabs.indexOf(activeTabRef.current);
         setActiveTab(tabs[(idx - 1 + tabs.length) % tabs.length]);
       }
@@ -4493,8 +4494,9 @@ export default function App() {
   // for every user who navigates to it. reads live `inputs` (not debounced) — intentional,
   // as this gates UI display only, not projection computation.
   const isForeigner  = (inputs.citizenStatus || 'SC') === 'foreigner';
-  isForeignerRef.current = isForeigner; // keep ref current for keyboard shortcut handler
-  cpfSchemeRef.current   = inputs.cpfScheme || 'cpf_life'; // keep ref current for keyboard shortcut handler
+  isForeignerRef.current      = isForeigner;                      // keep ref current for keyboard shortcut handler
+  cpfSchemeRef.current        = inputs.cpfScheme || 'cpf_life'; // keep ref current for keyboard shortcut handler
+  householdEnabledRef.current = !!householdEnabled;              // keep ref current for keyboard shortcut handler
 
   // Rev #13 — Currency fields that display as $X,XXX when not focused.
   // Excludes: age fields, rate/% fields, duration (Dur) fields, year fields, boolean fields.
@@ -5595,7 +5597,7 @@ export default function App() {
       currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
       isSelfEmployed, isMale, oaBalance, saBalance, maBalance,
       empOaCont, empSaCont, empMaCont, vc3aCash, vcSaTopup, vcVhr,
-      annualGovGrant, govGrantMa, wisAmount,
+      annualGovGrant, govGrantMa, mrssGrant, mmssGrant, wisAmount,
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
       cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
@@ -5626,7 +5628,7 @@ export default function App() {
       currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
       isSelfEmployed, isMale, oaBalance, saBalance, maBalance,
       empOaCont, empSaCont, empMaCont, vc3aCash, vcSaTopup, vcVhr,
-      annualGovGrant, govGrantMa, wisAmount,
+      annualGovGrant, govGrantMa, mrssGrant, mmssGrant, wisAmount,
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
       cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
@@ -5778,13 +5780,53 @@ export default function App() {
   // Spouse payout age — mirrors payoutAge65 pattern
   const spousePayoutAge = Number(debouncedSpouseInputs.payoutAge) || 65;
 
+  // ── payoutAge65 / raAfterTransfer block ────────────────────────────────────
+  // IMPORTANT: declared HERE (before householdData useMemo) so the useMemo factory
+  // can reference raAfterTransfer without hitting the Temporal Dead Zone.
+  // Previously these were declared ~117 lines later (after householdByAge), which
+  // caused a TDZ crash: useMemo calls its factory immediately during render, so any
+  // variable it closes over must already be initialised at the point useMemo() is called.
+  // NX10 fix: payoutAge65 reads debouncedInputs so it matches the debounced projection.
+  const payoutAge65 = Number(debouncedInputs.payoutAge) || 65;
+
+  // CQ-2 perf: use projectionByAge Map (O(1)) instead of projection.find() (O(n))
+  const raAtPayout = projectionByAge.get(payoutAge65)?.ra || 0;
+
+  // RA-to-OA transfer at payout age (CPF policy — cpf.gov.sg/A55):
+  // Per CPF Board infographic, only "cash top-ups, CPF transfers and government grants"
+  // are excluded from the eligible base. Interest earned on SA/RA is NOT excluded —
+  // it remains part of the eligible pool (confirmed by the John example: $220k RA,
+  // $20k excluded = cash top-ups/transfers/grants only, leaving $200k eligible base).
+  //
+  // Birth-year gating (CPF Board 2026):
+  //   Born 1958 or after → 20% of eligible base − $5,000 (floor $0)
+  //   Born 1957          → 10% of eligible base (no $5,000 deduction)
+  //   Born 1956 or earlier → not eligible (transfer = $0)
+  //
+  // RSS guard: pure RSS members (no migration) never undergo this transfer.
+  // When migration is active the transfer is computed inside runRSSEngine at lifeMigrationAge,
+  // so this block is skipped here to avoid double-applying it.
+  const _isRSSForTransfer = debouncedInputs.cpfScheme === 'rss';
+  const payoutRow65 = _isRSSForTransfer ? null : projectionByAge.get(payoutAge65);
+  const cumulativeCashTopUps = payoutRow65?.cumRaCashTopUps ?? 0;
+  // Birth year approximation: currentYear − currentAge (±1 yr; D4 birth-month will refine).
+  const _birthYear = (Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35);
+  const raTransferBase = _isRSSForTransfer ? 0 : Math.max(0, raAtPayout - cumulativeCashTopUps);
+  const _raTransferPct    = _birthYear >= 1958 ? 0.20 : _birthYear === 1957 ? 0.10 : 0;
+  const _raOaTransferRaw  = Math.round(raTransferBase * _raTransferPct);
+  const raOaTransfer = _isRSSForTransfer ? 0
+    : _birthYear >= 1958 ? Math.max(0, _raOaTransferRaw - 5000)
+    : _raOaTransferRaw;
+  // RA after birth-year-gated transfer (before CPF LIFE premium deduction)
+  const raAfterTransfer = raAtPayout - raOaTransfer;
+  // ── end of payoutAge65 / raAfterTransfer block ────────────────────────────
+
   // householdData: post-hoc combination of primary + spouse projections.
   // Computes combined totals, combined CPF LIFE monthly (via interpolateCpfLife),
   // and combined net worth at key ages. Consumed only by the Household tab.
-  // NOTE: payoutAge65 is declared ~44 lines below — use inline calc here to avoid TDZ.
   const householdData = useMemo(() => {
     if (!householdEnabled || !spouseProjection.length || !projection?.length) return null;
-    const primaryPa  = Number(debouncedInputs.payoutAge) || 65;   // inline — avoids TDZ with payoutAge65
+    const primaryPa  = Number(debouncedInputs.payoutAge) || 65;
     const spousePa   = Number(debouncedSpouseInputs.payoutAge) || 65;
     const pIsMale    = debouncedInputs.isMale !== false;
     const sIsMale    = debouncedSpouseInputs.isMale !== false;
@@ -5865,41 +5907,8 @@ export default function App() {
   const effectiveOaDrawMonthly  = debouncedInputs.dieWithZeroEnabled ? (projection._dwzOaMonthly || 0) : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
   const effectiveOaDrawStartAge = debouncedInputs.dieWithZeroEnabled ? (projection._dwzStartAge || Number(debouncedInputs.payoutAge) || 65) : (Number(debouncedInputs.oaDrawdownStartAge) || 0);
   const effectiveOaDrawFloor    = debouncedInputs.dieWithZeroEnabled ? 0 : (Number(debouncedInputs.oaDrawdownFloor) || 0);
-
-  // NX10 fix: payoutAge65 reads debouncedInputs so it matches the debounced projection
-  // Declared HERE (before raAtPayout) to avoid TDZ — raAtPayout references it directly.
-  const payoutAge65 = Number(debouncedInputs.payoutAge) || 65;
-
-  // CQ-2 perf: use projectionByAge Map (O(1)) instead of projection.find() (O(n))
-  const raAtPayout = projectionByAge.get(payoutAge65)?.ra || 0;
-
-  // RA-to-OA transfer at payout age (CPF policy — cpf.gov.sg/A55):
-  // Per CPF Board infographic, only "cash top-ups, CPF transfers and government grants"
-  // are excluded from the eligible base. Interest earned on SA/RA is NOT excluded —
-  // it remains part of the eligible pool (confirmed by the John example: $220k RA,
-  // $20k excluded = cash top-ups/transfers/grants only, leaving $200k eligible base).
-  //
-  // Birth-year gating (CPF Board 2026):
-  //   Born 1958 or after → 20% of eligible base − $5,000 (floor $0)
-  //   Born 1957          → 10% of eligible base (no $5,000 deduction)
-  //   Born 1956 or earlier → not eligible (transfer = $0)
-  //
-  // RSS guard: pure RSS members (no migration) never undergo this transfer.
-  // When migration is active the transfer is computed inside runRSSEngine at lifeMigrationAge,
-  // so this block is skipped here to avoid double-applying it.
-  const _isRSSForTransfer = debouncedInputs.cpfScheme === 'rss';
-  const payoutRow65 = _isRSSForTransfer ? null : projectionByAge.get(payoutAge65);
-  const cumulativeCashTopUps = payoutRow65?.cumRaCashTopUps ?? 0;
-  // Birth year approximation: currentYear − currentAge (±1 yr; D4 birth-month will refine).
-  const _birthYear = (Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35);
-  const raTransferBase = _isRSSForTransfer ? 0 : Math.max(0, raAtPayout - cumulativeCashTopUps);
-  const _raTransferPct    = _birthYear >= 1958 ? 0.20 : _birthYear === 1957 ? 0.10 : 0;
-  const _raOaTransferRaw  = Math.round(raTransferBase * _raTransferPct);
-  const raOaTransfer = _isRSSForTransfer ? 0
-    : _birthYear >= 1958 ? Math.max(0, _raOaTransferRaw - 5000)
-    : _raOaTransferRaw;
-  // RA after birth-year-gated transfer (before CPF LIFE premium deduction)
-  const raAfterTransfer = raAtPayout - raOaTransfer;
+  // NOTE: payoutAge65, raAtPayout, raOaTransfer, raAfterTransfer are declared ABOVE (before
+  // householdData useMemo) to avoid TDZ — do not redeclare them here.
 
   const lifePlans = useMemo(() => {
     // NX10 fix: use debouncedInputs inside useMemos that depend on the debounced projection
