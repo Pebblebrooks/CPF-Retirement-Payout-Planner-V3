@@ -8016,10 +8016,13 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
         .cpf-layout[data-mode="fhd"] .fhd-col-btn  { display: flex !important; }
         .cpf-layout[data-mode="fhd"] .hd-only-btn  { display: none !important; }
         .cpf-layout[data-mode="fhd"] .sidebar-gap-alert { grid-column: 1 / -1; }
+        /* FHD fix: household-panel spans all 3 sidebar columns as a full-width footer row */
+        .cpf-layout[data-mode="fhd"] .household-panel { grid-column: 1 / -1; margin-top: 4px; }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"] .fhd-col-btn  { display: flex !important; }
           .cpf-layout[data-mode="auto"] .hd-only-btn  { display: none !important; }
           .cpf-layout[data-mode="auto"] .sidebar-gap-alert { grid-column: 1 / -1; }
+          .cpf-layout[data-mode="auto"] .household-panel { grid-column: 1 / -1; margin-top: 4px; }
         }
         /* ═══════════════════════════════════════════════════════════════
            END FHD MULTI-COLUMN SIDEBAR MODULE
@@ -11914,10 +11917,12 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 Hidden for foreigners: no CPF account means no RA, no FRS, no gap concept. */}
               </div>{/* /sidebar-col-3-body */}
             </div>{/* /sidebar-col-3 */}
-          </div>
 
-          {/* ── Household Mode: Enable toggle + Spouse inputs panel ────────── */}
-          <div style={{ margin: "12px 12px 0", padding: "12px 14px", borderRadius: 12,
+            {/* ── Household Mode: Enable toggle + Spouse inputs panel ────────── */}
+            {/* FHD fix: panel is now inside cpf-sidebar-inner so it participates in the 3-col grid.
+                The CSS class "household-panel" gives it grid-column:1/-1 in FHD mode so it spans
+                all 3 columns as a full-width footer row beneath the three sidebar columns. */}
+            <div className="household-panel" style={{ margin: "4px 0 0", padding: "12px 14px", borderRadius: 12,
             background: householdEnabled ? "rgba(139,92,246,0.07)" : "var(--bg-muted)",
             border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.3)" : "var(--border-subtle)"}`,
             transition: "all 0.2s" }}>
@@ -12123,7 +12128,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 </div>
               );
             })()}
-          </div>
+          </div>{/* /household-panel */}
+          </div>{/* /cpf-sidebar-inner */}
           {/* end Household sidebar panel */}
 
         </aside>
