@@ -1189,7 +1189,8 @@ function runRSSEngine(inputs, {
   const oaEduLoanDur = Number(inputs.oaEduLoanDur) || 0;
   const vcMaCash = Number(inputs.vcMaCash) || 0;
   const rsGrowth = (Number(inputs.retirementSumGrowth) || 3) / 100;
-  const isSC = (inputs.citizenStatus === 'SC') || (inputs.citizenStatus === undefined);
+  const _csNorm = (inputs.citizenStatus || 'SC').toUpperCase(); // Bug 2 fix: normalise case so 'sc'/'SC'/'Sc' all match
+  const isSC = _csNorm === 'SC';
   const isPwD = !!inputs.isPwD;
   const wisAmount     = Number(inputs.wisAmount)    || 0;
   const cpfisOaAmount = Number(inputs.cpfisOaAmount) || 0;
@@ -1261,8 +1262,8 @@ function runRSSEngine(inputs, {
   const owMonthly            = Math.min(Number(inputs.salaryGross) || 0, 8000);
   const owAnnualSubjectToCPF = owMonthly * 12;
   const awCeiling            = Math.max(0, 102000 - owAnnualSubjectToCPF);
-  const isPR          = (inputs.citizenStatus || 'SC') === 'PR';
-  const isForeigner   = (inputs.citizenStatus || 'SC') === 'foreigner';
+  const isPR          = _csNorm === 'PR';
+  const isForeigner   = _csNorm === 'foreigner';
   const startPrYear   = Math.min(3, Math.max(1, Number(inputs.prYear) || 3));
   const annualGrossSalary = owMonthly * 12;
   let currentPrYear   = startPrYear;
@@ -1970,7 +1971,8 @@ function runProjectionEngine(inputs, {
   // Legacy profiles without the field default to 3% (historical CPF Board average).
   const rsGrowth = (Number(inputs.retirementSumGrowth) || 3) / 100;
 
-  const isSC = (inputs.citizenStatus === 'SC') || (inputs.citizenStatus === undefined); // default to SC if field absent (legacy profiles)
+  const _csNorm = (inputs.citizenStatus || 'SC').toUpperCase(); // Bug 2 fix: normalise case
+  const isSC = _csNorm === 'SC'; // default to SC if field absent (legacy profiles)
   // PwD gate: MRSS is available below age 55 for PwD members with OA+SA below BRS (from 2026).
   const isPwD = !!inputs.isPwD;
   // WIS: Workfare Income Supplement
@@ -2101,8 +2103,8 @@ function runProjectionEngine(inputs, {
   //   A. currentPrYear < 3 → PR rate table × (OW + AW)   [Yr1/Yr2]
   //   B. startPrYear < 3, currentPrYear >= 3 → SC/PR3+ rates × gross salary [graduated]
   //   C. SC or PR3+ from start → baseOA_Emp * gf          [standard]
-  const isPR = (inputs.citizenStatus || 'SC') === 'PR';
-  const isForeigner = (inputs.citizenStatus || 'SC') === 'foreigner'; // B1: foreigners have no CPF — gates all contributions, voluntary top-ups, and transfers
+  const isPR = _csNorm === 'PR';
+  const isForeigner = _csNorm === 'foreigner'; // B1: foreigners have no CPF — gates all contributions, voluntary top-ups, and transfers
   const startPrYear = Math.min(3, Math.max(1, Number(inputs.prYear) || 3));
   const annualGrossSalary = owMonthly * 12; // already capped at $8,000/mo above
   let currentPrYear = startPrYear;
@@ -4505,7 +4507,7 @@ export default function App() {
   // Accessing an undeclared identifier in JSX throws ReferenceError, crashing the LIFE tab
   // for every user who navigates to it. reads live `inputs` (not debounced) — intentional,
   // as this gates UI display only, not projection computation.
-  const isForeigner  = (inputs.citizenStatus || 'SC') === 'foreigner';
+  const isForeigner  = (inputs.citizenStatus || 'SC').toLowerCase() === 'foreigner'; // Bug 2 fix: normalise case
   isForeignerRef.current      = isForeigner;                      // keep ref current for keyboard shortcut handler
   cpfSchemeRef.current        = inputs.cpfScheme || 'cpf_life'; // keep ref current for keyboard shortcut handler
   householdEnabledRef.current = !!householdEnabled;              // keep ref current for keyboard shortcut handler
@@ -4695,7 +4697,7 @@ export default function App() {
     const cappedGross = Math.min(gross, 8000); // OW ceiling $8,000/mo
     const age = Number(inputs.currentAge) || 35;
     const prYr = Number(inputs.prYear) || 3;
-    const isPR = (inputs.citizenStatus || 'SC') === 'PR';
+    const isPR = ((inputs.citizenStatus || 'SC').toUpperCase()) === 'PR'; // Bug 2 fix: normalise case
     const prRateType = (isPR && prYr < 3) ? (inputs.prRateType || 'GG') : 'GG';
 
     // ── Step 1: determine OA/SA/MA rates and salary-band parameters ──────────────
@@ -5145,10 +5147,51 @@ export default function App() {
             if (p.housingSharePct != null) setHousingSharePct(Number(p.housingSharePct) || 50);
             if (Array.isArray(p.householdChildren)) setHouseholdChildren(p.householdChildren);
             if (p.spouseInputs && typeof p.spouseInputs === 'object') {
+              // Bug 3 fix: apply the same safety processing as sanitiseInputs() for primary inputs.
+              // Previously a raw key-copy was used — no boolean coercion, no lifeEvents safety,
+              // no legacy migrations. An old spouse profile with isMale:"true" (string) or
+              // lifeEvents:null would silently break the engine.
+              //
+              // We can't call sanitiseInputs() directly (it uses DEFAULT_INPUTS as base, which
+              // has name="Member" and other primary-specific defaults). Instead we apply the
+              // exact same safety steps manually, starting from SPOUSE_DEFAULT_INPUTS as base.
+              const rawSpouse = p.spouseInputs;
               const safeSpouse = { ...SPOUSE_DEFAULT_INPUTS };
+              // Step 1: whitelist-copy known keys, skip null lifeEvents (same as sanitiseInputs FIX-3)
               Object.keys(SPOUSE_DEFAULT_INPUTS).forEach(k => {
-                if (p.spouseInputs[k] !== undefined) safeSpouse[k] = p.spouseInputs[k];
+                if (rawSpouse[k] !== undefined && !(k === 'lifeEvents' && rawSpouse[k] === null)) {
+                  safeSpouse[k] = rawSpouse[k];
+                }
               });
+              // Step 2: boolean coercion (same as sanitiseInputs FIX-5)
+              const SPOUSE_BOOL_FIELDS = ['isMale','isSelfEmployed','includeProperty','usePropertyPledge',
+                'oaToMaForLovedOne','oaToSaForLovedOne','propMonetiseEnabled','dieWithZeroEnabled',
+                'isPwD','propertyLeasehold','showSalaryCalc'];
+              SPOUSE_BOOL_FIELDS.forEach(k => {
+                if (typeof safeSpouse[k] === 'string') safeSpouse[k] = safeSpouse[k] === 'true' || safeSpouse[k] === '1';
+                else if (typeof safeSpouse[k] === 'number') safeSpouse[k] = safeSpouse[k] !== 0;
+              });
+              // Step 3: lifeEvents array guarantee (same as sanitiseInputs FIX-3b)
+              if (!Array.isArray(safeSpouse.lifeEvents)) safeSpouse.lifeEvents = [];
+              // Step 4: life event object sanitisation (same as sanitiseInputs IMP-4)
+              const LIFE_EVENT_DEFAULTS = {
+                id: "", type: "retrenchment", label: "", startAge: 35, endAge: 36,
+                magnitude: 0, enabled: true, drawSource: "oa_then_private",
+                windfallDest: "private", hyperRate: 0.06, overrideSalary: 0,
+              };
+              safeSpouse.lifeEvents = safeSpouse.lifeEvents.map(ev => {
+                const base = { ...LIFE_EVENT_DEFAULTS };
+                if (ev && typeof ev === "object") {
+                  Object.keys(LIFE_EVENT_DEFAULTS).forEach(k => { if (ev[k] !== undefined) base[k] = ev[k]; });
+                  if (ev.amount !== undefined && ev.magnitude === undefined) base.magnitude = ev.amount;
+                  if (ev.source !== undefined && ev.drawSource === undefined) base.drawSource = ev.source;
+                }
+                return base;
+              });
+              // Step 5: srsCitizenPR → citizenStatus migration (same as sanitiseInputs FIX-2)
+              if (rawSpouse.srsCitizenPR === false && rawSpouse.citizenStatus === undefined) {
+                safeSpouse.citizenStatus = 'foreigner';
+              }
               setSpouseInputs(safeSpouse);
               setDebouncedSpouseInputs(safeSpouse);
             } else if (p.householdEnabled === false || p.spouseInputs === null) {
@@ -11274,7 +11317,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
                     {/* POL-3 fix: annual cap varies by citizenship — foreigner $35,700, SC/PR $15,300 */}
                     {(() => {
-                      const isForeigner = inputs.citizenStatus === 'foreigner';
+                      const isForeigner = (inputs.citizenStatus || '').toLowerCase() === 'foreigner'; // Bug 2 fix: normalise case
                       const capAmt = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // P2 fix: use module constants
                       return (
                         <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>
@@ -14727,21 +14770,22 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
               const pPlanLabel = PLAN_LABEL_MAP[primaryLifePlan] || 'Standard';
               const sPlanLabel = PLAN_LABEL_MAP[spouseLifePlan]  || 'Standard';
 
+              // TDZ FIX: pCurrentAge/sCurrentAge MUST be declared before any applyInflation call
+              // that passes them as the third arg — const is not hoisted.
+              const pCurrentAge  = Number(debouncedInputs.currentAge)       || 35;
+              const sCurrentAge  = Number(debouncedSpouseInputs.currentAge) || 35;
+
               // Combined monthly CPF LIFE — each member uses their own plan key
               const hAtCombinedPA = householdByAge.get(combinedPA) || {};
               const pLifeHHNom = hAtCombinedPA[`pLife${pPlanKey}`] || 0;
               const sLifeHHNom = hAtCombinedPA[`sLife${sPlanKey}`] || 0;
               const pLifeHH = Math.round(applyInflation(pLifeHHNom, pPA, pCurrentAge));
-              const sLifeHH = Math.round(applyInflation(sLifeHHNom, sPA, sCurrentAge)); // Bug 1 fix: use spouse's own currentAge
+              const sLifeHH = Math.round(applyInflation(sLifeHHNom, sPA, sCurrentAge));
               const pOaDraw = (Number(debouncedInputs.oaDrawdownMonthly) || 0);
               const sOaDraw = (Number(debouncedSpouseInputs.oaDrawdownMonthly) || 0);
               const combinedMonthly = pLifeHH + sLifeHH + pOaDraw + sOaDraw;
 
               // HH-6: salary projection helper for pre-payout employment income in Key Ages table
-              // HH-6: currentAge per member used by projSalary for pre-payout employment income
-              const pCurrentAge  = Number(debouncedInputs.currentAge)       || 35;
-              const sCurrentAge  = Number(debouncedSpouseInputs.currentAge) || 35;
-              // Note: pContribStop/sContribStop removed — projSalary reads contributionStopAge from inp directly
               const projSalary = (inp, memberCurrentAge, targetAge) => {
                 if (targetAge > (Number(inp.contributionStopAge) || 65)) return 0;
                 // Bug 5 fix: SEP members use netTradeIncome (monthly = NTI/12); salaryGross is 0 for them.
