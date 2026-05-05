@@ -10919,8 +10919,8 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
                 </div>
               );
             })()}
-            </div>{/* /household-panel */
-              </div>{/* /sidebar-col-1-body */}
+            </div>{/* /household-panel */}
+            </div>{/* /sidebar-col-1-body */}
             </div>{/* /sidebar-col-1 */}
 
             {/* ── FHD COL 2: Outflows, Transfers & Property (3 sections) ──────
