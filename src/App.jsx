@@ -8029,7 +8029,7 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
 
         /* ─── PAGE-WIDE WRAPPER ─── */
         .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 0; width: 100%; box-sizing: border-box; }
-        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 0; }
+        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 0; padding-left: 0; padding-right: 0; }
         .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 0; }
         .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; }
         @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 0; } }
@@ -8119,6 +8119,16 @@ ${milestones.length > 0 ? `<table><thead><tr><th>Age</th><th>Event</th><th>Detai
             padding-right: clamp(32px, 3vw, 120px);
           }
           .cpf-page-wrap[data-mode="auto"] {
+            padding-left: clamp(32px, 3vw, 120px);
+            padding-right: clamp(32px, 3vw, 120px);
+          }
+
+          /* Layout: match the nav bar horizontal padding so the sidebar left edge
+             aligns with the logo at QHD/4K widths. The sidebar column clamp() is
+             evaluated against the content-box width (after padding), so the grid
+             proportions remain stable. */
+          .cpf-layout[data-mode="fhd"],
+          .cpf-layout[data-mode="auto"] {
             padding-left: clamp(32px, 3vw, 120px);
             padding-right: clamp(32px, 3vw, 120px);
           }
