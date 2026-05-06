@@ -7004,30 +7004,58 @@ export default function App() {
       const compareHtml = (() => {
         if (!scenarioA) return '';
         const paRowA = (scenarioA.projection || []).find(r => r.age === pa) || {};
+        const row95A = (scenarioA.projection || []).find(r => r.age === 95) || {};
         const totalA = (paRowA.oa || 0) + (paRowA.sa || 0) + (paRowA.ma || 0) + (paRowA.ra || 0);
+        if (!totalA) return '';
         const diff = totalCpf - totalA;
+        // Estimated standard monthly for Scenario A (use RA directly as approximation)
+        const raA = paRowA.ra || 0;
+        const stdMonthlyA = Math.round(interpolateCpfLife(raA, 'std', isMalePdf));
+        const stdMonthlyCur = stdMonthly;
+        const monthlyDiff = stdMonthlyCur - stdMonthlyA;
+        // Net worth at 95: OA + SA + RA + MA from projection (excl. CPF LIFE payout which needs full payoutProjection)
+        const nw95A = (row95A.oa || 0) + (row95A.sa || 0) + (row95A.ma || 0) + (row95A.ra || 0);
+        const nw95Cur = nwAt95;
+        const nw95Diff = nw95Cur - nw95A;
         const keyDiffs = Object.keys(inputs).filter(k => {
           const a = (scenarioA.inputs || {})[k]; const b = inputs[k];
           if (a == null || b == null) return false;
           const nA = Number(a), nB = Number(b);
           return !isNaN(nA) && !isNaN(nB) ? Math.abs(nA - nB) > 0.5 : String(a) !== String(b);
         }).slice(0, 12);
-        if (!totalA) return '';
         const diffRows = keyDiffs.map(k => {
           const label = INPUT_LABELS[k] || k;
           const vA = (scenarioA.inputs || {})[k]; const vB = inputs[k];
           const fmtV = v => (!isNaN(Number(v)) && Number(v) > 100) ? fc(Number(v)) : String(v);
           return `<tr><td>${label}</td><td style="text-align:right;color:#1d4ed8">${fmtV(vA)}</td><td style="text-align:right;color:#7c3aed">${fmtV(vB)}</td></tr>`;
         }).join('');
-        return `<div class="section-break">
+        const kpiCard = (label, valA, valCur, diff, fmt, highlight) => {
+          const dSign = diff >= 0 ? '+' : '';
+          const dColor = diff >= 0 ? '#166534' : '#991b1b';
+          return `<tr>
+            <td style="padding:5px 8px;font-weight:700;font-size:9px">${label}</td>
+            <td style="text-align:right;padding:5px 8px;color:#1d4ed8;font-weight:700">${fmt(valA)}</td>
+            <td style="text-align:right;padding:5px 8px;color:#7c3aed;font-weight:700">${fmt(valCur)}</td>
+            <td style="text-align:right;padding:5px 8px;color:${dColor};font-weight:700;background:${diff >= 0 ? '#f0fdf4' : '#fef2f2'}">${dSign}${fmt(diff)}</td>
+          </tr>`;
+        };
+        return `<div class="chapter-break">
 <div class="sec-hdr" style="background:#eff6ff;border-left:4px solid #3b82f6">
-  <span class="sec-ico">📊</span><span class="sec-title">Scenario Comparison — ${scenarioLabelA || 'Scenario A'} vs Current</span>
+  <span class="sec-ico">📊</span><span class="sec-title">9 &nbsp;·&nbsp; Scenario Comparison — ${scenarioLabelA || 'Scenario A'} vs Current</span>
 </div>
-<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
-  <div class="kpi"><div class="kpi-label">${scenarioLabelA || 'Scenario A'} — CPF @ ${pa}</div><div class="kpi-value" style="color:#1d4ed8;font-size:13px">${fc(totalA)}</div></div>
-  <div class="kpi"><div class="kpi-label">Current — CPF @ ${pa}</div><div class="kpi-value" style="color:#7c3aed;font-size:13px">${fc(totalCpf)}</div></div>
-  <div class="kpi" style="background:${diff >= 0 ? '#f0fdf4' : '#fef2f2'};border-color:${diff >= 0 ? '#bbf7d0' : '#fecaca'}"><div class="kpi-label">Difference</div><div class="kpi-value" style="color:${diff >= 0 ? '#166534' : '#991b1b'};font-size:13px">${diff >= 0 ? '+' : ''}${fc(diff)}</div></div>
-</div>
+<table style="margin-bottom:10px">
+  <thead><tr>
+    <th>Metric</th>
+    <th style="text-align:right;color:#93c5fd">${scenarioLabelA || 'Scenario A'}</th>
+    <th style="text-align:right;color:#c4b5fd">Current</th>
+    <th style="text-align:right">Difference</th>
+  </tr></thead>
+  <tbody>
+    ${kpiCard(`Total CPF @ Age ${pa}`, totalA, totalCpf, diff, fc, true)}
+    ${kpiCard('Est. Standard Monthly Payout', stdMonthlyA, stdMonthlyCur, monthlyDiff, v => fc(Math.abs(v)) + '/mo', false)}
+    ${nw95A > 0 ? kpiCard('Net Worth @ Age 95', nw95A, nw95Cur, nw95Diff, fc, false) : ''}
+  </tbody>
+</table>
 ${keyDiffs.length > 0 ? `<h3 style="margin-top:8px">Key Input Differences</h3><table><thead><tr><th>Parameter</th><th style="text-align:right">${scenarioLabelA || 'Scenario A'}</th><th style="text-align:right">Current</th></tr></thead><tbody>${diffRows}</tbody></table>` : ''}
 </div>`;
       })();
@@ -7068,6 +7096,8 @@ ${keyDiffs.length > 0 ? `<h3 style="margin-top:8px">Key Input Differences</h3><t
     /* Only force page break before major chapters */
     .chapter-break { break-before:page; page-break-before:always; }
     .section-break { break-inside:avoid; page-break-inside:avoid; margin-top:14px; }
+    /* The cashflow ledger table is 60+ rows — let it flow naturally across pages */
+    .ledger-table { break-inside:auto !important; page-break-inside:auto !important; }
   }
   :root {
     --navy:#0f172a; --blue:#1e40af; --blue2:#3b82f6; --emerald:#059669;
@@ -7211,13 +7241,51 @@ ${keyDiffs.length > 0 ? `<h3 style="margin-top:8px">Key Input Differences</h3><t
   </div>
 </div>
 
+<h3 style="margin-top:10px">Key Metrics at a Glance</h3>
+${(() => {
+  const cpfTot = totalCpf || 1;
+  const oaPct = Math.round((pRow.oa / cpfTot) * 100);
+  const saPct = Math.round(((pRow.sa || 0) / cpfTot) * 100);
+  const maPct = Math.round((pRow.ma / cpfTot) * 100);
+  const raPct = 100 - oaPct - saPct - maPct;
+  const tile = (label, val, color) =>
+    `<div class="kpi" style="border-top:3px solid ${color}"><div class="kpi-label">${label}</div><div class="kpi-value" style="color:${color};font-size:13px">${val}</div></div>`;
+  let bx = 0;
+  const bars = [
+    { pct: oaPct, color: '#1d4ed8', label: `OA ${oaPct}%` },
+    { pct: saPct, color: '#059669', label: `SA ${saPct}%` },
+    { pct: maPct, color: '#7c3aed', label: `MA ${maPct}%` },
+    { pct: raPct, color: '#f59e0b', label: `RA ${raPct}%` },
+  ].map(s => {
+    const w = Math.round(s.pct * 6.8);
+    const seg = w > 0 ? `<rect x="${bx}" y="0" width="${w}" height="22" fill="${s.color}"/>` +
+      `<text x="${bx + w/2}" y="15" text-anchor="middle" font-size="8" fill="#fff" font-weight="700">${s.pct >= 6 ? s.label : ''}</text>` : '';
+    bx += w; return seg;
+  }).join('');
+  const legend = [
+    { c:'#1d4ed8', l:`OA ${oaPct}%` }, { c:'#059669', l:`SA ${saPct}%` },
+    { c:'#7c3aed', l:`MA ${maPct}%` }, { c:'#f59e0b', l:`RA ${raPct}%` },
+  ].map(s => `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:10px;font-size:8px"><span style="display:inline-block;width:9px;height:9px;background:${s.c};border-radius:2px"></span>${s.l}</span>`).join('');
+  return `<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px">
+    ${tile(`Total CPF @ Age ${pa}`, fc(totalCpf), '#059669')}
+    ${tile(`${highlightPlan.charAt(0).toUpperCase()+highlightPlan.slice(1)} Monthly Payout`, fc(paMonthlies[`${highlightPlan}Monthly`] || stdMonthly)+'/mo', '#1d4ed8')}
+    ${tile(`Net Worth @ Age ${pa}`, fc(nwPayout), '#7c3aed')}
+    ${tile('Cumul. Interest Earned', fc(pRow.cumulativeInterest || 0), '#0e7490')}
+    ${tile('Interest % of CPF', totalCpf > 0 ? ((pRow.cumulativeInterest||0)/totalCpf*100).toFixed(1)+'%' : '—', '#b45309')}
+    ${tile('Net Worth @ Age 95', fc(nwAt95), '#334155')}
+  </div>
+  <div style="font-size:8px;font-weight:700;color:#64748b;margin-bottom:3px">CPF Composition at Payout Age ${pa}</div>
+  <svg viewBox="0 0 680 22" width="100%" height="22" style="display:block;border-radius:4px;overflow:hidden;margin-bottom:4px">${bars}</svg>
+  <div style="margin-bottom:8px">${legend}</div>`;
+})()}
+
 <h3 style="margin-top:10px">CPF LIFE Payout Estimates (Monthly, from Age ${pa})</h3>
 <table>
-  <thead><tr><th>Plan</th><th style="text-align:right">Monthly Payout</th><th style="text-align:right">Annual Payout</th><th>Payout Type</th><th style="text-align:right">Net Worth @ Age 95</th></tr></thead>
+  <thead><tr><th>Plan</th><th style="text-align:right">Monthly</th><th style="text-align:right">Annual</th><th>Payout Type</th><th style="text-align:right">Bequest @ 95</th><th style="text-align:right">Lifetime Total</th><th style="text-align:right">Net Worth @ 95</th></tr></thead>
   <tbody>
-    <tr style="background:${highlightPlan==='standard'?'#f0fdf4':''}"><td><strong>Standard Plan</strong>${highlightPlan==='standard'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#059669">${fc(stdMonthly)}/mo</td><td style="text-align:right">${fc(stdMonthly * 12)}/yr</td><td>Level payouts for life</td><td style="text-align:right">${fc(payoutByAge.get(95)?.standardNetWorth || 0)}</td></tr>
-    <tr style="background:${highlightPlan==='escalating'?'#eff6ff':''}"><td><strong>Escalating Plan</strong>${highlightPlan==='escalating'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#1d4ed8">${fc(escMonthly)}/mo</td><td style="text-align:right">${fc(escMonthly * 12)}/yr</td><td>+2% escalation per year</td><td style="text-align:right">${fc(payoutByAge.get(95)?.escalatingNetWorth || 0)}</td></tr>
-    <tr style="background:${highlightPlan==='basic'?'#fffbeb':''}"><td><strong>Basic Plan</strong>${highlightPlan==='basic'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#b45309">${fc(basMonthly)}/mo</td><td style="text-align:right">${fc(basMonthly * 12)}/yr</td><td>RA drawdown to ~90, pool thereafter</td><td style="text-align:right">${fc(payoutByAge.get(95)?.basicNetWorth || 0)}</td></tr>
+    <tr style="background:${highlightPlan==='standard'?'#f0fdf4':''}"><td><strong>Standard Plan</strong>${highlightPlan==='standard'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#059669">${fc(stdMonthly)}/mo</td><td style="text-align:right">${fc(stdMonthly*12)}/yr</td><td>Level payouts for life</td><td style="text-align:right">${fc(payoutByAge.get(95)?.standardBequest||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.standardTotal||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.standardNetWorth||0)}</td></tr>
+    <tr style="background:${highlightPlan==='escalating'?'#eff6ff':''}"><td><strong>Escalating Plan</strong>${highlightPlan==='escalating'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#1d4ed8">${fc(escMonthly)}/mo</td><td style="text-align:right">${fc(escMonthly*12)}/yr</td><td>+2% per year</td><td style="text-align:right">${fc(payoutByAge.get(95)?.escalatingBequest||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.escalatingTotal||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.escalatingNetWorth||0)}</td></tr>
+    <tr style="background:${highlightPlan==='basic'?'#fffbeb':''}"><td><strong>Basic Plan</strong>${highlightPlan==='basic'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#b45309">${fc(basMonthly)}/mo</td><td style="text-align:right">${fc(basMonthly*12)}/yr</td><td>RA drawdown ~90, pool</td><td style="text-align:right">${fc(payoutByAge.get(95)?.basicBequest||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.basicTotal||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.basicNetWorth||0)}</td></tr>
   </tbody>
 </table>
 </div>
@@ -7424,7 +7492,7 @@ ${estimatedTaxSavings > 0 ? `<div class="box" style="margin-top:8px;background:#
 <div class="chapter-break">
 <div class="sec-hdr sec-hdr-green"><span class="sec-ico">💰</span><span class="sec-title" style="color:#065f46">6 &nbsp;·&nbsp; Annual Cashflow Ledger (Age ${ca} to 95)</span></div>
 <p style="font-size:8px;color:#64748b;margin:0 0 6px">Inflows: Mandatory · Voluntary VC · Gov Grants · Interest &nbsp;|&nbsp; Outflows: Housing · Medical · OA Draw · Other &nbsp;|&nbsp; Net = Total In − Total Out</p>
-<table style="font-size:8px">
+<table class="ledger-table" style="font-size:8px">
   <thead><tr>
     <th>Age</th>
     <th style="text-align:right">Mandatory</th>
