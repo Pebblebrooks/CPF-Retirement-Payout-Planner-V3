@@ -7368,7 +7368,7 @@ ${payAgeSensHtml}
 </div>
 
 <!-- ═══════════════════ 4. STRATEGY & INCOME STREAMS ══════════════════ -->
-<div class="chapter-break">
+<div class="section-break">
 <div class="sec-hdr sec-hdr-purple"><span class="sec-ico">🗺️</span><span class="sec-title" style="color:#5b21b6">4 &nbsp;·&nbsp; Retirement Strategy &amp; Income Streams</span></div>
 
 <div class="kpi-grid" style="grid-template-columns:repeat(${targetMo > 0 ? 4 : 3},1fr)">
@@ -8344,6 +8344,14 @@ ${milestones.length > 0 ? `<table>
             padding-right: clamp(32px, 3vw, 120px);
           }
           .cpf-page-wrap[data-mode="auto"] {
+            padding-left: clamp(32px, 3vw, 120px);
+            padding-right: clamp(32px, 3vw, 120px);
+          }
+          /* FHD alignment fix: give cpf-layout the same horizontal padding as the
+             nav bar's cpf-page-wrap so the sidebar left edge and logo left edge
+             are visually aligned at QHD (2560px) and 4K (3840px) widths. */
+          .cpf-layout[data-mode="fhd"],
+          .cpf-layout[data-mode="auto"] {
             padding-left: clamp(32px, 3vw, 120px);
             padding-right: clamp(32px, 3vw, 120px);
           }
