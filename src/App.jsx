@@ -8558,6 +8558,8 @@ ${milestones.length > 0 ? `<table>
              tab header panel above it. Vertical padding kept so content breathes below the KPI strip. */
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
+          /* Logo alignment: match header left/right padding to sidebar-inner (14px) */
+          .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Tablet: fix the sidebar toggle the same way mobile does — position:sticky cannot work
              when the parent is overflow:visible; use fixed so it stays reachable at all times. */
@@ -8602,6 +8604,8 @@ ${milestones.length > 0 ? `<table>
           .cpf-header-actions .hide-mobile { display: none; }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
           .cpf-sidebar-inner { display: flex; flex-direction: column; gap: 12px; padding: 10px 12px 14px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
+          /* Logo alignment: match header left/right padding to sidebar-inner (12px) */
+          .cpf-page-wrap { padding-left: 12px !important; padding-right: 12px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* W1 fix: move horizontal inset from cpf-tab-content up to cpf-main-wrap so the tab
              header panel (tabs + KPI strip) and the scrollable content below it share the same
@@ -10931,6 +10935,216 @@ ${milestones.length > 0 ? `<table>
               </div>}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
+            {/* ── Household Mode: Enable toggle + Spouse inputs panel ──────── */}
+            {/* Placement: inside sidebar-col-1 so it takes 1-column width in FHD 3-col grid */}
+            <div style={{ margin: "4px 0 0", padding: "12px 14px", borderRadius: 12,
+            background: householdEnabled ? "rgba(139,92,246,0.07)" : "var(--bg-muted)",
+            border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.3)" : "var(--border-subtle)"}`,
+            transition: "all 0.2s" }}>
+            {/* Toggle row */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Users style={{ width: 14, height: 14, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }}>
+                  Household Mode
+                </span>
+                {householdEnabled && (
+                  <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: "rgba(139,92,246,0.15)",
+                    color: "#8b5cf6", fontWeight: 700, border: "1px solid rgba(139,92,246,0.3)" }}>
+                    ON
+                  </span>
+                )}
+              </div>
+              <button onClick={() => {
+                const next = !householdEnabled;
+                setHouseholdEnabled(next);
+                if (next) setActiveTab("household");
+              }} style={{ padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                background: householdEnabled ? "rgba(139,92,246,0.15)" : "rgba(100,116,139,0.12)",
+                color: householdEnabled ? "#8b5cf6" : "var(--text-muted)",
+                border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
+                {householdEnabled ? "Disable" : "Enable"}
+              </button>
+            </div>
+            {!householdEnabled && (
+              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.4 }}>
+                Add a spouse / partner to see combined CPF LIFE income, shared housing model, and household net worth.
+              </p>
+            )}
+
+            {/* Spouse inputs — only shown when household is enabled */}
+            {householdEnabled && (() => {
+              const spH = (field, val) => setSpouseInputs(prev => ({ ...prev, [field]: val }));
+              const spouseIsForeigner = debouncedSpouseInputs.citizenStatus === 'foreigner';
+              const spouseIs55Plus = (Number(debouncedSpouseInputs.currentAge) || 0) >= 55;
+              return (
+                <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0, lineHeight: 1.4 }}>
+                    Spouse inputs run a full independent CPF projection. Combined results appear in the <strong style={{ color: "#8b5cf6" }}>Household</strong> tab.
+                  </p>
+
+                  {/* Spouse Profile */}
+                  <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Profile</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <label style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
+                        Name
+                        <input type="text" value={spouseInputs.name} onChange={e => spH("name", e.target.value)}
+                          style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
+                      </label>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
+                          Current Age
+                          <input type="number" min="0" max="100" value={spouseInputs.currentAge} onChange={e => spH("currentAge", e.target.value)}
+                            style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
+                        </label>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
+                          Payout Age
+                          <input type="number" min="55" max="70" value={spouseInputs.payoutAge} onChange={e => spH("payoutAge", e.target.value)}
+                            style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
+                        </label>
+                      </div>
+                      {/* Gender */}
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {[["Male", true], ["Female", false]].map(([lbl, val]) => (
+                          <button key={lbl} onClick={() => spH("isMale", val)}
+                            style={{ flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                              background: spouseInputs.isMale === val ? "rgba(139,92,246,0.15)" : "var(--bg-muted)",
+                              color: spouseInputs.isMale === val ? "#8b5cf6" : "var(--text-muted)",
+                              border: `1px solid ${spouseInputs.isMale === val ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Citizenship */}
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {[["SC", "sc"], ["PR", "pr"], ["Foreigner", "foreigner"]].map(([lbl, val]) => (
+                          <button key={val} onClick={() => spH("citizenStatus", val)}
+                            style={{ flex: "1 1 60px", padding: "4px 0", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                              background: spouseInputs.citizenStatus === val ? "rgba(139,92,246,0.15)" : "var(--bg-muted)",
+                              color: spouseInputs.citizenStatus === val ? "#8b5cf6" : "var(--text-muted)",
+                              border: `1px solid ${spouseInputs.citizenStatus === val ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Spouse CPF Balances */}
+                  {!spouseIsForeigner && (
+                    <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>CPF Balances</span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                        {[["OA", "oaBalance"], [spouseIs55Plus ? "RA" : "SA", "saBalance"], ["MA", "maBalance"]].map(([lbl, field]) => (
+                          <label key={field} style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3, gridColumn: lbl === "MA" ? "1 / -1" : "auto" }}>
+                            {lbl} ($)
+                            <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
+                              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Spouse Salary */}
+                  {!spouseIsForeigner && (
+                    <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Salary</span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                        {[["Gross Salary ($/yr)", "salaryGross"], ["Bonus ($/yr)", "salaryBonus"]].map(([lbl, field]) => (
+                          <label key={field} style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
+                            {lbl}
+                            <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
+                              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
+                          </label>
+                        ))}
+                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3, gridColumn: "1 / -1" }}>
+                          Contribution Stop Age
+                          <input type="number" min="0" max="100" value={spouseInputs.contributionStopAge} onChange={e => spH("contributionStopAge", e.target.value)}
+                            style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Housing share */}
+                  <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Housing Split</span>
+                      <span style={{ fontSize: 9, color: "var(--text-muted)" }}>of primary member's housing outflow (${Number(debouncedInputs.housingOutflow || 0).toLocaleString()}/yr)</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                        <span style={{ color: "var(--clr-blue2)" }}>Primary: {housingSharePct}% — ${Math.round((debouncedInputs.housingOutflow || 0) * housingSharePct / 100).toLocaleString()}/yr</span>
+                        <span style={{ color: "#8b5cf6" }}>Spouse: {100 - housingSharePct}% — ${Math.round((debouncedInputs.housingOutflow || 0) * (100 - housingSharePct) / 100).toLocaleString()}/yr</span>
+                      </div>
+                      <input type="range" min="0" max="100" step="5" value={housingSharePct}
+                        onChange={e => setHousingSharePct(Number(e.target.value))}
+                        style={{ width: "100%", accentColor: "#8b5cf6" }} />
+                      <p style={{ fontSize: 9, color: "var(--text-muted)", margin: 0 }}>
+                        This splits the primary member's housing outflow between both profiles in the Household view. Enter spouse's additional housing separately in spouse's Outflows if needed.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Spouse SA/RA Top-up */}
+                  {!spouseIsForeigner && (
+                    <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Key Voluntary Contributions</span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                        {[[`${spouseIs55Plus ? "RA" : "SA"} Top-up ($/yr)`, "vcSaTopup"], ["VC3A Cash ($/yr)", "vc3aCash"]].map(([lbl, field]) => (
+                          <label key={field} style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
+                            {lbl}
+                            <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
+                              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* OA drawdown for spouse */}
+                  {!spouseIsForeigner && (
+                    <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>OA Drawdown</span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                        {[["Monthly Draw ($/mo)", "oaDrawdownMonthly"], ["Start Age", "oaDrawdownStartAge"]].map(([lbl, field]) => (
+                          <label key={field} style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
+                            {lbl}
+                            <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
+                              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quick stats */}
+                  {spouseProjection.length > 0 && (() => {
+                    const spPA = Number(debouncedSpouseInputs.payoutAge) || 65;
+                    const spAtPA = spouseProjectionByAge.get(spPA) || {};
+                    return (
+                      <div style={{ background: "rgba(139,92,246,0.08)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(139,92,246,0.2)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                        {[
+                          ["Total at Payout Age", `$${((spAtPA.total || 0) / 1e6).toFixed(2)}M`],
+                          ["OA at Payout", `$${((spAtPA.oa || 0) / 1000).toFixed(0)}K`],
+                          [spouseIs55Plus ? "RA at Payout" : "SA at Payout", `$${((spAtPA.sa || 0) / 1000).toFixed(0)}K`],
+                          ["MA at Payout", `$${((spAtPA.ma || 0) / 1000).toFixed(0)}K`],
+                        ].map(([lbl, val]) => (
+                          <div key={lbl} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <span style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{lbl}</span>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: "#8b5cf6" }}>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
+          </div>
+            {/* /household-panel */}
               </div>{/* /sidebar-col-1-body */}
             </div>{/* /sidebar-col-1 */}
 
@@ -12143,215 +12357,7 @@ ${milestones.length > 0 ? `<table>
             </div>{/* /sidebar-col-3 */}
           </div>
 
-          {/* ── Household Mode: Enable toggle + Spouse inputs panel ────────── */}
-          <div style={{ margin: "12px 12px 0", padding: "12px 14px", borderRadius: 12,
-            background: householdEnabled ? "rgba(139,92,246,0.07)" : "var(--bg-muted)",
-            border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.3)" : "var(--border-subtle)"}`,
-            transition: "all 0.2s" }}>
-            {/* Toggle row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Users style={{ width: 14, height: 14, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }}>
-                  Household Mode
-                </span>
-                {householdEnabled && (
-                  <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: "rgba(139,92,246,0.15)",
-                    color: "#8b5cf6", fontWeight: 700, border: "1px solid rgba(139,92,246,0.3)" }}>
-                    ON
-                  </span>
-                )}
-              </div>
-              <button onClick={() => {
-                const next = !householdEnabled;
-                setHouseholdEnabled(next);
-                if (next) setActiveTab("household");
-              }} style={{ padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                background: householdEnabled ? "rgba(139,92,246,0.15)" : "rgba(100,116,139,0.12)",
-                color: householdEnabled ? "#8b5cf6" : "var(--text-muted)",
-                border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
-                {householdEnabled ? "Disable" : "Enable"}
-              </button>
-            </div>
-            {!householdEnabled && (
-              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.4 }}>
-                Add a spouse / partner to see combined CPF LIFE income, shared housing model, and household net worth.
-              </p>
-            )}
 
-            {/* Spouse inputs — only shown when household is enabled */}
-            {householdEnabled && (() => {
-              const spH = (field, val) => setSpouseInputs(prev => ({ ...prev, [field]: val }));
-              const spouseIsForeigner = debouncedSpouseInputs.citizenStatus === 'foreigner';
-              const spouseIs55Plus = (Number(debouncedSpouseInputs.currentAge) || 0) >= 55;
-              return (
-                <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-                  <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0, lineHeight: 1.4 }}>
-                    Spouse inputs run a full independent CPF projection. Combined results appear in the <strong style={{ color: "#8b5cf6" }}>Household</strong> tab.
-                  </p>
-
-                  {/* Spouse Profile */}
-                  <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Profile</span>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <label style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
-                        Name
-                        <input type="text" value={spouseInputs.name} onChange={e => spH("name", e.target.value)}
-                          style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
-                      </label>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
-                          Current Age
-                          <input type="number" min="0" max="100" value={spouseInputs.currentAge} onChange={e => spH("currentAge", e.target.value)}
-                            style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
-                        </label>
-                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
-                          Payout Age
-                          <input type="number" min="55" max="70" value={spouseInputs.payoutAge} onChange={e => spH("payoutAge", e.target.value)}
-                            style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
-                        </label>
-                      </div>
-                      {/* Gender */}
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {[["Male", true], ["Female", false]].map(([lbl, val]) => (
-                          <button key={lbl} onClick={() => spH("isMale", val)}
-                            style={{ flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                              background: spouseInputs.isMale === val ? "rgba(139,92,246,0.15)" : "var(--bg-muted)",
-                              color: spouseInputs.isMale === val ? "#8b5cf6" : "var(--text-muted)",
-                              border: `1px solid ${spouseInputs.isMale === val ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
-                            {lbl}
-                          </button>
-                        ))}
-                      </div>
-                      {/* Citizenship */}
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        {[["SC", "sc"], ["PR", "pr"], ["Foreigner", "foreigner"]].map(([lbl, val]) => (
-                          <button key={val} onClick={() => spH("citizenStatus", val)}
-                            style={{ flex: "1 1 60px", padding: "4px 0", borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                              background: spouseInputs.citizenStatus === val ? "rgba(139,92,246,0.15)" : "var(--bg-muted)",
-                              color: spouseInputs.citizenStatus === val ? "#8b5cf6" : "var(--text-muted)",
-                              border: `1px solid ${spouseInputs.citizenStatus === val ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
-                            {lbl}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Spouse CPF Balances */}
-                  {!spouseIsForeigner && (
-                    <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>CPF Balances</span>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                        {[["OA", "oaBalance"], [spouseIs55Plus ? "RA" : "SA", "saBalance"], ["MA", "maBalance"]].map(([lbl, field]) => (
-                          <label key={field} style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3, gridColumn: lbl === "MA" ? "1 / -1" : "auto" }}>
-                            {lbl} ($)
-                            <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
-                              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Spouse Salary */}
-                  {!spouseIsForeigner && (
-                    <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Salary</span>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                        {[["Gross Salary ($/yr)", "salaryGross"], ["Bonus ($/yr)", "salaryBonus"]].map(([lbl, field]) => (
-                          <label key={field} style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
-                            {lbl}
-                            <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
-                              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
-                          </label>
-                        ))}
-                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3, gridColumn: "1 / -1" }}>
-                          Contribution Stop Age
-                          <input type="number" min="0" max="100" value={spouseInputs.contributionStopAge} onChange={e => spH("contributionStopAge", e.target.value)}
-                            style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
-                        </label>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Housing share */}
-                  <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Housing Split</span>
-                      <span style={{ fontSize: 9, color: "var(--text-muted)" }}>of primary member's housing outflow (${Number(debouncedInputs.housingOutflow || 0).toLocaleString()}/yr)</span>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                        <span style={{ color: "var(--clr-blue2)" }}>Primary: {housingSharePct}% — ${Math.round((debouncedInputs.housingOutflow || 0) * housingSharePct / 100).toLocaleString()}/yr</span>
-                        <span style={{ color: "#8b5cf6" }}>Spouse: {100 - housingSharePct}% — ${Math.round((debouncedInputs.housingOutflow || 0) * (100 - housingSharePct) / 100).toLocaleString()}/yr</span>
-                      </div>
-                      <input type="range" min="0" max="100" step="5" value={housingSharePct}
-                        onChange={e => setHousingSharePct(Number(e.target.value))}
-                        style={{ width: "100%", accentColor: "#8b5cf6" }} />
-                      <p style={{ fontSize: 9, color: "var(--text-muted)", margin: 0 }}>
-                        This splits the primary member's housing outflow between both profiles in the Household view. Enter spouse's additional housing separately in spouse's Outflows if needed.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Spouse SA/RA Top-up */}
-                  {!spouseIsForeigner && (
-                    <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Key Voluntary Contributions</span>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                        {[[`${spouseIs55Plus ? "RA" : "SA"} Top-up ($/yr)`, "vcSaTopup"], ["VC3A Cash ($/yr)", "vc3aCash"]].map(([lbl, field]) => (
-                          <label key={field} style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
-                            {lbl}
-                            <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
-                              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* OA drawdown for spouse */}
-                  {!spouseIsForeigner && (
-                    <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>OA Drawdown</span>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                        {[["Monthly Draw ($/mo)", "oaDrawdownMonthly"], ["Start Age", "oaDrawdownStartAge"]].map(([lbl, field]) => (
-                          <label key={field} style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
-                            {lbl}
-                            <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
-                              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, outline: "none" }} />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quick stats */}
-                  {spouseProjection.length > 0 && (() => {
-                    const spPA = Number(debouncedSpouseInputs.payoutAge) || 65;
-                    const spAtPA = spouseProjectionByAge.get(spPA) || {};
-                    return (
-                      <div style={{ background: "rgba(139,92,246,0.08)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(139,92,246,0.2)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                        {[
-                          ["Total at Payout Age", `$${((spAtPA.total || 0) / 1e6).toFixed(2)}M`],
-                          ["OA at Payout", `$${((spAtPA.oa || 0) / 1000).toFixed(0)}K`],
-                          [spouseIs55Plus ? "RA at Payout" : "SA at Payout", `$${((spAtPA.sa || 0) / 1000).toFixed(0)}K`],
-                          ["MA at Payout", `$${((spAtPA.ma || 0) / 1000).toFixed(0)}K`],
-                        ].map(([lbl, val]) => (
-                          <div key={lbl} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                            <span style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{lbl}</span>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: "#8b5cf6" }}>{val}</span>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-              );
-            })()}
-          </div>
-          {/* end Household sidebar panel */}
 
         </aside>
         {/* Confidence badge comment cleaned up */}
