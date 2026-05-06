@@ -6870,7 +6870,14 @@ export default function App() {
         const testPA = pAges[_pi];
         const testRows = runProjectionEngine(debouncedInputs, { maxAge: testPA, overrideContribStop: Number(debouncedInputs.contributionStopAge) || 65 });
         const raRow = testRows.find(r => r.age === testPA) || testRows[testRows.length - 1];
-        const ra = raRow?.ra || 0;
+        const raRaw = raRow?.ra || 0;
+        // Apply same birth-year-gated OA→RA transfer deduction as raAfterTransfer so
+        // the sensitivity table base-case row matches the Section 1 summary figure.
+        const testCumTopUps = raRow?.cumRaCashTopUps ?? 0;
+        const testTransferBase = Math.max(0, raRaw - testCumTopUps);
+        const testOaTransferRaw = Math.round(testTransferBase * (_birthYear >= 1958 ? 0.20 : _birthYear === 1957 ? 0.10 : 0));
+        const testOaTransfer = _birthYear >= 1958 ? Math.max(0, testOaTransferRaw - 5000) : testOaTransferRaw;
+        const ra = Math.max(0, raRaw - testOaTransfer);
         const stdM = Math.round(interpolateCpfLife(ra, 'std', isMalePdf));
         const escM = Math.round(interpolateCpfLife(ra, 'esc', isMalePdf));
         const basM = Math.round(interpolateCpfLife(ra, 'bas', isMalePdf));
@@ -6983,12 +6990,13 @@ export default function App() {
       // SRS balance table
       const srsTableRows = hasSRSPdf ? projection.filter(r => (r.srsBalance || 0) > 0).map(r => {
         const isSD = r.age === srsStartPdf2;
+        const isActiveDrawdown = r.age >= srsStartPdf2 && r.age < srsStartPdf2 + srsYearsPdf2;
         const annInt = Math.round((r.srsBalance || 0) * srsRatePdf2);
         return `<tr style="background:${isSD ? '#e8f5e9' : (r.age % 2 === 0 ? '#f8fafc' : '#fff')}">
           <td style="font-weight:${isSD ? '700' : '400'}">${r.age}${isSD ? ' ◄ Drawdown start' : ''}</td>
           <td style="text-align:right">${fc(r.srsBalance || 0)}</td>
           <td style="text-align:right;color:#059669">${annInt > 0 ? fc(annInt) : '—'}</td>
-          <td style="text-align:right;color:#991b1b">${isSD && srsMoPdf2 > 0 ? fc(srsMoPdf2 * 12) + '/yr' : '—'}</td>
+          <td style="text-align:right;color:#991b1b">${isActiveDrawdown && srsMoPdf2 > 0 ? fc(srsMoPdf2 * 12) + '/yr' : '—'}</td>
         </tr>`;
       }).join('') : '';
 
@@ -7055,6 +7063,8 @@ ${keyDiffs.length > 0 ? `<h3 style="margin-top:8px">Key Input Differences</h3><t
     /* Smart breaks: avoid splitting tables, cards and chart wrappers */
     table, .two-col, .box, .kpi-grid, .kpi, .chart-wrap, .gantt-wrap { break-inside:avoid; page-break-inside:avoid; }
     h2, h3 { break-after:avoid; page-break-after:avoid; }
+    /* Section headers must never be orphaned at the bottom of a page */
+    .sec-hdr { break-after:avoid; page-break-after:avoid; }
     /* Only force page break before major chapters */
     .chapter-break { break-before:page; page-break-before:always; }
     .section-break { break-inside:avoid; page-break-inside:avoid; margin-top:14px; }
@@ -7426,8 +7436,8 @@ ${estimatedTaxSavings > 0 ? `<div class="box" style="margin-top:8px;background:#
     <th style="text-align:right">Net Flow</th>
     <th style="text-align:right">CPF Total</th>
   </tr></thead>
-  <tbody>${fullLedgerRows}</tbody>
-  <tfoot><tr style="background:#0f172a;color:#fff;font-weight:800">
+  <tbody>${fullLedgerRows}
+  <tr style="background:#0f172a;color:#fff;font-weight:800">
     <td>TOTAL</td>
     <td style="text-align:right">${fc(ledgTot.mandatory)}</td>
     <td style="text-align:right">${fc(ledgTot.voluntary)}</td>
@@ -7437,7 +7447,7 @@ ${estimatedTaxSavings > 0 ? `<div class="box" style="margin-top:8px;background:#
     <td style="text-align:right">${fc(ledgTot.out)}</td>
     <td style="text-align:right">${ledgTotIn - ledgTot.out >= 0 ? '+' : ''}${fc(ledgTotIn - ledgTot.out)}</td>
     <td></td>
-  </tr></tfoot>
+  </tr></tbody>
 </table>
 </div>
 
@@ -11078,14 +11088,14 @@ ${milestones.length > 0 ? `<table>
 
                   {/* Housing share */}
                   <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Housing Split</span>
-                      <span style={{ fontSize: 9, color: "var(--text-muted)" }}>of primary member's housing outflow (${Number(debouncedInputs.housingOutflow || 0).toLocaleString()}/yr)</span>
+                      <span style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.4 }}>of primary member's housing outflow (${Number(debouncedInputs.housingOutflow || 0).toLocaleString()}/yr)</span>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                        <span style={{ color: "var(--clr-blue2)" }}>Primary: {housingSharePct}% — ${Math.round((debouncedInputs.housingOutflow || 0) * housingSharePct / 100).toLocaleString()}/yr</span>
-                        <span style={{ color: "#8b5cf6" }}>Spouse: {100 - housingSharePct}% — ${Math.round((debouncedInputs.housingOutflow || 0) * (100 - housingSharePct) / 100).toLocaleString()}/yr</span>
+                      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 4, fontSize: 11 }}>
+                        <span style={{ color: "var(--clr-blue2)" }}>Primary: {housingSharePct}% (${Math.round((debouncedInputs.housingOutflow || 0) * housingSharePct / 100).toLocaleString()}/yr)</span>
+                        <span style={{ color: "#8b5cf6" }}>Spouse: {100 - housingSharePct}% (${Math.round((debouncedInputs.housingOutflow || 0) * (100 - housingSharePct) / 100).toLocaleString()}/yr)</span>
                       </div>
                       <input type="range" min="0" max="100" step="5" value={housingSharePct}
                         onChange={e => setHousingSharePct(Number(e.target.value))}
