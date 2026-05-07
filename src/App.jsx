@@ -4432,7 +4432,7 @@ export default function App() {
           if (fullState.scenarioAInputs && typeof fullState.scenarioAInputs === 'object') {
             const safeScenA = { ...DEFAULT_INPUTS };
             Object.keys(DEFAULT_INPUTS).forEach(k => { if (fullState.scenarioAInputs[k] !== undefined) safeScenA[k] = fullState.scenarioAInputs[k]; });
-            setScenarioA({ inputs: safeScenA, projection: runProjectionEngine(safeScenA), payoutProj: null });
+            setScenarioA({ inputs: safeScenA, projection: (safeScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenA), payoutProj: null });
             shareLinkScenariosRestored = true;
           } else {
             setScenarioA(null); // explicit null → no scenario in this share link
@@ -4443,7 +4443,7 @@ export default function App() {
           if (fullState.scenarioBInputs && typeof fullState.scenarioBInputs === 'object') {
             const safeScenB = { ...DEFAULT_INPUTS };
             Object.keys(DEFAULT_INPUTS).forEach(k => { if (fullState.scenarioBInputs[k] !== undefined) safeScenB[k] = fullState.scenarioBInputs[k]; });
-            setScenarioB({ inputs: safeScenB, projection: runProjectionEngine(safeScenB), payoutProj: null });
+            setScenarioB({ inputs: safeScenB, projection: (safeScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenB), payoutProj: null });
             shareLinkScenariosRestored = true;
           } else {
             setScenarioB(null);
@@ -6865,6 +6865,13 @@ export default function App() {
       showToast("⚠️ PDF generation timed out — try again");
     }, 30000);
     try {
+      // N3 fix: shadow live `inputs` with the debounced snapshot so every inputs.*
+      // read in the HTML template uses the same snapshot the engine was called with.
+      // Without this, the 180ms debounce window creates a race: engine runs with
+      // debouncedInputs, but the HTML template renders with live inputs — producing
+      // an inconsistent PDF if the user edited a field while the PDF was generating.
+      // eslint-disable-next-line no-shadow
+      const inputs = debouncedInputs;
       const pa = Number(inputs.payoutAge) || 65;
       const ca = Number(inputs.currentAge) || 35;
       const cy = Number(inputs.currentYear) || 2026;
@@ -6903,18 +6910,25 @@ export default function App() {
         </tr>`;
       }).join("");
 
+      // Fix 3: compute isRSSPdf BEFORE both sensitivity loops so guards can use it.
+      // Previously defined at line ~6979 (after the loops), making it useless for guarding.
+      const isRSSPdf = debouncedInputs.cpfScheme === 'rss';
+
       // Sensitivity analysis: housing outflow rows × SA top-up columns
       const baseH = Number(inputs.housingOutflow) || 0;
       const baseSATopup = Number(inputs.vcSaTopup) || 0;
       const hRows = [Math.max(0, baseH - 6000), Math.max(0, baseH - 3000), baseH, baseH + 3000, baseH + 6000];
       const saTopupCols = [Math.max(0, baseSATopup - 4000), Math.max(0, baseSATopup - 2000), baseSATopup, baseSATopup + 2000, baseSATopup + 4000];
       const calcTotalAtPA = (hOut, saTop) => {
-        // Use debouncedInputs (same source as main projection) for strict consistency
-        const rows = runProjectionEngine(debouncedInputs, {
+        // Fix 3: RSS members use runRSSEngine; maxAge:95 (not pa) because RSS projects
+        // to age 95 regardless of CPF LIFE payout age. CPF LIFE payout age is irrelevant for RSS.
+        const _engine = isRSSPdf ? runRSSEngine : runProjectionEngine;
+        const _maxAge = isRSSPdf ? 95 : pa;
+        const rows = _engine(debouncedInputs, {
           overrideVcSA: saTop,
           overrideHousingOutflow: hOut,
           overrideContribStop: Number(debouncedInputs.contributionStopAge) || 65,
-          maxAge: pa,
+          maxAge: _maxAge,
         });
         const last = rows.find(r => r.age === pa) || rows[rows.length - 1];
         return last ? last.total : 0;
@@ -6947,8 +6961,10 @@ export default function App() {
 
       // Payout-age sensitivity: 6 engine runs pre-computed here (async, yielding after every call)
       // so the template literal below can simply reference payAgeSensHtml as a plain string.
+      // Fix 3: skip entirely for RSS members — CPF LIFE payout interpolation has no meaning for RSS.
       const isMalePdf = inputs.isMale !== false;
       let payAgeSensRows = '';
+      if (!isRSSPdf) {
       const pAges = [65, 66, 67, 68, 69, 70];
       for (let _pi = 0; _pi < pAges.length; _pi++) {
         const testPA = pAges[_pi];
@@ -6969,14 +6985,14 @@ export default function App() {
         payAgeSensRows += `<tr style="background:${isCurrent ? "#dcfce7" : ""}"><td style="font-weight:${isCurrent ? "900" : "400"};color:${isCurrent ? "#166534" : ""}">${testPA}${isCurrent ? " ◄" : ""}</td><td style="text-align:right">${fc(stdM)}/mo</td><td style="text-align:right;color:#059669">${fc(escM)}/mo</td><td style="text-align:right;color:#b45309">${fc(basM)}/mo</td></tr>`;
         await new Promise(r => setTimeout(r, 0)); // Q3 fix: yield after every call (was every 2)
       }
-      const payAgeSensHtml = `
+      } // end if (!isRSSPdf) payout-age sensitivity guard
+      const payAgeSensHtml = isRSSPdf ? '' : `
 <h2 style="margin-top:12px">Payout Age Sensitivity — Monthly Starting Payouts</h2>
 <p style="font-size:8px;color:#64748b;margin-bottom:6px">Each row shows estimated monthly payouts based on 2026 CPF Board data, interpolated from the official CPF LIFE Estimator. Deferral gain comes from RA growth during additional contribution years. Green row = your selected payout age.</p>
 <table><thead><tr><th>Payout Age</th><th style="text-align:right">Standard</th><th style="text-align:right;color:#059669">Escalating</th><th style="text-align:right;color:#b45309">Basic</th></tr></thead>
 <tbody>${payAgeSensRows}</tbody></table>`;
 
       // ── Extra pre-computation for new PDF sections ──────────────────────────
-      const isRSSPdf = debouncedInputs.cpfScheme === 'rss';
       const paMonthlies = payoutByAge.get(pa) || {};
       const cpfLifeMoPdfStrat = !isForeigner ? (paMonthlies[`${highlightPlan}Monthly`] || stdMonthly) : 0;
 
@@ -8723,6 +8739,8 @@ ${milestones.length > 0 ? `<table>
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; padding-top: 44px !important; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 16px 14px 72px; }
+          /* Sticky tabs+KPI header — sits just below the fixed sidebar toggle bar (~44px) */
+          .cpf-tabs-kpi-header { position: sticky; top: 44px; z-index: 35; }
           /* W1 fix: remove horizontal padding from tab-content — parent cpf-main-wrap already provides
              14px inset, so adding another 14px here made content 14px narrower per side than the
              tab header panel above it. Vertical padding kept so content breathes below the KPI strip. */
@@ -8782,6 +8800,8 @@ ${milestones.length > 0 ? `<table>
              10px left/right margin. Previously the header was full-bleed while content had its
              own 10px padding, creating a visible width mis-alignment. */
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
+          /* Sticky tabs+KPI header — sits below the sticky sidebar toggle bar (~44px) */
+          .cpf-tabs-kpi-header { position: sticky; top: 44px; z-index: 35; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
 
           .sidebar-toggle-btn { display: flex !important; position: sticky; top: 0; z-index: 40; background: var(--bg-panel); }
@@ -8881,6 +8901,8 @@ ${milestones.length > 0 ? `<table>
           .cpf-sidebar-wrap .sidebar-toggle-btn { position: fixed !important; top: 48px; left: 0; right: 0; z-index: 48; }
           /* Push sidebar sections below the fixed toggle bar (~44px tall) */
           .cpf-sidebar-wrap { padding-top: 44px; }
+          /* Sticky tabs+KPI: fixed header (48px) + fixed sidebar toggle (44px) = 92px occupied */
+          .cpf-tabs-kpi-header { position: sticky; top: 92px; z-index: 35; }
           .desktop-only { display: none !important; }
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
           /* Docs sticky nav: fixed header is 48px; margin-top:0 already set by ≤768px rule above,
@@ -9005,7 +9027,7 @@ ${milestones.length > 0 ? `<table>
                       if (parsed.scenarioAInputs && typeof parsed.scenarioAInputs === 'object') {
                         const safeScenA = { ...DEFAULT_INPUTS };
                         Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioAInputs[k] !== undefined) safeScenA[k] = parsed.scenarioAInputs[k]; });
-                        setScenarioA({ inputs: safeScenA, projection: runProjectionEngine(safeScenA), payoutProj: null });
+                        setScenarioA({ inputs: safeScenA, projection: (safeScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenA), payoutProj: null });
                         scenariosRestored = true;
                       } else { setScenarioA(null); } // explicit null = no scenario in this code
                     } else if (parsed.scenarioA && parsed.scenarioA.inputs && parsed.scenarioA.projection) {
@@ -9013,21 +9035,21 @@ ${milestones.length > 0 ? `<table>
                       // (stale rows, missing newer fields). Now regenerate from sanitised inputs.
                       const safeOldScenA = { ...DEFAULT_INPUTS };
                       Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioA.inputs[k] !== undefined) safeOldScenA[k] = parsed.scenarioA.inputs[k]; });
-                      setScenarioA({ inputs: safeOldScenA, projection: runProjectionEngine(safeOldScenA), payoutProj: null, label: parsed.scenarioA.label });
+                      setScenarioA({ inputs: safeOldScenA, projection: (safeOldScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeOldScenA), payoutProj: null, label: parsed.scenarioA.label });
                       scenariosRestored = true;
                     } else { setScenarioA(null); }
                     if ('scenarioBInputs' in parsed) {
                       if (parsed.scenarioBInputs && typeof parsed.scenarioBInputs === 'object') {
                         const safeScenB = { ...DEFAULT_INPUTS };
                         Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioBInputs[k] !== undefined) safeScenB[k] = parsed.scenarioBInputs[k]; });
-                        setScenarioB({ inputs: safeScenB, projection: runProjectionEngine(safeScenB), payoutProj: null });
+                        setScenarioB({ inputs: safeScenB, projection: (safeScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenB), payoutProj: null });
                         scenariosRestored = true;
                       } else { setScenarioB(null); }
                     } else if (parsed.scenarioB && parsed.scenarioB.inputs && parsed.scenarioB.projection) {
                       // BUG-6 fix: same as Scenario A — regenerate from sanitised inputs.
                       const safeOldScenB = { ...DEFAULT_INPUTS };
                       Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioB.inputs[k] !== undefined) safeOldScenB[k] = parsed.scenarioB.inputs[k]; });
-                      setScenarioB({ inputs: safeOldScenB, projection: runProjectionEngine(safeOldScenB), payoutProj: null, label: parsed.scenarioB.label });
+                      setScenarioB({ inputs: safeOldScenB, projection: (safeOldScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeOldScenB), payoutProj: null, label: parsed.scenarioB.label });
                       scenariosRestored = true;
                     } else { setScenarioB(null); }
                     setShowShareModal(false);
@@ -12540,7 +12562,7 @@ ${milestones.length > 0 ? `<table>
         {/* Confidence badge comment cleaned up */}
         <section className="cpf-main-wrap" style={{ minWidth: 0, boxSizing: "border-box", width: "100%" }}>
           {/* Tabs + Persistent KPI Strip — sticky within the main scroll panel */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 0, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: "16px 16px 0 0", zIndex: 30, boxShadow: "var(--shadow-panel)" }}>
+          <div className="cpf-tabs-kpi-header" style={{ display: "flex", flexDirection: "column", gap: 0, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: "16px 16px 0 0", zIndex: 30, boxShadow: "var(--shadow-panel)" }}>
             {/* Tab navigation */}
             <div className="cpf-tabs" role="tablist" aria-label="Dashboard sections" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "center", padding: "6px 6px 0", gap: 2, borderBottom: "1px solid var(--border-subtle)", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
               {[["welcome", "Welcome", Lightbulb, "#64748b"], ["summary", "Summary", PieChart, "var(--clr-emerald)"], ["strategy", "Strategy", Target, "#f43f5e"], ["accumulation", "Growth", BarChart3, "var(--clr-blue2)"], ...(debouncedInputs.cpfScheme === 'rss' ? [["rss", "RSS", Clock, "var(--clr-blue)"]] : [["life", "LIFE", ShieldCheck, "var(--clr-purple)"]]), ["compare", "Compare", Split, "var(--clr-amber3)"], ...(householdEnabled ? [["household", "Household", Users, "#8b5cf6"]] : []), ["table", "Data Table", TableIcon, "var(--clr-slate)"], ["notes", "Docs", BookOpen, "var(--clr-blue)"]].map(([id, label, Icon, accent]) => {
