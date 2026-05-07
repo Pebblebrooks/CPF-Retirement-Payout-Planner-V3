@@ -8,17 +8,16 @@ import {
 import {
   Calculator, TrendingUp, User, Info, ShieldCheck, PieChart,
   AlignJustify, HelpCircle, MinusCircle, Printer,
-  Briefcase, Gift, Download, Loader2, FileText, BarChart2,
+  Briefcase, Gift, Download, Loader2, FileText, BarChart2, BarChart3,
   AlertTriangle, Clock, CheckCircle2, Split, BookOpen, Scale,
   LayoutDashboard, RotateCcw, Activity, Bell, X,
   SlidersHorizontal, Percent, Link, Target,
   Moon, Sun, Monitor, Lightbulb, Copy, ChevronDown, ChevronUp,
   ArrowRightLeft, LogOut, Users, ExternalLink, Home, Upload,
-  RefreshCw, Share2
+  RefreshCw, Share2, Settings
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
-const BarChart3 = BarChart2;
 const ArrowDownToLine = Download;
 
 // ═══════════════════════════════════════════════════════════════════════════════
