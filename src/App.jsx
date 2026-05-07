@@ -8307,7 +8307,7 @@ ${milestones.length > 0 ? `<table>
           z-index: 38;
           /* Desktop: non-sticky — the cpf-layout below never scrolls at page level */
         }
-        .cpf-tabs-full-width .cpf-tabs { justify-content: flex-start; }
+        .cpf-tabs-full-width .cpf-tabs { justify-content: flex-end; }
         .cpf-main-wrap {
           height: 100%;
           display: flex;
@@ -8896,11 +8896,12 @@ ${milestones.length > 0 ? `<table>
 
         /* ─── MOBILE HEADER  ≤ 640 px ───────────────────────────────── */
         @media (max-width: 640px) {
-          .mobile-menu-btn { display: flex !important; }
-          /* On ≤640px show only the 3 essential visible actions + hamburger; hide everything else */
-          .cpf-header-actions > *:not(.mobile-menu-btn):not(.cpf-nav-import):not(.cpf-nav-share):not(.cpf-nav-gear) { display: none !important; }
+          .mobile-menu-btn { display: none !important; }
+          /* Keep only Nominal/Real toggle, Import, Share/Export, and gear on mobile */
+          .cpf-header-actions > *:not(.cpf-nav-import):not(.cpf-nav-share):not(.cpf-nav-gear) { display: none !important; }
           .cpf-nav-import, .cpf-nav-share, .cpf-nav-gear { display: flex !important; }
           .cpf-header-actions { gap: 4px; }
+          .cpf-mobile-menu { display: none !important; }
           /* Pin the header so inputs toggle + hamburger are always reachable */
           header { position: fixed !important; top: 0; left: 0; right: 0; z-index: 50; }
           /* Push layout content below the fixed header (header is ~48px tall on mobile) */
@@ -9598,7 +9599,7 @@ ${milestones.length > 0 ? `<table>
           aligning above both the left input panel and the right content area as per mockup.
           Sticky rules applied per breakpoint via .cpf-tabs-full-width CSS class.          */}
       <nav className="cpf-tabs-full-width" aria-label="Dashboard sections">
-        <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-start", padding: "0 8px", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+        <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", padding: "0 8px", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
           {[["welcome", "Welcome", Lightbulb, "#64748b"], ["summary", "Summary", PieChart, "var(--clr-emerald)"], ["strategy", "Strategy", Target, "#f43f5e"], ["accumulation", "Growth", BarChart3, "var(--clr-blue2)"], ...(debouncedInputs.cpfScheme === 'rss' ? [["rss", "RSS", Clock, "var(--clr-blue)"]] : [["life", "LIFE", ShieldCheck, "var(--clr-purple)"]]), ["compare", "Compare", Split, "var(--clr-amber3)"], ...(householdEnabled ? [["household", "Household", Users, "#8b5cf6"]] : []), ["table", "Data Table", TableIcon, "var(--clr-slate)"], ["notes", "Docs", BookOpen, "var(--clr-blue)"]].map(([id, label, Icon, accent]) => {
             const isLifeLocked = id === "life" && isForeigner;
             return (
