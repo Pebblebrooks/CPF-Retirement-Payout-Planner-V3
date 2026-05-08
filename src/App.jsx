@@ -3813,6 +3813,10 @@ export default function App() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showReportMenu, setShowReportMenu] = useState(false);
+  const [showDisplayMenu, setShowDisplayMenu] = useState(false);
+  const [showTabsMenu, setShowTabsMenu] = useState(false);
   const [desktopMode, setDesktopMode] = useState("auto");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPresets, setShowPresets] = useState(false);
@@ -8568,8 +8572,62 @@ ${milestones.length > 0 ? `<table>
            END QHD / 4K RIGHT-PANEL MODULE
            ═══════════════════════════════════════════════════════════════ */
 
-        .cpf-header-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
-        .mobile-menu-btn { display: none; }
+        .cpf-header-actions { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
+
+        /* ── Responsive nav visibility helpers ──────────────────────────
+           .cpf-nav-d-only   : desktop ONLY  (≥1025px)
+           .cpf-nav-dt-only  : desktop + tablet (≥769px)
+           .cpf-nav-tm-only  : tablet + mobile  (≤1024px) — gear button
+           ──────────────────────────────────────────────────────────────── */
+        .cpf-nav-d-only  { display: flex; }
+        .cpf-nav-dt-only { display: flex; }
+        .cpf-nav-tm-only { display: none; }
+
+        /* ── Shared nav dropdown ──────────────────────────────────────── */
+        .cpf-nav-ddwrap { position: relative; }
+        .cpf-nav-dropdown {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          background: var(--bg-panel);
+          border: 1px solid var(--border-subtle);
+          border-radius: 12px;
+          box-shadow: var(--shadow-panel);
+          z-index: 210;
+          min-width: 190px;
+          padding: 6px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .cpf-nav-dd-right { left: auto; right: 0; }
+        .cpf-nav-dd-hdr {
+          font-size: 9px; font-weight: 800; color: var(--text-muted);
+          text-transform: uppercase; letter-spacing: 0.08em;
+          padding: 5px 10px 3px;
+        }
+        .cpf-nav-dd-item {
+          display: flex; align-items: center; gap: 8px;
+          padding: 8px 10px; border-radius: 8px; font-size: 11px;
+          font-weight: 600; border: none; background: transparent;
+          cursor: pointer; text-align: left; width: 100%;
+          color: var(--text-main); transition: background 0.12s;
+        }
+        .cpf-nav-dd-item:hover { background: var(--bg-muted); }
+
+        /* ── Input Parameters sticky bar (tablet + mobile only) ──────── */
+        .cpf-input-params-bar {
+          display: none;
+          background: var(--bg-panel);
+          border-bottom: 1px solid var(--border-subtle);
+        }
+
+        /* ── Tab strip hamburger (mobile only) ───────────────────────── */
+        .cpf-tabs-hamburger { display: none !important; }
+
+        /* .cpf-gear-mobile-share — inside gear dropdown; shown on mobile, hidden on tablet */
+        .cpf-gear-mobile-share { display: contents; }
+
         /* Tablet sticky bottom action bar — hidden by default, shown via @media 769–1024px */
         .tablet-action-bar {
           display: none;
@@ -8602,8 +8660,7 @@ ${milestones.length > 0 ? `<table>
            At ≥1920px right panel is already 50% wide so 2-col fits well.
            Mobile overrides handled by .rg-5 breakpoint rules below. */
         .summary-stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-        .sidebar-toggle-btn { display: none; }
-        /* Sidebar sticky expand/collapse bar — only meaningful on desktop where sidebar scrolls */
+        /* sidebar-toggle-btn removed from sidebar — now cpf-input-params-bar handles tablet/mobile toggle */
         .sidebar-sticky-bar { display: flex; }
         @media (max-width: 1024px) { .sidebar-sticky-bar { display: none !important; } }
         /* Keyboard accessibility for sidebar sections */
@@ -8758,18 +8815,22 @@ ${milestones.length > 0 ? `<table>
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
-          /* KPI-only strip inside cpf-main-wrap — no longer needs its own sticky (tab strip is sticky above) */
+          /* KPI-only strip inside cpf-main-wrap — no longer needs its own sticky */
           .cpf-tabs-kpi-header { position: static; }
-          /* W1 fix: remove horizontal padding from tab-content — parent cpf-main-wrap already provides
-             14px inset, so adding another 14px here made content 14px narrower per side than the
-             tab header panel above it. Vertical padding kept so content breathes below the KPI strip. */
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           /* Logo alignment: match header left/right padding to sidebar-inner (14px) */
           .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
-          /* Sidebar toggle: sticky below header (48px) + tab strip (44px) = 92px; remains in flow (no fixed) */
-          .sidebar-toggle-btn { display: flex !important; position: sticky !important; top: 92px !important; left: 0 !important; right: 0 !important; z-index: 48 !important; background: var(--bg-panel); }
+          /* Row 3 sticky: Input Parameters bar sits just below tab strip (~92px) */
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; }
+          /* Push sidebar content below the sticky input-params-bar (~44px) */
+          .cpf-sidebar-wrap { padding-top: 44px; }
+          /* Responsive nav: hide desktop-only Display btn, show ⚙ gear */
+          .cpf-nav-d-only { display: none !important; }
+          .cpf-nav-tm-only { display: flex !important; }
+          /* On tablet the Share/Report btns are inline — hide their duplicate in gear */
+          .cpf-gear-mobile-share { display: none !important; }
           .desktop-only { display: none !important; }
           .rg-6, .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
           .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
@@ -8817,15 +8878,20 @@ ${milestones.length > 0 ? `<table>
           header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
+          /* Row 3 sticky: Input Parameters bar */
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; }
+          /* Push sidebar content below the sticky input-params-bar (~44px) */
+          .cpf-sidebar-wrap { padding-top: 44px; }
+          /* Hide desktop+tablet-only nav buttons; show gear */
+          .cpf-nav-dt-only { display: none !important; }
+          .cpf-nav-tm-only { display: flex !important; }
+          /* Show Share/Report/etc in the gear dropdown on mobile */
+          .cpf-gear-mobile-share { display: contents !important; }
+          /* Show hamburger tab picker on mobile */
+          .cpf-tabs-hamburger { display: flex !important; }
           .cpf-tabs-kpi-header { position: static; }
-          /* W1 fix: move horizontal inset from cpf-tab-content up to cpf-main-wrap so the tab
-             header panel (tabs + KPI strip) and the scrollable content below it share the same
-             10px left/right margin. Previously the header was full-bleed while content had its
-             own 10px padding, creating a visible width mis-alignment. */
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
-          /* Sidebar toggle: sticky below header (48px) + tab strip (44px) = 92px */
-          .sidebar-toggle-btn { display: flex !important; position: sticky !important; top: 92px !important; z-index: 40; background: var(--bg-panel); }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
           .rg-5, .rg-4, .rg-3, .rg-2 { grid-template-columns: 1fr 1fr !important; }
@@ -8891,7 +8957,6 @@ ${milestones.length > 0 ? `<table>
           .cpf-kpi-value { font-size: 14px !important; }
           .cpf-kpi-label { font-size: 9px !important; }
           .cpf-tab-btn { font-size: 11px !important; padding: 6px 8px !important; }
-          .sidebar-toggle-btn span { font-size: 9px !important; }
           /* Summary zone overrides for very small screens */
           .z1-hero { padding: 12px 10px !important; border-radius: 14px !important; }
           .z4-plans-grid { grid-template-columns: 1fr !important; }
@@ -8903,40 +8968,27 @@ ${milestones.length > 0 ? `<table>
           #docs-sticky-nav h3 { font-size: 16px !important; }
         }
 
-        /* ─── MOBILE HEADER  ≤ 640 px ───────────────────────────────── */
+        /* ─── SMALL PHONE HEADER  ≤ 640 px ─────────────────────────── */
         @media (max-width: 640px) {
-          .mobile-menu-btn { display: none !important; }
-          /* Keep only Nominal/Real toggle, Import, Share/Export, and gear on mobile */
-          .cpf-header-actions > *:not(.cpf-nav-import):not(.cpf-nav-share):not(.cpf-nav-gear) { display: none !important; }
-          .cpf-nav-import, .cpf-nav-share, .cpf-nav-gear { display: flex !important; }
-          .cpf-header-actions { gap: 4px; }
-          .cpf-mobile-menu { display: none !important; }
-          /* Pin the header so inputs toggle + hamburger are always reachable */
+          /* Pin the header so gear + Nom/Real are always reachable */
           header { position: fixed !important; top: 0; left: 0; right: 0; z-index: 50; }
-          /* Push layout content below the fixed header (header is ~48px tall on mobile) */
+          /* Push layout content below the fixed header (~48px) */
           .cpf-mobile-top-spacer { display: block !important; height: 48px; flex-shrink: 0; }
-          .cpf-mobile-menu { display: flex !important; flex-direction: column; gap: 8px; position: fixed; top: 48px; right: 0; left: 0; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); padding: 12px 14px; z-index: 49; box-shadow: var(--shadow-mobile-menu); max-height: calc(100dvh - 48px); overflow-y: auto; }
-          .cpf-mobile-menu-row { display: flex; gap: 8px; flex-wrap: wrap; }
+          /* Pin Input Parameters bar below fixed header + tab strip */
+          .cpf-input-params-bar { position: fixed !important; top: 92px !important; left: 0 !important; right: 0 !important; }
+          /* Push sidebar sections below the fixed params bar (~44px) */
+          .cpf-sidebar-wrap { padding-top: 44px; }
+          /* Shrink logo on tiny screens */
           .cpf-logo-text { font-size: 13px !important; }
           .cpf-logo-sub  { display: none !important; }
-          /* Show toggle btn on mobile — no positioning here (handled per-context below) */
-          .sidebar-toggle-btn { display: flex !important; z-index: 40; background: var(--bg-panel); }
-          /* The sidebar INPUT PARAMETERS bar: fixed below fixed header AND fixed tab strip */
-          .cpf-sidebar-wrap .sidebar-toggle-btn { position: fixed !important; top: 92px; left: 0; right: 0; z-index: 48; }
-          /* Push sidebar sections below the fixed toggle bar (~44px tall) */
-          .cpf-sidebar-wrap { padding-top: 44px; }
-          /* Full-width tab strip: fixed header (48px) → tab strip sticks just below at top:48px */
+          /* Full-width tab strip: fixed header → sticky at top:48px */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
-          /* KPI strip inside cpf-main-wrap — no sticky; scrolls with page */
           .cpf-tabs-kpi-header { position: static; }
           .desktop-only { display: none !important; }
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
-          /* Docs sticky nav: fixed header is 48px; margin-top:0 already set by ≤768px rule above,
-             so top:48px places the border edge exactly at 48px — flush below the fixed header. */
           #docs-sticky-nav { top: 48px !important; }
         }
         @media (min-width: 641px) {
-          .cpf-mobile-menu { display: none !important; }
           .cpf-mobile-top-spacer { display: none !important; }
         }
 
@@ -9454,8 +9506,16 @@ ${milestones.length > 0 ? `<table>
       )}
 
       {/* HEADER */}
+      {/* ═══════════════════════════════════════════════════════════════
+          HEADER — responsive nav bar
+          Desktop (≥1025px): Logo + Nom($)/Real($) + Reset + Samples + Share▾ + Report▾ + Display▾
+          Tablet  (769–1024px): Logo + Nom($)/Real($) + Reset + Samples + Share▾ + Report▾ + ⚙ gear
+          Mobile  (≤768px): Logo + Nom($)/Real($) + ⚙ gear
+          ═══════════════════════════════════════════════════════════════ */}
       <header style={{ flexShrink: 0, zIndex: 50 }}>
-        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap", background: "var(--header-bg)", borderBottom: "1px solid var(--border-subtle)", backdropFilter: "blur(8px)" }}>
+        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "nowrap", background: "var(--header-bg)", borderBottom: "1px solid var(--border-subtle)", backdropFilter: "blur(8px)" }}>
+
+          {/* ── Logo ── */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <div className="cpf-calc-icon-box" style={{ background: "var(--clr-emerald)", padding: 8, borderRadius: 12 }}>
               <Calculator style={{ color: "#ffffff", width: 18, height: 18 }} />
@@ -9465,136 +9525,181 @@ ${milestones.length > 0 ? `<table>
               <div className="cpf-logo-sub" style={{ fontSize: 10, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
             </div>
           </div>
-          <div className="cpf-header-actions" style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", justifyContent: "flex-end", flex: "1 1 auto", minWidth: 0 }}>
-            {/* Sidebar toggle — tablet/mobile only via CSS */}
-            <button className="sidebar-toggle-btn" onClick={() => setSidebarOpen(v => !v)} style={{ display: "none", alignItems: "center", justifyContent: "center", gap: 5, background: sidebarOpen ? "rgba(var(--clr-emerald-rgb),0.12)" : "var(--bg-panel)", border: `1px solid ${sidebarOpen ? "rgba(var(--clr-emerald-rgb),0.4)" : "var(--border-strong)"}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: sidebarOpen ? "var(--clr-green)" : "var(--text-muted)" }}>
-              <SlidersHorizontal style={{ width: 14, height: 14 }} />
-              <span style={{ fontSize: 10, fontWeight: 700 }}>{sidebarOpen ? "Inputs ▲" : "Inputs ▼"}</span>
-            </button>
-            {/* Mobile hamburger menu button */}
-            <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(v => !v)} style={{ alignItems: "center", justifyContent: "center", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "var(--text-muted)" }}>
-              <AlignJustify style={{ width: 18, height: 18 }} />
-            </button>
 
-            {/* ── Essential visible buttons (desktop) ─────────────────── */}
-            {/* Nominal / Real $ toggle */}
-            <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1 }}>
-              <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nominal $</button>
-              <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real $ (today)</button>
+          {/* ── Header actions ── */}
+          <div className="cpf-header-actions" style={{ display: "flex", alignItems: "center", gap: 5, flex: "1 1 auto", minWidth: 0, justifyContent: "flex-end" }}>
+
+            {/* 1. Nom($) / Real($) toggle — all viewports */}
+            <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1, flexShrink: 0 }}>
+              <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nom($)</button>
+              <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real($)</button>
             </div>
 
-            {/* ↓ Import — file picker */}
-            <label className="cpf-nav-import" style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--bg-panel)", color: "var(--text-main)", padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", whiteSpace: "nowrap" }} title="Import a previously saved JSON profile">
-              <Download style={{ width: 13, height: 13 }} />Import
-              <input type="file" accept=".json" style={{ display: "none" }} onChange={handleImportProfile} />
-            </label>
-
-            {/* ↑ Share / Export — opens share modal */}
-            <button className="cpf-nav-share" onClick={handleShareLinkInit} style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--bg-panel)", color: "var(--text-main)", padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", whiteSpace: "nowrap" }} title="Share a link or export your profile">
-              <Upload style={{ width: 13, height: 13 }} />Share / Export
+            {/* 2. Reset — desktop + tablet */}
+            <button className="cpf-nav-dt-only" onClick={handleReset}
+              style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.08)", color: "var(--clr-red)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1px solid rgba(239,68,68,0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+              title="Reset all inputs to defaults">
+              <RotateCcw style={{ width: 13, height: 13 }} />Reset
             </button>
 
-            {/* ⚙ Settings gear — dropdown with remaining actions */}
-            <div className="cpf-nav-gear" style={{ position: "relative" }}>
+            {/* 3. Samples — desktop + tablet */}
+            <button className="cpf-nav-dt-only" onClick={() => setShowPresets(true)}
+              style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+              title="Load a sample profile">
+              <Users style={{ width: 13, height: 13 }} />Samples
+            </button>
+
+            {/* 4. Share dropdown — desktop + tablet */}
+            <div className="cpf-nav-dt-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
-                onClick={() => setShowSettingsMenu(v => !v)}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", background: showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.15)" : "var(--bg-panel)", border: `1px solid ${showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.4)" : "var(--border-strong)"}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: showSettingsMenu ? "var(--clr-blue)" : "var(--text-muted)" }}
-                title="Settings &amp; more actions"
-              >
-                <Settings style={{ width: 16, height: 16 }} />
-                {hasUnsaved && <span style={{ position: "absolute", top: 4, right: 4, width: 6, height: 6, borderRadius: "50%", background: "var(--clr-amber)" }} />}
+                onClick={() => { setShowShareMenu(v => !v); setShowReportMenu(false); setShowDisplayMenu(false); setShowSettingsMenu(false); }}
+                style={{ display: "flex", alignItems: "center", gap: 5, background: showShareMenu ? "rgba(var(--clr-blue2-rgb),0.14)" : "var(--bg-panel)", color: showShareMenu ? "var(--clr-blue)" : "var(--text-main)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: `1px solid ${showShareMenu ? "rgba(var(--clr-blue2-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.12s" }}>
+                <Share2 style={{ width: 13, height: 13 }} />Share<ChevronDown style={{ width: 11, height: 11, marginLeft: 1 }} />
               </button>
-              {showSettingsMenu && (
-                <div
-                  style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 12, boxShadow: "var(--shadow-panel)", zIndex: 200, minWidth: 220, padding: 6, display: "flex", flexDirection: "column", gap: 2 }}
-                  onMouseLeave={() => setShowSettingsMenu(false)}
-                >
-                  {hasUnsaved && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.12)", color: "var(--clr-amber)", fontSize: 11, fontWeight: 700, marginBottom: 2 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--clr-amber)", flexShrink: 0, display: "inline-block" }} />Unsaved changes
-                    </div>
-                  )}
-                  {/* Divider label */}
-                  <div style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", padding: "4px 10px 2px" }}>Actions</div>
-                  {[
-                    { icon: <Users style={{ width: 13, height: 13 }} />, label: "Load Sample", color: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", action: () => { setShowPresets(true); setShowSettingsMenu(false); } },
-                    { icon: <Download style={{ width: 13, height: 13 }} />, label: "Export Profile (JSON)", color: "var(--clr-blue)", bg: "rgba(var(--clr-blue2-rgb),0.06)", action: () => { handleExportProfile(); setShowSettingsMenu(false); } },
-                    { icon: <Link style={{ width: 13, height: 13 }} />, label: "Copy Share Link", color: "var(--clr-blue)", bg: "rgba(var(--clr-blue2-rgb),0.06)", action: () => { handleShareLinkInit(); setShowSettingsMenu(false); } },
-                    { icon: isGeneratingPdf ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <Printer style={{ width: 13, height: 13 }} />, label: isGeneratingPdf ? "Generating PDF…" : "Download PDF Report", color: "var(--clr-green)", bg: "rgba(var(--clr-emerald-rgb),0.08)", action: () => { if (!isGeneratingPdf) { generatePDF(); setShowSettingsMenu(false); } } },
-                    { icon: <RotateCcw style={{ width: 13, height: 13 }} />, label: "Reset All Inputs", color: "var(--clr-red)", bg: "rgba(239,68,68,0.06)", action: () => { handleReset(); setShowSettingsMenu(false); } },
-                  ].map(({ icon, label, color, bg, action }) => (
-                    <button key={label} onClick={action} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: "none", background: bg, color, cursor: "pointer", textAlign: "left", width: "100%" }}>
-                      {icon}{label}
-                    </button>
-                  ))}
-                  {/* Divider */}
-                  <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 0" }} />
-                  <div style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", padding: "2px 10px" }}>Display</div>
-                  {/* Layout mode */}
-                  <div style={{ display: "flex", gap: 3, padding: "4px 6px" }}>
-                    {[["fhd", "FHD"], ["hd", "HD"], ["auto", "Auto"]].map(([mode, lbl]) => (
-                      <button key={mode} onClick={() => setDesktopMode(mode)} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", background: desktopMode === mode ? "var(--ctrl-active-bg)" : "transparent", color: desktopMode === mode ? "#fff" : "var(--text-muted)" }}>{lbl}</button>
+              {showShareMenu && (
+                <div className="cpf-nav-dropdown" onMouseLeave={() => setShowShareMenu(false)}>
+                  <div className="cpf-nav-dd-hdr">Share &amp; Transfer</div>
+                  <label className="cpf-nav-dd-item" style={{ color: "var(--clr-blue)" }}>
+                    <Download style={{ width: 13, height: 13 }} />Import Profile
+                    <input type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { handleImportProfile(e); setShowShareMenu(false); }} />
+                  </label>
+                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-blue)" }} onClick={() => { handleExportProfile(); setShowShareMenu(false); }}>
+                    <Upload style={{ width: 13, height: 13 }} />Export Profile
+                  </button>
+                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-blue)" }} onClick={() => { handleShareLinkInit(); setShowShareMenu(false); }}>
+                    <Link style={{ width: 13, height: 13 }} />Share Link
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 5. Report dropdown — desktop + tablet */}
+            <div className="cpf-nav-dt-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
+              <button
+                onClick={() => { setShowReportMenu(v => !v); setShowShareMenu(false); setShowDisplayMenu(false); setShowSettingsMenu(false); }}
+                style={{ display: "flex", alignItems: "center", gap: 5, background: showReportMenu ? "rgba(var(--clr-emerald-rgb),0.14)" : "var(--bg-panel)", color: showReportMenu ? "var(--clr-green)" : "var(--text-main)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: `1px solid ${showReportMenu ? "rgba(var(--clr-emerald-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.12s" }}>
+                <FileText style={{ width: 13, height: 13 }} />Report<ChevronDown style={{ width: 11, height: 11, marginLeft: 1 }} />
+              </button>
+              {showReportMenu && (
+                <div className="cpf-nav-dropdown" onMouseLeave={() => setShowReportMenu(false)}>
+                  <div className="cpf-nav-dd-hdr">Export &amp; Reports</div>
+                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }} onClick={() => { if (!isGeneratingPdf) { generatePDF(); setShowReportMenu(false); } }}>
+                    {isGeneratingPdf ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <Printer style={{ width: 13, height: 13 }} />}
+                    {isGeneratingPdf ? "Generating…" : "PDF Report"}
+                  </button>
+                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }} onClick={() => { handleExportCSV(); setShowReportMenu(false); }}>
+                    <Download style={{ width: 13, height: 13 }} />CSV – Data
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 6. Display dropdown — desktop ONLY (no gear on desktop) */}
+            <div className="cpf-nav-d-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
+              <button
+                onClick={() => { setShowDisplayMenu(v => !v); setShowShareMenu(false); setShowReportMenu(false); setShowSettingsMenu(false); }}
+                style={{ display: "flex", alignItems: "center", gap: 5, background: showDisplayMenu ? "rgba(var(--clr-blue2-rgb),0.14)" : "var(--bg-panel)", color: showDisplayMenu ? "var(--clr-blue)" : "var(--text-main)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: `1px solid ${showDisplayMenu ? "rgba(var(--clr-blue2-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.12s" }}>
+                <Monitor style={{ width: 13, height: 13 }} />Display<ChevronDown style={{ width: 11, height: 11, marginLeft: 1 }} />
+              </button>
+              {showDisplayMenu && (
+                <div className="cpf-nav-dropdown cpf-nav-dd-right" onMouseLeave={() => setShowDisplayMenu(false)}>
+                  <div className="cpf-nav-dd-hdr">Modes</div>
+                  <div style={{ display: "flex", gap: 3, padding: "3px 8px 6px" }}>
+                    {[["fhd","FHD"],["hd","HD"],["auto","Auto"]].map(([m,l]) => (
+                      <button key={m} onClick={() => setDesktopMode(m)} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", background: desktopMode === m ? "var(--ctrl-active-bg)" : "transparent", color: desktopMode === m ? "#fff" : "var(--text-muted)" }}>{l}</button>
                     ))}
                   </div>
-                  {/* Theme */}
-                  <div style={{ display: "flex", gap: 3, padding: "4px 6px 6px" }}>
-                    {[["dark", "● Dark"], ["light", "○ Light"]].map(([mode, lbl]) => (
-                      <button key={mode} onClick={() => setThemeMode(mode)} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", background: themeMode === mode ? "var(--ctrl-active-bg)" : "transparent", color: themeMode === mode ? "#fff" : "var(--text-muted)" }}>{lbl}</button>
+                  <div className="cpf-nav-dd-hdr">Appearance</div>
+                  <div style={{ display: "flex", gap: 3, padding: "3px 8px 8px" }}>
+                    {[["dark","● Dark"],["light","○ Light"]].map(([m,l]) => (
+                      <button key={m} onClick={() => setThemeMode(m)} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", background: themeMode === m ? "var(--ctrl-active-bg)" : "transparent", color: themeMode === m ? "#fff" : "var(--text-muted)" }}>{l}</button>
                     ))}
                   </div>
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      </header>
 
-      {/* MOBILE MENU OVERLAY */}
-      {mobileMenuOpen && (
-        <div className="cpf-mobile-menu">
-          <div className="cpf-mobile-menu-row">
-            <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 8, border: "1px solid var(--border-strong)" }}>
-              <button onClick={() => setIsRealDollars(false)} style={{ padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)" }}>Nominal</button>
-              <button onClick={() => setIsRealDollars(true)} style={{ padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)" }}>Real $</button>
-            </div>
-            <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 8, border: "1px solid var(--border-strong)" }}>
-              <button onClick={() => setThemeMode('dark')} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'dark' ? "var(--ctrl-active-bg)" : "transparent", color: themeMode === 'dark' ? "#ffffff" : "var(--text-muted)" }}>● Dark</button>
-              <button onClick={() => setThemeMode('light')} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: themeMode === 'light' ? "var(--ctrl-active-bg)" : "transparent", color: themeMode === 'light' ? "#ffffff" : "var(--text-muted)" }}>○ Light</button>
-            </div>
-            {/* Sidebar toggle shortcut in mobile dropdown */}
-            <button onClick={() => { setSidebarOpen(v => !v); setMobileMenuOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: `1px solid ${sidebarOpen ? "rgba(var(--clr-emerald-rgb),0.4)" : "var(--border-strong)"}`, background: sidebarOpen ? "rgba(var(--clr-emerald-rgb),0.1)" : "rgba(100,116,139,0.15)", color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)", cursor: "pointer" }}>
-              <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Inputs" : "Show Inputs"}
-            </button>
-          </div>
-          <div className="cpf-mobile-menu-row">
-            <button onClick={() => { setMobileMenuOpen(false); setShowPresets(true); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-amber-rgb),0.12)", color: "var(--clr-amber)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.3)", cursor: "pointer" }}>
-              <Users style={{ width: 13, height: 13 }} />Samples
-            </button>
-            <button onClick={() => { setMobileMenuOpen(false); handleReset(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.12)", color: "var(--clr-red)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(239,68,68,0.35)", cursor: "pointer" }} title="Reset all inputs and scenarios to defaults">
-              <RotateCcw style={{ width: 13, height: 13 }} />Reset
-            </button>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
-              <Upload style={{ width: 13, height: 13 }} />Import Profile
-              <input type="file" accept=".json" style={{ display: "none" }} onChange={handleImportProfile} />
-            </label>
-            {/* Rev#18: mobile unsaved badge — same logic as desktop */}
+            {/* 7. Unsaved badge — desktop only */}
             {hasUnsaved && (
-              <span title="Inputs have changed since last export" style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(var(--clr-amber-rgb),0.15)", color: "var(--clr-amber)", padding: "8px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.4)", animation: "unsavedPulse 2.4s ease-in-out infinite", whiteSpace: "nowrap", userSelect: "none" }}>
+              <span className="cpf-nav-d-only" title="Inputs changed since last export"
+                style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(var(--clr-amber-rgb),0.15)", color: "var(--clr-amber)", padding: "5px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.4)", animation: "unsavedPulse 2.4s ease-in-out infinite", whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
                 ● Unsaved
               </span>
             )}
-            <button onClick={() => { setMobileMenuOpen(false); handleExportProfile(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
-              <Download style={{ width: 13, height: 13 }} />Export Profile
-            </button>
-            <button onClick={() => { setMobileMenuOpen(false); handleShareLinkInit(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-blue2-rgb),0.1)", color: "var(--clr-blue)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-blue2-rgb),0.3)", cursor: "pointer" }}>
-              <Link style={{ width: 13, height: 13 }} />Share Link
-            </button>
-            <button onClick={() => { setMobileMenuOpen(false); generatePDF(); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(var(--clr-emerald-rgb),0.15)", color: "var(--clr-green)", padding: "8px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-emerald-rgb),0.4)", cursor: "pointer" }}>
-              <Printer style={{ width: 13, height: 13 }} />PDF Report
-            </button>
+
+            {/* 8. ⚙ Settings gear — tablet + mobile only.
+                Contains: Display modes, Appearance, Sidebar toggle, and on mobile also Share/Report. */}
+            <div className="cpf-nav-tm-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
+              <button
+                onClick={() => { setShowSettingsMenu(v => !v); setShowShareMenu(false); setShowReportMenu(false); setShowDisplayMenu(false); }}
+                style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", background: showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.15)" : "var(--bg-panel)", border: `1px solid ${showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.4)" : "var(--border-strong)"}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: showSettingsMenu ? "var(--clr-blue)" : "var(--text-muted)" }}
+                title="Settings &amp; more">
+                <Settings style={{ width: 16, height: 16 }} />
+                {hasUnsaved && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "var(--clr-amber)", pointerEvents: "none" }} />}
+              </button>
+              {showSettingsMenu && (
+                <div className="cpf-nav-dropdown cpf-nav-dd-right" onMouseLeave={() => setShowSettingsMenu(false)} style={{ minWidth: 230 }}>
+                  {hasUnsaved && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.12)", color: "var(--clr-amber)", fontSize: 11, fontWeight: 700, marginBottom: 2 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--clr-amber)", flexShrink: 0, display: "inline-block" }} />Unsaved changes
+                    </div>
+                  )}
+                  {/* Share section — shown on mobile only (tablet has its own Share/Report btns) */}
+                  <div className="cpf-gear-mobile-share">
+                    <div className="cpf-nav-dd-hdr">Share &amp; Transfer</div>
+                    <label className="cpf-nav-dd-item" style={{ color: "var(--clr-blue)" }}>
+                      <Download style={{ width: 13, height: 13 }} />Import Profile
+                      <input type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { handleImportProfile(e); setShowSettingsMenu(false); }} />
+                    </label>
+                    {[
+                      { icon: <Upload style={{ width: 13, height: 13 }} />, label: "Export Profile", color: "var(--clr-blue)", action: () => { handleExportProfile(); setShowSettingsMenu(false); } },
+                      { icon: <Link style={{ width: 13, height: 13 }} />, label: "Share Link", color: "var(--clr-blue)", action: () => { handleShareLinkInit(); setShowSettingsMenu(false); } },
+                    ].map(({ icon, label, color, action }) => (
+                      <button key={label} className="cpf-nav-dd-item" style={{ color }} onClick={action}>{icon}{label}</button>
+                    ))}
+                    <div className="cpf-nav-dd-hdr">Reports</div>
+                    <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }} onClick={() => { if (!isGeneratingPdf) { generatePDF(); setShowSettingsMenu(false); } }}>
+                      {isGeneratingPdf ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <Printer style={{ width: 13, height: 13 }} />}
+                      {isGeneratingPdf ? "Generating…" : "PDF Report"}
+                    </button>
+                    <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }} onClick={() => { handleExportCSV(); setShowSettingsMenu(false); }}>
+                      <Download style={{ width: 13, height: 13 }} />CSV – Data
+                    </button>
+                    <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
+                  </div>
+                  {/* Actions — all viewports in gear */}
+                  <div className="cpf-nav-dd-hdr">Actions</div>
+                  {[
+                    { icon: <Users style={{ width: 13, height: 13 }} />, label: "Load Sample", color: "var(--clr-amber)", action: () => { setShowPresets(true); setShowSettingsMenu(false); } },
+                    { icon: <RotateCcw style={{ width: 13, height: 13 }} />, label: "Reset All Inputs", color: "var(--clr-red)", action: () => { handleReset(); setShowSettingsMenu(false); } },
+                  ].map(({ icon, label, color, action }) => (
+                    <button key={label} className="cpf-nav-dd-item" style={{ color }} onClick={action}>{icon}{label}</button>
+                  ))}
+                  <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
+                  <div className="cpf-nav-dd-hdr">Display</div>
+                  <div style={{ display: "flex", gap: 3, padding: "3px 8px 6px" }}>
+                    {[["fhd","FHD"],["hd","HD"],["auto","Auto"]].map(([m,l]) => (
+                      <button key={m} onClick={() => setDesktopMode(m)} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", background: desktopMode === m ? "var(--ctrl-active-bg)" : "transparent", color: desktopMode === m ? "#fff" : "var(--text-muted)" }}>{l}</button>
+                    ))}
+                  </div>
+                  <div className="cpf-nav-dd-hdr">Appearance</div>
+                  <div style={{ display: "flex", gap: 3, padding: "3px 8px 8px" }}>
+                    {[["dark","● Dark"],["light","○ Light"]].map(([m,l]) => (
+                      <button key={m} onClick={() => setThemeMode(m)} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", background: themeMode === m ? "var(--ctrl-active-bg)" : "transparent", color: themeMode === m ? "#fff" : "var(--text-muted)" }}>{l}</button>
+                    ))}
+                  </div>
+                  <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
+                  <button className="cpf-nav-dd-item" style={{ color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)" }}
+                    onClick={() => { setSidebarOpen(v => !v); setShowSettingsMenu(false); }}>
+                    <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Input Panel" : "Show Input Panel"}
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
-      )}
+      </header>
 
       {/* Mobile fixed-header spacer — hidden on desktop via CSS */}
       <div className="cpf-mobile-top-spacer" style={{ display: "none" }} />
@@ -9603,28 +9708,74 @@ ${milestones.length > 0 ? `<table>
           <AlertTriangle style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />VC Exceeds Available Limit ({formatCurrency(maxAllowableVC)})
         </div>
       )}
-      {/* ── Full-width tab navigation — spans sidebar+content on all viewports ── */}
-      {/* Change 2: Tab strip extracted from cpf-main-wrap so it fills the full page width,
-          aligning above both the left input panel and the right content area as per mockup.
-          Sticky rules applied per breakpoint via .cpf-tabs-full-width CSS class.          */}
+
+      {/* ── Full-width tab strip — sticky on tablet/mobile; spans full width on all viewports ── */}
       <nav className="cpf-tabs-full-width" aria-label="Dashboard sections">
-        {/* Wrap in cpf-page-wrap so the tab right edge lands at the same x as the header gear button */}
-        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0 }}>
-          <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-          {[["welcome", "Welcome", Lightbulb, "#64748b"], ["summary", "Summary", PieChart, "var(--clr-emerald)"], ["strategy", "Strategy", Target, "#f43f5e"], ["accumulation", "Growth", BarChart3, "var(--clr-blue2)"], ...(debouncedInputs.cpfScheme === 'rss' ? [["rss", "RSS", Clock, "var(--clr-blue)"]] : [["life", "LIFE", ShieldCheck, "var(--clr-purple)"]]), ["compare", "Compare", Split, "var(--clr-amber3)"], ...(householdEnabled ? [["household", "Household", Users, "#8b5cf6"]] : []), ["table", "Data Table", TableIcon, "var(--clr-slate)"], ["notes", "Docs", BookOpen, "var(--clr-blue)"]].map(([id, label, Icon, accent]) => {
-            const isLifeLocked = id === "life" && isForeigner;
-            return (
-              <button key={id} role="tab" aria-selected={activeTab === id} aria-controls={`panel-${id}`}
-                onClick={() => { if (isLifeLocked) return; setActiveTab(id); }}
-                title={isLifeLocked ? "CPF LIFE — not available to foreigners" : undefined}
-                style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 13, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: "transparent", color: activeTab === id ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: activeTab === id ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLifeLocked ? 0.45 : 1 }}>
-                <Icon style={{ width: 14, height: 14 }} />{label}{isLifeLocked && <span style={{ fontSize: 9, marginLeft: 2 }}>🔒</span>}
-              </button>
-            );
-          })}
+        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0, display: "flex", alignItems: "stretch" }}>
+          {/* Scrollable tab buttons */}
+          <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", flex: "1 1 auto", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+            {[["welcome","Welcome",Lightbulb,"#64748b"],["summary","Summary",PieChart,"var(--clr-emerald)"],["strategy","Strategy",Target,"#f43f5e"],["accumulation","Growth",BarChart3,"var(--clr-blue2)"],...(debouncedInputs.cpfScheme==='rss'?[["rss","RSS",Clock,"var(--clr-blue)"]]:([["life","LIFE",ShieldCheck,"var(--clr-purple)"]])),["compare","Compare",Split,"var(--clr-amber3)"],...(householdEnabled?[["household","Household",Users,"#8b5cf6"]]:[]),["table","Data Table",TableIcon,"var(--clr-slate)"],["notes","Docs",BookOpen,"var(--clr-blue)"]].map(([id,label,Icon,accent]) => {
+              const isLifeLocked = id === "life" && isForeigner;
+              return (
+                <button key={id} role="tab" aria-selected={activeTab === id} aria-controls={`panel-${id}`}
+                  onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); }}
+                  title={isLifeLocked ? "CPF LIFE — not available to foreigners" : undefined}
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 13, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: "transparent", color: activeTab === id ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: activeTab === id ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLifeLocked ? 0.45 : 1 }}>
+                  <Icon style={{ width: 14, height: 14 }} />{label}{isLifeLocked && <span style={{ fontSize: 9, marginLeft: 2 }}>🔒</span>}
+                </button>
+              );
+            })}
+          </div>
+          {/* Tab hamburger — mobile only; one-tap tab picker */}
+          <div className="cpf-tabs-hamburger" style={{ position: "relative", flexShrink: 0, display: "none", alignItems: "center", borderLeft: "1px solid var(--border-subtle)", paddingLeft: 6 }}>
+            <button onClick={() => setShowTabsMenu(v => !v)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", background: showTabsMenu ? "rgba(var(--clr-blue2-rgb),0.12)" : "transparent", border: `1px solid ${showTabsMenu ? "rgba(var(--clr-blue2-rgb),0.35)" : "transparent"}`, borderRadius: 8, padding: "6px 8px", cursor: "pointer", color: "var(--text-muted)" }}
+              aria-label="All tabs">
+              <AlignJustify style={{ width: 18, height: 18 }} />
+            </button>
+            {showTabsMenu && (
+              <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 12, boxShadow: "var(--shadow-panel)", zIndex: 200, minWidth: 180, padding: 6, display: "flex", flexDirection: "column", gap: 2 }}
+                onMouseLeave={() => setShowTabsMenu(false)}>
+                {[["welcome","Welcome",Lightbulb,"#64748b"],["summary","Summary",PieChart,"var(--clr-emerald)"],["strategy","Strategy",Target,"#f43f5e"],["accumulation","Growth",BarChart3,"var(--clr-blue2)"],...(debouncedInputs.cpfScheme==='rss'?[["rss","RSS",Clock,"var(--clr-blue)"]]:([["life","LIFE",ShieldCheck,"var(--clr-purple)"]])),["compare","Compare",Split,"var(--clr-amber3)"],...(householdEnabled?[["household","Household",Users,"#8b5cf6"]]:[]),["table","Data Table",TableIcon,"var(--clr-slate)"],["notes","Docs",BookOpen,"var(--clr-blue)"]].map(([id,label,Icon,accent]) => {
+                  const isLifeLocked = id === "life" && isForeigner;
+                  return (
+                    <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); }}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: activeTab === id ? 800 : 600, border: "none", background: activeTab === id ? `${accent}18` : "transparent", color: isLifeLocked ? "rgba(160,160,160,0.4)" : activeTab === id ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: isLifeLocked ? 0.5 : 1 }}>
+                      <Icon style={{ width: 13, height: 13 }} />{label}{isLifeLocked && " 🔒"}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
-        </div>{/* end cpf-page-wrap */}
       </nav>
+
+      {/* ── Input Parameters sticky bar — tablet + mobile only; sits just below tab strip ──
+          Extracted from the sidebar so it stays visible at top:92px even when scrolled
+          into the main content area. Hidden on desktop (sidebar always visible). */}
+      <div className="cpf-input-params-bar" style={{ display: "none" }}>
+        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0 }}>
+          <div onClick={() => setSidebarOpen(v => !v)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", cursor: "pointer", userSelect: "none" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <SlidersHorizontal style={{ width: 14, height: 14, color: "var(--clr-emerald)" }} />
+              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Input Parameters</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700 }}>{sidebarOpen ? "▲" : "▼"}</span>
+            </div>
+            {sidebarOpen && (
+              <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
+                <button onClick={expandAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                  <ChevronDown style={{ width: 10, height: 10 }} />All
+                </button>
+                <button onClick={collapseAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                  <ChevronUp style={{ width: 10, height: 10 }} />None
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div
         className="cpf-layout"
@@ -9636,28 +9787,8 @@ ${milestones.length > 0 ? `<table>
           background: 'var(--bg-base)'
         }}
       >
-        {/* SIDEBAR — desktop: left column | tablet/mobile: collapsible strip */}
+        {/* SIDEBAR — desktop: left column | tablet/mobile: collapsible panel */}
         <aside className="cpf-sidebar-wrap" style={{ background: "var(--bg-base)" }}>
-          {/* Toggle bar — only visible on tablet/mobile via CSS .sidebar-toggle-btn */}
-          <div className="sidebar-toggle-btn" style={{ display: "none", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid var(--border-subtle)", userSelect: "none", background: "var(--bg-panel)" }}>
-            {/* Left: tap the label/chevron to open/close sidebar */}
-            <div onClick={() => setSidebarOpen(v => !v)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1 }}>
-              <SlidersHorizontal style={{ width: 14, height: 14, color: "var(--clr-emerald)" }} />
-              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Input Parameters</span>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, marginLeft: 4 }}>{sidebarOpen ? "▲" : "▼"}</span>
-            </div>
-            {/* Right: Expand All / Collapse All — only useful when sidebar is open */}
-            {sidebarOpen && (
-              <div style={{ display: "flex", gap: 4, marginLeft: 8 }} onClick={e => e.stopPropagation()}>
-                <button onClick={expandAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                  <ChevronDown style={{ width: 10, height: 10 }} />All
-                </button>
-                <button onClick={collapseAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                  <ChevronUp style={{ width: 10, height: 10 }} />None
-                </button>
-              </div>
-            )}
-          </div>
           {/* Sticky Expand / Collapse bar — always visible at top of sidebar while scrolling */}
           {/* Sticky bar — FHD: 3 dual-function column buttons; HD/smaller: Expand/Collapse All */}
           <div className="sidebar-sticky-bar" style={{ display: "flex", gap: 6, padding: "6px 0", position: "sticky", top: 0, zIndex: 10, background: "var(--bg-base)", borderBottom: "1px solid var(--border-subtle)", backdropFilter: "blur(6px)" }}>
