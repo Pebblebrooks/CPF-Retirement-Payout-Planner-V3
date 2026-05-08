@@ -4585,6 +4585,28 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Close all nav dropdowns when tapping/clicking outside them ──────────
+  // onMouseLeave alone doesn't work on touch devices (fires on pointer-up before
+  // the user can tap an item). This effect adds mousedown + touchstart listeners
+  // on document so any outside tap reliably dismisses all open menus.
+  useEffect(() => {
+    const handleOutside = (e) => {
+      if (!e.target.closest('.cpf-nav-ddwrap') && !e.target.closest('.cpf-tabs-hamburger')) {
+        setShowShareMenu(false);
+        setShowReportMenu(false);
+        setShowDisplayMenu(false);
+        setShowSettingsMenu(false);
+        setShowTabsMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const is55Plus     = (Number(inputs.currentAge) || 0) >= 55;
   const isUnder16    = (Number(inputs.currentAge) || 0) < 16;   // CPF minor gate: informational note for cash top-ups
   const isUnder18    = (Number(inputs.currentAge) || 0) < 18;   // SRS gate (IRAS: account requires age 18+) + CPFIS gate
@@ -8627,6 +8649,8 @@ ${milestones.length > 0 ? `<table>
 
         /* .cpf-gear-mobile-share — inside gear dropdown; shown on mobile, hidden on tablet */
         .cpf-gear-mobile-share { display: contents; }
+        /* .cpf-gear-nomreal — Nom/Real inside gear; shown on mobile only */
+        .cpf-gear-nomreal { display: none; }
 
         /* Tablet sticky bottom action bar — hidden by default, shown via @media 769–1024px */
         .tablet-action-bar {
@@ -8884,7 +8908,13 @@ ${milestones.length > 0 ? `<table>
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Hide desktop+tablet-only nav buttons; show gear */
           .cpf-nav-dt-only { display: none !important; }
+          /* Also hide desktop-only elements (Display button) */
+          .cpf-nav-d-only { display: none !important; }
+          /* Hide Nom/Real inline toggle — it lives inside gear on mobile */
+          .cpf-nav-nomreal { display: none !important; }
           .cpf-nav-tm-only { display: flex !important; }
+          /* Show Nom/Real inside gear dropdown on mobile */
+          .cpf-gear-nomreal { display: block !important; }
           /* Show Share/Report/etc in the gear dropdown on mobile */
           .cpf-gear-mobile-share { display: contents !important; }
           /* Show hamburger tab picker on mobile */
@@ -9529,8 +9559,8 @@ ${milestones.length > 0 ? `<table>
           {/* ── Header actions ── */}
           <div className="cpf-header-actions" style={{ display: "flex", alignItems: "center", gap: 5, flex: "1 1 auto", minWidth: 0, justifyContent: "flex-end" }}>
 
-            {/* 1. Nom($) / Real($) toggle — all viewports */}
-            <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1, flexShrink: 0 }}>
+            {/* 1. Nom($) / Real($) toggle — desktop + tablet only; hidden on mobile (inside gear) */}
+            <div className="cpf-nav-nomreal" style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1, flexShrink: 0 }}>
               <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nom($)</button>
               <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real($)</button>
             </div>
@@ -9557,7 +9587,7 @@ ${milestones.length > 0 ? `<table>
                 <Share2 style={{ width: 13, height: 13 }} />Share<ChevronDown style={{ width: 11, height: 11, marginLeft: 1 }} />
               </button>
               {showShareMenu && (
-                <div className="cpf-nav-dropdown" onMouseLeave={() => setShowShareMenu(false)}>
+                <div className="cpf-nav-dropdown">
                   <div className="cpf-nav-dd-hdr">Share &amp; Transfer</div>
                   <label className="cpf-nav-dd-item" style={{ color: "var(--clr-blue)" }}>
                     <Download style={{ width: 13, height: 13 }} />Import Profile
@@ -9581,7 +9611,7 @@ ${milestones.length > 0 ? `<table>
                 <FileText style={{ width: 13, height: 13 }} />Report<ChevronDown style={{ width: 11, height: 11, marginLeft: 1 }} />
               </button>
               {showReportMenu && (
-                <div className="cpf-nav-dropdown" onMouseLeave={() => setShowReportMenu(false)}>
+                <div className="cpf-nav-dropdown">
                   <div className="cpf-nav-dd-hdr">Export &amp; Reports</div>
                   <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }} onClick={() => { if (!isGeneratingPdf) { generatePDF(); setShowReportMenu(false); } }}>
                     {isGeneratingPdf ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <Printer style={{ width: 13, height: 13 }} />}
@@ -9602,7 +9632,7 @@ ${milestones.length > 0 ? `<table>
                 <Monitor style={{ width: 13, height: 13 }} />Display<ChevronDown style={{ width: 11, height: 11, marginLeft: 1 }} />
               </button>
               {showDisplayMenu && (
-                <div className="cpf-nav-dropdown cpf-nav-dd-right" onMouseLeave={() => setShowDisplayMenu(false)}>
+                <div className="cpf-nav-dropdown cpf-nav-dd-right">
                   <div className="cpf-nav-dd-hdr">Modes</div>
                   <div style={{ display: "flex", gap: 3, padding: "3px 8px 6px" }}>
                     {[["fhd","FHD"],["hd","HD"],["auto","Auto"]].map(([m,l]) => (
@@ -9638,12 +9668,21 @@ ${milestones.length > 0 ? `<table>
                 {hasUnsaved && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "var(--clr-amber)", pointerEvents: "none" }} />}
               </button>
               {showSettingsMenu && (
-                <div className="cpf-nav-dropdown cpf-nav-dd-right" onMouseLeave={() => setShowSettingsMenu(false)} style={{ minWidth: 230 }}>
+                <div className="cpf-nav-dropdown cpf-nav-dd-right" style={{ minWidth: 230 }}>
                   {hasUnsaved && (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.12)", color: "var(--clr-amber)", fontSize: 11, fontWeight: 700, marginBottom: 2 }}>
                       <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--clr-amber)", flexShrink: 0, display: "inline-block" }} />Unsaved changes
                     </div>
                   )}
+                  {/* Nom/Real toggle — only rendered in gear on mobile (hidden at ≥769px by CSS) */}
+                  <div className="cpf-gear-nomreal" style={{ padding: "6px 8px 4px" }}>
+                    <div className="cpf-nav-dd-hdr" style={{ paddingLeft: 2 }}>Display Mode</div>
+                    <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1 }}>
+                      <button onClick={() => setIsRealDollars(false)} style={{ flex: 1, padding: "6px 0", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", textAlign: "center" }}>Nom($)</button>
+                      <button onClick={() => setIsRealDollars(true)} style={{ flex: 1, padding: "6px 0", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", textAlign: "center" }}>Real($)</button>
+                    </div>
+                  </div>
+                  <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
                   {/* Share section — shown on mobile only (tablet has its own Share/Report btns) */}
                   <div className="cpf-gear-mobile-share">
                     <div className="cpf-nav-dd-hdr">Share &amp; Transfer</div>
@@ -9734,8 +9773,7 @@ ${milestones.length > 0 ? `<table>
               <AlignJustify style={{ width: 18, height: 18 }} />
             </button>
             {showTabsMenu && (
-              <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 12, boxShadow: "var(--shadow-panel)", zIndex: 200, minWidth: 180, padding: 6, display: "flex", flexDirection: "column", gap: 2 }}
-                onMouseLeave={() => setShowTabsMenu(false)}>
+              <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 12, boxShadow: "var(--shadow-panel)", zIndex: 200, minWidth: 180, padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
                 {[["welcome","Welcome",Lightbulb,"#64748b"],["summary","Summary",PieChart,"var(--clr-emerald)"],["strategy","Strategy",Target,"#f43f5e"],["accumulation","Growth",BarChart3,"var(--clr-blue2)"],...(debouncedInputs.cpfScheme==='rss'?[["rss","RSS",Clock,"var(--clr-blue)"]]:([["life","LIFE",ShieldCheck,"var(--clr-purple)"]])),["compare","Compare",Split,"var(--clr-amber3)"],...(householdEnabled?[["household","Household",Users,"#8b5cf6"]]:[]),["table","Data Table",TableIcon,"var(--clr-slate)"],["notes","Docs",BookOpen,"var(--clr-blue)"]].map(([id,label,Icon,accent]) => {
                   const isLifeLocked = id === "life" && isForeigner;
                   return (
