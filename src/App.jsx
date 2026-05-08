@@ -8301,11 +8301,16 @@ ${milestones.length > 0 ? `<table>
         /* Main content panel: grid with sticky header row + scrollable content row */
         /* ── Full-width tab strip — sits between header and the sidebar/content split ── */
         .cpf-tabs-full-width {
-          background: var(--bg-panel);
-          border-bottom: 2px solid var(--border-subtle);
           flex-shrink: 0;
           z-index: 38;
           /* Desktop: non-sticky — the cpf-layout below never scrolls at page level */
+        }
+        /* Background and border sit on the inner cpf-page-wrap so they follow the
+           mode's max-width constraint (1440px HD / 100% FHD) rather than bleeding
+           full-viewport-width when the layout is narrower than the screen. */
+        .cpf-tabs-full-width .cpf-page-wrap {
+          background: var(--bg-panel);
+          border-bottom: 2px solid var(--border-subtle);
         }
         /* Tab strip uses cpf-page-wrap internally — matches header container exactly */
         .cpf-tabs-full-width .cpf-tabs { justify-content: flex-end; padding: 0; }
@@ -9449,8 +9454,8 @@ ${milestones.length > 0 ? `<table>
       )}
 
       {/* HEADER */}
-      <header style={{ background: "var(--header-bg)", borderBottom: "1px solid var(--border-subtle)", flexShrink: 0, zIndex: 50, backdropFilter: "blur(8px)" }}>
-        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap" }}>
+      <header style={{ flexShrink: 0, zIndex: 50 }}>
+        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap", background: "var(--header-bg)", borderBottom: "1px solid var(--border-subtle)", backdropFilter: "blur(8px)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <div className="cpf-calc-icon-box" style={{ background: "var(--clr-emerald)", padding: 8, borderRadius: 12 }}>
               <Calculator style={{ color: "#ffffff", width: 18, height: 18 }} />
@@ -9604,7 +9609,7 @@ ${milestones.length > 0 ? `<table>
           Sticky rules applied per breakpoint via .cpf-tabs-full-width CSS class.          */}
       <nav className="cpf-tabs-full-width" aria-label="Dashboard sections">
         {/* Wrap in cpf-page-wrap so the tab right edge lands at the same x as the header gear button */}
-        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ padding: 0 }}>
+        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0 }}>
           <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
           {[["welcome", "Welcome", Lightbulb, "#64748b"], ["summary", "Summary", PieChart, "var(--clr-emerald)"], ["strategy", "Strategy", Target, "#f43f5e"], ["accumulation", "Growth", BarChart3, "var(--clr-blue2)"], ...(debouncedInputs.cpfScheme === 'rss' ? [["rss", "RSS", Clock, "var(--clr-blue)"]] : [["life", "LIFE", ShieldCheck, "var(--clr-purple)"]]), ["compare", "Compare", Split, "var(--clr-amber3)"], ...(householdEnabled ? [["household", "Household", Users, "#8b5cf6"]] : []), ["table", "Data Table", TableIcon, "var(--clr-slate)"], ["notes", "Docs", BookOpen, "var(--clr-blue)"]].map(([id, label, Icon, accent]) => {
             const isLifeLocked = id === "life" && isForeigner;
