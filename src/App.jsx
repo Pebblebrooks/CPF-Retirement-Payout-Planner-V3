@@ -8307,7 +8307,8 @@ ${milestones.length > 0 ? `<table>
           z-index: 38;
           /* Desktop: non-sticky — the cpf-layout below never scrolls at page level */
         }
-        .cpf-tabs-full-width .cpf-tabs { justify-content: flex-end; }
+        /* Tab strip uses cpf-page-wrap internally — matches header container exactly */
+        .cpf-tabs-full-width .cpf-tabs { justify-content: flex-end; padding: 0; }
         .cpf-main-wrap {
           height: 100%;
           display: flex;
@@ -8746,10 +8747,12 @@ ${milestones.length > 0 ? `<table>
           /* Revert to normal page flow — no sticky panels on tablet */
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
-          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; padding-top: 44px !important; }
+          /* Row 1 sticky: header always visible */
+          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; }
+          .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
-          /* Full-width tab strip sticks at top:0 — no fixed header on tablet */
-          .cpf-tabs-full-width { position: sticky; top: 0; z-index: 42; }
+          /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
+          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
           /* KPI-only strip inside cpf-main-wrap — no longer needs its own sticky (tab strip is sticky above) */
           .cpf-tabs-kpi-header { position: static; }
           /* W1 fix: remove horizontal padding from tab-content — parent cpf-main-wrap already provides
@@ -8760,9 +8763,8 @@ ${milestones.length > 0 ? `<table>
           /* Logo alignment: match header left/right padding to sidebar-inner (14px) */
           .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
-          /* Tablet: fix the sidebar toggle the same way mobile does — position:sticky cannot work
-             when the parent is overflow:visible; use fixed so it stays reachable at all times. */
-          .sidebar-toggle-btn { display: flex !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; z-index: 48 !important; background: var(--bg-panel); }
+          /* Sidebar toggle: sticky below header (48px) + tab strip (44px) = 92px; remains in flow (no fixed) */
+          .sidebar-toggle-btn { display: flex !important; position: sticky !important; top: 92px !important; left: 0 !important; right: 0 !important; z-index: 48 !important; background: var(--bg-panel); }
           .desktop-only { display: none !important; }
           .rg-6, .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
           .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
@@ -8806,17 +8808,19 @@ ${milestones.length > 0 ? `<table>
           /* Logo alignment: match header left/right padding to sidebar-inner (12px) */
           .cpf-page-wrap { padding-left: 12px !important; padding-right: 12px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
+          /* Row 1 sticky: header always visible on mid-mobile (641-768px) */
+          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; }
+          /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
+          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
+          .cpf-tabs-kpi-header { position: static; }
           /* W1 fix: move horizontal inset from cpf-tab-content up to cpf-main-wrap so the tab
              header panel (tabs + KPI strip) and the scrollable content below it share the same
              10px left/right margin. Previously the header was full-bleed while content had its
              own 10px padding, creating a visible width mis-alignment. */
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
-          /* Full-width tab strip sticks at top:0 — no fixed header on mid-mobile */
-          .cpf-tabs-full-width { position: sticky; top: 0; z-index: 42; }
-          .cpf-tabs-kpi-header { position: static; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
-
-          .sidebar-toggle-btn { display: flex !important; position: sticky; top: 0; z-index: 40; background: var(--bg-panel); }
+          /* Sidebar toggle: sticky below header (48px) + tab strip (44px) = 92px */
+          .sidebar-toggle-btn { display: flex !important; position: sticky !important; top: 92px !important; z-index: 40; background: var(--bg-panel); }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
           .rg-5, .rg-4, .rg-3, .rg-2 { grid-template-columns: 1fr 1fr !important; }
@@ -9599,7 +9603,9 @@ ${milestones.length > 0 ? `<table>
           aligning above both the left input panel and the right content area as per mockup.
           Sticky rules applied per breakpoint via .cpf-tabs-full-width CSS class.          */}
       <nav className="cpf-tabs-full-width" aria-label="Dashboard sections">
-        <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", padding: "0 8px", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+        {/* Wrap in cpf-page-wrap so the tab right edge lands at the same x as the header gear button */}
+        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ padding: 0 }}>
+          <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
           {[["welcome", "Welcome", Lightbulb, "#64748b"], ["summary", "Summary", PieChart, "var(--clr-emerald)"], ["strategy", "Strategy", Target, "#f43f5e"], ["accumulation", "Growth", BarChart3, "var(--clr-blue2)"], ...(debouncedInputs.cpfScheme === 'rss' ? [["rss", "RSS", Clock, "var(--clr-blue)"]] : [["life", "LIFE", ShieldCheck, "var(--clr-purple)"]]), ["compare", "Compare", Split, "var(--clr-amber3)"], ...(householdEnabled ? [["household", "Household", Users, "#8b5cf6"]] : []), ["table", "Data Table", TableIcon, "var(--clr-slate)"], ["notes", "Docs", BookOpen, "var(--clr-blue)"]].map(([id, label, Icon, accent]) => {
             const isLifeLocked = id === "life" && isForeigner;
             return (
@@ -9612,6 +9618,7 @@ ${milestones.length > 0 ? `<table>
             );
           })}
         </div>
+        </div>{/* end cpf-page-wrap */}
       </nav>
 
       <div
