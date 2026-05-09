@@ -5957,6 +5957,28 @@ export default function App() {
     () => new Map(spouseProjection.map(r => [r.age, r])),
     [spouseProjection]);
 
+  // II-5 fix: deflated spouse accumulation Map — mirrors the displayAccumulation/accumulationByAge
+  // pattern for the primary member. Used by the Household tab KPI "Combined CPF at Later Payout Age"
+  // so sAtPA responds correctly to the Nom/Real$ toggle.
+  const spouseDisplayAccumulation = useMemo(() => {
+    if (!spouseProjection.length) return spouseProjection;
+    if (!isRealDollars) return spouseProjection;
+    const inflD = (Number(debouncedSpouseInputs.inflationRate) || 0) / 100;
+    const caD   = Number(debouncedSpouseInputs.currentAge) || 35;
+    const NUM_KEYS = ["oa","sa","ma","ra","total","privateAssets","srsBalance","propertyValue",
+      "cumulativeInjected","cumulativeInterest","cumulativeOutflow"];
+    return spouseProjection.map(row => {
+      const factor = Math.pow(1 + inflD, Math.max(0, row.age - caD));
+      const n = { ...row };
+      NUM_KEYS.forEach(k => { if (n[k] != null) n[k] = Math.round(n[k] / factor); });
+      return n;
+    });
+  }, [spouseProjection, isRealDollars, debouncedSpouseInputs.inflationRate, debouncedSpouseInputs.currentAge]);
+
+  const spouseAccumulationByAge = useMemo(
+    () => new Map(spouseDisplayAccumulation.map(r => [r.age, r])),
+    [spouseDisplayAccumulation]);
+
   // Spouse payout age — mirrors payoutAge65 pattern
   const spousePayoutAge = Number(debouncedSpouseInputs.payoutAge) || 65;
 
@@ -6083,6 +6105,33 @@ export default function App() {
   const householdByAge = useMemo(
     () => new Map((householdData || []).map(r => [r.age, r])),
     [householdData]);
+
+  // II-4/5/6 fix: deflated household data — mirrors the displayAccumulation pattern.
+  // Deflates all numeric balance fields (combinedOA, combinedSA, combinedMA, combinedRA,
+  // combinedPrivate, combinedTotal, primaryTotal, spouseTotal) age-by-age when isRealDollars=true.
+  // CPF LIFE payout fields (pLifeStd etc.) are NOT deflated here — they are already deflated
+  // at display time via applyInflation(), which is the correct pattern for point-in-time values.
+  const displayHouseholdData = useMemo(() => {
+    if (!householdData || !householdData.length) return householdData;
+    if (!isRealDollars) return householdData;
+    const inflD = (Number(debouncedInputs.inflationRate) || 0) / 100;
+    const caD   = Math.min(
+      Number(debouncedInputs.currentAge)       || 35,
+      Number(debouncedSpouseInputs.currentAge) || 35
+    );
+    const deflate = (val, age) =>
+      typeof val === "number" ? Math.round(val / Math.pow(1 + inflD, Math.max(0, age - caD))) : val;
+    const BALANCE_KEYS = ["combinedOA","combinedSA","combinedMA","combinedRA","combinedPrivate","combinedTotal","primaryTotal","spouseTotal"];
+    return householdData.map(row => {
+      const n = { ...row };
+      BALANCE_KEYS.forEach(k => { if (n[k] != null) n[k] = deflate(n[k], row.age); });
+      return n;
+    });
+  }, [householdData, isRealDollars, debouncedInputs.inflationRate, debouncedInputs.currentAge, debouncedSpouseInputs.currentAge]);
+
+  const displayHouseholdByAge = useMemo(
+    () => new Map((displayHouseholdData || []).map(r => [r.age, r])),
+    [displayHouseholdData]);
 
   const effectiveOaDrawMonthly  = debouncedInputs.dieWithZeroEnabled ? (projection._dwzOaMonthly || 0) : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
   const effectiveOaDrawStartAge = debouncedInputs.dieWithZeroEnabled ? (projection._dwzStartAge || Number(debouncedInputs.payoutAge) || 65) : (Number(debouncedInputs.oaDrawdownStartAge) || 0);
@@ -6392,7 +6441,7 @@ export default function App() {
       ? Math.round((payoutRow.allVals.filter(v => v >= frsAtPayout).length / payoutRow.allVals.length) * 100)
       : null;
     return { rows: rows.map(({ allVals: _, ...r }) => r), probSufficiency, frsAtPayout };
-  }, [showMonteCarlo, debouncedInputs]);
+  }, [showMonteCarlo, debouncedInputs, isRealDollars]);
 
   // Baseline projection — mandatory contributions only, all voluntary inputs zeroed.
   // Used as a dashed ghost line on the Accumulation chart to show how much voluntary
@@ -6820,18 +6869,30 @@ export default function App() {
       : srsBalAtStart;
     const srsMonthlyDraw = Math.round(srsAnnualDraw / 12);
 
+    // I-1/II-7/II-8 fix: deflation helper for strategyChartData — deflates nominal monthly
+    // amounts to real (today's) dollars when isRealDollars=true.
+    const _scInflD = (Number(debouncedInputs.inflationRate) || 0) / 100;
+    const _scCaD   = Number(debouncedInputs.currentAge) || 35;
+    const _scDeflate = (val, atAge) =>
+      isRealDollars && val > 0
+        ? Math.round(val / Math.pow(1 + _scInflD, Math.max(0, atAge - _scCaD)))
+        : val;
+
     const data = [];
     for (let age = pa; age <= 95; age++) {
       // BUG-13 fix: use O(1) Map lookups instead of O(n) .find() inside the loop
-      const ppRow   = payoutByAge.get(age)        || {};
-      const projRow = accumulationByAge.get(age)  || {};
+      // I-1 fix: use displayProjectionByAge (deflated when isRealDollars=true) instead of
+      // payoutByAge (always nominal) so CPF LIFE area responds to the Nom/Real$ toggle.
+      const dpRow   = displayProjectionByAge.get(age) || {};
+      const projRow = accumulationByAge.get(age)      || {};
       const prevProjRow = accumulationByAge.get(age - 1) || {};
 
-      // CPF LIFE — use the active highlighted plan
-      const cpfLife = ppRow[`${highlightPlan}Monthly`] || 0;
+      // CPF LIFE — read from deflated displayProjectionByAge (was payoutByAge — nominal)
+      const cpfLife = dpRow[`${highlightPlan}Monthly`] || 0;
 
       // S4 fix: RSS payout — fixed monthly draw from RA, active from rssPayoutStart until depletion.
       // cpfLife is 0 for RSS members (payoutByAge uses LIFE tables), so this is the primary income stream.
+      // II-7 fix: deflate rssMonAmt so the RSS income area responds to the Nom/Real$ toggle.
       const rssDrawdown = (() => {
         if (debouncedInputs.cpfScheme !== 'rss') return 0;
         const rssStart  = Number(debouncedInputs.rssPayoutStartAge) || 65;
@@ -6839,15 +6900,17 @@ export default function App() {
         if (age < rssStart || rssMonAmt <= 0) return 0;
         // Stop at depletion: RA at this age should be > 0 for payout to continue
         const raAtAge = projRow.ra || 0;
-        return raAtAge > 0 ? rssMonAmt : 0;
+        return raAtAge > 0 ? _scDeflate(rssMonAmt, age) : 0;
       })();
 
       // OA Drawdown — active during draw window; check OA floor via projection
+      // II-8 fix: deflate oaDrawMonthly (user-entered nominal) for Real$ mode.
       let oaDraw = 0;
       if (oaDrawStart > 0 && oaDrawMonthly > 0 && age >= oaDrawStart) {
         const oaBal = projRow.oa || 0;
-        if (oaBal > oaFloor) oaDraw = Math.min(oaDrawMonthly, Math.max(0, Math.round((oaBal - oaFloor) / 12)));
-        oaDraw = Math.min(oaDraw, oaDrawMonthly);
+        const deflatedDraw = _scDeflate(oaDrawMonthly, age);
+        if (oaBal > oaFloor) oaDraw = Math.min(deflatedDraw, Math.max(0, Math.round((oaBal - oaFloor) / 12)));
+        oaDraw = Math.min(oaDraw, deflatedDraw);
       }
 
       // SRS drawdown
@@ -6869,9 +6932,10 @@ export default function App() {
       data.push({ age, cpfLife, rssDrawdown, oaDraw, srs, privateAsset: privateDrawdown, propMon, totalMonthly });
     }
     return data;
-  // BUG-13+46 fix: deps updated — use payoutAge65 (debounced), add accumulationByAge + payoutByAge Maps (O(1) lookups),
-  // replace live inputs.* with debouncedInputs.* for SRS/property fields.
-  }, [displayProjection, displayAccumulation, accumulationByAge, payoutByAge, isRealDollars, payoutAge65,
+  // I-1/II-7/II-8 fix: replace payoutByAge with displayProjectionByAge (deflation-aware);
+  // add debouncedInputs.inflationRate + currentAge for the _scDeflate helper.
+  }, [displayProjection, displayAccumulation, accumulationByAge, displayProjectionByAge, isRealDollars, payoutAge65,
+    debouncedInputs.inflationRate, debouncedInputs.currentAge,
     debouncedInputs.srsDrawdownStartAge, debouncedInputs.srsDrawdownYears,
     effectiveOaDrawStartAge, effectiveOaDrawMonthly, effectiveOaDrawFloor,
     debouncedInputs.propMonetiseEnabled, debouncedInputs.propMonetiseAge, debouncedInputs.propMonetiseCashProceeds,
@@ -12724,12 +12788,13 @@ ${milestones.length > 0 ? `<table>
                       // which was computed by the DWZ two-pass and injected into the final engine run.
                       // The old local recalculation was display-only and never matched actual engine deductions.
                       const pmtPriv  = projection._dwzPrivMonthly || 0; // from two-pass engine (private)
-                      // NEWBug-1 fix: use O(1) Map lookups and debouncedInputs to match projection data source.
-                      // projection.find() was O(n) and live inputs.* caused transient mismatches during debounce.
-                      const paRow         = projectionByAge.get(pa) || {};
+                      // I-2 fix: read cpfLife from displayProjectionByAge (deflated when isRealDollars=true)
+                      // instead of payoutByAge (always nominal). Also use accumulationByAge for
+                      // oaAtPayout and privAtPayout so they are deflation-aware.
+                      const paRow         = accumulationByAge.get(pa) || {};
                       const oaAtPayout    = paRow.oa || 0;
                       const privAtPayout  = paRow.privateAssets || 0;
-                      const cpfLife       = payoutByAge.get(pa)?.[`${highlightPlan}Monthly`] || 0;
+                      const cpfLife       = displayProjectionByAge.get(pa)?.[`${highlightPlan}Monthly`] || 0;
                       const totalMonthly  = cpfLife + pmtOA + pmtPriv;
                       const srsDwzStart   = Math.max(Number(debouncedInputs.srsDrawdownStartAge) || 63, 63);
                       const srsDwzYrs     = Math.min(Math.max(Number(debouncedInputs.srsDrawdownYears) || 10, 1), 10);
@@ -13579,7 +13644,10 @@ ${milestones.length > 0 ? `<table>
                   {/* ZONE 3 — Growth story */}
                   {(() => {
                     const pa_z3 = summaryRefAge;
-                    const paRowBase = projectionByAge.get(pa_z3) || {};
+                    // I-6 fix: use accumulationByAge (deflated when isRealDollars=true) instead of
+                    // projectionByAge (always nominal) so all three bars and the grand total
+                    // respond correctly to the Nom/Real$ toggle.
+                    const paRowBase = accumulationByAge.get(pa_z3) || {};
                     const startBal = (Number(inputs.oaBalance)||0) + (Number(inputs.saBalance)||0) + (Number(inputs.maBalance)||0);
                     const totalInj = paRowBase.cumulativeInjected || 0;
                     const totalInt = paRowBase.cumulativeInterest || 0;
@@ -13909,6 +13977,16 @@ ${milestones.length > 0 ? `<table>
 
                 {/* ── ZONE 6: Supporting statistics ── */}
                 {(() => {
+                  // I-4 fix: zone-6 deflation helper — same formula as displayAccumulation
+                  const _z6InflD = (Number(inputs.inflationRate) || 0) / 100;
+                  const _z6CaD   = Number(inputs.currentAge) || 35;
+                  const _z6Defl  = (val, atAge) =>
+                    isRealDollars && val > 0
+                      ? Math.round(val / Math.pow(1 + _z6InflD, Math.max(0, atAge - _z6CaD)))
+                      : val;
+
+                  // rssNW / nw95: read from nominal sources then manually deflate.
+                  // accumulationByAge is already deflated so can't be used for rssNW (RSS mode).
                   const rssNW = isRSSMode
                     ? ((projectionByAge.get(summaryRefAge)?.oa || 0) + (projectionByAge.get(summaryRefAge)?.ma || 0) + (projectionByAge.get(summaryRefAge)?.ra || 0))
                     : (payoutByAge.get(summaryRefAge)?.[`${highlightPlan}NetWorth`] || 0);
@@ -13919,8 +13997,11 @@ ${milestones.length > 0 ? `<table>
                   const rssNWReal = rssNW > 0
                     ? Math.round(rssNW / Math.pow(1 + ((Number(inputs.inflationRate)||2)/100), Math.max(0, summaryRefAge - (Number(inputs.currentAge)||35))))
                     : 0;
-                  const cumTopups = projectionByAge.get(summaryRefAge)?.cumulativeInjected || 0;
-                  const cumOutflow = projectionByAge.get(summaryRefAge)?.cumulativeOutflow || 0;
+                  // I-4 fix: switch cumTopups + cumOutflow to accumulationByAge (deflated when
+                  // isRealDollars=true). Previously read from projectionByAge (always nominal).
+                  const _z6AccRow  = accumulationByAge.get(summaryRefAge) || {};
+                  const cumTopups  = _z6AccRow.cumulativeInjected || 0;
+                  const cumOutflow = _z6AccRow.cumulativeOutflow  || 0;
                   const tooltips = {
                     nwPayout: `OA + MA + RA + Property + Private Assets at age ${summaryRefAge} under the ${highlightPlan} plan`,
                     nw95:     "OA + MA + RA + Property + Private Assets at age 95 under the selected plan",
@@ -13948,8 +14029,13 @@ ${milestones.length > 0 ? `<table>
                             Net worth · age {summaryRefAge}
                             <TooltipBox id="t-nw-pa" text={tooltips.nwPayout} />
                           </p>
-                          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--clr-blue)", margin: 0, fontFamily: "monospace" }}>{formatCurrency(rssNW)}</p>
-                          {!isRealDollars && rssNWReal > 0 && <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(rssNWReal)} today's $</p>}
+                          {/* I-3 fix: show real value as main figure in Real$ mode; show nominal as sub-label */}
+                          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--clr-blue)", margin: 0, fontFamily: "monospace" }}>
+                            {formatCurrency(isRealDollars && rssNWReal > 0 ? rssNWReal : rssNW)}
+                          </p>
+                          {isRealDollars && rssNWReal > 0
+                            ? <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(rssNW)} nominal</p>
+                            : rssNWReal > 0 && <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(rssNWReal)} today's $</p>}
                         </div>
                         {/* Net Worth at 95 */}
                         <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "12px 14px", borderLeft: "3px solid var(--text-muted)" }}>
@@ -13957,14 +14043,19 @@ ${milestones.length > 0 ? `<table>
                             Net worth · age 95
                             <TooltipBox id="t-nw-95" text={tooltips.nw95} />
                           </p>
-                          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--text-bright)", margin: 0, fontFamily: "monospace" }}>{formatCurrency(nw95)}</p>
-                          {!isRealDollars && nw95Real > 0 && <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(nw95Real)} today's $</p>}
+                          {/* I-3 fix: show real value as main figure in Real$ mode; show nominal as sub-label */}
+                          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--text-bright)", margin: 0, fontFamily: "monospace" }}>
+                            {formatCurrency(isRealDollars && nw95Real > 0 ? nw95Real : nw95)}
+                          </p>
+                          {isRealDollars && nw95Real > 0
+                            ? <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(nw95)} nominal</p>
+                            : nw95Real > 0 && <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(nw95Real)} today's $</p>}
                         </div>
                         {/* CPF Interest Earned — new stat */}
                         {(() => {
-                          const paRow6int = projectionByAge.get(summaryRefAge) || {};
-                          const cumInterest = paRow6int.cumulativeInterest || 0;
-                          const cumInjected = paRow6int.cumulativeInjected || 1;
+                          // I-4 fix: use _z6AccRow (accumulationByAge — deflated) instead of projectionByAge
+                          const cumInterest = _z6AccRow.cumulativeInterest || 0;
+                          const cumInjected = _z6AccRow.cumulativeInjected || 1;
                           const interestPct = cumInjected > 0 ? Math.round((cumInterest / cumInjected) * 100) : 0;
                           return (
                             <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "12px 14px", borderLeft: "3px solid var(--clr-emerald)" }}>
@@ -14023,12 +14114,14 @@ ${milestones.length > 0 ? `<table>
 
                         {/* ── Finance Ratios row ─────────────────────────────────────── */}
                         {(() => {
-                          // CAGR: effective growth rate of contributions → final CPF balance.
-                          const paRow6 = projectionByAge.get(summaryRefAge) || {};
+                          // II-3 fix: use accumulationByAge (_z6AccRow) — deflated when isRealDollars=true —
+                          // for all cumulative and balance fields so CAGR, Wealth Multiple, Contribution
+                          // Multiplier, and OA Sustainability respond correctly to the Nom/Real$ toggle.
+                          // Previously both paRow6 and paRowNW read from projectionByAge (always nominal).
                           const startBal6 = (Number(inputs.oaBalance)||0) + (Number(inputs.saBalance)||0) + (Number(inputs.maBalance)||0);
-                          const totalInj6 = paRow6.cumulativeInjected || 0;
-                          const totalInt6 = paRow6.cumulativeInterest || 0;
-                          const totalOut6 = paRow6.cumulativeOutflow || 0;
+                          const totalInj6 = _z6AccRow.cumulativeInjected || 0;
+                          const totalInt6 = _z6AccRow.cumulativeInterest || 0;
+                          const totalOut6 = _z6AccRow.cumulativeOutflow  || 0;
                           const finalCPF6 = startBal6 + totalInj6 + totalInt6 - totalOut6;
                           const years6 = Math.max(1, summaryRefAge - (Number(inputs.currentAge) || 35));
                           const totalPutIn6 = Math.max(1, startBal6 + totalInj6);
@@ -14063,9 +14156,8 @@ ${milestones.length > 0 ? `<table>
                           const xirrColor = (v) => v === null ? "var(--text-muted)" : v >= 4 ? "var(--clr-green)" : v >= 2 ? "var(--clr-amber)" : "var(--clr-red)";
 
                           // Wealth Multiple: total net worth at payout ÷ annual target income
-                          // Gives "you have X years of income in assets" intuition
-                          const paRowNW = projectionByAge.get(summaryRefAge) || {};
-                          const totalNetWorth6 = (paRowNW.oa||0) + (paRowNW.sa||0) + (paRowNW.ma||0) + (paRowNW.ra||0) + (paRowNW.srsBalance||0) + (paRowNW.privateAssets||0);
+                          // II-3 fix: use accumulationByAge (_z6AccRow) — deflation-aware.
+                          const totalNetWorth6 = (_z6AccRow.oa||0) + (_z6AccRow.sa||0) + (_z6AccRow.ma||0) + (_z6AccRow.ra||0) + (_z6AccRow.srsBalance||0) + (_z6AccRow.privateAssets||0);
                           const wealthMultiple = target6 > 0 && totalNetWorth6 > 0
                             ? totalNetWorth6 / (target6 * 12)
                             : null;
@@ -14078,9 +14170,10 @@ ${milestones.length > 0 ? `<table>
 
                           // OA Sustainability: years OA can fund the current drawdown
                           // Only shown when OA drawdown is active
+                          // II-3 fix: oaAtPayout6 from _z6AccRow (deflation-aware) not paRowNW
                           const oaDrawMonthly6 = Number(debouncedInputs.oaDrawdownMonthly) || 0;
                           const oaDrawEnabled6 = effectiveOaDrawStartAge > 0 && oaDrawMonthly6 > 0;
-                          const oaAtPayout6 = paRowNW.oa || 0;
+                          const oaAtPayout6 = _z6AccRow.oa || 0;
                           const oaSustainYears = oaDrawEnabled6 && oaAtPayout6 > 0
                             ? Math.floor(oaAtPayout6 / (oaDrawMonthly6 * 12))
                             : null;
@@ -15262,7 +15355,8 @@ ${milestones.length > 0 ? `<table>
                     const ar = accumulationByAge.get(refAge);
                     if (!ar) return 0;
                     if (isRSSEstate) return (ar.ra||0)+(ar.oa||0)+(ar.ma||0)+(inputs.includeProperty?(ar.propertyValue||0):0);
-                    const pr = payoutByAge.get(refAge);
+                    // II-2 fix: use displayProjectionByAge (deflated) instead of payoutByAge (nominal)
+                    const pr = displayProjectionByAge.get(refAge);
                     if (!pr) return 0;
                     return (pr[`${plan}Bequest`]||0)+(ar.oa||0)+(ar.ma||0)+(inputs.includeProperty?(ar.propertyValue||0):0);
                   })();
@@ -15286,7 +15380,9 @@ ${milestones.length > 0 ? `<table>
                           if (isRSSEstate) {
                             bequest = ra; total = bequest + oa + ma + prop;
                           } else {
-                            const pRow = payoutByAge.get(age);
+                            // II-2 fix: use displayProjectionByAge (deflated) instead of payoutByAge (nominal)
+                            // so the bequest column is consistent with OA/MA from accumulationByAge.
+                            const pRow = displayProjectionByAge.get(age);
                             if (!pRow) return null;
                             bequest = pRow[`${plan}Bequest`]||0;
                             total = bequest + oa + ma + prop;
@@ -15441,10 +15537,13 @@ ${milestones.length > 0 ? `<table>
               const pPA   = payoutAge65;
               const sPA   = spousePayoutAge;
               const combinedPA = Math.max(pPA, sPA);
-              const pAtPA  = projectionByAge.get(pPA)  || {};
-              const sAtPA  = spouseProjectionByAge.get(sPA) || {};
-              const hAtPA  = householdByAge.get(combinedPA) || {};
-              const hAt95  = householdByAge.get(95) || {};
+              // II-5 fix: use accumulationByAge (deflated when isRealDollars=true) for primary/spouse
+              // individual totals, and displayHouseholdByAge for combined totals (also deflated).
+              // Previously both reads used projectionByAge / householdByAge — always nominal.
+              const pAtPA  = accumulationByAge.get(pPA)          || {};
+              const sAtPA  = spouseAccumulationByAge.get(sPA)    || {};
+              const hAtPA  = displayHouseholdByAge.get(combinedPA) || {};
+              const hAt95  = displayHouseholdByAge.get(95)         || {};
 
               // HH-5: independent plan keys — each member uses their own CPF LIFE plan selector
               const PLAN_KEY_MAP   = { standard: 'Std', escalating: 'Esc', basic: 'Bas' };
@@ -15737,8 +15836,9 @@ ${milestones.length > 0 ? `<table>
                   </div>
 
                   {/* Combined accumulation chart */}
-                  {householdData && householdData.length > 0 && (() => {
-                    const chartData = householdData.filter(r => r.age % 1 === 0);
+                  {/* II-4 fix: use displayHouseholdData (deflated when isRealDollars=true) */}
+                  {displayHouseholdData && displayHouseholdData.length > 0 && (() => {
+                    const chartData = displayHouseholdData.filter(r => r.age % 1 === 0);
                     return (
                       <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, padding: "16px 18px" }}>
                         <h3 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 14px", color: "var(--text-bright)", display: "flex", alignItems: "center", gap: 8 }}>
@@ -15815,7 +15915,12 @@ ${milestones.length > 0 ? `<table>
                           for (let a = Math.ceil(startAge / 5) * 5; a < combinedPA; a += 5) every5.push(a);
                           const keyAges = [...new Set([startAge, ...every5, 55, pPA, sPA, 65, 70, 75, 80, 85, 90, 95])].filter(a => a >= startAge && a <= 95).sort((a,b) => a-b);
                           return keyAges.map(age => {
-                            const hRow = householdByAge.get(age) || {};
+                            // II-6 fix: use displayHouseholdByAge (deflated when isRealDollars=true)
+                            // so primaryTotal, spouseTotal, and combinedTotal in all three balance
+                            // columns respond correctly to the Nom/Real$ toggle.
+                            // CPF LIFE monthly fields (pLifeStd etc.) are NOT deflated here —
+                            // they are deflated by applyInflation() at lines 15924–15925 below.
+                            const hRow = displayHouseholdByAge.get(age) || {};
                             const pInPayout = age >= pPA;
                             const sInPayout = age >= sPA;
 
@@ -17188,7 +17293,10 @@ ${milestones.length > 0 ? `<table>
                   });
                 }
               }
-              const cpfLifeMonthly = !isForeigner ? (payoutByAge.get(pa)?.[`${highlightPlan}Monthly`] || 0) : 0; // E5 fix: O(1)
+              // I-5 fix: use displayProjectionByAge (deflated when isRealDollars=true) instead of
+              // payoutByAge (always nominal) so the CPF LIFE row in the income summary table
+              // responds to the Nom/Real$ toggle correctly.
+              const cpfLifeMonthly = !isForeigner ? (displayProjectionByAge.get(pa)?.[`${highlightPlan}Monthly`] || 0) : 0;
               if (cpfLifeMonthly > 0) {
                 summaryRows.push({ label: `CPF LIFE (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`, startAge: pa, endAge: "Life", monthly: cpfLifeMonthly, total: cpfLifeMonthly * 12 * (95 - pa + 1), color: "var(--clr-purple)" });
               }
