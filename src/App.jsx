@@ -13178,7 +13178,7 @@ ${milestones.length > 0 ? `<table>
                       <div className="z1-cols" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", gap: 0, alignItems: "stretch" }}>
 
                         {/* ── Col 1 — Total CPF ── */}
-                        <div style={{ paddingRight: 24, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
                           <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>
                             {isRSSMode ? `Total CPF (age ${summaryRefAge})` : `Total CPF at age ${inputs.payoutAge}`}
                           </p>
@@ -13197,7 +13197,7 @@ ${milestones.length > 0 ? `<table>
 
                         {/* ── Col 2 — Monthly payout (hero column) ── */}
                         {!isRSSMode && !isForeigner ? (
-                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
                             {/* Label row: plain label only */}
                             <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>Monthly CPF LIFE payout</p>
                             {/* Number — consistent size with other KPI columns */}
@@ -13207,7 +13207,7 @@ ${milestones.length > 0 ? `<table>
                             <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0", whiteSpace: "nowrap" }}>{planLabel} plan · CPF LIFE</p>
                           </div>
                         ) : isRSSMode ? (
-                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
                             <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>RSS monthly payout</p>
                             <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.03em", fontFamily: "monospace" }}>
                               {Number(inputs.rssMonthlyPayout) > 0 ? <>{formatCurrency(Number(inputs.rssMonthlyPayout))}<span style={{ fontSize: 13, fontWeight: 400, color: "var(--text-muted)", marginLeft: 3 }}>/mo</span></> : "Not set"}
@@ -13215,7 +13215,7 @@ ${milestones.length > 0 ? `<table>
                             <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0" }}>Fixed RSS drawdown from RA</p>
                           </div>
                         ) : (
-                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
                             <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>SRS drawdown</p>
                             <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-amber)", lineHeight: 1.05, letterSpacing: "-0.03em", fontFamily: "monospace" }}>
                               {Number(inputs.srsAnnualContribution) > 0 ? <>{formatCurrency(Math.round(Number(inputs.srsAnnualContribution) / 12))}<span style={{ fontSize: 13, fontWeight: 400, color: "var(--text-muted)", marginLeft: 3 }}>/mo</span></> : "—"}
@@ -13228,11 +13228,11 @@ ${milestones.length > 0 ? `<table>
                         <div className="z1-divider" style={{ width: 1, background: "linear-gradient(to bottom, transparent, var(--border-subtle) 20%, var(--border-subtle) 80%, transparent)", margin: "4px 24px" }} />
 
                         {/* ── Col 3 — Payout age ── */}
-                        <div style={{ paddingLeft: 4, display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
-                          <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Payout starts at</p>
+                        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", minWidth: 0 }}>
+                          <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Payout age</p>
                           {/* "Age" stays neutral; the number gets the blue accent so it reads as a clickable/notable value */}
-                          <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--text-bright)", lineHeight: 1.05, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
-                            Age <span style={{ color: "var(--clr-blue)" }}>{isRSSMode ? (inputs.rssPayoutStartAge || 65) : inputs.payoutAge}</span>
+                          <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
+                            {isRSSMode ? (inputs.rssPayoutStartAge || 65) : inputs.payoutAge}
                           </p>
                           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0", whiteSpace: "nowrap" }}>{isRSSMode ? "RSS scheme" : `CPF LIFE · ${planLabel} plan`}</p>
                         </div>
