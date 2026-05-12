@@ -3747,6 +3747,279 @@ function StatusDot({ active }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ── SetupWizard ───────────────────────────────────────────────────────────────
+// Phase 3 onboarding wizard. Shown to first-time users before the main app.
+// Writes only to inputs via setInputs — same path as every other field.
+// Props: onComplete(mergedInputs) | onSkip()
+// ─────────────────────────────────────────────────────────────────────────────
+function SetupWizard({ onComplete, onSkip }) {
+  const [step, setStep]   = useState(1);
+  const TOTAL_STEPS       = 3;
+  const [w, setW]         = useState({
+    // Step 1 — Profile
+    name: "", currentAge: "", payoutAge: "", citizenStatus: "SC", gender: "male",
+    // Step 2 — CPF Balances
+    oaBalance: "", saBalance: "", maBalance: "",
+    // Step 3 — Income & Goals
+    monthlyGross: "", annualBonus: "", retirementIncome: "",
+  });
+  const [errors, setErrors] = useState({});
+
+  const set = (k, v) => { setW(p => ({ ...p, [k]: v })); setErrors(p => ({ ...p, [k]: "" })); };
+
+  const validate = () => {
+    const e = {};
+    if (step === 1) {
+      const age = Number(w.currentAge);
+      const pa  = Number(w.payoutAge);
+      if (!w.currentAge || isNaN(age) || age < 16 || age > 99) e.currentAge = "Enter a valid age (16–99)";
+      if (!w.payoutAge  || isNaN(pa)  || pa <= age)             e.payoutAge  = "Must be greater than current age";
+    }
+    if (step === 2) {
+      if (w.oaBalance !== "" && isNaN(Number(w.oaBalance))) e.oaBalance = "Numbers only";
+      if (w.saBalance !== "" && isNaN(Number(w.saBalance))) e.saBalance = "Numbers only";
+      if (w.maBalance !== "" && isNaN(Number(w.maBalance))) e.maBalance = "Numbers only";
+    }
+    if (step === 3) {
+      if (w.monthlyGross !== "" && isNaN(Number(w.monthlyGross))) e.monthlyGross = "Numbers only";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const next = () => { if (!validate()) return; step < TOTAL_STEPS ? setStep(s => s + 1) : finish(); };
+  const back = () => { setErrors({}); setStep(s => s - 1); };
+
+  const finish = () => {
+    const merged = {
+      ...(w.name          && { name:             w.name }),
+      ...(w.currentAge    && { currentAge:        w.currentAge }),
+      ...(w.payoutAge     && { payoutAge:         w.payoutAge }),
+      citizenStatus:         w.citizenStatus,
+      gender:                w.gender,
+      ...(w.oaBalance     && { oaBalance:         w.oaBalance }),
+      ...(w.saBalance     && { saBalance:         w.saBalance }),
+      ...(w.maBalance     && { maBalance:         w.maBalance }),
+      ...(w.monthlyGross  && { monthlyGross:      w.monthlyGross }),
+      ...(w.annualBonus   && { annualBonus:       w.annualBonus }),
+      ...(w.retirementIncome && { targetMonthlyIncome: w.retirementIncome }),
+    };
+    onComplete(merged);
+  };
+
+  // ── Shared input style ──────────────────────────────────────────────────────
+  const inp = (field, placeholder, type = "text") => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <input
+        type={type} inputMode={type === "number" ? "numeric" : "text"}
+        placeholder={placeholder}
+        value={w[field]}
+        onChange={e => set(field, e.target.value)}
+        onKeyDown={e => e.key === "Enter" && next()}
+        style={{
+          background: "var(--bg-input)", border: `1px solid ${errors[field] ? "#ef4444" : "var(--border-strong)"}`,
+          borderRadius: 10, padding: "10px 14px", fontSize: 14, color: "var(--text-bright)",
+          outline: "none", width: "100%",
+        }}
+      />
+      {errors[field] && <span style={{ fontSize: 11, color: "#ef4444" }}>{errors[field]}</span>}
+    </div>
+  );
+
+  const segBtn = (field, val, label) => (
+    <button type="button" onClick={() => set(field, val)}
+      style={{
+        flex: 1, padding: "9px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+        border: `1px solid ${w[field] === val ? "rgba(34,211,238,0.5)" : "var(--border-strong)"}`,
+        background: w[field] === val ? "rgba(34,211,238,0.12)" : "transparent",
+        color: w[field] === val ? "#22d3ee" : "var(--text-muted)",
+        transition: "all 0.12s",
+      }}>{label}</button>
+  );
+
+  // ── Step content ─────────────────────────────────────────────────────────────
+  const steps = [
+    {
+      title: "Tell us about yourself",
+      subtitle: "Just the basics — you can change everything later.",
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {inp("name",       "Your name (optional)")}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Current age</label>
+              {inp("currentAge", "e.g. 35", "number")}
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>CPF payout age</label>
+              {inp("payoutAge", "e.g. 65", "number")}
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>Citizenship</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {segBtn("citizenStatus","SC","🇸🇬 SC")}
+              {segBtn("citizenStatus","PR","PR")}
+              {segBtn("citizenStatus","foreigner","Foreigner")}
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>Gender <span style={{ fontSize: 11, color:"var(--text-subtle)" }}>(affects CPF LIFE payout)</span></label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {segBtn("gender","male","Male")}
+              {segBtn("gender","female","Female")}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Your CPF balances",
+      subtitle: "Check your CPF statement or the app's default values are fine to start.",
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {[
+            ["oaBalance", "Ordinary Account (OA) — $", "Housing, investments"],
+            ["saBalance", "Special / Retirement Account (SA) — $", "Retirement savings"],
+            ["maBalance", "MediSave (MA) — $", "Healthcare"],
+          ].map(([field, label, hint]) => (
+            <div key={field}>
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>
+                {label} <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>— {hint}</span>
+              </label>
+              {inp(field, "0", "number")}
+            </div>
+          ))}
+          <p style={{ fontSize: 11, color: "var(--text-subtle)", lineHeight: 1.5 }}>
+            💡 Leave blank to use the sample starting balances. You can update these any time.
+          </p>
+        </div>
+      ),
+    },
+    {
+      title: "Income & retirement goal",
+      subtitle: "Used to calculate your CPF contributions and retirement gap.",
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {[
+            ["monthlyGross",    "Monthly gross salary — $",        "Before CPF deduction"],
+            ["annualBonus",     "Annual bonus — $",                "Total bonus per year (optional)"],
+            ["retirementIncome","Target retirement income — $/mo", "How much you want in retirement"],
+          ].map(([field, label, hint]) => (
+            <div key={field}>
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>
+                {label} <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>— {hint}</span>
+              </label>
+              {inp(field, "0", "number")}
+            </div>
+          ))}
+        </div>
+      ),
+    },
+  ];
+
+  const current = steps[step - 1];
+
+  return (
+    /* Overlay */
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9999,
+      background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+    }}>
+      {/* Card */}
+      <div style={{
+        background: "var(--bg-panel)", border: "1px solid var(--border-subtle)",
+        borderRadius: 20, padding: "32px 32px 24px", width: "100%", maxWidth: 460,
+        boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+      }}>
+
+        {/* App logo + skip */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>CPF Planner Pro</span>
+          </div>
+          <button type="button" onClick={onSkip}
+            style={{ fontSize: 12, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: 6 }}>
+            Skip — use sample data
+          </button>
+        </div>
+
+        {/* Step indicator — T13 */}
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 28 }}>
+          {steps.map((s, i) => {
+            const n = i + 1;
+            const done    = n < step;
+            const active  = n === step;
+            return (
+              <React.Fragment key={n}>
+                {/* Dot */}
+                <div style={{
+                  width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 12, fontWeight: 700,
+                  background: done ? "#22d3ee" : active ? "rgba(34,211,238,0.15)" : "var(--bg-input)",
+                  border: `2px solid ${done || active ? "#22d3ee" : "var(--border-strong)"}`,
+                  color: done ? "#0d1117" : active ? "#22d3ee" : "var(--text-muted)",
+                  transition: "all 0.2s",
+                }}>
+                  {done ? "✓" : n}
+                </div>
+                {/* Connector line between dots */}
+                {i < steps.length - 1 && (
+                  <div style={{ flex: 1, height: 2, background: done ? "#22d3ee" : "var(--border-subtle)", transition: "background 0.2s" }} />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        {/* Step labels row */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: -20, marginBottom: 24 }}>
+          {["Profile","Balances","Income"].map((l, i) => (
+            <span key={l} style={{ fontSize: 10, color: i + 1 === step ? "#22d3ee" : "var(--text-subtle)", fontWeight: i + 1 === step ? 700 : 400, width: "33%", textAlign: i === 0 ? "left" : i === 2 ? "right" : "center" }}>{l}</span>
+          ))}
+        </div>
+
+        {/* Step title */}
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-bright)", margin: "0 0 4px" }}>{current.title}</h2>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 22px", lineHeight: 1.4 }}>{current.subtitle}</p>
+
+        {/* Step body */}
+        {current.body}
+
+        {/* Navigation */}
+        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+          {step > 1 && (
+            <button type="button" onClick={back}
+              style={{ flex: "0 0 80px", padding: "11px 0", borderRadius: 10, fontSize: 13, fontWeight: 600,
+                border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}>
+              ← Back
+            </button>
+          )}
+          <button type="button" onClick={next}
+            style={{ flex: 1, padding: "11px 0", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+              border: "1px solid rgba(34,211,238,0.4)", background: "rgba(34,211,238,0.12)", color: "#22d3ee",
+              transition: "all 0.12s" }}>
+            {step < TOTAL_STEPS ? `Next → Step ${step + 1} of ${TOTAL_STEPS}` : "✓ Finish setup"}
+          </button>
+        </div>
+
+        {/* Progress dots */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 18 }}>
+          {steps.map((_, i) => (
+            <div key={i} style={{ width: i + 1 === step ? 16 : 6, height: 6, borderRadius: 3,
+              background: i + 1 === step ? "#22d3ee" : i + 1 < step ? "rgba(34,211,238,0.4)" : "var(--border-strong)",
+              transition: "all 0.2s" }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
@@ -3827,8 +4100,17 @@ export default function App() {
   const [pdfOrientation, setPdfOrientation] = useState("portrait");
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // UX-P2-B: dismissible state for the gap alert banner shown at top of Summary tab.
-  // Resets to false whenever gapAlert reappears (handled in the render, not here).
+  // P3-T11: First-run detection — show wizard once, then never again.
+  // localStorage key 'cpf_planner_setup_done' is set on wizard complete OR skip.
+  // 'cpf_planner_wizard_tip_done' suppresses the post-wizard onboarding tip.
+  const [showWizard, setShowWizard] = useState(() => {
+    try { return !localStorage.getItem('cpf_planner_setup_done'); }
+    catch { return false; } // private-browsing / storage blocked → skip wizard
+  });
+  const [postWizardTipDismissed, setPostWizardTipDismissed] = useState(() => {
+    try { return !!localStorage.getItem('cpf_planner_wizard_tip_done'); }
+    catch { return true; }
+  });
   const [gapAlertDismissed, setGapAlertDismissed] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -4408,6 +4690,20 @@ export default function App() {
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // P3-T12: Wizard handlers
+  const handleWizardComplete = (mergedInputs) => {
+    setInputs(prev => ({ ...prev, ...mergedInputs }));
+    try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
+    setShowWizard(false);
+    setActiveTab('summary');
+    showToast('✓ Setup complete — your profile is ready');
+  };
+
+  const handleWizardSkip = () => {
+    try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
+    setShowWizard(false);
   };
 
   useEffect(() => {
@@ -9846,6 +10142,7 @@ ${milestones.length > 0 ? `<table>
                   {[
                     { icon: <Users style={{ width: 13, height: 13 }} />, label: "Load Sample", color: "var(--clr-amber)", action: () => { setShowPresets(true); setShowSettingsMenu(false); } },
                     { icon: <RotateCcw style={{ width: 13, height: 13 }} />, label: "Reset All Inputs", color: "var(--clr-red)", action: () => { handleReset(); setShowSettingsMenu(false); } },
+                    { icon: <Lightbulb style={{ width: 13, height: 13 }} />, label: "Setup Wizard", color: "#22d3ee", action: () => { setShowWizard(true); setShowSettingsMenu(false); } },
                   ].map(({ icon, label, color, action }) => (
                     <button key={label} className="cpf-nav-dd-item" style={{ color }} onClick={action}>{icon}{label}</button>
                   ))}
@@ -13131,6 +13428,48 @@ ${milestones.length > 0 ? `<table>
                           color: "var(--text-muted)", cursor: "pointer", lineHeight: 1 }}
                         aria-label="Dismiss alert">✕</button>
                     </div>
+                  </div>
+                )}
+
+                {/* P3-T14: Post-wizard onboarding tip — shown once after first setup completion.
+                    Three quick-links open the relevant sidebar sections so new users know
+                    where to find key features without hunting through the sidebar. */}
+                {!postWizardTipDismissed && !showWizard && (
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
+                    borderRadius: 12, border: "1px solid rgba(34,211,238,0.25)",
+                    background: "rgba(34,211,238,0.05)" }}>
+                    <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1 }}>🎉</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "#22d3ee", margin: "0 0 4px" }}>Your plan is ready — here's what to explore next</p>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                        {[
+                          { label: "Add voluntary top-ups →", section: "topups",      emoji: "💰" },
+                          { label: "Add a life event →",       section: "lifeevents", emoji: "⚡" },
+                          { label: "Set drawdown goals →",     section: "decumulation", emoji: "🎯" },
+                        ].map(({ label, section, emoji }) => (
+                          <button key={section} type="button"
+                            onClick={() => {
+                              setOpenSections(prev => { const n = new Set(prev); n.add(section); return n; });
+                              setSidebarOpen(true);
+                            }}
+                            style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px",
+                              borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                              border: "1px solid rgba(34,211,238,0.25)", background: "rgba(34,211,238,0.08)",
+                              color: "#22d3ee" }}>
+                            {emoji} {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <button type="button"
+                      onClick={() => {
+                        setPostWizardTipDismissed(true);
+                        try { localStorage.setItem('cpf_planner_wizard_tip_done', '1'); } catch {}
+                      }}
+                      style={{ padding: "4px 8px", borderRadius: 6, fontSize: 12, fontWeight: 500,
+                        border: "1px solid var(--border-subtle)", background: "transparent",
+                        color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+                      aria-label="Dismiss tip">✕</button>
                   </div>
                 )}
 
@@ -17893,6 +18232,16 @@ ${milestones.length > 0 ? `<table>
       </div>
 
       </div>{/* /rootRef */}
+
+      {/* P3-T12: Setup wizard overlay — renders above everything when active.
+          position:fixed means it escapes rootRef's overflow and covers the full viewport. */}
+      {showWizard && (
+        <SetupWizard
+          onComplete={handleWizardComplete}
+          onSkip={handleWizardSkip}
+        />
+      )}
+
       </ErrorBoundary>
     </TooltipContext.Provider>
   );
