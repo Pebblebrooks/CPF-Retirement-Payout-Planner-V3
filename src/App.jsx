@@ -10088,62 +10088,9 @@ ${milestones.length > 0 ? `<table>
               </span>
             )}
 
-            {/* ⚙ Settings — DESKTOP ONLY (≥1025px).
-                On large viewports the navbar has room for a labeled button;
-                the icon-only gear below handles tablet+mobile where space is tight.
-                Same showSettingsMenu state, same dropdown — no mobile-only sections. */}
-            <div className="cpf-nav-d-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
-              <button
-                onClick={() => { setShowSettingsMenu(v => !v); setShowShareMenu(false); setShowReportMenu(false); setShowDisplayMenu(false); }}
-                style={{ display: "flex", alignItems: "center", gap: 5, background: showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.14)" : "var(--bg-panel)", color: showSettingsMenu ? "var(--clr-blue)" : "var(--text-muted)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: `1px solid ${showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.12s", position: "relative" }}
-                title="Settings">
-                <Settings style={{ width: 13, height: 13, pointerEvents: "none" }} />
-                Settings
-                <ChevronDown style={{ width: 11, height: 11, marginLeft: 1, pointerEvents: "none" }} />
-                {hasUnsaved && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: "var(--clr-amber)", pointerEvents: "none" }} />}
-              </button>
-              {showSettingsMenu && (
-                <div className="cpf-nav-dropdown cpf-nav-dd-right" style={{ minWidth: 220 }}>
-                  {hasUnsaved && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.12)", color: "var(--clr-amber)", fontSize: 11, fontWeight: 700, marginBottom: 2 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--clr-amber)", flexShrink: 0, display: "inline-block" }} />Unsaved changes
-                    </div>
-                  )}
-                  <div className="cpf-nav-dd-hdr">Actions</div>
-                  {[
-                    { icon: <Users style={{ width: 13, height: 13 }} />, label: "Load Sample", color: "var(--clr-amber)", action: () => { setShowPresets(true); setShowSettingsMenu(false); } },
-                    { icon: <RotateCcw style={{ width: 13, height: 13 }} />, label: "Reset All Inputs", color: "var(--clr-red)", action: () => { handleReset(); setShowSettingsMenu(false); } },
-                    { icon: <Lightbulb style={{ width: 13, height: 13 }} />, label: "Setup Wizard", color: "#22d3ee", action: () => { setShowWizard(true); setShowSettingsMenu(false); } },
-                  ].map(({ icon, label, color, action }) => (
-                    <button key={label} className="cpf-nav-dd-item" style={{ color }} onClick={action}>{icon}{label}</button>
-                  ))}
-                  <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
-                  <div className="cpf-nav-dd-hdr">Display</div>
-                  <div style={{ display: "flex", gap: 3, padding: "3px 8px 6px" }}>
-                    {[["fhd","FHD"],["hd","HD"],["auto","Auto"]].map(([m,l]) => (
-                      <button key={m} onClick={() => setDesktopMode(m)} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", background: desktopMode === m ? "var(--ctrl-active-bg)" : "transparent", color: desktopMode === m ? "#fff" : "var(--text-muted)" }}>{l}</button>
-                    ))}
-                  </div>
-                  <div className="cpf-nav-dd-hdr">Appearance</div>
-                  <div style={{ display: "flex", gap: 3, padding: "3px 8px 8px" }}>
-                    {[["dark","● Dark"],["light","○ Light"]].map(([m,l]) => (
-                      <button key={m} onClick={() => setThemeMode(m)} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: 10, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", background: themeMode === m ? "var(--ctrl-active-bg)" : "transparent", color: themeMode === m ? "#fff" : "var(--text-muted)" }}>{l}</button>
-                    ))}
-                  </div>
-                  <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
-                  <button className="cpf-nav-dd-item" style={{ color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)" }}
-                    onClick={() => { setSidebarOpen(v => !v); setShowSettingsMenu(false); }}>
-                    <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Input Panel" : "Show Input Panel"}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* ⚙ Settings gear icon — TABLET + MOBILE ONLY (<1025px).
-                On smaller viewports the navbar is tight so a compact icon is shown instead
-                of the labeled Settings button above. Same state, richer dropdown (includes
-                Share/Report sections that are hidden from the navbar on mobile). */}
-            <div className="cpf-nav-tm-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
+            {/* ⚙ Settings gear — ALL viewports (UX-P1: promoted from tablet+mobile only).
+                Contains: Display modes, Appearance, Reset, Samples, Sidebar toggle. */}
+            <div className="cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
                 onClick={() => { setShowSettingsMenu(v => !v); setShowShareMenu(false); setShowReportMenu(false); setShowDisplayMenu(false); }}
                 style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", background: showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.15)" : "var(--bg-panel)", border: `1px solid ${showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.4)" : "var(--border-strong)"}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: showSettingsMenu ? "var(--clr-blue)" : "var(--text-muted)" }}
