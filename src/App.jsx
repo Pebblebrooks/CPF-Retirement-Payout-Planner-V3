@@ -3219,8 +3219,7 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
   const current = (inputs && inputs[freqKey]) || "annual";
   const isAnnual = current === "annual";
   const durVal = durKey ? (Number((inputs && inputs[durKey]) || 0)) : 0;
-  // UX-P1 Task 4: Bumped from 10px → 12px to meet minimum readability floor.
-  // The responsive CSS override at @media narrow also updated below.
+  // UX-P1 Task 4: bumped from 10px → 11px to meet minimum readability floor across all viewports
   const btnBase = { fontSize: 11, fontWeight: 800, padding: "3px 9px", border: "none", cursor: "pointer", letterSpacing: "0.04em", lineHeight: 1.6 };
   const makeHandler = (val) => (e) => {
     e.stopPropagation();
@@ -3254,7 +3253,7 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
       {isAnnual && durKey && (
         <span style={{ display: "inline-flex", alignItems: "center", marginLeft: 4,
           background: "rgba(14,165,233,0.08)", border: "1px solid rgba(14,165,233,0.25)",
-          borderRadius: 3, padding: "0 6px 0 6px", height: 26 }}
+          borderRadius: 3, padding: "0 6px 0 6px", height: 28 }}
           title="Number of years to apply this recurring contribution (0 or blank = indefinite ∞)">
           <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em", marginRight: 2 }}>for</span>
           <input
@@ -3575,8 +3574,10 @@ function TagPill({ color, bg, border, size = 10, bold = true, uppercase = false,
 }
 
 // ── SidebarSectionHeader ──────────────────────────────────────────────────────
-// Renders the clickable header row of a sidebar section (icon, label, badge,
-// chevron) plus an optional one-line hint shown when the section is collapsed.
+// Renders the clickable header row of a sidebar section (the icon, label,
+// optional badge, and chevron). The outer wrapper div and the conditional body
+// remain in the calling component so per-section dynamic styles (isForeigner
+// opacity, variable borders, etc.) are unchanged.
 //
 // Props:
 //   id            – section key used in aria-controls
@@ -3587,12 +3588,13 @@ function TagPill({ color, bg, border, size = 10, bold = true, uppercase = false,
 //   badge         – optional JSX after the label (count chips, warning icons)
 //   isOpen        – whether the section is currently expanded
 //   onToggle      – () => void callback for click / keyboard activation
-//   collapsedHint – UX-P1: short string shown beneath the header when collapsed
-//                   e.g. "VC3A · RSTU · VCMA · MRSS". Helps users find fields
-//                   without expanding every section. Omit for always-open sections.
+//   collapsedHint – UX-P1: short text shown BELOW the header row when collapsed
+//                   e.g. "VC3A · RSTU · VCMA · MRSS". Helps users scan what's
+//                   inside each section without expanding it. Safe to omit for
+//                   sections that are always open (profile, balances, contribs).
 function SidebarSectionHeader({ id, label, icon, color, activeBg, badge, isOpen, onToggle, collapsedHint }) {
   return (
-    <>
+    <div style={{ display: "flex", flexDirection: "column" }}>
       <div
         onClick={onToggle}
         tabIndex={0}
@@ -3624,13 +3626,15 @@ function SidebarSectionHeader({ id, label, icon, color, activeBg, badge, isOpen,
           {isOpen ? "▲" : "▼"}
         </span>
       </div>
-      {/* UX-P1: Collapsed hint — quick-scan summary of what's inside without expanding */}
+      {/* UX-P1: Collapsed hint — one-line summary of section contents shown only when closed.
+          Lets users quickly find a field without expanding every section. Rendered inside the
+          same outer div as the header row so no wrapper structure changes. */}
       {!isOpen && collapsedHint && (
-        <div style={{ padding: "0 16px 10px 42px", fontSize: 11, color: "var(--text-subtle)", fontStyle: "italic", lineHeight: 1.5, marginTop: -4 }}>
+        <div style={{ padding: "2px 16px 10px 42px", fontSize: 11, color: "var(--text-subtle)", fontStyle: "italic", lineHeight: 1.4 }}>
           {collapsedHint}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -3823,6 +3827,9 @@ export default function App() {
   const [pdfOrientation, setPdfOrientation] = useState("portrait");
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // UX-P2-B: dismissible state for the gap alert banner shown at top of Summary tab.
+  // Resets to false whenever gapAlert reappears (handled in the render, not here).
+  const [gapAlertDismissed, setGapAlertDismissed] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [showReportMenu, setShowReportMenu] = useState(false);
@@ -3860,8 +3867,8 @@ export default function App() {
   // a future schema change can bump to 'cpf_planner_v2_sections' without reading stale data.
   const SECTIONS_STORAGE_KEY = 'cpf_planner_v1_sections';
   // UX-P1: First-time users see only the 3 core sections open (Profile, Balances, Contributions).
-  // This reduces cognitive load from ~60 simultaneous fields to ~15 on first load.
-  // Returning users always restore their last saved state from localStorage — no disruption.
+  // Reduces visible field count from ~60 to ~15 on first load. Returning users get their
+  // last-saved localStorage state restored exactly — no disruption.
   const DEFAULT_OPEN_SECTIONS = ["profile", "cpfBalances", "contribs"];
   const [openSections, setOpenSections] = useState(() => {
     try {
@@ -4658,6 +4665,11 @@ export default function App() {
   // for every user who navigates to it. reads live `inputs` (not debounced) — intentional,
   // as this gates UI display only, not projection computation.
   const isForeigner  = (inputs.citizenStatus || 'SC').toLowerCase() === 'foreigner'; // Bug 2 fix: normalise case
+  // BUG-NEW-2 fix: isSC must be declared at component scope so the Growth tab Gantt IIFE
+  // (hasMRSS / hasMMSS checks at ~line 14878) resolves correctly. Without this declaration,
+  // navigating to the Growth tab throws ReferenceError: isSC is not defined, crashing the
+  // React tree and producing a blank page. Pattern mirrors the isForeigner fix above.
+  const isSC = !isForeigner && (inputs.citizenStatus || 'SC').toUpperCase() === 'SC';
   isForeignerRef.current      = isForeigner;                      // keep ref current for keyboard shortcut handler
   cpfSchemeRef.current        = inputs.cpfScheme || 'cpf_life'; // keep ref current for keyboard shortcut handler
   householdEnabledRef.current = !!householdEnabled;              // keep ref current for keyboard shortcut handler
@@ -9718,14 +9730,15 @@ ${milestones.length > 0 ? `<table>
               <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real($)</button>
             </div>
 
-            {/* UX-P1: Reset and Samples moved to ⚙ gear menu — they remain fully accessible
-                there on all viewports. Removing the duplicate standalone buttons reduces the
-                toolbar from 7 interactive elements to 4, keeping the header uncluttered. */}
+            {/* UX-P1: Reset and Samples moved exclusively to the ⚙ gear menu.
+                Both actions are already there; having them here too doubles the toolbar from
+                4 items to 6 without adding discoverability. Toolbar now reads:
+                [Nom/Real] [Share▾] [Report▾] [⚙] on desktop+tablet. */}
 
             {/* 4. Share dropdown — desktop + tablet */}
             <div className="cpf-nav-dt-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
-                onClick={() => { setShowShareMenu(v => !v); setShowReportMenu(false); setShowSettingsMenu(false); }}
+                onClick={() => { setShowShareMenu(v => !v); setShowReportMenu(false); setShowDisplayMenu(false); setShowSettingsMenu(false); }}
                 style={{ display: "flex", alignItems: "center", gap: 5, background: showShareMenu ? "rgba(var(--clr-blue2-rgb),0.14)" : "var(--bg-panel)", color: showShareMenu ? "var(--clr-blue)" : "var(--text-main)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: `1px solid ${showShareMenu ? "rgba(var(--clr-blue2-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.12s" }}>
                 <Share2 style={{ width: 13, height: 13, pointerEvents: 'none' }} />Share<ChevronDown style={{ width: 11, height: 11, marginLeft: 1, pointerEvents: 'none' }} />
               </button>
@@ -9749,7 +9762,7 @@ ${milestones.length > 0 ? `<table>
             {/* 5. Report dropdown — desktop + tablet */}
             <div className="cpf-nav-dt-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
-                onClick={() => { setShowReportMenu(v => !v); setShowShareMenu(false); setShowSettingsMenu(false); }}
+                onClick={() => { setShowReportMenu(v => !v); setShowShareMenu(false); setShowDisplayMenu(false); setShowSettingsMenu(false); }}
                 style={{ display: "flex", alignItems: "center", gap: 5, background: showReportMenu ? "rgba(var(--clr-emerald-rgb),0.14)" : "var(--bg-panel)", color: showReportMenu ? "var(--clr-green)" : "var(--text-main)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: `1px solid ${showReportMenu ? "rgba(var(--clr-emerald-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.12s" }}>
                 <FileText style={{ width: 13, height: 13, pointerEvents: 'none' }} />Report<ChevronDown style={{ width: 11, height: 11, marginLeft: 1, pointerEvents: 'none' }} />
               </button>
@@ -9767,7 +9780,11 @@ ${milestones.length > 0 ? `<table>
               )}
             </div>
 
-            {/* 6. Unsaved badge — all viewports (brief, non-intrusive) */}
+            {/* UX-P1: Display dropdown removed — FHD/HD/Auto and theme are in the ⚙ gear menu.
+                Removing this desktop-only duplicate reduces toolbar to 4 items: [Nom/Real] [Share▾] [Report▾] [⚙].
+                Unsaved badge moved here (all viewports). Gear promoted from tablet+mobile to all viewports. */}
+
+            {/* Unsaved badge — all viewports */}
             {hasUnsaved && (
               <span title="Inputs changed since last export"
                 style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(var(--clr-amber-rgb),0.15)", color: "var(--clr-amber)", padding: "5px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.4)", animation: "unsavedPulse 2.4s ease-in-out infinite", whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
@@ -9775,16 +9792,11 @@ ${milestones.length > 0 ? `<table>
               </span>
             )}
 
-            {/* UX-P1: Display dropdown removed — FHD/HD/Auto and theme are fully accessible
-                in the ⚙ gear menu below. Removing this redundant desktop-only button reduces
-                the toolbar from 7 items to 4: [Nom/Real] [Share▾] [Report▾] [⚙].
-                The gear is now shown on ALL viewports (was tablet+mobile only). */}
-
-            {/* 7. ⚙ Settings gear — ALL viewports (UX-P1: promoted from tablet+mobile only).
-                Contains: Display modes, Appearance, Actions (Samples, Reset), Sidebar toggle. */}
+            {/* ⚙ Settings gear — ALL viewports (UX-P1: promoted from tablet+mobile only).
+                Contains: Display modes, Appearance, Reset, Samples, Sidebar toggle. */}
             <div className="cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
-                onClick={() => { setShowSettingsMenu(v => !v); setShowShareMenu(false); setShowReportMenu(false); }}
+                onClick={() => { setShowSettingsMenu(v => !v); setShowShareMenu(false); setShowReportMenu(false); setShowDisplayMenu(false); }}
                 style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", background: showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.15)" : "var(--bg-panel)", border: `1px solid ${showSettingsMenu ? "rgba(var(--clr-blue2-rgb),0.4)" : "var(--border-strong)"}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: showSettingsMenu ? "var(--clr-blue)" : "var(--text-muted)" }}
                 title="Settings &amp; more">
                 <Settings style={{ width: 16, height: 16, pointerEvents: 'none' }} />
@@ -10989,7 +11001,7 @@ ${milestones.length > 0 ? `<table>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit ? "#f97316" : isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="topups" label="Inflows ($/yr)" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => toggleSection("topups")} collapsedHint="VC3A · RSTU · VCMA (cash top-up to MA) · MRSS · MMSS · Gov Grants · WIS" badge={(() => {
+              <SidebarSectionHeader id="topups" label="Inflows ($/yr)" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => toggleSection("topups")} collapsedHint="VC3A · RSTU · VCMA cash top-up to MA · MRSS · MMSS · Gov Grants · WIS" badge={(() => {
                 const vc3aVal = Number(inputs.vc3aCash) || 0;
                 const usedPct = maxAllowableVC > 0 ? Math.min(1, vc3aVal / maxAllowableVC) : (vc3aVal > 0 ? 1 : 0);
                 const barColor = isVcOverLimit ? "#f97316" : usedPct >= 0.75 ? "var(--clr-amber)" : "var(--clr-green)";
@@ -11193,55 +11205,7 @@ ${milestones.length > 0 ? `<table>
                     })()}
 
                     {/* Inline gap card — only shown when a gap exists and FRS not yet met */}
-                    {gapAlert && (
-                      <div style={{ marginTop: 10, borderRadius: 10, padding: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.3)" : "rgba(var(--clr-amber3-rgb),0.3)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.07)" : "rgba(var(--clr-amber3-rgb),0.07)" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
-                          <AlertTriangle style={{ width: 12, height: 12, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0 }} />
-                          <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>Contribution Gap</span>
-                        </div>
-                        <p style={{ fontSize: 10, color: gapAlert.isUrgent ? "#fca5a5" : "#fcd34d", marginBottom: 8, lineHeight: 1.4 }}>
-                          {gapAlert.raLabel} is <strong>{formatCurrency(gapAlert.raForAlert)}</strong> — <strong>{formatCurrency(gapAlert.frsGap)}</strong> short of FRS ({formatCurrency(gapAlert.projFRS55)}).
-                        </p>
-                        <div style={{ background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.08)", borderRadius: 6, padding: 8, fontSize: 10, fontFamily: "monospace" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                            <span style={{ color: "var(--text-muted)" }}>Additional top-up needed*:</span>
-                            <span style={{ fontWeight: 900, color: gapAlert.isUrgent ? "var(--clr-red)" : "#fcd34d" }}>{formatCurrency(gapAlert.annualTopUp)}/yr</span>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                            <span style={{ color: "var(--text-muted)" }}>Monthly equivalent:</span>
-                            <span style={{ fontWeight: 900, color: gapAlert.isUrgent ? "var(--clr-red)" : "#fcd34d" }}>{formatCurrency(gapAlert.monthlyTopUp)}/mo</span>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid rgba(100,116,139,0.25)" }}>
-                            <span style={{ color: "var(--text-muted)" }}>Years to target age:</span>
-                            <span style={{ fontWeight: 900, color: "var(--text-highlight)" }}>{gapAlert.yearsToGo} yrs</span>
-                          </div>
-                          {gapAlert.currentVcSa > 0 && (
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                              <span style={{ color: "var(--text-muted)" }}>Current RSTU top-up:</span>
-                              <span style={{ fontWeight: 700, color: "var(--text-muted)" }}>{formatCurrency(gapAlert.currentVcSa)}/yr</span>
-                            </div>
-                          )}
-                          {gapAlert.currentVcSa > 0 && (
-                            <div style={{ display: "flex", justifyContent: "space-between" }}>
-                              <span style={{ color: "var(--text-muted)" }}>Suggested new top-up:</span>
-                              <span style={{ fontWeight: 900, color: gapAlert.isUrgent ? "var(--clr-red)" : "#fcd34d" }}>{formatCurrency(gapAlert.newTopUp)}/yr</span>
-                            </div>
-                          )}
-                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.4 }}>*Additional top-up ON TOP of current projection. {gapAlert.topupNote}.</p>
-                        </div>
-                        {gapAlert.annualTopUp > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setInputs(prev => ({ ...prev, vcSaTopup: gapAlert.newTopUp }));
-                              showToast(`✓ RSTU set to ${formatCurrency(gapAlert.newTopUp)}/yr — gap closed`);
-                            }}
-                            style={{ width: "100%", marginTop: 8, padding: "7px 0", borderRadius: 7, fontSize: 10, fontWeight: 800, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`, background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                            ⚡ Apply Top-up — Set RSTU to {formatCurrency(gapAlert.newTopUp)}/yr
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    {/* UX-P2-B: gap alert moved to top of Summary tab panel — see Summary tab JSX */}
                   </div>
 
                   {/* MRSS auto-badge — shown under RSTU when member is eligible (SC · age 55+ or PwD · RA/OA+SA < BRS · income ≤ $4k) */}
@@ -11731,7 +11695,7 @@ ${milestones.length > 0 ? `<table>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical (MA) · MediShield Life · ElderShield/CareShield · CPFIS invested (OA & SA) · Education loan · OA lump-sum withdrawal" />
+              <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · CPFIS OA & SA · Education loan · OA lump-sum withdrawal" />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -11905,7 +11869,7 @@ ${milestones.length > 0 ? `<table>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="transfers" label="CPF Transfers ($/yr)" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or Loved One" />
+              <SidebarSectionHeader id="transfers" label="CPF Transfers ($/yr)" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One" />
               {openSections.has("transfers") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* OA → MA */}
@@ -12048,7 +12012,7 @@ ${milestones.length > 0 ? `<table>
             </div>{/* /transfers gate wrapper */}
             {/* Property — consolidated section (3rd section of col2) */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="property" label="Property & Timelines" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => toggleSection("property")} badge={null} collapsedHint="Housing loan · OA used for housing · Property sale & CPF refund · LBS · Property monetisation" />
+              <SidebarSectionHeader id="property" label="Property & Timelines" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => toggleSection("property")} badge={null} collapsedHint="Housing loan timelines · OA used for housing · Property sale & CPF refund · LBS · Monetisation" />
               {openSections.has("property") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -12288,7 +12252,7 @@ ${milestones.length > 0 ? `<table>
               <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader id="privateAssets" label="Private Assets" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & annual contribution" />
+              <SidebarSectionHeader id="privateAssets" label="Private Assets" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & contributions" />
               {openSections.has("privateAssets") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   
@@ -12493,7 +12457,7 @@ ${milestones.length > 0 ? `<table>
               return (
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
                   {/* Header */}
-                  <SidebarSectionHeader id="lifeevents" label="Life Events" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 10, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} — ${enabledCount} active · click to view or edit` : "Stress-test retrenchment, windfall, career break, medical crisis…"} />
+                  <SidebarSectionHeader id="lifeevents" label="Life Events" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 10, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Stress-test retrenchment, windfall, career break, medical crisis…"} />
 
                   {openSections.has("lifeevents") && (
                     <div style={{ padding: "0 16px 16px" }}>
@@ -12651,7 +12615,7 @@ ${milestones.length > 0 ? `<table>
 
             {/* Decumulation & Goals — income targets, OA drawdown, Die with Zero */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE / RSS scheme" />
+              <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
               {openSections.has("decumulation") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Monthly Goal */}
@@ -13125,6 +13089,51 @@ ${milestones.length > 0 ? `<table>
             {/* ── SUMMARY TAB ── */}
             {activeTab === "summary" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+                {/* UX-P2-B: Contribution gap alert — moved from buried sidebar position to top of
+                    Summary panel. Uses existing gapAlert useMemo (unchanged). Dismissible per
+                    session; resets automatically if the gap changes (key on frsGap value). */}
+                {gapAlert && !gapAlertDismissed && (
+                  <div key={gapAlert.frsGap}
+                    style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
+                      borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.35)" : "rgba(var(--clr-amber3-rgb),0.35)"}`,
+                      background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.07)" }}>
+                    <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>
+                          Contribution gap — {gapAlert.raLabel}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+                        Projected {gapAlert.raLabel} of <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.raForAlert)}</strong> is <strong style={{ color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>{formatCurrency(gapAlert.frsGap)}</strong> short of FRS ({formatCurrency(gapAlert.projFRS55)}).
+                        {" "}Suggested top-up: <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.annualTopUp)}/yr</strong> ({formatCurrency(gapAlert.monthlyTopUp)}/mo) over {gapAlert.yearsToGo} yrs.
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                      {gapAlert.annualTopUp > 0 && (
+                        <button type="button"
+                          onClick={() => {
+                            setInputs(prev => ({ ...prev, vcSaTopup: gapAlert.newTopUp }));
+                            showToast(`✓ RSTU set to ${formatCurrency(gapAlert.newTopUp)}/yr — gap closed`);
+                            setGapAlertDismissed(true);
+                          }}
+                          style={{ padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700,
+                            border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
+                            background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)",
+                            color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", whiteSpace: "nowrap" }}>
+                          ⚡ Apply top-up
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setGapAlertDismissed(true)}
+                        style={{ padding: "6px 8px", borderRadius: 8, fontSize: 12, fontWeight: 500,
+                          border: "1px solid var(--border-subtle)", background: "transparent",
+                          color: "var(--text-muted)", cursor: "pointer", lineHeight: 1 }}
+                        aria-label="Dismiss alert">✕</button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Summary tab intro — collapsible via native <details> (no hooks) */}
                 <details style={{ borderRadius: 14, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
                   <summary style={{ padding: "10px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
@@ -13420,7 +13429,7 @@ ${milestones.length > 0 ? `<table>
                   return (
                     <div style={{ background: "var(--bg-panel)", border: "1.5px solid rgba(34,211,238,0.25)", borderRadius: 20, padding: "16px 20px" }}>
                       {/* ── Header ── */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: zCalloutExpanded ? 16 : 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: zCalloutExpanded ? 14 : 0 }}>
                         <span style={{ fontSize: 14 }}>🎯</span>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee" }}>Milestone Snapshots</span>
                         <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 2 }}>{slots.length} age{slots.length > 1 ? "s" : ""} tracked</span>
@@ -13430,176 +13439,134 @@ ${milestones.length > 0 ? `<table>
                         </button>
                       </div>
 
-                      {zCalloutExpanded && (
-                        /* ── Spine container ── */
-                        <div style={{ position: "relative", height: containerH, marginLeft: 4 }}>
+                      {zCalloutExpanded && (() => {
+                        // ── Build full timeline chart data from displayAccumulation ──
+                        const ca_chart = Number(inputs.currentAge) || 0;
+                        const pa_chart = Number(inputs.payoutAge)  || 65;
+                        const chartData = displayAccumulation
+                          .filter(r => r.age >= ca_chart && r.age <= pa_chart + 5)
+                          .map(r => {
+                            const isPost = r.age >= 55;
+                            return {
+                              age:   r.age,
+                              OA:    Math.round(r.oa  || 0),
+                              SA:    isPost ? 0 : Math.round(r.sa || 0),
+                              RA:    isPost ? Math.round(r.ra || 0) : 0,
+                              MA:    Math.round(r.ma  || 0),
+                              total: Math.round((r.oa || 0) + (r.sa || 0) + (r.ra || 0) + (r.ma || 0)),
+                            };
+                          });
 
-                          {/* Vertical spine line — only rendered when 2+ milestones */}
-                          {slots.length > 1 && (
-                            <div style={{
-                              position: "absolute",
-                              left: 8, top: spineTop, height: spineBottom - spineTop,
-                              width: 2, background: "rgba(34,211,238,0.18)", borderRadius: 1,
-                            }} />
-                          )}
+                        // Custom tooltip
+                        const MilestoneTooltip = ({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          const total = payload.reduce((s, p) => s + (p.value || 0), 0);
+                          const isMilestone = slots.includes(label);
+                          return (
+                            <div style={{ ...STYLES.chartTooltip, minWidth: 148 }}>
+                              <p style={{ ...STYLES.chartTooltipLabel, color: isMilestone ? "#22d3ee" : "var(--tooltip-label)" }}>
+                                {isMilestone ? "🎯 " : ""}Age {label}
+                              </p>
+                              {payload.map(p => p.value > 0 && (
+                                <p key={p.dataKey} style={{ ...STYLES.chartTooltipItem, display: "flex", justifyContent: "space-between", gap: 12 }}>
+                                  <span style={{ color: p.fill }}>{p.dataKey}</span>
+                                  <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(p.value)}</span>
+                                </p>
+                              ))}
+                              <p style={{ ...STYLES.chartTooltipItem, display: "flex", justifyContent: "space-between", gap: 12, borderTop: "1px solid var(--border-subtle)", marginTop: 4, paddingTop: 4 }}>
+                                <span style={{ color: "var(--tooltip-label)" }}>Total CPF</span>
+                                <span style={{ fontFamily: "monospace", fontWeight: 800, color: "var(--text-bright)" }}>{formatCurrency(total)}</span>
+                              </p>
+                            </div>
+                          );
+                        };
 
-                          {milestoneData.map((d, idx) => {
-                            const { mAge, mRow, mOA, mSA, mMA, mRA, mSRS, mPriv,
-                                    mTotal, mNetWorth, yearsToM, mRealTotal, accentColor } = d;
-                            if (mRow.age !== mAge) return null;
+                        // Custom dot to highlight milestone ages on the chart
+                        const milestoneSet = new Set(slots);
 
-                            const isPost55 = mAge >= 55;
-                            const saVal    = isPost55 ? mRA : mSA;
-                            const saColor  = isPost55 ? "#7F77DD" : "#f59e0b";
-                            const saLabel  = isPost55 ? "RA" : "SA";
+                        return (
+                          <>
+                            {/* ── Full-width stacked bar chart ── */}
+                            <ResponsiveContainer width="100%" height={200}>
+                              <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barCategoryGap="8%">
+                                <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                                <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--chart-text)" }} tickLine={false} axisLine={false}
+                                  tickFormatter={v => milestoneSet.has(v) ? `Age ${v}` : v}
+                                  ticks={[...new Set([ca_chart, ...slots, pa_chart])]}
+                                />
+                                <YAxis hide />
+                                <Tooltip content={<MilestoneTooltip />} wrapperStyle={STYLES.chartTooltipWrapper} />
+                                {/* Reference lines at each milestone age */}
+                                {slots.map(age => (
+                                  <ReferenceLine key={age} x={age} stroke="rgba(34,211,238,0.45)" strokeWidth={1.5} strokeDasharray="4 3"
+                                    label={{ value: `🎯`, position: "top", fontSize: 10, fill: "#22d3ee" }} />
+                                ))}
+                                <Bar dataKey="OA" stackId="cpf" fill="#378ADD" radius={[0,0,0,0]} />
+                                <Bar dataKey="SA" stackId="cpf" fill="#f59e0b" radius={[0,0,0,0]} />
+                                <Bar dataKey="RA" stackId="cpf" fill="#7F77DD" radius={[0,0,0,0]} />
+                                <Bar dataKey="MA" stackId="cpf" fill="#059669" radius={[3,3,0,0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
 
-                            const oaPct = mTotal > 0 ? Math.round((mOA / mTotal) * 100) : 0;
-                            const saPct = mTotal > 0 ? Math.round((saVal   / mTotal) * 100) : 0;
-                            const maPct = Math.max(0, 100 - oaPct - saPct);
+                            {/* ── Legend ── */}
+                            <div style={{ display: "flex", gap: 14, marginTop: 6, marginBottom: 14, paddingLeft: 2 }}>
+                              {[["OA","#378ADD"],["SA (pre-55)","#f59e0b"],["RA (post-55)","#7F77DD"],["MA","#059669"]].map(([label,color]) => (
+                                <span key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "var(--text-muted)" }}>
+                                  <span style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />{label}
+                                </span>
+                              ))}
+                            </div>
 
-                            // Bar width proportional to this milestone's total vs max
-                            const barW = mTotal > 0 ? Math.round((mTotal / maxTotal) * BAR_MAX_W) : 0;
+                            {/* ── Milestone stat chips — one row per milestone ── */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {milestoneData.map((d, idx) => {
+                                const { mAge, mOA, mSA, mMA, mRA, mSRS, mPriv, mTotal, mNetWorth, yearsToM, mRealTotal } = d;
+                                if (!mTotal && !mSRS && !mPriv) return null;
+                                const isPost55 = mAge >= 55;
+                                const saVal   = isPost55 ? mRA : mSA;
+                                const saColor = isPost55 ? "#7F77DD" : "#f59e0b";
+                                const saLabel = isPost55 ? "RA" : "SA";
+                                const prevTotal = idx > 0 ? milestoneData[idx - 1].mTotal : 0;
+                                const growthPct = idx > 0 && prevTotal > 0
+                                  ? Math.round((mTotal / prevTotal - 1) * 100) : null;
 
-                            // Growth vs previous milestone
-                            const prevTotal = idx > 0 ? milestoneData[idx - 1].mTotal : 0;
-                            const growthPct = (idx > 0 && prevTotal > 0)
-                              ? Math.round((mTotal / prevTotal - 1) * 100) : null;
-
-                            // Growth badge positioned at the midpoint between prev and current node
-                            const growthBadgeTop = idx > 0
-                              ? Math.round((nodePx[idx - 1] + nodePx[idx]) / 2) - 9
-                              : null;
-
-                            const nodeTop = nodePx[idx];
-
-                            return (
-                              <React.Fragment key={mAge}>
-                                {/* ── Growth delta badge between nodes ── */}
-                                {growthPct !== null && (
-                                  <div style={{
-                                    position: "absolute", left: 18, top: growthBadgeTop,
-                                    fontSize: 9, fontWeight: 700,
-                                    color: "#10b981",
-                                    background: "rgba(16,185,129,0.12)",
-                                    border: "1px solid rgba(16,185,129,0.25)",
-                                    borderRadius: 6, padding: "1px 6px",
-                                    whiteSpace: "nowrap", lineHeight: "18px",
-                                  }}>
-                                    +{growthPct}%
+                                return (
+                                  <div key={mAge} style={{ display: "flex", alignItems: "center", gap: 10,
+                                    padding: "10px 14px", borderRadius: 12, border: `1px solid ${d.accentColor}33`,
+                                    background: `${d.accentColor}08` }}>
+                                    {/* Age badge */}
+                                    <div style={{ flexShrink: 0, textAlign: "center", minWidth: 44 }}>
+                                      <div style={{ fontSize: 16, fontWeight: 700, color: d.accentColor, lineHeight: 1.1 }}>{mAge}</div>
+                                      <div style={{ fontSize: 9, color: "var(--text-muted)" }}>{yearsToM > 0 ? `+${yearsToM} yrs` : "now"}</div>
+                                    </div>
+                                    <div style={{ width: 1, height: 36, background: `${d.accentColor}33`, flexShrink: 0 }} />
+                                    {/* Account chips */}
+                                    <div style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                                      {mOA > 0 && <span style={{ fontSize: 10, fontWeight: 600, color: "#378ADD", fontFamily: "monospace" }}>OA {formatCurrency(mOA)}</span>}
+                                      {saVal > 0 && <span style={{ fontSize: 10, fontWeight: 600, color: saColor, fontFamily: "monospace" }}>{saLabel} {formatCurrency(saVal)}</span>}
+                                      {mMA > 0 && <span style={{ fontSize: 10, fontWeight: 600, color: "#059669", fontFamily: "monospace" }}>MA {formatCurrency(mMA)}</span>}
+                                      {mSRS > 0 && <span style={{ fontSize: 10, fontWeight: 600, color: "#0ea5e9", fontFamily: "monospace" }}>SRS {formatCurrency(mSRS)}</span>}
+                                    </div>
+                                    {/* Total + growth */}
+                                    <div style={{ flexShrink: 0, textAlign: "right" }}>
+                                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)", fontFamily: "monospace" }}>{formatCurrency(mTotal)}</div>
+                                      <div style={{ fontSize: 9, color: "var(--text-muted)" }}>≈ {formatCurrency(mRealTotal)} today</div>
+                                      {growthPct !== null && (
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: growthPct >= 0 ? "var(--clr-green)" : "var(--clr-red)" }}>
+                                          {growthPct >= 0 ? "+" : ""}{growthPct}% from age {milestoneData[idx-1].mAge}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                )}
-
-                                {/* ── Node circle on spine ── */}
-                                <div style={{
-                                  position: "absolute", left: 0, top: nodeTop,
-                                  width: 18, height: 18, borderRadius: "50%",
-                                  background: accentColor,
-                                  transform: "translateY(-50%)",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  zIndex: 2, flexShrink: 0,
-                                }}>
-                                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--bg-panel)" }} />
-                                </div>
-
-                                {/* ── Dashed connector from node to card ── */}
-                                <div style={{
-                                  position: "absolute", left: 18, top: nodeTop,
-                                  width: 18, height: 0,
-                                  borderTop: "1px dashed rgba(34,211,238,0.22)",
-                                  transform: "translateY(-50%)",
-                                }} />
-
-                                {/* ── Milestone card ── */}
-                                <div style={{
-                                  position: "absolute", left: 36, right: 0, top: nodeTop,
-                                  transform: "translateY(-50%)",
-                                  background: "var(--bg-muted)", borderRadius: 14,
-                                  padding: "10px 12px",
-                                  borderLeft: `2px solid ${accentColor}`,
-                                }}>
-                                  {/* Card header */}
-                                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 7 }}>
-                                    <div>
-                                      <p style={{ fontSize: 11, fontWeight: 700, color: accentColor, textTransform: "uppercase", letterSpacing: "0.05em", margin: 0, lineHeight: 1.2 }}>
-                                        Age {mAge}
-                                      </p>
-                                      <p style={{ fontSize: 9, color: "var(--text-muted)", margin: "1px 0 0" }}>
-                                        {yearsToM} yr{yearsToM !== 1 ? "s" : ""} from now · {isRealDollars ? "real $" : "nominal $"}
-                                      </p>
-                                    </div>
-                                    <div style={{ textAlign: "right" }}>
-                                      <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "var(--text-bright)", fontFamily: "monospace", lineHeight: 1.15 }}>
-                                        {formatCurrency(isRealDollars ? mRealTotal : mTotal)}
-                                      </p>
-                                      {!isRealDollars && mRealTotal > 0 && (
-                                        <p style={{ fontSize: 9, color: "var(--text-muted)", margin: "1px 0 0" }}>
-                                          {formatCurrency(mRealTotal)} today
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Proportional-width wealth bar */}
-                                  {mTotal > 0 && (
-                                    <>
-                                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                                        <div style={{
-                                          width: barW, height: 10, borderRadius: 3,
-                                          display: "flex", overflow: "hidden", flexShrink: 0,
-                                        }}>
-                                          <div style={{ flex: oaPct, background: "#378ADD" }} />
-                                          <div style={{ flex: saPct, background: saColor }} />
-                                          <div style={{ flex: maPct, background: "#059669" }} />
-                                        </div>
-                                        <span style={{ fontSize: 8, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                                          OA · {saLabel} · MA
-                                        </span>
-                                      </div>
-
-                                      {/* Inline account chips */}
-                                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                        <span style={{ fontSize: 10, fontWeight: 600, color: "#378ADD", fontFamily: "monospace" }}>
-                                          OA {formatCurrency(mOA)}
-                                        </span>
-                                        <span style={{ fontSize: 10, fontWeight: 600, color: saColor, fontFamily: "monospace" }}>
-                                          {saLabel} {formatCurrency(saVal)}
-                                        </span>
-                                        <span style={{ fontSize: 10, fontWeight: 600, color: "#059669", fontFamily: "monospace" }}>
-                                          MA {formatCurrency(mMA)}
-                                        </span>
-                                      </div>
-                                    </>
-                                  )}
-
-                                  {/* SRS + Private + Net Worth — preserved exactly */}
-                                  {(mSRS > 0 || mPriv > 0) && (
-                                    <div style={{ display: "flex", gap: 6, marginTop: 7 }}>
-                                      {mSRS > 0 && (
-                                        <div style={{ flex: 1, background: "rgba(14,165,233,0.07)", borderRadius: 7, padding: "5px 8px", border: "1px solid rgba(14,165,233,0.2)" }}>
-                                          <p style={{ fontSize: 9, color: "#0ea5e9", fontWeight: 700, margin: "0 0 1px", textTransform: "uppercase" }}>SRS</p>
-                                          <p style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-bright)", margin: 0, fontWeight: 700 }}>{formatCurrency(mSRS)}</p>
-                                        </div>
-                                      )}
-                                      {mPriv > 0 && (
-                                        <div style={{ flex: 1, background: "rgba(var(--clr-green-rgb),0.07)", borderRadius: 7, padding: "5px 8px", border: "1px solid rgba(var(--clr-green-rgb),0.2)" }}>
-                                          <p style={{ fontSize: 9, color: "var(--clr-green)", fontWeight: 700, margin: "0 0 1px", textTransform: "uppercase" }}>Private</p>
-                                          <p style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-bright)", margin: 0, fontWeight: 700 }}>{formatCurrency(mPriv)}</p>
-                                        </div>
-                                      )}
-                                      <div style={{ flex: 1, background: "rgba(var(--clr-amber-rgb),0.07)", borderRadius: 7, padding: "5px 8px", border: "1px solid rgba(var(--clr-amber-rgb),0.2)" }}>
-                                        <p style={{ fontSize: 9, color: "var(--clr-amber)", fontWeight: 700, margin: "0 0 1px", textTransform: "uppercase" }}>Net Worth</p>
-                                        <p style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-bright)", margin: 0, fontWeight: 700 }}>{formatCurrency(mNetWorth)}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </React.Fragment>
-                            );
-                          })}
-                        </div>
-                      )}
+                                );
+                              })}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   );
+
                 })()}
 
                 {/* ── ZONE 2 + ZONE 3 side by side — collapsible ── */}
@@ -17930,4 +17897,5 @@ ${milestones.length > 0 ? `<table>
     </TooltipContext.Provider>
   );
 }
+
 
