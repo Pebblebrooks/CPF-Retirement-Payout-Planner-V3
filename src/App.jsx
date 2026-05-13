@@ -618,7 +618,9 @@ const SPOUSE_DEFAULT_INPUTS = {
   oaDrawdownMonthly: 0, oaDrawdownStartAge: 0,
   dieWithZeroEnabled: false,
   lifeEvents: [],
-  milestoneAge: 0, milestoneAge2: 0, milestoneAge3: 0,
+  // BUG-5 fix: include milestoneAge4/5 so spouse profiles don't silently drop these fields on import.
+  // DEFAULT_INPUTS defines 5 milestone ages; SPOUSE_DEFAULT_INPUTS previously only had 3.
+  milestoneAge: 0, milestoneAge2: 0, milestoneAge3: 0, milestoneAge4: 0, milestoneAge5: 0,
 };
 
 const PRESET_PROFILES = [
@@ -3361,6 +3363,91 @@ const lzDecompress = (encoded) => {
   } catch (e) { return decodeURIComponent(encoded); }
 };
 
+// ── buildSafeInputs — module-level profile sanitisation helper ──────────────
+// Single source of truth for safe input reconstruction used by ALL three load
+// paths: URL ?p= decode, Share Code inline import, and JSON file import
+// (handleImportProfile has its own local sanitiseInputs that mirrors this logic).
+//
+// Applies the full suite of guards introduced across multiple fix rounds:
+//   FIX-3  : skip lifeEvents: null (old profiles before field existed)
+//   FIX-3b : guarantee lifeEvents is always an array
+//   FIX-5  : coerce boolean fields stored as string "true"/"false" or number 0/1
+//   IMP-4  : sanitise each life event object against LIFE_EVENT_DEFAULTS skeleton
+//   FIX-2  : srsCitizenPR (boolean) → citizenStatus ('SC'|'PR'|'foreigner') migration
+//   legacy : cpfisAmount → cpfisOaAmount migration (old CPFIS field rename)
+//   legacy : careerBreakStartAge/EndAge → Life Events career_break entry migration
+const buildSafeInputs = (raw) => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_INPUTS };
+  const safe = { ...DEFAULT_INPUTS };
+  // Whitelist-copy: only known DEFAULT_INPUTS keys; fills gaps with defaults so
+  // profiles from any older/newer version never inject unknown keys or leave
+  // required fields as undefined (which produces NaN in the engine).
+  Object.keys(DEFAULT_INPUTS).forEach(k => {
+    // FIX-3: skip null values for lifeEvents — old profiles stored lifeEvents: null
+    // before the field existed as an array. null !== undefined passes the guard and
+    // would overwrite the [] default, causing engine crashes on .map().
+    if (raw[k] !== undefined && !(k === 'lifeEvents' && raw[k] === null)) {
+      safe[k] = raw[k];
+    }
+  });
+  // FIX-5: Coerce critical boolean fields that old exports may have stored as
+  // strings ("true"/"false") or numbers (1/0). Engine uses strict === true checks.
+  const BOOL_FIELDS = ['isMale','isSelfEmployed','includeProperty','usePropertyPledge',
+    'oaToMaForLovedOne','oaToSaForLovedOne','propMonetiseEnabled','dieWithZeroEnabled',
+    'isPwD','propertyLeasehold','showSalaryCalc'];
+  BOOL_FIELDS.forEach(k => {
+    if (typeof safe[k] === 'string') safe[k] = safe[k] === 'true' || safe[k] === '1';
+    else if (typeof safe[k] === 'number') safe[k] = safe[k] !== 0;
+  });
+  // FIX-3b: Belt-and-suspenders — always guarantee lifeEvents is an array.
+  if (!Array.isArray(safe.lifeEvents)) safe.lifeEvents = [];
+  // IMP-4: Sanitise each life event object to guard against old schemas where
+  // fields like drawSource, windfallDest, or magnitude didn't exist yet.
+  const _LIFE_EVT_DFLT = {
+    id: "", type: "retrenchment", label: "", startAge: 35, endAge: 36,
+    magnitude: 0, enabled: true, drawSource: "oa_then_private",
+    windfallDest: "private", hyperRate: 0.06, overrideSalary: 0,
+  };
+  safe.lifeEvents = safe.lifeEvents.map(ev => {
+    const base = { ..._LIFE_EVT_DFLT };
+    if (ev && typeof ev === "object") {
+      Object.keys(_LIFE_EVT_DFLT).forEach(k => { if (ev[k] !== undefined) base[k] = ev[k]; });
+      // Legacy field renames
+      if (ev.amount !== undefined && ev.magnitude === undefined) base.magnitude = ev.amount;
+      if (ev.source !== undefined && ev.drawSource === undefined) base.drawSource = ev.source;
+    }
+    return base;
+  });
+  // Legacy migration: old profiles stored a single cpfisAmount; new field is cpfisOaAmount.
+  if (raw.cpfisAmount !== undefined && !raw.cpfisOaAmount) {
+    safe.cpfisOaAmount = raw.cpfisAmount;
+  }
+  // FIX-2: srsCitizenPR (boolean) → citizenStatus migration.
+  // Old profiles used srsCitizenPR: true = SC/PR, false = foreigner.
+  // New profiles use citizenStatus: 'SC' | 'PR' | 'foreigner'.
+  if (raw.srsCitizenPR === false && raw.citizenStatus === undefined) {
+    safe.citizenStatus = 'foreigner';
+  }
+  // Legacy migration: careerBreakStartAge / careerBreakEndAge (removed in Rev #22b)
+  // → Life Events career_break entry. Only runs when both fields are numeric.
+  const legacyCbStart = raw.careerBreakStartAge !== undefined && raw.careerBreakStartAge !== "" ? Number(raw.careerBreakStartAge) : null;
+  const legacyCbEnd   = raw.careerBreakEndAge   !== undefined && raw.careerBreakEndAge   !== "" ? Number(raw.careerBreakEndAge)   : null;
+  if (legacyCbStart !== null && legacyCbEnd !== null && !isNaN(legacyCbStart) && !isNaN(legacyCbEnd)) {
+    const alreadyExists = safe.lifeEvents.some(
+      ev => ev.type === 'career_break' && Number(ev.startAge) === legacyCbStart && Number(ev.endAge) === legacyCbEnd
+    );
+    if (!alreadyExists) {
+      safe.lifeEvents = [
+        ...safe.lifeEvents,
+        { ..._LIFE_EVT_DFLT, id: `le-migrated-cb-${Date.now()}`, type: 'career_break',
+          label: 'Career Break (migrated)', startAge: legacyCbStart, endAge: legacyCbEnd,
+          magnitude: 0, enabled: true },
+      ];
+    }
+  }
+  return safe;
+};
+
 // ── Pure utility functions — hoisted to module level (R7, R8) ──────────────
 // Defined outside App() so they are stable references — not re-created on
 // every render. Both are pure with no component state dependency.
@@ -4716,14 +4803,12 @@ export default function App() {
       if (pParam) {
         // New format: full state encoded via lzCompress (LZ77 or legacy base64url)
         const fullState = JSON.parse(lzDecompress(pParam));
+        // BUG-1 fix: was raw whitelist copy — missing boolean coercion, lifeEvents guards,
+        // and all legacy migrations. Now uses buildSafeInputs for full parity with JSON import.
         if (fullState.inputs) {
-          // Whitelist only known keys from DEFAULT_INPUTS to prevent injection
-          const safeInputs = {};
-          Object.keys(DEFAULT_INPUTS).forEach(k => {
-            if (fullState.inputs[k] !== undefined) safeInputs[k] = fullState.inputs[k];
-          });
-          const mergedInputs = { ...DEFAULT_INPUTS, ...safeInputs };
+          const mergedInputs = buildSafeInputs(fullState.inputs);
           setInputs(mergedInputs);
+          setInputErrors({}); // BUG-4 fix: clear stale error highlights from previous session
           // R1 fix: stamp lastSavedRef with the merged object so the beforeunload
           // "unsaved changes" guard doesn't fire on every navigation after a share-link load.
           // setInputs() is async — inputs won't reflect the new value until next render —
@@ -4771,8 +4856,8 @@ export default function App() {
         let shareLinkScenariosRestored = false;
         if ('scenarioAInputs' in fullState) {
           if (fullState.scenarioAInputs && typeof fullState.scenarioAInputs === 'object') {
-            const safeScenA = { ...DEFAULT_INPUTS };
-            Object.keys(DEFAULT_INPUTS).forEach(k => { if (fullState.scenarioAInputs[k] !== undefined) safeScenA[k] = fullState.scenarioAInputs[k]; });
+            // BUG-1 fix: was raw whitelist copy — use buildSafeInputs for full sanitisation.
+            const safeScenA = buildSafeInputs(fullState.scenarioAInputs);
             setScenarioA({ inputs: safeScenA, projection: (safeScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenA), payoutProj: null });
             shareLinkScenariosRestored = true;
           } else {
@@ -4782,8 +4867,8 @@ export default function App() {
         // else: key absent → leave existing slot untouched
         if ('scenarioBInputs' in fullState) {
           if (fullState.scenarioBInputs && typeof fullState.scenarioBInputs === 'object') {
-            const safeScenB = { ...DEFAULT_INPUTS };
-            Object.keys(DEFAULT_INPUTS).forEach(k => { if (fullState.scenarioBInputs[k] !== undefined) safeScenB[k] = fullState.scenarioBInputs[k]; });
+            // BUG-1 fix: was raw whitelist copy — use buildSafeInputs for full sanitisation.
+            const safeScenB = buildSafeInputs(fullState.scenarioBInputs);
             setScenarioB({ inputs: safeScenB, projection: (safeScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenB), payoutProj: null });
             shareLinkScenariosRestored = true;
           } else {
@@ -4806,21 +4891,19 @@ export default function App() {
       } else if (sParam) {
         // Legacy compressed base64url format — lzDecompress handles both old and new encoding
         const decoded = JSON.parse(lzDecompress(sParam));
-        // Whitelist only known keys from DEFAULT_INPUTS to prevent unknown key injection
-        const safeDecoded = {};
-        Object.keys(DEFAULT_INPUTS).forEach(k => { if (decoded[k] !== undefined) safeDecoded[k] = decoded[k]; });
-        const mergedLegacy = { ...DEFAULT_INPUTS, ...safeDecoded };
+        // BUG-1 fix: was raw whitelist copy — use buildSafeInputs for full sanitisation.
+        const mergedLegacy = buildSafeInputs(decoded);
         setInputs(mergedLegacy);
+        setInputErrors({}); // BUG-4 fix
         // R1 fix: stamp lastSavedRef so the beforeunload guard doesn't fire after a legacy share-link load.
         lastSavedRef.current = JSON.stringify(mergedLegacy);
       } else if (stateParam) {
         // Legacy plain format
         const decoded = JSON.parse(decodeURIComponent(stateParam));
-        // Whitelist only known keys from DEFAULT_INPUTS to prevent unknown key injection
-        const safeDecoded = {};
-        Object.keys(DEFAULT_INPUTS).forEach(k => { if (decoded[k] !== undefined) safeDecoded[k] = decoded[k]; });
-        const mergedPlain = { ...DEFAULT_INPUTS, ...safeDecoded };
+        // BUG-1 fix: was raw whitelist copy — use buildSafeInputs for full sanitisation.
+        const mergedPlain = buildSafeInputs(decoded);
         setInputs(mergedPlain);
+        setInputErrors({}); // BUG-4 fix
         // R1 fix: stamp lastSavedRef so the beforeunload guard doesn't fire after a legacy plain share-link load.
         lastSavedRef.current = JSON.stringify(mergedPlain);
       } else {
@@ -5468,7 +5551,7 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `CPF_Profile_${memberName}.json`;
       document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 2000); // BUG-6 fix: was 500ms — too short on slow devices/background tabs before save dialog opens
       showToast(`✓ Profile saved: CPF_Profile_${memberName}.json`);
     } catch (e) {
       // Fallback: show modal with JSON to copy
@@ -5586,6 +5669,7 @@ export default function App() {
         }
         const safeIn = sanitiseInputs(rawInputs);
         setInputs(safeIn);
+        setInputErrors({}); // BUG-4 fix: clear stale validation highlights from previous session
         // FIX-lastSaved: stamp immediately after setInputs so the beforeunload "Unsaved changes"
         // guard is cleared for ALL profile formats (old flat JSON + new {inputs:…} wrapper).
         // The stamp inside if(p.inputs) below is redundant but kept as a safety net.
@@ -9575,52 +9659,71 @@ ${milestones.length > 0 ? `<table>
                     const decoded = lzDecompress(codeToLoad);
                     const parsed = JSON.parse(decoded);
                     const rawInp = parsed.inputs || parsed;
-                    // Whitelist — same guard as JSON file import
-                    const safeInp = { ...DEFAULT_INPUTS };
-                    Object.keys(DEFAULT_INPUTS).forEach(k => { if (rawInp[k] !== undefined) safeInp[k] = rawInp[k]; });
+                    // BUG-1 fix: was raw whitelist copy — use buildSafeInputs for full
+                    // sanitisation (boolean coercion, lifeEvents guards, legacy migrations).
+                    const safeInp = buildSafeInputs(rawInp);
                     setInputs(safeInp);
+                    setInputErrors({}); // BUG-4 fix: clear stale error highlights
+                    // BUG-2 fix: stamp lastSavedRef so the beforeunload "unsaved changes"
+                    // guard doesn't fire immediately after loading a share code.
+                    lastSavedRef.current = JSON.stringify(safeInp);
+                    // BUG-3 fix: restore ALL UI/state fields — was missing activeTab,
+                    // primaryLifePlan, spouseLifePlan, household, 4× What-If, pdfOrientation.
+                    if (parsed.activeTab) setActiveTab(parsed.activeTab);
                     if (parsed.highlightPlan) setHighlightPlan(parsed.highlightPlan);
+                    if (parsed.primaryLifePlan) setPrimaryLifePlan(parsed.primaryLifePlan);
+                    if (parsed.spouseLifePlan)  setSpouseLifePlan(parsed.spouseLifePlan);
                     if (parsed.viewMode) setViewMode(parsed.viewMode);
                     if (parsed.basicPremiumPct != null) setBasicPremiumPct(parsed.basicPremiumPct);
                     if (parsed.scenarioLabelA != null) setScenarioLabelA(parsed.scenarioLabelA);
                     if (parsed.scenarioLabelB != null) setScenarioLabelB(parsed.scenarioLabelB);
+                    // Household state
+                    if (parsed.householdEnabled != null) setHouseholdEnabled(!!parsed.householdEnabled);
+                    if (parsed.housingSharePct != null) setHousingSharePct(Number(parsed.housingSharePct) || 50);
+                    if (Array.isArray(parsed.householdChildren)) setHouseholdChildren(parsed.householdChildren);
+                    if (parsed.spouseInputs && typeof parsed.spouseInputs === 'object') {
+                      const safeSpouse = { ...SPOUSE_DEFAULT_INPUTS };
+                      Object.keys(SPOUSE_DEFAULT_INPUTS).forEach(k => { if (parsed.spouseInputs[k] !== undefined) safeSpouse[k] = parsed.spouseInputs[k]; });
+                      setSpouseInputs(safeSpouse); setDebouncedSpouseInputs(safeSpouse);
+                    }
+                    // All 8 What-If fields (was only 4 — missing ContribStop, OaDrawdown, SrsContrib, PrivGrowth)
                     if (parsed.whatIfPayoutAge != null) setWhatIfPayoutAge(parsed.whatIfPayoutAge);
                     if (parsed.whatIfSaTopup != null) setWhatIfSaTopup(parsed.whatIfSaTopup);
                     if (parsed.whatIfHousing != null) setWhatIfHousing(parsed.whatIfHousing);
                     if (parsed.whatIfSalaryBump != null) setWhatIfSalaryBump(parsed.whatIfSalaryBump);
-
+                    if (parsed.whatIfContribStop != null) setWhatIfContribStop(parsed.whatIfContribStop);
+                    if (parsed.whatIfOaDrawdown != null) setWhatIfOaDrawdown(parsed.whatIfOaDrawdown);
+                    if (parsed.whatIfSrsContrib != null) setWhatIfSrsContrib(parsed.whatIfSrsContrib);
+                    if (parsed.whatIfPrivGrowth != null) setWhatIfPrivGrowth(parsed.whatIfPrivGrowth);
                     if (parsed.isRealDollars != null) setIsRealDollars(parsed.isRealDollars);
+                    if (parsed.pdfOrientation) setPdfOrientation(parsed.pdfOrientation);
                     // Scenario restore — handle both formats:
                     //   New format (V4-2026+): scenarioAInputs key holds just inputs; projection recalculated.
                     //   Old format (pre-Fix 2): scenarioA.inputs + scenarioA.projection stored directly.
-                    // This mirrors the URL-parameter decode logic at the top of the mount useEffect.
+                    // BUG-1 fix: use buildSafeInputs for scenario inputs too (was raw whitelist copy).
                     let scenariosRestored = false;
                     if ('scenarioAInputs' in parsed) {
                       if (parsed.scenarioAInputs && typeof parsed.scenarioAInputs === 'object') {
-                        const safeScenA = { ...DEFAULT_INPUTS };
-                        Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioAInputs[k] !== undefined) safeScenA[k] = parsed.scenarioAInputs[k]; });
+                        const safeScenA = buildSafeInputs(parsed.scenarioAInputs);
                         setScenarioA({ inputs: safeScenA, projection: (safeScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenA), payoutProj: null });
                         scenariosRestored = true;
                       } else { setScenarioA(null); } // explicit null = no scenario in this code
                     } else if (parsed.scenarioA && parsed.scenarioA.inputs && parsed.scenarioA.projection) {
                       // BUG-6 fix: old-format code with embedded projection — was restored as-is
                       // (stale rows, missing newer fields). Now regenerate from sanitised inputs.
-                      const safeOldScenA = { ...DEFAULT_INPUTS };
-                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioA.inputs[k] !== undefined) safeOldScenA[k] = parsed.scenarioA.inputs[k]; });
+                      const safeOldScenA = buildSafeInputs(parsed.scenarioA.inputs);
                       setScenarioA({ inputs: safeOldScenA, projection: (safeOldScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeOldScenA), payoutProj: null, label: parsed.scenarioA.label });
                       scenariosRestored = true;
                     } else { setScenarioA(null); }
                     if ('scenarioBInputs' in parsed) {
                       if (parsed.scenarioBInputs && typeof parsed.scenarioBInputs === 'object') {
-                        const safeScenB = { ...DEFAULT_INPUTS };
-                        Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioBInputs[k] !== undefined) safeScenB[k] = parsed.scenarioBInputs[k]; });
+                        const safeScenB = buildSafeInputs(parsed.scenarioBInputs);
                         setScenarioB({ inputs: safeScenB, projection: (safeScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenB), payoutProj: null });
                         scenariosRestored = true;
                       } else { setScenarioB(null); }
                     } else if (parsed.scenarioB && parsed.scenarioB.inputs && parsed.scenarioB.projection) {
                       // BUG-6 fix: same as Scenario A — regenerate from sanitised inputs.
-                      const safeOldScenB = { ...DEFAULT_INPUTS };
-                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioB.inputs[k] !== undefined) safeOldScenB[k] = parsed.scenarioB.inputs[k]; });
+                      const safeOldScenB = buildSafeInputs(parsed.scenarioB.inputs);
                       setScenarioB({ inputs: safeOldScenB, projection: (safeOldScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeOldScenB), payoutProj: null, label: parsed.scenarioB.label });
                       scenariosRestored = true;
                     } else { setScenarioB(null); }
