@@ -8902,12 +8902,15 @@ ${milestones.length > 0 ? `<table>
            medium-saturated starts that still keep white text legible.        ── */
         .theme-light .welcome-banner-green {
           background: linear-gradient(145deg, #047857 0%, #059669 45%, #10b981 80%, #34d399 100%) !important;
+          opacity: 0.82;
         }
         .theme-light .welcome-banner-blue {
           background: linear-gradient(145deg, #1e40af 0%, #2563eb 45%, #3b82f6 80%, #60a5fa 100%) !important;
+          opacity: 0.82;
         }
         .theme-light .welcome-banner-purple {
           background: linear-gradient(145deg, #6d28d9 0%, #7c3aed 45%, #8b5cf6 80%, #a78bfa 100%) !important;
+          opacity: 0.82;
         }
 
         /* #22d3ee (cyan-400) — "🎯 MILESTONE AGES" label + "Milestone Snapshots": 3 uses.
@@ -13899,7 +13902,6 @@ ${milestones.length > 0 ? `<table>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, alignItems: "center", marginTop: 4, paddingTop: 12, borderTop: "0.5px solid var(--border-subtle)" }}>
                         {/* Col 1 — Nominal/Real toggle */}
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>Display</span>
                           <div style={{ display: "flex", background: "var(--bg-muted)", border: "0.5px solid var(--border-strong)", borderRadius: 20, padding: 2, gap: 2 }}>
                             <button onClick={() => setIsRealDollars(false)}
                               style={{ padding: "3px 12px", borderRadius: 18, fontSize: 11, fontWeight: !isRealDollars ? 600 : 400, cursor: "pointer", border: "none", transition: "all 0.15s",
@@ -17237,26 +17239,26 @@ ${milestones.length > 0 ? `<table>
                   {/* Anchor navigation — scrollable horizontally on mobile */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   {[
-                    ["#doc-whatsnew", "🆕 What's New"],
-                    ["#doc-guide", "📖 User Guide"],
-                    ["#doc-engine", "⚙️ Projection Engine"],
-                    ["#doc-policy", "🛡 Policy Reference"],
-                    ["#doc-planning", "🎯 Planning Tools"],
-                    ["#doc-whatif", "🎛 What-If Explorer"],
-                    ["#doc-srs", "💳 SRS"],
-                    ["#doc-propmon", "🏠 Property Monetisation"],
-                    ["#doc-dwz", "⏳ Die with Zero"],
-                    ["#doc-sep", "💼 SEP Rules"],
-                    ["#doc-yield", "📈 Yield & XIRR"],
-                    ["#doc-montecarlo", "🎲 Monte Carlo"],
-                    ["#doc-minor", "👶 Minor & PwD"],
-                    ["#doc-eduloan", "🎓 Education Loan"],
-                    ["#doc-rsgrowth", "📈 RS Growth Rate"],
-                    ["#doc-phasedsalary", "💼 Phased Salary"],
-                    ["#doc-lifeevents", "⚡ Life Events"],
-                    ["#doc-household", "👨‍👩‍👧 Household"],
-                  ].map(([href, label]) => (
-                    <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--bg-input)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", textDecoration: "none", cursor: "pointer" }}
+                    ["#doc-whatsnew",    Star,             "What's New"],
+                    ["#doc-guide",       BookOpen,         "User Guide"],
+                    ["#doc-engine",      Settings,         "Projection Engine"],
+                    ["#doc-policy",      ShieldCheck,      "Policy Reference"],
+                    ["#doc-planning",    Target,           "Planning Tools"],
+                    ["#doc-whatif",      SlidersHorizontal,"What-If Explorer"],
+                    ["#doc-srs",         DollarSign,       "SRS"],
+                    ["#doc-propmon",     Home,             "Property Monetisation"],
+                    ["#doc-dwz",         Sunset,           "Die with Zero"],
+                    ["#doc-sep",         Briefcase,        "SEP Rules"],
+                    ["#doc-yield",       TrendingUp,       "Yield & XIRR"],
+                    ["#doc-montecarlo",  Activity,         "Monte Carlo"],
+                    ["#doc-minor",       Baby,             "Minor & PwD"],
+                    ["#doc-eduloan",     FileText,         "Education Loan"],
+                    ["#doc-rsgrowth",    BarChart3,        "RS Growth Rate"],
+                    ["#doc-phasedsalary",Pause,            "Phased Salary"],
+                    ["#doc-lifeevents",  HeartPulse,       "Life Events"],
+                    ["#doc-household",   Users,            "Household"],
+                  ].map(([href, NavIcon, label]) => (
+                    <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--bg-input)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", textDecoration: "none", cursor: "pointer" }}
                       onClick={e => {
                         e.preventDefault();
                         const target = document.querySelector(href);
@@ -17289,6 +17291,7 @@ ${milestones.length > 0 ? `<table>
                           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                       }}>
+                      <NavIcon style={{ width: 12, height: 12, flexShrink: 0 }} />
                       {label}
                     </a>
                   ))}
