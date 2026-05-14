@@ -14,7 +14,9 @@ import {
   SlidersHorizontal, Percent, Link, Target,
   Moon, Sun, Monitor, Lightbulb, Copy, ChevronDown, ChevronUp,
   ArrowRightLeft, LogOut, Users, ExternalLink, Home, Upload,
-  RefreshCw, Share2, Settings
+  RefreshCw, Share2, Settings,
+  Eraser, UserCheck, Building2, Baby,
+  TrendingDown, Pause, HeartPulse, DollarSign, Sunset, Star
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
@@ -116,17 +118,17 @@ const MMSS_PILOT_END_YEAR   = 2030;
 // isPoint = true  → startAge === endAge (one-off); no End Age field in UI
 // isPoint = false → range event; shaded band on chart
 const LIFE_EVENT_TYPES = {
-  retrenchment:     { label: "Retrenchment",      color: "#ef4444", icon: "📉", isPoint: false,
+  retrenchment:     { label: "Retrenchment",      color: "#ef4444", icon: TrendingDown, isPoint: false,
     description: "Salary and mandatory CPF contributions drop to $0 for the specified age range." },
-  career_break:     { label: "Career Break",       color: "#f97316", icon: "⏸",  isPoint: false,
+  career_break:     { label: "Career Break",       color: "#f97316", icon: Pause,        isPoint: false,
     description: "Voluntary pause — contributions stop (e.g. parental leave, caregiving, travel)." },
-  medical_crisis:   { label: "Medical Crisis",     color: "var(--clr-purple)", icon: "🏥", isPoint: false,
+  medical_crisis:   { label: "Medical Crisis",     color: "var(--clr-purple)", icon: HeartPulse, isPoint: false,
     description: "Annual cash outflow from OA and/or private assets for medical costs." },
-  windfall:         { label: "Windfall",            color: "var(--clr-emerald)", icon: "💰", isPoint: true,
+  windfall:         { label: "Windfall",            color: "var(--clr-emerald)", icon: DollarSign, isPoint: true,
     description: "One-off cash inflow — inheritance, bonus, asset sale proceeds." },
-  early_retirement: { label: "Early Retirement",   color: "var(--clr-blue2)", icon: "🏖", isPoint: true,
+  early_retirement: { label: "Early Retirement",   color: "var(--clr-blue2)", icon: Sunset,      isPoint: true,
     description: "CPF contributions stop permanently from this age onward (overrides Contrib Stop Age if earlier)." },
-  hyperinflation:   { label: "Hyperinflation",     color: "#eab308", icon: "📈", isPoint: false,
+  hyperinflation:   { label: "Hyperinflation",     color: "#eab308", icon: TrendingUp,   isPoint: false,
     description: "Temporarily override the inflation rate for the specified age range." },
 };
 // Convenience: draw source options for medical_crisis
@@ -623,7 +625,7 @@ const SPOUSE_DEFAULT_INPUTS = {
 
 const PRESET_PROFILES = [
   {
-    id: "blank", label: "Blank Slate", icon: "🧹",
+    id: "blank", label: "Blank Slate", icon: Eraser,
     desc: "All zeros — start completely fresh",
     inputs: {
       // ── Profile (sensible defaults, not zeroed) ──────────────────────────
@@ -671,39 +673,39 @@ const PRESET_PROFILES = [
     }
   },
   {
-    id: "typical35", label: "Typical Employee, 35", icon: "👔",
+    id: "typical35", label: "Typical Employee, 35", icon: Briefcase,
     desc: "Median CPF balances, $5.5k salary, HDB mortgage",
     inputs: { name: "Sample Member", currentAge: 35, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isMale: true, oaBalance: 55000, saBalance: 35000, maBalance: 28000, salaryGross: 5500, salaryBonus: 11000, empOaCont: 12804, empSaCont: 4302, empMaCont: 4302, housingOutflow: 12000, medicalUsage: 500, medishieldIP: 900, elderCareShield: 500, propertyValue: 450000, propertyGrowthRate: 2, annualGovGrant: 500, targetMonthlyIncome: 3000 }
   },
   {
-    id: "late50", label: "Late Starter, 50", icon: "⏰",
+    id: "late50", label: "Late Starter, 50", icon: Clock,
     desc: "Lower balances at 50, 5 years to SA closure",
     inputs: { name: "Late Starter", currentAge: 50, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isMale: true, oaBalance: 80000, saBalance: 60000, maBalance: 55000, salaryGross: 6000, salaryBonus: 12000, empOaCont: 7920, empSaCont: 5160, empMaCont: 5160, housingOutflow: 8400, medicalUsage: 800, medishieldIP: 1200, elderCareShield: 600, propertyValue: 500000, propertyGrowthRate: 2, vcSaTopup: 8000, annualGovGrant: 500, oaToSaTransfer: 10000, targetMonthlyIncome: 3500,
       lifeEvents: [{ id: "le-late50-retrenched", type: "retrenchment", label: "Retrenchment", startAge: 52, endAge: 53, magnitude: 72000, enabled: true }] }
   },
   {
-    id: "sep40", label: "Self-Employed, 40", icon: "💼",
+    id: "sep40", label: "Self-Employed, 40", icon: UserCheck,
     desc: "SEP mode, NTI $80k, no mandatory OA/SA",
     inputs: { name: "Freelancer", currentAge: 40, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isSelfEmployed: true, isMale: true, netTradeIncome: 80000, oaBalance: 30000, saBalance: 25000, maBalance: 20000, empOaCont: 0, empSaCont: 0, empMaCont: 6720, vc3aCash: 20000, housingOutflow: 9600, medicalUsage: 500, medishieldIP: 900, elderCareShield: 500, propertyValue: 400000, propertyGrowthRate: 2, srsAnnualContribution: 15300, srsReturnRate: 4, srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10, targetMonthlyIncome: 3500 }
   },
   {
-    id: "highearn40", label: "High Earner, 40", icon: "🚀",
+    id: "highearn40", label: "High Earner, 40", icon: TrendingUp,
     desc: "$8k salary cap, bonus at AW ceiling, ERS target",
     inputs: { name: "High Earner", currentAge: 40, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isMale: true, oaBalance: 150000, saBalance: 120000, maBalance: 65000, salaryGross: 8000, salaryBonus: 6000, empOaCont: 14400, empSaCont: 5040, empMaCont: 5040, housingOutflow: 18000, medicalUsage: 600, medishieldIP: 1500, elderCareShield: 600, propertyValue: 1200000, propertyGrowthRate: 2, vcSaTopup: 8000, oaToSaTransfer: 20000, annualGovGrant: 0, srsAnnualContribution: 15300, srsBalance: 50000, srsReturnRate: 5, srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10, targetMonthlyIncome: 6000,
       lifeEvents: [{ id: "le-high40-medical", type: "medical_crisis", label: "Cancer Treatment", startAge: 60, endAge: 62, magnitude: 25000, enabled: true, drawSource: "oa_then_private" }] }
   },
   {
-    id: "near55", label: "Near Retirement, 54", icon: "🔔",
+    id: "near55", label: "Near Retirement, 54", icon: Bell,
     desc: "Age 54, near-FRS, focus on OA→SA + payout choice",
     inputs: { name: "Near Retirement", currentAge: 54, payoutAge: 65, contributionStopAge: 65, housingStopAge: 55, isMale: true, oaBalance: 180000, saBalance: 200000, maBalance: 72000, salaryGross: 7000, salaryBonus: 14000, empOaCont: 8400, empSaCont: 5520, empMaCont: 5520, housingOutflow: 6000, medicalUsage: 800, medishieldIP: 1500, elderCareShield: 600, propertyValue: 700000, propertyGrowthRate: 1.5, oaToSaTransfer: 15000, vcSaTopup: 8000, annualGovGrant: 500, targetMonthlyIncome: 4000 }
   },
   {
-    id: "post55ra", label: "Post-55 RA Builder, 57", icon: "🏦",
+    id: "post55ra", label: "Post-55 RA Builder, 57", icon: Building2,
     desc: "SA closed, RA below FRS — OA→RA + MRSS focus",
     inputs: { name: "RA Builder", currentAge: 57, payoutAge: 67, contributionStopAge: 65, housingStopAge: 57, isMale: true, oaBalance: 120000, saBalance: 90000, maBalance: 68000, salaryGross: 5000, salaryBonus: 10000, empOaCont: 6000, empSaCont: 3900, empMaCont: 3900, housingOutflow: 0, medicalUsage: 900, medishieldIP: 1600, elderCareShield: 600, propertyValue: 550000, propertyGrowthRate: 1.5, oaToSaTransfer: 12000, vcSaTopup: 8000, annualGovGrant: 500, targetMonthlyIncome: 3500 }
   },
   {
-    id: "rss68", label: "RSS Member, 68", icon: "📋",
+    id: "rss68", label: "RSS Member, 68", icon: FileText,
     desc: "Born before 1958 — RSS drawdown, exploring migration to CPF LIFE",
     // PR-1 note: cpfScheme 'rss' routes to runRSSEngine (stub in PR-1, full implementation PR-2).
     // rssPayoutStartAge/rssMonthlyPayout drive the RSS drawdown; lifeMigrationAge = 0 means
@@ -752,7 +754,7 @@ const PRESET_PROFILES = [
   {
     id: "household_tanfamily",
     label: "Household — Tan Family (38 & 36, 2 children)",
-    icon: "🏠",
+    icon: Home,
     desc: "Dual-income HDB couple, two school-age kids. Spouse career break at 39. Combined CPF LIFE ~$2,700/mo at 65.",
     householdEnabled: true,
     housingSharePct: 55,
@@ -871,7 +873,7 @@ const PRESET_PROFILES = [
   {
     id: "baby_stratA",
     label: "Baby Millionaire A — Full Launch, 0",
-    icon: "👶",
+    icon: Baby,
     desc: "Newborn SC: one-time RSTU $220,400 + VCMA $79,000 at birth, then annual VC3A $37,740. Engine auto-credits $5,000 MediSave Grant for Newborns (MGN) to MA in year 0. Hits $1M at age 10, ~$2.06M at 21.",
     inputs: {
       name: "Baby — Full Launch",
@@ -955,7 +957,7 @@ const PRESET_PROFILES = [
   {
     id: "baby_stratB",
     label: "Baby Millionaire B — Annual Only, 0",
-    icon: "🍼",
+    icon: Baby,
     desc: "Newborn SC: annual VC3A $37,740 only — no birth lump sums. Engine auto-credits $5,000 MediSave Grant for Newborns (MGN) to MA in year 0. Hits $1M at age 15, ~$1.51M at 21.",
     inputs: {
       name: "Baby — Annual Only",
@@ -9956,7 +9958,9 @@ ${milestones.length > 0 ? `<table>
               <button onClick={() => setShowPresets(false)} style={{ background: "none", border: "none", color: "var(--text-subtle)", cursor: "pointer", padding: 4 }}><X style={{ width: 20, height: 20 }} /></button>
             </div>
             <div style={{ padding: "16px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-              {PRESET_PROFILES.map(p => (
+              {PRESET_PROFILES.map(p => {
+                const ProfileIcon = p.icon;
+                return (
                 <button key={p.id} onClick={() => {
                   const merged = { ...DEFAULT_INPUTS, ...p.inputs };
                   setInputs(merged);
@@ -10004,14 +10008,17 @@ ${milestones.length > 0 ? `<table>
                   onMouseEnter={e => e.currentTarget.style.borderColor = "var(--clr-amber)"}
                   onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border-subtle)"}
                 >
-                  <span style={{ fontSize: 26, flexShrink: 0 }}>{p.icon}</span>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--bg-input)", border: "1px solid var(--border-strong)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <ProfileIcon style={{ width: 18, height: 18, color: "var(--clr-amber)" }} />
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", marginBottom: 3 }}>{p.label}</div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>{p.desc}</div>
                   </div>
                   <div style={{ fontSize: 10, color: "var(--clr-amber)", fontWeight: 700, flexShrink: 0 }}>Load →</div>
                 </button>
-              ))}
+                );
+              })}
             </div>
             <div style={{ padding: "12px 24px", borderTop: "1px solid var(--border-subtle)", background: "var(--bg-base)", borderRadius: "0 0 20px 20px" }}>
               <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>⚠ Loading a sample profile will overwrite your current inputs. Export your profile first if you want to keep it.</p>
@@ -13020,7 +13027,7 @@ ${milestones.length > 0 ? `<table>
                         return (
                           <div key={ev.id} style={{ marginBottom: 6, padding: "8px 10px", borderRadius: 10, background: isEnabled ? "var(--bg-muted)" : "rgba(100,116,139,0.06)", border: `1px solid ${isEnabled ? (meta.color || "#ef4444") + "44" : "var(--border-subtle)"}`, opacity: isEnabled ? 1 : 0.55 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ fontSize: 13 }}>{meta.icon || "⚡"}</span>
+                              {(() => { const EvIcon = meta.icon || Activity; return <EvIcon style={{ width: 13, height: 13, color: isEnabled ? (meta.color || "#ef4444") : "var(--text-muted)", flexShrink: 0 }} />; })()}
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <span style={{ fontSize: 11, fontWeight: 700, color: isEnabled ? (meta.color || "#ef4444") : "var(--text-muted)" }}>{ev.label || meta.label}</span>
                                 <span style={{ fontSize: 10, color: "var(--text-subtle)", marginLeft: 6 }}>
@@ -13046,12 +13053,15 @@ ${milestones.length > 0 ? `<table>
                           <div style={{ marginBottom: 8 }}>
                             <label className="cpf-label" style={{ marginBottom: 4 }}>Event Type</label>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-                              {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => (
+                              {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => {
+                                const TypeIcon = meta.icon || Activity;
+                                return (
                                 <button key={key} onClick={() => setLeFormState(p => ({ ...p, type: key, label: meta.label, endAge: (meta.isPoint ? p.startAge : p.endAge) || p.startAge }))}
-                                  style={{ padding: "5px 6px", borderRadius: 6, fontSize: 10, fontWeight: 700, textAlign: "left", border: `1px solid ${leFormState.type === key ? meta.color : "var(--border-strong)"}`, background: leFormState.type === key ? `${meta.color}18` : "transparent", color: leFormState.type === key ? meta.color : "var(--text-muted)", cursor: "pointer" }}>
-                                  {meta.icon} {meta.label}
+                                  style={{ padding: "5px 6px", borderRadius: 6, fontSize: 10, fontWeight: 700, textAlign: "left", border: `1px solid ${leFormState.type === key ? meta.color : "var(--border-strong)"}`, background: leFormState.type === key ? `${meta.color}18` : "transparent", color: leFormState.type === key ? meta.color : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                                  <TypeIcon style={{ width: 11, height: 11, flexShrink: 0 }} /> {meta.label}
                                 </button>
-                              ))}
+                                );
+                              })}
                             </div>
                             {leFormState.type && <p style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 5 }}>{LIFE_EVENT_TYPES[leFormState.type]?.description}</p>}
                           </div>
@@ -13678,15 +13688,15 @@ ${milestones.length > 0 ? `<table>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
                     borderRadius: 12, border: "1px solid rgba(34,211,238,0.25)",
                     background: "rgba(34,211,238,0.05)" }}>
-                    <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1 }}>🎉</span>
+                    <CheckCircle2 style={{ width: 18, height: 18, color: "#22d3ee", flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 12, fontWeight: 700, color: "#22d3ee", margin: "0 0 4px" }}>Your plan is ready — here's what to explore next</p>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
                         {[
-                          { label: "Add voluntary top-ups →", section: "topups",      emoji: "💰" },
-                          { label: "Add a life event →",       section: "lifeevents", emoji: "⚡" },
-                          { label: "Set drawdown goals →",     section: "decumulation", emoji: "🎯" },
-                        ].map(({ label, section, emoji }) => (
+                          { label: "Add voluntary top-ups →", section: "topups",       icon: TrendingUp },
+                          { label: "Add a life event →",       section: "lifeevents",  icon: Activity   },
+                          { label: "Set drawdown goals →",     section: "decumulation", icon: Target     },
+                        ].map(({ label, section, icon: QuickIcon }) => (
                           <button key={section} type="button"
                             onClick={() => {
                               setOpenSections(prev => { const n = new Set(prev); n.add(section); return n; });
@@ -13696,7 +13706,7 @@ ${milestones.length > 0 ? `<table>
                               borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
                               border: "1px solid rgba(34,211,238,0.25)", background: "rgba(34,211,238,0.08)",
                               color: "#22d3ee" }}>
-                            {emoji} {label}
+                            <QuickIcon style={{ width: 11, height: 11, flexShrink: 0 }} /> {label}
                           </button>
                         ))}
                       </div>
@@ -15307,7 +15317,7 @@ ${milestones.length > 0 ? `<table>
                         const sa = Number(ev.startAge);
                         const ea = Number(ev.endAge);
                         const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement' || sa === ea;
-                        const labelVal = `${meta.icon || "⚡"} ${ev.label || meta.label}`;
+                        const labelVal = `${ev.label || meta.label}`;
                         if (isPoint) {
                           return <ReferenceLine key={`le-${idx}`} x={sa} stroke={color} strokeWidth={2} strokeDasharray="5 3"
                             label={{ position: "insideTopLeft", value: labelVal, fill: color, fontSize: 8, fontWeight: "bold" }} />;
@@ -17308,22 +17318,24 @@ ${milestones.length > 0 ? `<table>
                     </h4>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
-                        ["🧭", "Setup Wizard", "#22d3ee",
+                        [Lightbulb, "Setup Wizard", "#22d3ee",
                           "First-time users are greeted with a 3-step onboarding wizard — Profile → CPF Balances → Income & Goals — before the main app loads. The wizard writes directly to your profile and jumps to the Summary tab on completion. Returning users skip it automatically. You can relaunch it any time from the ⚙ Display menu (desktop) or ⚙ Settings menu (mobile)."],
-                        ["📐", "Adaptive Navbar", "var(--clr-green)",
-                          "On desktop (HD/FHD) all settings are exposed as direct buttons: ↺ Reset, 👥 Samples, Share▾, Report▾, and a Display▾ dropdown (Resolution, Appearance, Sidebar toggle, Setup Wizard). The ⚙ gear icon only appears on tablet and mobile where navbar space is limited."],
-                        ["📊", "Milestone Hero Chart", "var(--clr-blue2)",
-                          "The Milestone Snapshots section in the Summary tab now renders a full-width Recharts stacked bar chart (OA / SA / RA / MA) from your current age to payout age + 5 years. Cyan 🎯 reference lines mark each milestone age with an interactive tooltip per bar. The compact stat chips (age, totals, growth %) remain below the chart."],
-                        ["🔔", "Contribution Gap Alert", "var(--clr-amber)",
-                          "When your projected RA at payout age falls short of FRS, the alert now appears as a full-width banner at the very top of the Summary tab — immediately visible without scrolling the sidebar. The ⚡ Apply top-up button is right there in the banner; dismissing it with ✕ clears it until the gap changes."],
-                        ["🗂", "Smart Sidebar Collapse", "var(--clr-purple)",
+                        [LayoutDashboard, "Adaptive Navbar", "var(--clr-green)",
+                          "On desktop (HD/FHD) all settings are exposed as direct buttons: ↺ Reset, Samples, Share▾, Report▾, and a Display▾ dropdown (Resolution, Appearance, Sidebar toggle, Setup Wizard). The ⚙ gear icon only appears on tablet and mobile where navbar space is limited."],
+                        [BarChart2, "Milestone Hero Chart", "var(--clr-blue2)",
+                          "The Milestone Snapshots section in the Summary tab now renders a full-width Recharts stacked bar chart (OA / SA / RA / MA) from your current age to payout age + 5 years. Cyan reference lines mark each milestone age with an interactive tooltip per bar. The compact stat chips (age, totals, growth %) remain below the chart."],
+                        [Bell, "Contribution Gap Alert", "var(--clr-amber)",
+                          "When your projected RA at payout age falls short of FRS, the alert now appears as a full-width banner at the very top of the Summary tab — immediately visible without scrolling the sidebar. The Apply top-up button is right there in the banner; dismissing it with ✕ clears it until the gap changes."],
+                        [SlidersHorizontal, "Smart Sidebar Collapse", "var(--clr-purple)",
                           "New users see only the 3 essential sections open on first load (Profile, CPF Balances, Mandatory Contributions), reducing the visible field count from ~60 to ~15. Returning users restore their last-saved collapse state. Each closed section shows a one-line hint of what's inside. Expand All / Collapse All buttons remain in the sidebar header."],
-                        ["♿", "Accessibility & Readability", "var(--clr-orange)",
+                        [CheckCircle2, "Accessibility & Readability", "var(--clr-orange)",
                           "Frequency toggle (Recurring / One-Time) buttons bumped from 9 px to 11 px minimum, touch target height raised to 30 px. All section headers are keyboard-accessible (Enter / Space to toggle). The contribution gap alert and post-wizard tip are each dismissible and ARIA-labelled."],
-                      ].map(([emoji, title, color, desc]) => (
+                      ].map(([WNIcon, title, color, desc]) => (
                         <div key={title} style={{ display: "flex", gap: 14, padding: "14px 16px", borderRadius: 12,
                           border: `1px solid ${color}33`, background: `${color}08` }}>
-                          <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1.3 }}>{emoji}</span>
+                          <div style={{ width: 36, height: 36, borderRadius: 8, background: `${color}18`, border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <WNIcon style={{ width: 18, height: 18, color }} />
+                          </div>
                           <div>
                             <p style={{ fontSize: 13, fontWeight: 700, color, margin: "0 0 4px" }}>{title}</p>
                             <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>{desc}</p>
@@ -17873,12 +17885,15 @@ ${milestones.length > 0 ? `<table>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
                       <p style={{ marginBottom: 12 }}>The Life Events panel (between Timelines and Decumulation in the left sidebar) lets you overlay named stress-test scenarios onto your projection. Events are processed by the engine each year and appear as coloured markers on the Accumulation chart and a dedicated row in the Strategy Gantt timeline.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                        {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => (
+                        {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => {
+                          const DocEvIcon = meta.icon || Activity;
+                          return (
                           <div key={key} style={{ padding: "12px 14px", borderRadius: 10, background: `${meta.color}0d`, border: `1px solid ${meta.color}33` }}>
-                            <p style={{ fontWeight: 700, color: meta.color, marginBottom: 6, fontSize: 11 }}>{meta.icon} {meta.label}</p>
+                            <p style={{ fontWeight: 700, color: meta.color, marginBottom: 6, fontSize: 11, display: "flex", alignItems: "center", gap: 6 }}><DocEvIcon style={{ width: 12, height: 12, flexShrink: 0 }} />{meta.label}</p>
                             <p style={{ fontSize: 11, lineHeight: 1.5 }}>{meta.description}</p>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
@@ -18158,22 +18173,22 @@ ${milestones.length > 0 ? `<table>
                     // Actionable recommendations
                     const stRecs = [];
                     if (stRa55 < stBRS) {
-                      stRecs.push({ icon: "🎯", color: "var(--clr-red)", title: "Priority: Reach BRS", body: `Top up ${formatCurrency(stBRS - stRa55)} via RSTU to unlock the minimum CPF LIFE payout. Without BRS you may need a cash pledge on your property to keep your home.` });
+                      stRecs.push({ icon: Target, color: "var(--clr-red)", title: "Priority: Reach BRS", body: `Top up ${formatCurrency(stBRS - stRa55)} via RSTU to unlock the minimum CPF LIFE payout. Without BRS you may need a cash pledge on your property to keep your home.` });
                     }
                     if (stRa55 >= stBRS && stRa55 < stFRS) {
-                      stRecs.push({ icon: "📈", color: "var(--clr-amber)", title: `Close the ${formatCurrency(stShortfall)} FRS gap`, body: `Annual RSTU top-up of ${formatCurrency(Math.round(stShortfall / Math.max(1, 55 - stCa)))}/yr from now to 55 would close this gap. FRS unlocks higher CPF LIFE payouts and avoids the property pledge requirement.` });
+                      stRecs.push({ icon: TrendingUp, color: "var(--clr-amber)", title: `Close the ${formatCurrency(stShortfall)} FRS gap`, body: `Annual RSTU top-up of ${formatCurrency(Math.round(stShortfall / Math.max(1, 55 - stCa)))}/yr from now to 55 would close this gap. FRS unlocks higher CPF LIFE payouts and avoids the property pledge requirement.` });
                     }
                     if (stRa55 >= stFRS && stRa55 < stERS) {
-                      stRecs.push({ icon: "🚀", color: "var(--clr-blue)", title: "Top up to ERS for maximum payout", body: `${formatCurrency(stERS - stRa55)} more to reach ERS — the cap for CPF LIFE enrolment and the largest possible monthly payout under all three plans.` });
+                      stRecs.push({ icon: TrendingUp, color: "var(--clr-blue)", title: "Top up to ERS for maximum payout", body: `${formatCurrency(stERS - stRa55)} more to reach ERS — the cap for CPF LIFE enrolment and the largest possible monthly payout under all three plans.` });
                     }
                     if (stRa55 >= stERS) {
-                      stRecs.push({ icon: "✅", color: "var(--clr-green)", title: "ERS achieved — maximum payout unlocked", body: "RA at 55 exceeds ERS. No further SA/RA top-ups needed. Redirect surplus savings to OA drawdown, SRS, or private assets for flexibility." });
+                      stRecs.push({ icon: CheckCircle2, color: "var(--clr-green)", title: "ERS achieved — maximum payout unlocked", body: "RA at 55 exceeds ERS. No further SA/RA top-ups needed. Redirect surplus savings to OA drawdown, SRS, or private assets for flexibility." });
                     }
                     if ((Number(inputs.vcSaTopup) || 0) === 0 && stRa55 < stFRS) {
-                      stRecs.push({ icon: "💡", color: "var(--clr-violet)", title: "No RSTU top-up entered", body: `RSTU is tax-deductible up to $8,000/yr and compounds at 4% p.a. Even $3,000/yr from age ${stCa} adds ~${formatCurrency(Math.round(3000 * ((Math.pow(1.04, Math.max(1, 55 - stCa)) - 1) / 0.04)))} to RA by age 55.` });
+                      stRecs.push({ icon: Lightbulb, color: "var(--clr-violet)", title: "No RSTU top-up entered", body: `RSTU is tax-deductible up to $8,000/yr and compounds at 4% p.a. Even $3,000/yr from age ${stCa} adds ~${formatCurrency(Math.round(3000 * ((Math.pow(1.04, Math.max(1, 55 - stCa)) - 1) / 0.04)))} to RA by age 55.` });
                     }
                     if ((Number(inputs.vcSaTopup) || 0) > 0 && estimatedTaxSavings > 0) {
-                      stRecs.push({ icon: "🧾", color: "var(--clr-amber)", title: `Saving ${formatCurrency(estimatedTaxSavings)}/yr in tax via RSTU`, body: `Your ${formatCurrency(Number(inputs.vcSaTopup))} RSTU top-up saves ~${formatCurrency(estimatedTaxSavings)}/yr in income tax. Continue until FRS is met to maximise both compound growth and tax relief.` });
+                      stRecs.push({ icon: FileText, color: "var(--clr-amber)", title: `Saving ${formatCurrency(estimatedTaxSavings)}/yr in tax via RSTU`, body: `Your ${formatCurrency(Number(inputs.vcSaTopup))} RSTU top-up saves ~${formatCurrency(estimatedTaxSavings)}/yr in income tax. Continue until FRS is met to maximise both compound growth and tax relief.` });
                     }
                     return (
                       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -18211,7 +18226,7 @@ ${milestones.length > 0 ? `<table>
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 10 }}>
                             {stRecs.map((r, i) => (
                               <div key={i} style={{ background: "var(--bg-muted)", borderLeft: `3px solid ${r.color}`, borderRadius: 10, padding: "11px 14px" }}>
-                                <p style={{ fontSize: 12, fontWeight: 600, color: r.color, margin: "0 0 5px" }}>{r.icon} {r.title}</p>
+                                {(() => { const RecIcon = r.icon; return <p style={{ fontSize: 12, fontWeight: 600, color: r.color, margin: "0 0 5px", display: "flex", alignItems: "center", gap: 5 }}><RecIcon style={{ width: 12, height: 12, flexShrink: 0 }} />{r.title}</p>; })()}
                                 <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>{r.body}</p>
                               </div>
                             ))}
@@ -18373,17 +18388,20 @@ ${milestones.length > 0 ? `<table>
                             const ea = Number(ev.endAge);
                             const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement' || sa === ea;
                             if (isPoint) {
+                              const GanttDotIcon = meta.icon || Activity;
                               return (
                                 <div key={idx} title={`${ev.label || meta.label} · Age ${sa}`}
                                   style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", width: 14, height: 14, borderRadius: "50%", background: color, border: "2px solid var(--bg-muted)", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "default", ...ganttDot(sa) }}>
-                                  <span style={{ fontSize: 9, color: "#fff", fontWeight: 900 }}>{meta.icon || "⚡"}</span>
+                                  <GanttDotIcon style={{ width: 8, height: 8, color: "#fff" }} />
                                 </div>
                               );
                             }
+                            const GanttBarIcon = meta.icon || Activity;
                             return (
                               <div key={idx} title={`${ev.label || meta.label} · Age ${sa}–${ea}`}
-                                style={{ position: "absolute", top: 2, bottom: 2, borderRadius: 4, background: color, opacity: 0.75, display: "flex", alignItems: "center", paddingLeft: 3, cursor: "default", overflow: "hidden", ...ganttPct(sa, ea) }}>
-                                <span style={{ fontSize: 10, color: "#fff", fontWeight: 800, whiteSpace: "nowrap" }}>{meta.icon} {ev.label || meta.label}</span>
+                                style={{ position: "absolute", top: 2, bottom: 2, borderRadius: 4, background: color, opacity: 0.75, display: "flex", alignItems: "center", gap: 3, paddingLeft: 3, cursor: "default", overflow: "hidden", ...ganttPct(sa, ea) }}>
+                                <GanttBarIcon style={{ width: 9, height: 9, color: "#fff", flexShrink: 0 }} />
+                                <span style={{ fontSize: 10, color: "#fff", fontWeight: 800, whiteSpace: "nowrap" }}>{ev.label || meta.label}</span>
                               </div>
                             );
                           })}
