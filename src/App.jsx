@@ -3370,6 +3370,62 @@ const lzDecompress = (encoded) => {
 // every render. Both are pure with no component state dependency.
 const formatCurrency = val => "$" + Math.round(Number(val) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
+// ── BUG-1 fix: module-level buildSafeInputs — single source of truth ──────
+// Previously each import path (JSON file, URL ?p=, URL ?s=/?state=, Share Code)
+// had its own inline raw whitelist copy. Each missed boolean coercion, lifeEvents
+// null guards, life event skeleton sanitisation, and legacy field migrations.
+// This function is the single authoritative sanitiser for all four paths.
+const LIFE_EVENT_DEFAULTS_MOD = {
+  id: "", type: "retrenchment", label: "", startAge: 35, endAge: 36,
+  magnitude: 0, enabled: true, drawSource: "oa_then_private",
+  windfallDest: "private", hyperRate: 0.06, overrideSalary: 0,
+};
+const BOOL_FIELDS_MOD = [
+  'isMale','isSelfEmployed','includeProperty','usePropertyPledge',
+  'oaToMaForLovedOne','oaToSaForLovedOne','propMonetiseEnabled','dieWithZeroEnabled',
+  'isPwD','propertyLeasehold','showSalaryCalc',
+];
+function buildSafeInputs(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_INPUTS };
+  const safe = { ...DEFAULT_INPUTS };
+  Object.keys(DEFAULT_INPUTS).forEach(k => {
+    // Skip null for array fields — lifeEvents:null in old exports must not overwrite []
+    if (raw[k] !== undefined && !(k === 'lifeEvents' && raw[k] === null)) safe[k] = raw[k];
+  });
+  // Boolean coercion — old exports may store booleans as strings or numbers
+  BOOL_FIELDS_MOD.forEach(k => {
+    if (typeof safe[k] === 'string') safe[k] = safe[k] === 'true' || safe[k] === '1';
+    else if (typeof safe[k] === 'number') safe[k] = safe[k] !== 0;
+  });
+  // Guarantee lifeEvents is always an array
+  if (!Array.isArray(safe.lifeEvents)) safe.lifeEvents = [];
+  // Life event skeleton sanitisation — merge each event against known-good defaults
+  safe.lifeEvents = safe.lifeEvents.map(ev => {
+    const base = { ...LIFE_EVENT_DEFAULTS_MOD };
+    if (ev && typeof ev === 'object') {
+      Object.keys(LIFE_EVENT_DEFAULTS_MOD).forEach(k => { if (ev[k] !== undefined) base[k] = ev[k]; });
+      // Legacy field renames
+      if (ev.amount !== undefined && ev.magnitude === undefined) base.magnitude = ev.amount;
+      if (ev.source !== undefined && ev.drawSource === undefined) base.drawSource = ev.source;
+    }
+    return base;
+  });
+  // Legacy field migration: cpfisAmount → cpfisOaAmount
+  if (raw.cpfisAmount !== undefined && !raw.cpfisOaAmount) safe.cpfisOaAmount = raw.cpfisAmount;
+  // Legacy field migration: srsCitizenPR (boolean) → citizenStatus string
+  if (raw.srsCitizenPR === false && raw.citizenStatus === undefined) safe.citizenStatus = 'foreigner';
+  // Legacy field migration: careerBreakStartAge/EndAge → lifeEvents career_break entry
+  const cbStart = raw.careerBreakStartAge !== undefined && raw.careerBreakStartAge !== '' ? Number(raw.careerBreakStartAge) : null;
+  const cbEnd   = raw.careerBreakEndAge   !== undefined && raw.careerBreakEndAge   !== '' ? Number(raw.careerBreakEndAge)   : null;
+  if (cbStart !== null && cbEnd !== null && !isNaN(cbStart) && !isNaN(cbEnd)) {
+    const alreadyExists = safe.lifeEvents.some(ev => ev.type === 'career_break' && Number(ev.startAge) === cbStart && Number(ev.endAge) === cbEnd);
+    if (!alreadyExists) {
+      safe.lifeEvents = [...safe.lifeEvents, { ...LIFE_EVENT_DEFAULTS_MOD, id: `le-migrated-cb-${Date.now()}`, type: 'career_break', label: 'Career Break (migrated)', startAge: cbStart, endAge: cbEnd, magnitude: 0, enabled: true }];
+    }
+  }
+  return safe;
+}
+
 // XIRR computation (Newton-Raphson)
 // cashFlows: array of {t: year_index, v: amount} — negative = outflow, positive = inflow
 const computeXIRR = (cashFlows, guess = 0.05) => {
@@ -4721,17 +4777,12 @@ export default function App() {
         // New format: full state encoded via lzCompress (LZ77 or legacy base64url)
         const fullState = JSON.parse(lzDecompress(pParam));
         if (fullState.inputs) {
-          // Whitelist only known keys from DEFAULT_INPUTS to prevent injection
-          const safeInputs = {};
-          Object.keys(DEFAULT_INPUTS).forEach(k => {
-            if (fullState.inputs[k] !== undefined) safeInputs[k] = fullState.inputs[k];
-          });
-          const mergedInputs = { ...DEFAULT_INPUTS, ...safeInputs };
+          // BUG-1 fix: use module-level buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
+          const mergedInputs = buildSafeInputs(fullState.inputs);
           setInputs(mergedInputs);
-          // R1 fix: stamp lastSavedRef with the merged object so the beforeunload
-          // "unsaved changes" guard doesn't fire on every navigation after a share-link load.
-          // setInputs() is async — inputs won't reflect the new value until next render —
-          // so we must use the locally-built mergedInputs, not the stale inputs state.
+          setDebouncedInputs(mergedInputs);
+          // BUG-4 fix: clear stale validation highlights when loading from share link
+          setInputErrors({});
           lastSavedRef.current = JSON.stringify(mergedInputs);
         }
         if (fullState.activeTab) setActiveTab(fullState.activeTab);
@@ -4810,22 +4861,18 @@ export default function App() {
       } else if (sParam) {
         // Legacy compressed base64url format — lzDecompress handles both old and new encoding
         const decoded = JSON.parse(lzDecompress(sParam));
-        // Whitelist only known keys from DEFAULT_INPUTS to prevent unknown key injection
-        const safeDecoded = {};
-        Object.keys(DEFAULT_INPUTS).forEach(k => { if (decoded[k] !== undefined) safeDecoded[k] = decoded[k]; });
-        const mergedLegacy = { ...DEFAULT_INPUTS, ...safeDecoded };
-        setInputs(mergedLegacy);
-        // R1 fix: stamp lastSavedRef so the beforeunload guard doesn't fire after a legacy share-link load.
+        // BUG-1 fix: buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
+        const mergedLegacy = buildSafeInputs(decoded);
+        setInputs(mergedLegacy); setDebouncedInputs(mergedLegacy);
+        setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedLegacy);
       } else if (stateParam) {
         // Legacy plain format
         const decoded = JSON.parse(decodeURIComponent(stateParam));
-        // Whitelist only known keys from DEFAULT_INPUTS to prevent unknown key injection
-        const safeDecoded = {};
-        Object.keys(DEFAULT_INPUTS).forEach(k => { if (decoded[k] !== undefined) safeDecoded[k] = decoded[k]; });
-        const mergedPlain = { ...DEFAULT_INPUTS, ...safeDecoded };
-        setInputs(mergedPlain);
-        // R1 fix: stamp lastSavedRef so the beforeunload guard doesn't fire after a legacy plain share-link load.
+        // BUG-1 fix: buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
+        const mergedPlain = buildSafeInputs(decoded);
+        setInputs(mergedPlain); setDebouncedInputs(mergedPlain);
+        setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedPlain);
       } else {
         // Always show welcome modal on fresh load
@@ -5414,7 +5461,7 @@ export default function App() {
       a.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
       document.body.appendChild(a);
       a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 2000);
       showToast(`✓ Download started: ${filename}`);
     } catch (e) {
       // Modal already open — user can copy from there
@@ -5477,7 +5524,7 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `CPF_Profile_${memberName}.json`;
       document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 2000);
       showToast(`✓ Profile saved: CPF_Profile_${memberName}.json`);
     } catch (e) {
       // Fallback: show modal with JSON to copy
@@ -5593,16 +5640,12 @@ export default function App() {
           alert("Invalid profile file — no inputs found. Make sure you are loading a CPF Planner Pro JSON export.");
           return; // target.value already cleared before the read
         }
-        const safeIn = sanitiseInputs(rawInputs);
+        // BUG-1 fix: use module-level buildSafeInputs instead of local sanitiseInputs —
+        // identical logic, but accessible from all import paths and always in sync.
+        const safeIn = buildSafeInputs(rawInputs);
         setInputs(safeIn);
-        // FIX-import-debounce: bypass the 180ms debounce on bulk profile load so the engine
-        // and charts update immediately. Without this, setInputs fires but debouncedInputs (which
-        // drives the projection) still holds the old profile for 180ms — charts show stale data
-        // against fresh sidebar values during that window.
         setDebouncedInputs(safeIn);
-        // FIX-lastSaved: stamp immediately after setInputs so the beforeunload "Unsaved changes"
-        // guard is cleared for ALL profile formats (old flat JSON + new {inputs:…} wrapper).
-        // The stamp inside if(p.inputs) below is redundant but kept as a safety net.
+        setInputErrors({}); // BUG-4 fix: clear stale red validation borders on load
         lastSavedRef.current = JSON.stringify(safeIn);
         // Restore optional UI state — each wrapped individually so one bad field
         // doesn't prevent the rest of the profile from loading
@@ -5899,7 +5942,7 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = filename;
       document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 2000);
       showToast(`✓ CSV downloaded: ${filename}`);
     } catch (e) {
       // Fallback: show modal with CSV content to copy
@@ -5970,7 +6013,7 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = filename;
       document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 2000);
       showToast(`✓ Ledger CSV downloaded: ${filename}`);
     } catch (e) {
       setExportModal({ type: "csv", content: csv, filename });
@@ -6054,7 +6097,7 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = filename;
       document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 2000);
       showToast(`✓ Scenario diff downloaded: ${filename}`);
     } catch (e) {
       setExportModal({ type: "csv", content: csv, filename });
@@ -6695,11 +6738,15 @@ export default function App() {
   // on every render cycle regardless of whether displayAccumulation had changed.
   // Returns { crossoverAge, label, capLabel, targetSum, currentBal, alreadyMet } for the sidebar UI.
   const oaToSaCrossover = useMemo(() => {
-    const _ca        = Number(inputs.currentAge) || 35;
-    const _cy        = Number(inputs.currentYear) || 2026;
-    const _sa        = Number(inputs.saBalance) || 0;
+    // R1 fix: all scalar reads use debouncedInputs (same source as displayAccumulation).
+    // Previously used live inputs.* — during the 180ms debounce window, scalars and row data
+    // were from different snapshots, producing stale or wrong crossover ages.
+    // Mirrors the identical fix applied to the adjacent gapAlert useMemo (N1 fix comment).
+    const _ca        = Number(debouncedInputs.currentAge) || 35;
+    const _cy        = Number(debouncedInputs.currentYear) || 2026;
+    const _sa        = Number(debouncedInputs.saBalance) || 0;
     const _is55Plus  = _ca >= 55;
-    const _rsGrowth  = (Number(inputs.retirementSumGrowth) || 3) / 100;
+    const _rsGrowth  = (Number(debouncedInputs.retirementSumGrowth) || 3) / 100;
     const _targetSum = _is55Plus
       ? Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + _rsGrowth, Math.max(0, _cy - 2026)))
       : Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + _rsGrowth, Math.max(0, _cy - 2026)));
@@ -6717,7 +6764,7 @@ export default function App() {
       return row.age > _ca && _bal >= _projCap;
     });
     return { alreadyMet: false, crossoverAge: crossover?.age ?? null, label: _label, capLabel: _capLabel, targetSum: _targetSum, currentBal: _currentBal };
-  }, [displayAccumulation, inputs.currentAge, inputs.currentYear, inputs.saBalance, inputs.retirementSumGrowth]);
+  }, [displayAccumulation, debouncedInputs.currentAge, debouncedInputs.currentYear, debouncedInputs.saBalance, debouncedInputs.retirementSumGrowth]);
 
   const gapAlert = useMemo(() => {
     // N1 fix: all scalar reads use debouncedInputs (same source as projection/displayAccumulation)
@@ -9589,21 +9636,39 @@ ${milestones.length > 0 ? `<table>
                     const decoded = lzDecompress(codeToLoad);
                     const parsed = JSON.parse(decoded);
                     const rawInp = parsed.inputs || parsed;
-                    // Whitelist — same guard as JSON file import
-                    const safeInp = { ...DEFAULT_INPUTS };
-                    Object.keys(DEFAULT_INPUTS).forEach(k => { if (rawInp[k] !== undefined) safeInp[k] = rawInp[k]; });
-                    setInputs(safeInp);
+                    // BUG-1 fix: use module-level buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
+                    const safeInp = buildSafeInputs(rawInp);
+                    setInputs(safeInp); setDebouncedInputs(safeInp);
+                    setInputErrors({}); // BUG-4 fix: clear stale validation highlights
+                    // BUG-2 fix: stamp lastSavedRef so "Unsaved changes" guard doesn't fire after Share Code load
+                    lastSavedRef.current = JSON.stringify(safeInp);
+                    // BUG-3 fix: restore all previously missing state fields
+                    if (parsed.activeTab) setActiveTab(parsed.activeTab);
                     if (parsed.highlightPlan) setHighlightPlan(parsed.highlightPlan);
+                    if (parsed.primaryLifePlan) setPrimaryLifePlan(parsed.primaryLifePlan);
+                    if (parsed.spouseLifePlan)  setSpouseLifePlan(parsed.spouseLifePlan);
                     if (parsed.viewMode) setViewMode(parsed.viewMode);
                     if (parsed.basicPremiumPct != null) setBasicPremiumPct(parsed.basicPremiumPct);
                     if (parsed.scenarioLabelA != null) setScenarioLabelA(parsed.scenarioLabelA);
                     if (parsed.scenarioLabelB != null) setScenarioLabelB(parsed.scenarioLabelB);
+                    if (parsed.householdEnabled != null) setHouseholdEnabled(!!parsed.householdEnabled);
+                    if (parsed.housingSharePct != null) setHousingSharePct(Number(parsed.housingSharePct) || 50);
+                    if (Array.isArray(parsed.householdChildren)) setHouseholdChildren(parsed.householdChildren);
+                    if (parsed.spouseInputs && typeof parsed.spouseInputs === 'object') {
+                      const safeSpouseCode = { ...SPOUSE_DEFAULT_INPUTS };
+                      Object.keys(SPOUSE_DEFAULT_INPUTS).forEach(k => { if (parsed.spouseInputs[k] !== undefined) safeSpouseCode[k] = parsed.spouseInputs[k]; });
+                      setSpouseInputs(safeSpouseCode); setDebouncedSpouseInputs(safeSpouseCode);
+                    }
                     if (parsed.whatIfPayoutAge != null) setWhatIfPayoutAge(parsed.whatIfPayoutAge);
                     if (parsed.whatIfSaTopup != null) setWhatIfSaTopup(parsed.whatIfSaTopup);
                     if (parsed.whatIfHousing != null) setWhatIfHousing(parsed.whatIfHousing);
                     if (parsed.whatIfSalaryBump != null) setWhatIfSalaryBump(parsed.whatIfSalaryBump);
-
+                    if (parsed.whatIfContribStop != null) setWhatIfContribStop(parsed.whatIfContribStop);
+                    if (parsed.whatIfOaDrawdown != null) setWhatIfOaDrawdown(parsed.whatIfOaDrawdown);
+                    if (parsed.whatIfSrsContrib != null) setWhatIfSrsContrib(parsed.whatIfSrsContrib);
+                    if (parsed.whatIfPrivGrowth != null) setWhatIfPrivGrowth(parsed.whatIfPrivGrowth);
                     if (parsed.isRealDollars != null) setIsRealDollars(parsed.isRealDollars);
+                    if (parsed.pdfOrientation) setPdfOrientation(parsed.pdfOrientation);
                     // Scenario restore — handle both formats:
                     //   New format (V4-2026+): scenarioAInputs key holds just inputs; projection recalculated.
                     //   Old format (pre-Fix 2): scenarioA.inputs + scenarioA.projection stored directly.
@@ -9611,30 +9676,23 @@ ${milestones.length > 0 ? `<table>
                     let scenariosRestored = false;
                     if ('scenarioAInputs' in parsed) {
                       if (parsed.scenarioAInputs && typeof parsed.scenarioAInputs === 'object') {
-                        const safeScenA = { ...DEFAULT_INPUTS };
-                        Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioAInputs[k] !== undefined) safeScenA[k] = parsed.scenarioAInputs[k]; });
+                        const safeScenA = buildSafeInputs(parsed.scenarioAInputs);
                         setScenarioA({ inputs: safeScenA, projection: (safeScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenA), payoutProj: null });
                         scenariosRestored = true;
-                      } else { setScenarioA(null); } // explicit null = no scenario in this code
+                      } else { setScenarioA(null); }
                     } else if (parsed.scenarioA && parsed.scenarioA.inputs && parsed.scenarioA.projection) {
-                      // BUG-6 fix: old-format code with embedded projection — was restored as-is
-                      // (stale rows, missing newer fields). Now regenerate from sanitised inputs.
-                      const safeOldScenA = { ...DEFAULT_INPUTS };
-                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioA.inputs[k] !== undefined) safeOldScenA[k] = parsed.scenarioA.inputs[k]; });
+                      const safeOldScenA = buildSafeInputs(parsed.scenarioA.inputs);
                       setScenarioA({ inputs: safeOldScenA, projection: (safeOldScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeOldScenA), payoutProj: null, label: parsed.scenarioA.label });
                       scenariosRestored = true;
                     } else { setScenarioA(null); }
                     if ('scenarioBInputs' in parsed) {
                       if (parsed.scenarioBInputs && typeof parsed.scenarioBInputs === 'object') {
-                        const safeScenB = { ...DEFAULT_INPUTS };
-                        Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioBInputs[k] !== undefined) safeScenB[k] = parsed.scenarioBInputs[k]; });
+                        const safeScenB = buildSafeInputs(parsed.scenarioBInputs);
                         setScenarioB({ inputs: safeScenB, projection: (safeScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenB), payoutProj: null });
                         scenariosRestored = true;
                       } else { setScenarioB(null); }
                     } else if (parsed.scenarioB && parsed.scenarioB.inputs && parsed.scenarioB.projection) {
-                      // BUG-6 fix: same as Scenario A — regenerate from sanitised inputs.
-                      const safeOldScenB = { ...DEFAULT_INPUTS };
-                      Object.keys(DEFAULT_INPUTS).forEach(k => { if (parsed.scenarioB.inputs[k] !== undefined) safeOldScenB[k] = parsed.scenarioB.inputs[k]; });
+                      const safeOldScenB = buildSafeInputs(parsed.scenarioB.inputs);
                       setScenarioB({ inputs: safeOldScenB, projection: (safeOldScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeOldScenB), payoutProj: null, label: parsed.scenarioB.label });
                       scenariosRestored = true;
                     } else { setScenarioB(null); }
@@ -9730,7 +9788,7 @@ ${milestones.length > 0 ? `<table>
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a"); a.href = url; a.download = fname;
                     document.body.appendChild(a); a.click();
-                    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+                    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 2000);
                     showToast(`✓ Downloading ${fname}`);
                   } catch (e) { showToast("Download blocked — select all text below and paste into a new file"); }
                 }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 8, background: "var(--clr-emerald)", color: "#ffffff", fontWeight: 800, border: "none", cursor: "pointer", fontSize: 12 }}>
@@ -13588,11 +13646,25 @@ ${milestones.length > 0 ? `<table>
                 </details>
                 {/* ── ZONE 1: Headline hero ── */}
                 {(() => {
-                  const rawRow = projectionByAge.get(summaryRefAge) || {};
-                  const nominalTotal = (rawRow.oa || 0) + (rawRow.sa || 0) + (rawRow.ma || 0) + (rawRow.ra || 0);
-                  const years = Math.max(0, summaryRefAge - (Number(inputs.currentAge) || 35));
-                  const inflRate = (Number(inputs.inflationRate) || 2) / 100;
-                  const realTotal = Math.round(nominalTotal / Math.pow(1 + inflRate, years));
+                  // BUG-M1 fix: use accumulationByAge (same source as Zone 2/3 and milestone spine).
+                  // Previously Zone 1 used projectionByAge (always nominal) and re-derived realTotal
+                  // from live inputs.inflationRate — disagreeing with Zone 2/3 which used accumulationByAge
+                  // (deflated when isRealDollars=true, and keyed on debouncedInputs.inflationRate).
+                  // Now: nominalTotal always comes from projectionByAge (nominal); realTotal comes from
+                  // accumulationByAge when isRealDollars=true (already deflated — no division needed),
+                  // or is computed from projectionByAge + debouncedInputs.inflationRate in nominal mode.
+                  const rawRowNominal = projectionByAge.get(summaryRefAge) || {};
+                  const nominalTotal  = (rawRowNominal.oa||0) + (rawRowNominal.sa||0) + (rawRowNominal.ma||0) + (rawRowNominal.ra||0);
+                  // BUG-M1+M6 fix: use debouncedInputs.inflationRate (not live inputs.inflationRate)
+                  const inflRateZ1    = (Number(debouncedInputs.inflationRate) || 2) / 100;
+                  const yearsZ1       = Math.max(0, summaryRefAge - (Number(debouncedInputs.currentAge) || 35));
+                  const accRowZ1      = accumulationByAge.get(summaryRefAge) || {};
+                  // In Real$ mode accumulationByAge is already deflated — use it directly.
+                  // In nominal mode, derive real from nominal using debouncedInputs inflation rate.
+                  const realTotal = isRealDollars
+                    ? (accRowZ1.oa||0) + (accRowZ1.sa||0) + (accRowZ1.ma||0) + (accRowZ1.ra||0)
+                    : Math.round(nominalTotal / Math.pow(1 + inflRateZ1, yearsZ1));
+                  const inflPctDisplay = debouncedInputs.inflationRate || 2; // BUG-M6 fix: debounced
                   const activePlan = highlightPlan || "standard";
                   const activePlanObj = lifePlans?.[activePlan];
                   const activePayoutRaw2 = activePlanObj
@@ -13647,15 +13719,15 @@ ${milestones.length > 0 ? `<table>
                         {/* ── Col 1 — Total CPF ── */}
                         <div style={{ paddingRight: 24, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                           <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                            {isRSSMode ? `Total CPF (age ${summaryRefAge})` : `Total CPF at age ${inputs.payoutAge}`}
+                            {isRSSMode ? `Total CPF (age ${summaryRefAge})` : `Total CPF at age ${payoutAge65}`}
                           </p>
                           <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--text-bright)", lineHeight: 1.05, letterSpacing: "-0.03em", fontFamily: "monospace" }}>
                             {isRealDollars ? formatCurrency(realTotal) : formatCurrency(nominalTotal)}
                           </p>
                           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.4 }}>
                             {isRealDollars
-                              ? `${formatCurrency(nominalTotal)} nominal · ${inputs.inflationRate || 2}% inflation`
-                              : `${formatCurrency(realTotal)} today's dollars · ${inputs.inflationRate || 2}% inflation`}
+                              ? `${formatCurrency(nominalTotal)} nominal · ${inflPctDisplay}% inflation`
+                              : `${formatCurrency(realTotal)} today's dollars · ${inflPctDisplay}% inflation`}
                           </p>
                         </div>
 
@@ -13767,15 +13839,17 @@ ${milestones.length > 0 ? `<table>
 
                 {/* ── Q2: MILESTONE AGE CALLOUTS — proportional spine ── */}
                 {(() => {
-                  const ca_m = Number(inputs.currentAge) || 0;
+                  // BUG-M4 fix: ca_m and milestone age slots from debouncedInputs to match
+                  // accumulationByAge (and displayAccumulation) which are keyed on debouncedInputs.
+                  const ca_m = Number(debouncedInputs.currentAge) || 0;
                   const inflRate = (Number(debouncedInputs.inflationRate) || 2) / 100;
                   const markerColors = ["#22d3ee", "#67e8f9", "#a5f3fc", "#cffafe", "#e0f2fe"];
                   const slots = [
-                    Number(inputs.milestoneAge)  || 0,
-                    Number(inputs.milestoneAge2) || 0,
-                    Number(inputs.milestoneAge3) || 0,
-                    Number(inputs.milestoneAge4) || 0,
-                    Number(inputs.milestoneAge5) || 0,
+                    Number(debouncedInputs.milestoneAge)  || 0,
+                    Number(debouncedInputs.milestoneAge2) || 0,
+                    Number(debouncedInputs.milestoneAge3) || 0,
+                    Number(debouncedInputs.milestoneAge4) || 0,
+                    Number(debouncedInputs.milestoneAge5) || 0,
                   ].filter(age => age > 0 && age > ca_m).sort((a, b) => a - b);
                   if (slots.length === 0) return null;
 
@@ -13832,7 +13906,14 @@ ${milestones.length > 0 ? `<table>
                     return { mAge, mRow, mOA, mSA, mMA, mRA, mSRS, mPriv, mTotal, mIsPost55,
                              mNetWorth: mTotal + mSRS + mPriv,
                              yearsToM: Math.max(0, mAge - ca_m),
-                             mRealTotal: mTotal > 0 ? Math.round(mTotal / Math.pow(1 + inflRate, Math.max(0, mAge - ca_m))) : 0,
+                             // BUG-M3 fix: mRealTotal guards on isRealDollars.
+                             // When isRealDollars=true, accumulationByAge (and therefore mTotal) is
+                             // already deflated — using it as-is avoids double-deflation.
+                             // When isRealDollars=false (nominal mode), divide by inflation factor to
+                             // get the "today's dollars" sub-label shown on each chip.
+                             mRealTotal: mTotal > 0
+                               ? (isRealDollars ? mTotal : Math.round(mTotal / Math.pow(1 + inflRate, Math.max(0, mAge - ca_m))))
+                               : 0,
                              accentColor: markerColors[idx] };
                   });
                   const maxTotal = Math.max(...milestoneData.map(d => d.mTotal), 1);
@@ -13852,8 +13933,10 @@ ${milestones.length > 0 ? `<table>
 
                       {zCalloutExpanded && (() => {
                         // ── Build full timeline chart data from displayAccumulation ──
-                        const ca_chart = Number(inputs.currentAge) || 0;
-                        const pa_chart = Number(inputs.payoutAge)  || 65;
+                        // BUG-M4 fix: ca_chart and pa_chart from debouncedInputs / payoutAge65
+                        // to match displayAccumulation which is keyed on debouncedInputs.
+                        const ca_chart = Number(debouncedInputs.currentAge) || 0;
+                        const pa_chart = payoutAge65;
                         const chartData = displayAccumulation
                           .filter(r => r.age >= ca_chart && r.age <= pa_chart + 5)
                           .map(r => {
@@ -15192,13 +15275,14 @@ ${milestones.length > 0 ? `<table>
                       })}
                       {/* Q2: Milestone Age markers — teal dashed vertical lines for up to 3 ages */}
                       {(() => {
-                        const ca_m = Number(inputs.currentAge) || 0;
+                        // BUG-M4 fix: ca_m and slot ages from debouncedInputs to match chart data source
+                        const ca_m = Number(debouncedInputs.currentAge) || 0;
                         const slots = [
-                          { age: Number(inputs.milestoneAge)  || 0, stroke: "#22d3ee" },
-                          { age: Number(inputs.milestoneAge2) || 0, stroke: "#67e8f9" },
-                          { age: Number(inputs.milestoneAge3) || 0, stroke: "#a5f3fc" },
-                          { age: Number(inputs.milestoneAge4) || 0, stroke: "#cffafe" },
-                          { age: Number(inputs.milestoneAge5) || 0, stroke: "#e0f2fe" },
+                          { age: Number(debouncedInputs.milestoneAge)  || 0, stroke: "#22d3ee" },
+                          { age: Number(debouncedInputs.milestoneAge2) || 0, stroke: "#67e8f9" },
+                          { age: Number(debouncedInputs.milestoneAge3) || 0, stroke: "#a5f3fc" },
+                          { age: Number(debouncedInputs.milestoneAge4) || 0, stroke: "#cffafe" },
+                          { age: Number(debouncedInputs.milestoneAge5) || 0, stroke: "#e0f2fe" },
                         ];
                         return slots
                           .filter(s => s.age > 0 && s.age > ca_m)
