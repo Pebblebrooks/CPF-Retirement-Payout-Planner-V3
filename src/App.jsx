@@ -10572,7 +10572,7 @@ ${milestones.length > 0 ? `<table>
               <div className={`sidebar-col-body${colOpen[1] ? "" : " col-collapsed"}`}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <SidebarSectionHeader id="profile" label="Profile" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} badge={null}
-                collapsedHint="Name · Age · Citizenship (SC / PR / Foreigner) · Gender · CPF scheme · Payout age · Milestone ages" />
+                collapsedHint="Name · Age · Citizenship · Gender · Employment type · PR tenure" />
               {openSections.has("profile") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div><label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>Name</label>
@@ -11005,7 +11005,7 @@ ${milestones.length > 0 ? `<table>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <SidebarSectionHeader id="cpfBalances" label="CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} badge={null}
-                collapsedHint="Ordinary (OA) · Special / Retirement (SA/RA) · MediSave (MA) · Progress trackers toward FRS, ERS and BHS" />
+                collapsedHint="Current OA · SA / RA (post-55) · MA balances" />
               {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Balance inputs */}
@@ -11064,8 +11064,8 @@ ${milestones.length > 0 ? `<table>
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
               <SidebarSectionHeader id="contribs" label={`Mandatory Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 9, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}</>}
                 collapsedHint={isSelfEmployed
-                  ? "SEP — MediSave contributions only · Salary reference for retirement sum projections"
-                  : "OA · SA · MA employee & employer amounts · Auto-Calc from OW + AW · Salary growth · Phase 2 salary · Career break · PR tenure"} />
+                  ? "SEP · MA contribution · Salary for MediSave allocation"
+                  : "Salary (OW / AW) · OA / SA / MA contributions · Auto-Calc ⚡ · PR tenure rates"} />
               {openSections.has("contribs") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 10 }}>
                   <button onClick={() => setInputs(p => ({ ...p, isSelfEmployed: !p.isSelfEmployed, empOaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empOaCont : 0, empSaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empSaCont : 0, empMaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empMaCont : 0 }))} style={{ fontSize: 10, background: isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.15)" : "rgba(100,116,139,0.15)", color: isSelfEmployed ? "var(--clr-orange)" : "var(--text-subtle)", padding: "4px 10px", borderRadius: 6, fontWeight: 700, border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer" }}>
@@ -14660,265 +14660,193 @@ ${milestones.length > 0 ? `<table>
                           {z6Expanded ? "▲ Collapse" : "▼ Expand"}
                         </button>
                       </div>
-                      {z6Expanded && <>
-                      {/* ── Row 1: 3-column top row ── */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 8 }}>
-                        {/* Net Worth at payout age */}
-                        <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "12px 14px", borderLeft: "3px solid var(--clr-blue)" }}>
-                          <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-                            Net worth · age {summaryRefAge}
-                            <TooltipBox id="t-nw-pa" text={tooltips.nwPayout} />
-                          </p>
-                          {/* I-3 fix: show real value as main figure in Real$ mode; show nominal as sub-label */}
-                          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--clr-blue)", margin: 0, fontFamily: "monospace" }}>
-                            {formatCurrency(isRealDollars && rssNWReal > 0 ? rssNWReal : rssNW)}
-                          </p>
-                          {isRealDollars && rssNWReal > 0
-                            ? <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(rssNW)} nominal</p>
-                            : rssNWReal > 0 && <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(rssNWReal)} today's $</p>}
-                        </div>
-                        {/* Net Worth at 95 */}
-                        <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "12px 14px", borderLeft: "3px solid var(--text-muted)" }}>
-                          <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-                            Net worth · age 95
-                            <TooltipBox id="t-nw-95" text={tooltips.nw95} />
-                          </p>
-                          {/* I-3 fix: show real value as main figure in Real$ mode; show nominal as sub-label */}
-                          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--text-bright)", margin: 0, fontFamily: "monospace" }}>
-                            {formatCurrency(isRealDollars && nw95Real > 0 ? nw95Real : nw95)}
-                          </p>
-                          {isRealDollars && nw95Real > 0
-                            ? <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(nw95)} nominal</p>
-                            : nw95Real > 0 && <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{formatCurrency(nw95Real)} today's $</p>}
-                        </div>
-                        {/* CPF Interest Earned — new stat */}
-                        {(() => {
-                          // I-4 fix: use _z6AccRow (accumulationByAge — deflated) instead of projectionByAge
-                          const cumInterest = _z6AccRow.cumulativeInterest || 0;
-                          const cumInjected = _z6AccRow.cumulativeInjected || 1;
-                          const interestPct = cumInjected > 0 ? Math.round((cumInterest / cumInjected) * 100) : 0;
-                          return (
-                            <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "12px 14px", borderLeft: "3px solid var(--clr-emerald)" }}>
-                              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-                                CPF interest earned
-                                <TooltipBox id="t-int-earned" text={`Total compound interest credited to OA (2.5%), SA/RA (4%), and MA (4%) from age ${Number(inputs.currentAge)||35} to age ${summaryRefAge}. This is the "free money" CPF's guaranteed rates generate on your contributions.`} />
-                              </p>
-                              <p style={{ fontSize: 17, fontWeight: 700, color: "var(--clr-green)", margin: 0, fontFamily: "monospace" }}>{formatCurrency(cumInterest)}</p>
-                              {interestPct > 0 && <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{interestPct}% of total contributions</p>}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                      {/* ── Row 2: 3-column bottom row ── */}
-                      <div className="z6-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-                        {/* Cumulative top-ups */}
-                        <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "12px 14px", borderLeft: "3px solid var(--clr-green)" }}>
-                          <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-                            Cumulative top-ups
-                            <TooltipBox id="t-topups" text={tooltips.topups} />
-                          </p>
-                          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--clr-green)", margin: 0, fontFamily: "monospace" }}>{formatCurrency(cumTopups)}</p>
-                          {cumTopups > 0 && (() => {
-                            const yrs = Math.max(1, summaryRefAge - (Number(inputs.currentAge)||35));
-                            return <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>avg {formatCurrency(Math.round(cumTopups / yrs))}/yr</p>;
-                          })()}
-                        </div>
-                        {/* Cumulative outflow */}
-                        <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "12px 14px", borderLeft: "3px solid #f472b6" }}>
-                          <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-                            Cumulative outflow
-                            <TooltipBox id="t-outflow" text={tooltips.outflow} />
-                          </p>
-                          <p style={{ fontSize: 17, fontWeight: 700, color: "#f472b6", margin: 0, fontFamily: "monospace" }}>{formatCurrency(cumOutflow)}</p>
-                          {cumTopups > 0 && cumOutflow > 0 && <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "4px 0 0" }}>{Math.round((cumOutflow / cumTopups) * 100)}% of contributions</p>}
-                        </div>
-                        {/* Est. Tax Savings */}
-                        <div style={{ background: "rgba(var(--clr-amber3-rgb),0.05)", border: "1px solid rgba(var(--clr-amber3-rgb),0.2)", borderRadius: 12, padding: "12px 14px", borderLeft: "3px solid var(--clr-amber)" }}>
-                          <p style={{ fontSize: 10, color: "var(--clr-amber2)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 4 }}>
-                            Est. tax savings (RSTU)
-                            <TooltipBox id="t-rstu" text={tooltips.rstu} />
-                          </p>
-                          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--clr-amber)", margin: 0, fontFamily: "monospace" }}>
-                            {formatCurrency(estimatedTaxSavings)}<span style={{ fontSize: 10, color: "#92400e", marginLeft: 4 }}>/ yr</span>
-                          </p>
-                          {currentSaRa >= currentFRS
-                            ? <p style={{ fontSize: 10, color: "var(--clr-amber2)", margin: "4px 0 0" }}>SA/RA ≥ FRS — no relief</p>
-                            : estimatedTaxSavings === 0
-                            ? <p style={{ fontSize: 10, color: "var(--clr-amber2)", margin: "4px 0 0", lineHeight: 1.4 }}>Add RSTU to unlock ↗</p>
-                            : currentSaRa < currentFRS && eligibleRSTU < (Number(inputs.vcSaTopup) || 0)
-                            ? <p style={{ fontSize: 10, color: "var(--clr-amber2)", margin: "4px 0 0" }}>Capped at FRS headroom</p>
-                            : null
-                          }
-                        </div>
-                      </div>
+                      {z6Expanded && (() => {
+                        // ── Ratio variables (previously in inner IIFE, hoisted so all 3 panels can read) ──
+                        const cumInterest6 = _z6AccRow.cumulativeInterest || 0;
+                        const cumInjected6 = Math.max(1, _z6AccRow.cumulativeInjected || 1);
+                        const interestPct6 = Math.round((cumInterest6 / cumInjected6) * 100);
+                        const startBal6 = (Number(inputs.oaBalance)||0) + (Number(inputs.saBalance)||0) + (Number(inputs.maBalance)||0);
+                        const totalInj6 = _z6AccRow.cumulativeInjected || 0;
+                        const totalInt6 = _z6AccRow.cumulativeInterest || 0;
+                        const totalOut6 = _z6AccRow.cumulativeOutflow  || 0;
+                        const finalCPF6 = startBal6 + totalInj6 + totalInt6 - totalOut6;
+                        const years6 = Math.max(1, summaryRefAge - (Number(inputs.currentAge) || 35));
+                        const totalPutIn6 = Math.max(1, startBal6 + totalInj6);
+                        const cagrRaw6 = finalCPF6 > totalPutIn6
+                          ? (Math.pow(finalCPF6 / totalPutIn6, 1 / years6) - 1) * 100
+                          : null;
+                        const activePlanZ6 = lifePlans?.[highlightPlan];
+                        const activePayoutZ6 = activePlanZ6
+                          ? (inputs.isMale !== false ? activePlanZ6.startM : activePlanZ6.startF)
+                          : 0;
+                        const monthlyGross6 = Number(inputs.salaryGross) || 0;
+                        const irrRatio6 = monthlyGross6 > 0 && activePayoutZ6 > 0
+                          ? (activePayoutZ6 / monthlyGross6) * 100 : null;
+                        const target6 = Number(inputs.targetMonthlyIncome) || 0;
+                        const coverageRatio6 = target6 > 0 && activePayoutZ6 > 0
+                          ? (activePayoutZ6 / target6) * 100 : null;
+                        const isLifeForRatios6 = !isRSSMode && !isForeigner;
+                        const xirrStd6  = isLifeForRatios6 ? (xirrByAge['standard']?.[summaryRefAge]   ?? null) : null;
+                        const xirrEsc6  = isLifeForRatios6 ? (xirrByAge['escalating']?.[summaryRefAge] ?? null) : null;
+                        const xirrBas6  = isLifeForRatios6 ? (xirrByAge['basic']?.[summaryRefAge]      ?? null) : null;
+                        const xirrCol6  = (v) => v === null ? "var(--text-muted)" : v >= 4 ? "var(--clr-green)" : v >= 2 ? "var(--clr-amber)" : "var(--clr-red)";
+                        const totalNW6  = (_z6AccRow.oa||0)+(_z6AccRow.sa||0)+(_z6AccRow.ma||0)+(_z6AccRow.ra||0)+(_z6AccRow.srsBalance||0)+(_z6AccRow.privateAssets||0);
+                        const wealthMul6 = target6 > 0 && totalNW6 > 0 ? totalNW6 / (target6 * 12) : null;
+                        const contribMul6 = totalPutIn6 > 1 && finalCPF6 > 0 ? finalCPF6 / totalPutIn6 : null;
+                        const oaDraw6   = Number(debouncedInputs.oaDrawdownMonthly) || 0;
+                        const oaDrawOn6 = effectiveOaDrawStartAge > 0 && oaDraw6 > 0;
+                        const oaAt6     = _z6AccRow.oa || 0;
+                        const oaSust6   = oaDrawOn6 && oaAt6 > 0 ? Math.floor(oaAt6 / (oaDraw6 * 12)) : null;
 
-                        {/* ── Finance Ratios row ─────────────────────────────────────── */}
-                        {(() => {
-                          // II-3 fix: use accumulationByAge (_z6AccRow) — deflated when isRealDollars=true —
-                          // for all cumulative and balance fields so CAGR, Wealth Multiple, Contribution
-                          // Multiplier, and OA Sustainability respond correctly to the Nom/Real$ toggle.
-                          // Previously both paRow6 and paRowNW read from projectionByAge (always nominal).
-                          const startBal6 = (Number(inputs.oaBalance)||0) + (Number(inputs.saBalance)||0) + (Number(inputs.maBalance)||0);
-                          const totalInj6 = _z6AccRow.cumulativeInjected || 0;
-                          const totalInt6 = _z6AccRow.cumulativeInterest || 0;
-                          const totalOut6 = _z6AccRow.cumulativeOutflow  || 0;
-                          const finalCPF6 = startBal6 + totalInj6 + totalInt6 - totalOut6;
-                          const years6 = Math.max(1, summaryRefAge - (Number(inputs.currentAge) || 35));
-                          const totalPutIn6 = Math.max(1, startBal6 + totalInj6);
-                          const cagrRaw = finalCPF6 > totalPutIn6
-                            ? (Math.pow(finalCPF6 / totalPutIn6, 1 / years6) - 1) * 100
-                            : null;
+                        // shared metric-row style helper
+                        const mRow = (last) => ({ borderBottom: last ? "none" : "1px solid var(--border-subtle)", paddingBottom: last ? 0 : 11, marginBottom: last ? 0 : 11 });
+                        const mLabel = { fontSize: 10, color: "var(--text-muted)", margin: "0 0 3px", display: "flex", alignItems: "center", gap: 4 };
+                        const mVal   = (color) => ({ fontSize: 17, fontWeight: 700, color, margin: 0, fontFamily: "monospace" });
+                        const mSub   = { fontSize: 10, color: "var(--text-muted)", margin: "3px 0 0", lineHeight: 1.4 };
 
-                          // Income Replacement Ratio: CPF LIFE payout ÷ last known monthly salary
-                          const activePlanZ6 = lifePlans?.[highlightPlan];
-                          const activePayoutZ6 = activePlanZ6
-                            ? (inputs.isMale !== false ? activePlanZ6.startM : activePlanZ6.startF)
-                            : 0;
-                          const monthlyGross6 = Number(inputs.salaryGross) || 0;
-                          const irrRatio = monthlyGross6 > 0 && activePayoutZ6 > 0
-                            ? (activePayoutZ6 / monthlyGross6) * 100
-                            : null;
+                        // panel shell styles
+                        const panelShell = { background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 0 var(--border-subtle)" };
+                        const panelBody  = { padding: "13px 14px" };
 
-                          // CPF Coverage Ratio: CPF LIFE payout ÷ target monthly income
-                          const target6 = Number(inputs.targetMonthlyIncome) || 0;
-                          const coverageRatio = target6 > 0 && activePayoutZ6 > 0
-                            ? (activePayoutZ6 / target6) * 100
-                            : null;
+                        return (
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10 }}>
 
-                          // ── NEW RATIOS ──────────────────────────────────────────────
-
-                          // XIRR for each CPF LIFE plan at payout age (reuse existing solver output)
-                          // Guard: only meaningful for CPF LIFE members (not RSS, not foreigner)
-                          const isLifeForRatios = !isRSSMode && !isForeigner;
-                          const xirrStd = isLifeForRatios ? (xirrByAge['standard']?.[summaryRefAge] ?? null) : null;
-                          const xirrEsc = isLifeForRatios ? (xirrByAge['escalating']?.[summaryRefAge] ?? null) : null;
-                          const xirrBas = isLifeForRatios ? (xirrByAge['basic']?.[summaryRefAge] ?? null) : null;
-                          const xirrColor = (v) => v === null ? "var(--text-muted)" : v >= 4 ? "var(--clr-green)" : v >= 2 ? "var(--clr-amber)" : "var(--clr-red)";
-
-                          // Wealth Multiple: total net worth at payout ÷ annual target income
-                          // II-3 fix: use accumulationByAge (_z6AccRow) — deflation-aware.
-                          const totalNetWorth6 = (_z6AccRow.oa||0) + (_z6AccRow.sa||0) + (_z6AccRow.ma||0) + (_z6AccRow.ra||0) + (_z6AccRow.srsBalance||0) + (_z6AccRow.privateAssets||0);
-                          const wealthMultiple = target6 > 0 && totalNetWorth6 > 0
-                            ? totalNetWorth6 / (target6 * 12)
-                            : null;
-
-                          // Contribution Multiplier: final CPF balance ÷ total money put in
-                          // "Every $1 contributed became $X"
-                          const contribMultiplier = totalPutIn6 > 1 && finalCPF6 > 0
-                            ? finalCPF6 / totalPutIn6
-                            : null;
-
-                          // OA Sustainability: years OA can fund the current drawdown
-                          // Only shown when OA drawdown is active
-                          // II-3 fix: oaAtPayout6 from _z6AccRow (deflation-aware) not paRowNW
-                          const oaDrawMonthly6 = Number(debouncedInputs.oaDrawdownMonthly) || 0;
-                          const oaDrawEnabled6 = effectiveOaDrawStartAge > 0 && oaDrawMonthly6 > 0;
-                          const oaAtPayout6 = _z6AccRow.oa || 0;
-                          const oaSustainYears = oaDrawEnabled6 && oaAtPayout6 > 0
-                            ? Math.floor(oaAtPayout6 / (oaDrawMonthly6 * 12))
-                            : null;
-
-                          const ratioCards = [
-                            // ── XIRR trio (CPF LIFE only) ──
-                            // R-7: XIRR is computed from nominal cashflows (nominal contributions vs
-                            // nominal payout amounts) and always represents a nominal rate of return.
-                            // When Real$ mode is on, every other figure is deflated — add a clear
-                            // "(nominal rate)" sub-label so users don't interpret XIRR as a real return.
-                            xirrStd !== null && {
-                              label: "XIRR · Standard",
-                              value: `${xirrStd.toFixed(2)}%`,
-                              sub: isRealDollars ? "nominal rate · not inflation-adjusted" : "annualised return on all contributions",
-                              color: xirrColor(xirrStd),
-                              tooltip: `XIRR (Extended IRR) for the Standard plan at age ${summaryRefAge}: the single annualised rate that equates all CPF contributions (outflows) to projected Standard plan payouts (inflows) via Newton-Raphson. ≥4% = strong; 2–4% = moderate; <2% = below CPF deposit rates.${isRealDollars ? " Note: XIRR is always a nominal rate — subtract your inflation rate (~${Number(inputs.inflationRate)||2}%) to estimate the real return." : ""}`,
-                              tip_id: "t-xirr-std6",
-                            },
-                            xirrEsc !== null && {
-                              label: "XIRR · Escalating",
-                              value: `${xirrEsc.toFixed(2)}%`,
-                              sub: isRealDollars ? "nominal rate · not inflation-adjusted" : "annualised return on all contributions",
-                              color: xirrColor(xirrEsc),
-                              tooltip: `XIRR for the Escalating plan at age ${summaryRefAge}. Starts lower than Standard but rises 2%/yr — XIRR is typically higher than Standard if you live past ~82. 'N/A' means the solver did not converge for this cash-flow structure.${isRealDollars ? " Always a nominal rate." : ""}`,
-                              tip_id: "t-xirr-esc6",
-                            },
-                            xirrBas !== null && {
-                              label: "XIRR · Basic",
-                              value: `${xirrBas.toFixed(2)}%`,
-                              sub: isRealDollars ? "nominal rate · not inflation-adjusted" : "annualised return on all contributions",
-                              color: xirrColor(xirrBas),
-                              tooltip: `XIRR for the Basic plan at age ${summaryRefAge}. Basic has two phases (premium-refund + longevity pool) which can prevent the solver from converging — if shown as 'N/A' in the Data Table, the value here may also be unreliable. Use the Data Table Yield IRR% column for per-age detail.${isRealDollars ? " Always a nominal rate." : ""}`,
-                              tip_id: "t-xirr-bas6",
-                            },
-                            // ── Original 3 ratios ──
-                            cagrRaw !== null && {
-                              label: "Implied CPF CAGR",
-                              value: `${cagrRaw.toFixed(2)}%`,
-                              sub: `over ${years6} yrs · contributions → balance`,
-                              color: "var(--clr-blue)",
-                              tooltip: `Approximate effective annual growth rate of your CPF from age ${Number(inputs.currentAge)||35} to ${summaryRefAge}. Computed as (total balance ÷ total put in)^(1/years) − 1. For a time-weighted return use Yield IRR% in the Data Table tab.`,
-                              tip_id: "t-cagr6",
-                            },
-                            irrRatio !== null && {
-                              label: "Income Replacement",
-                              value: `${irrRatio.toFixed(0)}%`,
-                              sub: `CPF LIFE ÷ last salary · ${highlightPlan} plan`,
-                              color: irrRatio >= 70 ? "var(--clr-green)" : irrRatio >= 40 ? "var(--clr-amber)" : "var(--clr-red)",
-                              tooltip: `CPF LIFE starting payout (${highlightPlan} plan) ÷ current monthly gross salary. A ratio ≥ 70% is considered adequate in most retirement planning frameworks.`,
-                              tip_id: "t-irr6",
-                            },
-                            coverageRatio !== null && {
-                              label: "CPF Coverage",
-                              value: `${Math.min(coverageRatio, 999).toFixed(0)}%`,
-                              sub: `CPF LIFE ÷ target income`,
-                              color: coverageRatio >= 100 ? "var(--clr-green)" : coverageRatio >= 70 ? "var(--clr-amber)" : "var(--clr-red)",
-                              tooltip: `CPF LIFE payout (${highlightPlan} plan) as a percentage of your target monthly income of ${formatCurrency(target6)}. 100%+ means CPF LIFE alone covers your full income target.`,
-                              tip_id: "t-cov6",
-                            },
-                            // ── New ratios ──
-                            wealthMultiple !== null && {
-                              label: "Wealth Multiple",
-                              value: `${wealthMultiple.toFixed(1)}×`,
-                              sub: `net worth ÷ annual target income`,
-                              color: wealthMultiple >= 20 ? "var(--clr-green)" : wealthMultiple >= 10 ? "var(--clr-amber)" : "var(--clr-red)",
-                              tooltip: `Total net worth at age ${summaryRefAge} (CPF + SRS + private assets) divided by your annual target income of ${formatCurrency(target6 * 12)}. This is the "years of income in assets" metric: ≥20× is considered financially independent; 10–20× is on track; <10× signals a gap.`,
-                              tip_id: "t-wealth6",
-                            },
-                            contribMultiplier !== null && {
-                              label: "Contribution Multiplier",
-                              value: `${contribMultiplier.toFixed(2)}×`,
-                              sub: `balance ÷ total contributions`,
-                              color: contribMultiplier >= 2 ? "var(--clr-green)" : contribMultiplier >= 1.5 ? "var(--clr-amber)" : "var(--text-muted)",
-                              tooltip: `Every dollar contributed (starting balances + cumulative inflows) has grown to this multiple by age ${summaryRefAge}. Captures the power of compound interest and employer contributions combined. A multiplier ≥2× means CPF has at least doubled every dollar ever put in.`,
-                              tip_id: "t-mult6",
-                            },
-                            oaSustainYears !== null && {
-                              label: "OA Sustainability",
-                              value: `${oaSustainYears} yrs`,
-                              sub: `OA funds drawdown of ${formatCurrency(oaDrawMonthly6)}/mo`,
-                              color: oaSustainYears >= 20 ? "var(--clr-green)" : oaSustainYears >= 10 ? "var(--clr-amber)" : "var(--clr-red)",
-                              tooltip: `At your current OA drawdown of ${formatCurrency(oaDrawMonthly6)}/month, the OA balance at age ${summaryRefAge} would last approximately ${oaSustainYears} years (before interest — the engine models actual year-by-year depletion with 2.5% OA interest). Check the Strategy tab for the precise OA Exhaustion Age.`,
-                              tip_id: "t-oasust6",
-                            },
-                          ].filter(Boolean);
-
-                          if (ratioCards.length === 0) return null;
-                          return (
-                            <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--border-subtle)", paddingTop: 10, marginTop: 4 }}>
-                              <p style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>Finance Ratios</p>
-                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8 }}>
-                                {ratioCards.map(({ label, value, sub, color, tooltip, tip_id }) => (
-                                  <div key={label} style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "10px 12px", borderLeft: `3px solid ${color}` }}>
-                                    <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 3px", display: "flex", alignItems: "center", gap: 4 }}>
-                                      {label}<TooltipBox id={tip_id} text={tooltip} />
-                                    </p>
-                                    <p style={{ fontSize: 18, fontWeight: 700, color, margin: 0, fontFamily: "monospace" }}>{value}</p>
-                                    <p style={{ fontSize: 9, color: "var(--text-subtle)", margin: "2px 0 0", lineHeight: 1.4 }}>{sub}</p>
+                            {/* ── Column 1: Retirement Outcomes ── */}
+                            <div style={panelShell}>
+                              <div style={{ padding: "8px 13px", borderBottom: "1px solid rgba(59,130,246,0.2)", background: "rgba(59,130,246,0.07)", display: "flex", alignItems: "center", gap: 6 }}>
+                                <Target style={{ width: 11, height: 11, color: "var(--clr-blue)", flexShrink: 0 }} />
+                                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--clr-blue)" }}>Retirement outcomes</span>
+                              </div>
+                              <div style={panelBody}>
+                                <div style={mRow(false)}>
+                                  <p style={mLabel}>Net worth · age {summaryRefAge}<TooltipBox id="t-nw-pa" text={tooltips.nwPayout} /></p>
+                                  <p style={mVal("var(--clr-blue)")}>{formatCurrency(isRealDollars && rssNWReal > 0 ? rssNWReal : rssNW)}</p>
+                                  {isRealDollars && rssNWReal > 0
+                                    ? <p style={mSub}>{formatCurrency(rssNW)} nominal</p>
+                                    : rssNWReal > 0 && <p style={mSub}>{formatCurrency(rssNWReal)} today's $</p>}
+                                </div>
+                                <div style={mRow(!irrRatio6 && !coverageRatio6 && !wealthMul6 && !oaSust6)}>
+                                  <p style={mLabel}>Net worth · age 95<TooltipBox id="t-nw-95" text={tooltips.nw95} /></p>
+                                  <p style={mVal("var(--text-bright)")}>{formatCurrency(isRealDollars && nw95Real > 0 ? nw95Real : nw95)}</p>
+                                  {isRealDollars && nw95Real > 0
+                                    ? <p style={mSub}>{formatCurrency(nw95)} nominal</p>
+                                    : nw95Real > 0 && <p style={mSub}>{formatCurrency(nw95Real)} today's $</p>}
+                                </div>
+                                {irrRatio6 !== null && (
+                                  <div style={mRow(!coverageRatio6 && !wealthMul6 && !oaSust6)}>
+                                    <p style={mLabel}>Income replacement<TooltipBox id="t-irr6" text={`CPF LIFE starting payout (${highlightPlan} plan) ÷ current monthly gross salary. A ratio ≥ 70% is considered adequate in most retirement planning frameworks.`} /></p>
+                                    <p style={mVal(irrRatio6 >= 70 ? "var(--clr-green)" : irrRatio6 >= 40 ? "var(--clr-amber)" : "var(--clr-red)")}>{irrRatio6.toFixed(0)}%</p>
+                                    <p style={mSub}>CPF LIFE ÷ last salary · {highlightPlan} plan</p>
                                   </div>
-                                ))}
+                                )}
+                                {coverageRatio6 !== null && (
+                                  <div style={mRow(!wealthMul6 && !oaSust6)}>
+                                    <p style={mLabel}>CPF coverage<TooltipBox id="t-cov6" text={`CPF LIFE payout (${highlightPlan} plan) as a percentage of your target monthly income of ${formatCurrency(target6)}. 100%+ means CPF LIFE alone covers your full income target.`} /></p>
+                                    <p style={mVal(coverageRatio6 >= 100 ? "var(--clr-green)" : coverageRatio6 >= 70 ? "var(--clr-amber)" : "var(--clr-red)")}>{Math.min(coverageRatio6, 999).toFixed(0)}%</p>
+                                    <p style={mSub}>CPF LIFE ÷ target income</p>
+                                  </div>
+                                )}
+                                {wealthMul6 !== null && (
+                                  <div style={mRow(!oaSust6)}>
+                                    <p style={mLabel}>Wealth multiple<TooltipBox id="t-wealth6" text={`Total net worth at age ${summaryRefAge} (CPF + SRS + private assets) divided by your annual target income of ${formatCurrency(target6 * 12)}. ≥20× = financially independent; 10–20× = on track; <10× = gap.`} /></p>
+                                    <p style={mVal(wealthMul6 >= 20 ? "var(--clr-green)" : wealthMul6 >= 10 ? "var(--clr-amber)" : "var(--clr-red)")}>{wealthMul6.toFixed(1)}×</p>
+                                    <p style={mSub}>net worth ÷ annual target income</p>
+                                  </div>
+                                )}
+                                {oaSust6 !== null && (
+                                  <div style={mRow(true)}>
+                                    <p style={mLabel}>OA sustainability<TooltipBox id="t-oasust6" text={`At your current OA drawdown of ${formatCurrency(oaDraw6)}/month, the OA balance at age ${summaryRefAge} would last approximately ${oaSust6} years. Check the Strategy tab for the precise OA Exhaustion Age.`} /></p>
+                                    <p style={mVal(oaSust6 >= 20 ? "var(--clr-green)" : oaSust6 >= 10 ? "var(--clr-amber)" : "var(--clr-red)")}>{oaSust6} yrs</p>
+                                    <p style={mSub}>OA funds drawdown of {formatCurrency(oaDraw6)}/mo</p>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          );
-                        })()}
-                      </>}
+
+                            {/* ── Column 2: Growth & Returns ── */}
+                            <div style={panelShell}>
+                              <div style={{ padding: "8px 13px", borderBottom: "1px solid rgba(16,185,129,0.2)", background: "rgba(16,185,129,0.07)", display: "flex", alignItems: "center", gap: 6 }}>
+                                <TrendingUp style={{ width: 11, height: 11, color: "var(--clr-green)", flexShrink: 0 }} />
+                                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--clr-green)" }}>Growth &amp; returns</span>
+                              </div>
+                              <div style={panelBody}>
+                                <div style={mRow(false)}>
+                                  <p style={mLabel}>CPF interest earned<TooltipBox id="t-int-earned" text={`Total compound interest credited to OA (2.5%), SA/RA (4%), and MA (4%) from age ${Number(inputs.currentAge)||35} to age ${summaryRefAge}. This is the "free money" CPF's guaranteed rates generate on your contributions.`} /></p>
+                                  <p style={mVal("var(--clr-green)")}>{formatCurrency(cumInterest6)}</p>
+                                  {interestPct6 > 0 && <p style={mSub}>{interestPct6}% of total contributions</p>}
+                                </div>
+                                {cagrRaw6 !== null && (
+                                  <div style={mRow(!contribMul6 && !xirrStd6 && !xirrEsc6 && !xirrBas6)}>
+                                    <p style={mLabel}>Implied CPF CAGR<TooltipBox id="t-cagr6" text={`Approximate effective annual growth rate of your CPF from age ${Number(inputs.currentAge)||35} to ${summaryRefAge}. Computed as (total balance ÷ total put in)^(1/years) − 1. For a time-weighted return use Yield IRR% in the Data Table tab.`} /></p>
+                                    <p style={mVal("var(--clr-blue)")}>{cagrRaw6.toFixed(2)}%</p>
+                                    <p style={mSub}>over {years6} yrs · contributions → balance</p>
+                                  </div>
+                                )}
+                                {contribMul6 !== null && (
+                                  <div style={mRow(!xirrStd6 && !xirrEsc6 && !xirrBas6)}>
+                                    <p style={mLabel}>Contribution multiplier<TooltipBox id="t-mult6" text={`Every dollar contributed (starting balances + cumulative inflows) has grown to this multiple by age ${summaryRefAge}. A multiplier ≥2× means CPF has at least doubled every dollar ever put in.`} /></p>
+                                    <p style={mVal(contribMul6 >= 2 ? "var(--clr-green)" : contribMul6 >= 1.5 ? "var(--clr-amber)" : "var(--text-muted)")}>{contribMul6.toFixed(2)}×</p>
+                                    <p style={mSub}>balance ÷ total contributions</p>
+                                  </div>
+                                )}
+                                {xirrStd6 !== null && (
+                                  <div style={mRow(!xirrEsc6 && !xirrBas6)}>
+                                    <p style={mLabel}>XIRR · Standard<TooltipBox id="t-xirr-std6" text={`XIRR for the Standard plan at age ${summaryRefAge}: the annualised rate equating all contributions to Standard plan payouts. ≥4% = strong; 2–4% = moderate; <2% = below CPF deposit rates.${isRealDollars ? " Always a nominal rate." : ""}`} /></p>
+                                    <p style={mVal(xirrCol6(xirrStd6))}>{xirrStd6.toFixed(2)}%</p>
+                                    <p style={mSub}>{isRealDollars ? "nominal rate · not inflation-adjusted" : "annualised return on all contributions"}</p>
+                                  </div>
+                                )}
+                                {xirrEsc6 !== null && (
+                                  <div style={mRow(!xirrBas6)}>
+                                    <p style={mLabel}>XIRR · Escalating<TooltipBox id="t-xirr-esc6" text={`XIRR for the Escalating plan at age ${summaryRefAge}. Starts lower than Standard but rises 2%/yr — typically higher than Standard if you live past ~82.${isRealDollars ? " Always a nominal rate." : ""}`} /></p>
+                                    <p style={mVal(xirrCol6(xirrEsc6))}>{xirrEsc6.toFixed(2)}%</p>
+                                    <p style={mSub}>{isRealDollars ? "nominal rate · not inflation-adjusted" : "annualised return on all contributions"}</p>
+                                  </div>
+                                )}
+                                {xirrBas6 !== null && (
+                                  <div style={mRow(true)}>
+                                    <p style={mLabel}>XIRR · Basic<TooltipBox id="t-xirr-bas6" text={`XIRR for the Basic plan at age ${summaryRefAge}. Basic has two phases which can prevent solver convergence — use the Data Table Yield IRR% column for per-age detail.${isRealDollars ? " Always a nominal rate." : ""}`} /></p>
+                                    <p style={mVal(xirrCol6(xirrBas6))}>{xirrBas6.toFixed(2)}%</p>
+                                    <p style={mSub}>{isRealDollars ? "nominal rate · not inflation-adjusted" : "annualised return on all contributions"}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* ── Column 3: Cash Flow & Tax ── */}
+                            <div style={panelShell}>
+                              <div style={{ padding: "8px 13px", borderBottom: "1px solid rgba(217,119,6,0.2)", background: "rgba(217,119,6,0.07)", display: "flex", alignItems: "center", gap: 6 }}>
+                                <ArrowRightLeft style={{ width: 11, height: 11, color: "var(--clr-amber)", flexShrink: 0 }} />
+                                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--clr-amber)" }}>Cash flow &amp; tax</span>
+                              </div>
+                              <div style={panelBody}>
+                                <div style={mRow(false)}>
+                                  <p style={mLabel}>Cumulative top-ups<TooltipBox id="t-topups" text={tooltips.topups} /></p>
+                                  <p style={mVal("var(--clr-green)")}>{formatCurrency(cumTopups)}</p>
+                                  {cumTopups > 0 && <p style={mSub}>avg {formatCurrency(Math.round(cumTopups / Math.max(1, summaryRefAge - (Number(inputs.currentAge)||35))))}/yr</p>}
+                                </div>
+                                <div style={mRow(false)}>
+                                  <p style={mLabel}>Cumulative outflow<TooltipBox id="t-outflow" text={tooltips.outflow} /></p>
+                                  <p style={mVal("#f472b6")}>{formatCurrency(cumOutflow)}</p>
+                                  {cumTopups > 0 && cumOutflow > 0 && <p style={mSub}>{Math.round((cumOutflow / cumTopups) * 100)}% of contributions</p>}
+                                </div>
+                                <div style={mRow(true)}>
+                                  <p style={{ ...mLabel, color: "var(--clr-amber2)" }}>Est. tax savings (RSTU)<TooltipBox id="t-rstu" text={tooltips.rstu} /></p>
+                                  <p style={mVal("var(--clr-amber)")}>{formatCurrency(estimatedTaxSavings)}<span style={{ fontSize: 10, color: "#92400e", marginLeft: 4 }}>/ yr</span></p>
+                                  {currentSaRa >= currentFRS
+                                    ? <p style={{ ...mSub, color: "var(--clr-amber2)" }}>SA/RA ≥ FRS — no relief</p>
+                                    : estimatedTaxSavings === 0
+                                    ? <p style={{ ...mSub, color: "var(--clr-amber2)" }}>Add RSTU to unlock ↗</p>
+                                    : currentSaRa < currentFRS && eligibleRSTU < (Number(inputs.vcSaTopup) || 0)
+                                    ? <p style={{ ...mSub, color: "var(--clr-amber2)" }}>Capped at FRS headroom</p>
+                                    : null}
+                                </div>
+                              </div>
+                            </div>
+
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
