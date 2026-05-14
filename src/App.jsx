@@ -618,7 +618,7 @@ const SPOUSE_DEFAULT_INPUTS = {
   oaDrawdownMonthly: 0, oaDrawdownStartAge: 0,
   dieWithZeroEnabled: false,
   lifeEvents: [],
-  milestoneAge: 0, milestoneAge2: 0, milestoneAge3: 0,
+  milestoneAge: 0, milestoneAge2: 0, milestoneAge3: 0, milestoneAge4: 0, milestoneAge5: 0, // BUG-7 fix: complete the explicit list
 };
 
 const PRESET_PROFILES = [
@@ -1088,6 +1088,79 @@ const SCENARIO_LABELS = INPUT_LABELS;
 //
 // ARCHITECTURE NOTE: runProjectionEngine is intentionally never modified.
 // All RSS logic lives exclusively in this function.
+
+// ── BUG-5 fix: runProjectionWithDWZ ─────────────────────────────────────────
+// Shared Die-with-Zero multi-pass wrapper — extracts the DWZ logic that was
+// previously duplicated inline inside the projection useMemo so scenario A/B
+// and the Compare tab capture can also honour DWZ when it is enabled.
+//
+// If dieWithZeroEnabled is false (or absent), delegates directly to engineFn.
+// Otherwise runs up to 4 engine passes to compute the correct OA + private-asset
+// monthly draw that depletes both to ~$0 at dieWithZeroAge.
+//
+// Returns the final engine pass array, with the same _dwz* metadata fields
+// the main projection useMemo attaches (used by the DWZ UI panel and PDF).
+function runProjectionWithDWZ(inputs, engineFn) {
+  if (!inputs.dieWithZeroEnabled) return engineFn(inputs);
+  const isRSS = inputs.cpfScheme === 'rss';
+  const pa   = isRSS
+    ? (Number(inputs.currentAge) || 68)
+    : (Number(inputs.payoutAge) || 65);
+  const dwzA = Number(inputs.dieWithZeroAge) || 85;
+  const n    = Math.max(1, dwzA - pa);
+  const rOA  = 0.025;
+  const pass1 = engineFn({ ...inputs, oaDrawdownMonthly: 0, oaDrawdownStartAge: 0 });
+  const pass1ByAge = new Map(pass1.map(r => [r.age, r]));
+  const oaAtPayout = pass1ByAge.get(pa)?.oa || 0;
+  const dwzPmt = oaAtPayout > 0
+    ? (rOA > 0 ? Math.round(oaAtPayout * rOA / (1 - Math.pow(1 + rOA, -n)) / 12) : Math.round(oaAtPayout / n / 12))
+    : 0;
+  const pass2 = engineFn({ ...inputs, oaDrawdownMonthly: dwzPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 });
+  const pass2ByAge = new Map(pass2.map(r => [r.age, r]));
+  const residualOa = pass2ByAge.get(dwzA)?.oa || 0;
+  let finalPmt  = dwzPmt;
+  let finalPass = pass2;
+  if (residualOa > 500 && dwzPmt > 0) {
+    const correctionMonthly = Math.round(residualOa / Math.max(1, n * 12));
+    finalPmt  = dwzPmt + correctionMonthly;
+    finalPass = engineFn({ ...inputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 });
+  }
+  const finalPassByAge = new Map(finalPass.map(r => [r.age, r]));
+  finalPass._dwzOaMonthly  = finalPmt;
+  finalPass._dwzStartAge   = pa;
+  finalPass._dwzResidualOa = finalPassByAge.get(dwzA)?.oa || 0;
+  finalPass._dwzResidualPriv = 0;
+  const rPriv = Math.max(0, (Number(inputs.privateAssetGrowthRate) || 0) / 100);
+  const privAtPayout = finalPassByAge.get(pa)?.privateAssets || 0;
+  let pmtPrivAnnual = privAtPayout > 0
+    ? (rPriv > 0 ? Math.round(privAtPayout * rPriv / (1 - Math.pow(1 + rPriv, -n))) : Math.round(privAtPayout / n))
+    : 0;
+  if (pmtPrivAnnual > 0) {
+    let privPass = engineFn(
+      { ...inputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
+      { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa }
+    );
+    let privPassByAge = new Map(privPass.map(r => [r.age, r]));
+    const residualPriv = privPassByAge.get(dwzA)?.privateAssets || 0;
+    if (residualPriv > 500 && pmtPrivAnnual > 0) {
+      const correctionAnnual = Math.round(residualPriv / Math.max(1, n));
+      pmtPrivAnnual += correctionAnnual;
+      privPass = engineFn(
+        { ...inputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
+        { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa }
+      );
+      privPassByAge = new Map(privPass.map(r => [r.age, r]));
+    }
+    finalPass = privPass;
+    finalPass._dwzOaMonthly   = finalPmt;
+    finalPass._dwzStartAge    = pa;
+    finalPass._dwzResidualOa  = privPassByAge.get(dwzA)?.oa || 0;
+    finalPass._dwzResidualPriv = privPassByAge.get(dwzA)?.privateAssets || 0;
+  }
+  finalPass._dwzPrivMonthly = Math.round(pmtPrivAnnual / 12);
+  return finalPass;
+}
+
 function runRSSEngine(inputs, {
   overrideContribStop,
   overrideVcSA,
@@ -1211,7 +1284,7 @@ function runRSSEngine(inputs, {
   const plannedDownpaymentOA = Number(inputs.plannedDownpaymentOA) || 0;
   const downpaymentAge       = Number(inputs.downpaymentAge) || 35;
   let downpaymentApplied = startAge > downpaymentAge;
-  const srsCap = (inputs.citizenStatus === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
+  const srsCap = ((inputs.citizenStatus || 'SC').toLowerCase() === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // BUG-9 fix: normalise case
   const srsContrib     = overrideSrsContrib !== undefined ? Math.min(overrideSrsContrib, srsCap) : Math.min(Number(inputs.srsAnnualContribution) || 0, srsCap);
   const srsContribStop = Number(inputs.srsContribStopAge)    || 63;
   const srsReturn      = (Number(inputs.srsReturnRate) || 0) / 100;
@@ -1220,6 +1293,14 @@ function runRSSEngine(inputs, {
   let srsBalance        = Number(inputs.srsBalance) || 0;
   let srsDrawdownApplied = startAge >= srsDrawStart;
   let srsAnnualDraw      = 0;
+  // BUG-2 fix: when member is already past drawdown start age, the loop guard
+  // (age === srsDrawStart && !srsDrawdownApplied) can never fire. Pre-compute
+  // srsAnnualDraw here so the balance depletes correctly from the first year.
+  if (srsDrawdownApplied && srsBalance > 0 && srsDrawYears > 0) {
+    srsAnnualDraw = srsReturn > 0
+      ? Math.round(srsBalance * srsReturn / (1 - Math.pow(1 + srsReturn, -srsDrawYears)))
+      : Math.round(srsBalance / srsDrawYears);
+  }
   const yearsTo55  = Math.max(0, 55 - startAge);
   const projFRS55  = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + yearsTo55) - 2026)));
   const past55FRS  = Math.round(RETIREMENT_SUMS_2026.FRS / Math.pow(1 + rsGrowth, Math.max(0, startAge - 55)));
@@ -1262,7 +1343,7 @@ function runRSSEngine(inputs, {
   const owAnnualSubjectToCPF = owMonthly * 12;
   const awCeiling            = Math.max(0, 102000 - owAnnualSubjectToCPF);
   const isPR          = _csNorm === 'PR';
-  const isForeigner   = _csNorm === 'foreigner';
+  const isForeigner   = _csNorm === 'FOREIGNER'; // BUG-1 fix: _csNorm is .toUpperCase() so must compare uppercase
   const startPrYear   = Math.min(3, Math.max(1, Number(inputs.prYear) || 3));
   const annualGrossSalary = owMonthly * 12;
   let currentPrYear   = startPrYear;
@@ -2057,7 +2138,7 @@ function runProjectionEngine(inputs, {
   // NOT the React component's live inputs state. validateInputs uses `inp` for the
   // same cap — both correctly read from their own function parameter; the naming
   // difference (inputs vs inp) is stylistic only and carries no runtime risk.
-  const srsCap = (inputs.citizenStatus === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // P2 fix: use module constants
+  const srsCap = ((inputs.citizenStatus || 'SC').toLowerCase() === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // BUG-9 fix + P2 fix
   const srsContrib = overrideSrsContrib !== undefined ? Math.min(overrideSrsContrib, srsCap) : Math.min(Number(inputs.srsAnnualContribution) || 0, srsCap);
   const srsContribStop = Number(inputs.srsContribStopAge) || 63;
   const srsReturn = (Number(inputs.srsReturnRate) || 0) / 100;
@@ -2066,6 +2147,14 @@ function runProjectionEngine(inputs, {
   let srsBalance = Number(inputs.srsBalance) || 0;
   let srsDrawdownApplied = startAge >= srsDrawStart;
   let srsAnnualDraw = 0; // computed once at drawdown start age
+  // BUG-2 fix: when member is already past drawdown start age, the loop guard
+  // (age === srsDrawStart && !srsDrawdownApplied) can never fire. Pre-compute
+  // srsAnnualDraw here so the balance depletes correctly from the first year.
+  if (srsDrawdownApplied && srsBalance > 0 && srsDrawYears > 0) {
+    srsAnnualDraw = srsReturn > 0
+      ? Math.round(srsBalance * srsReturn / (1 - Math.pow(1 + srsReturn, -srsDrawYears)))
+      : Math.round(srsBalance / srsDrawYears);
+  }
 
   // Cohort FRS at age 55
   const yearsTo55 = Math.max(0, 55 - startAge);
@@ -2149,7 +2238,7 @@ function runProjectionEngine(inputs, {
   //   B. startPrYear < 3, currentPrYear >= 3 → SC/PR3+ rates × gross salary [graduated]
   //   C. SC or PR3+ from start → baseOA_Emp * gf          [standard]
   const isPR = _csNorm === 'PR';
-  const isForeigner = _csNorm === 'foreigner'; // B1: foreigners have no CPF — gates all contributions, voluntary top-ups, and transfers
+  const isForeigner = _csNorm === 'FOREIGNER'; // BUG-1 fix: _csNorm is .toUpperCase() so must compare uppercase — B1: foreigners have no CPF
   const startPrYear = Math.min(3, Math.max(1, Number(inputs.prYear) || 3));
   const annualGrossSalary = owMonthly * 12; // already capped at $8,000/mo above
   let currentPrYear = startPrYear;
@@ -3378,6 +3467,7 @@ const formatCurrency = val => "$" + Math.round(Number(val) || 0).toString().repl
 const LIFE_EVENT_DEFAULTS_MOD = {
   id: "", type: "retrenchment", label: "", startAge: 35, endAge: 36,
   magnitude: 0, enabled: true, drawSource: "oa_then_private",
+  destination: "private",  // BUG-3 fix: engine + form use 'destination'; 'windfallDest' kept for old-profile compat
   windfallDest: "private", hyperRate: 0.06, overrideSalary: 0,
 };
 const BOOL_FIELDS_MOD = [
@@ -4347,6 +4437,23 @@ export default function App() {
       if (ma5_val <= ca) errs.milestoneAge5 = "Milestone age must be greater than current age";
       else if (ma5_val > 95) errs.milestoneAge5 = "Milestone age must be ≤ 95";
     }
+    // BUG-6 fix: cross-field duplicate check — flag any milestone that repeats another
+    {
+      const seen = new Set();
+      const msPairs = [
+        ['milestoneAge',  ma_val],  ['milestoneAge2', ma2_val],
+        ['milestoneAge3', ma3_val], ['milestoneAge4', ma4_val],
+        ['milestoneAge5', ma5_val],
+      ];
+      for (const [key, val] of msPairs) {
+        if (val !== 0) {
+          if (seen.has(val) && !errs[key]) {
+            errs[key] = `Age ${val} is already used by another milestone`;
+          }
+          seen.add(val);
+        }
+      }
+    }
     // ── RSS-specific validations (additive block — does not touch any CPF LIFE check above) ──
     if (inp.cpfScheme === 'rss') {
       const rssStart = Number(inp.rssPayoutStartAge) || 65;
@@ -4726,7 +4833,7 @@ export default function App() {
       if (pmScheme === 'shb' && !errs.propMonetiseRaTopup && pmRA > 90000) errs.propMonetiseRaTopup = "SHB RA bonus cap is $30,000–$90,000 depending on flat type — verify with CPF Board";
     }
     // SRS validation
-    const srsCap = (inp.citizenStatus === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // P2 fix: use module constants
+    const srsCap = ((inp.citizenStatus || 'SC').toLowerCase() === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // BUG-9 fix + P2 fix
     const srsContrib = Number(inp.srsAnnualContribution) || 0;
     if (srsContrib < 0 || srsContrib > srsCap) errs.srsAnnualContribution = `Max $${srsCap.toLocaleString()}/yr`;
     const srsBal = Number(inp.srsBalance) || 0;
@@ -4826,9 +4933,11 @@ export default function App() {
         let shareLinkScenariosRestored = false;
         if ('scenarioAInputs' in fullState) {
           if (fullState.scenarioAInputs && typeof fullState.scenarioAInputs === 'object') {
-            const safeScenA = { ...DEFAULT_INPUTS };
-            Object.keys(DEFAULT_INPUTS).forEach(k => { if (fullState.scenarioAInputs[k] !== undefined) safeScenA[k] = fullState.scenarioAInputs[k]; });
-            setScenarioA({ inputs: safeScenA, projection: (safeScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenA), payoutProj: null });
+            // BUG-4 fix: use buildSafeInputs (boolean coercion + lifeEvents sanitisation)
+            // BUG-5 fix: use runProjectionWithDWZ so DWZ multi-pass fires when enabled
+            const safeScenA = buildSafeInputs(fullState.scenarioAInputs);
+            const engineFnA = safeScenA.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine;
+            setScenarioA({ inputs: safeScenA, projection: runProjectionWithDWZ(safeScenA, engineFnA), payoutProj: null });
             shareLinkScenariosRestored = true;
           } else {
             setScenarioA(null); // explicit null → no scenario in this share link
@@ -4837,9 +4946,10 @@ export default function App() {
         // else: key absent → leave existing slot untouched
         if ('scenarioBInputs' in fullState) {
           if (fullState.scenarioBInputs && typeof fullState.scenarioBInputs === 'object') {
-            const safeScenB = { ...DEFAULT_INPUTS };
-            Object.keys(DEFAULT_INPUTS).forEach(k => { if (fullState.scenarioBInputs[k] !== undefined) safeScenB[k] = fullState.scenarioBInputs[k]; });
-            setScenarioB({ inputs: safeScenB, projection: (safeScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine)(safeScenB), payoutProj: null });
+            // BUG-4 fix: use buildSafeInputs; BUG-5 fix: use runProjectionWithDWZ
+            const safeScenB = buildSafeInputs(fullState.scenarioBInputs);
+            const engineFnB = safeScenB.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine;
+            setScenarioB({ inputs: safeScenB, projection: runProjectionWithDWZ(safeScenB, engineFnB), payoutProj: null });
             shareLinkScenariosRestored = true;
           } else {
             setScenarioB(null);
@@ -5591,6 +5701,7 @@ export default function App() {
           const LIFE_EVENT_DEFAULTS = {
             id: "", type: "retrenchment", label: "", startAge: 35, endAge: 36,
             magnitude: 0, enabled: true, drawSource: "oa_then_private",
+            destination: "private",  // BUG-3 fix
             windfallDest: "private", hyperRate: 0.06, overrideSalary: 0,
           };
           if (Array.isArray(safe.lifeEvents)) {
@@ -5695,6 +5806,7 @@ export default function App() {
               const LIFE_EVENT_DEFAULTS = {
                 id: "", type: "retrenchment", label: "", startAge: 35, endAge: 36,
                 magnitude: 0, enabled: true, drawSource: "oa_then_private",
+                destination: "private",  // BUG-3 fix
                 windfallDest: "private", hyperRate: 0.06, overrideSalary: 0,
               };
               safeSpouse.lifeEvents = safeSpouse.lifeEvents.map(ev => {
@@ -5742,8 +5854,11 @@ export default function App() {
           // Previously always called runProjectionEngine regardless of scheme, so RSS
           // scenarios would silently use the wrong engine once PR-2 (full RSS engine)
           // is merged. Now routes correctly: RSS → runRSSEngine, LIFE → runProjectionEngine.
-          const scenarioEngineFn = (inp) =>
-            inp.cpfScheme === 'rss' ? runRSSEngine(inp) : runProjectionEngine(inp);
+          // BUG-5 fix: use runProjectionWithDWZ so DWZ multi-pass fires when enabled
+          const scenarioEngineFn = (inp) => {
+            const fn = inp.cpfScheme === 'rss' ? runRSSEngine : runProjectionEngine;
+            return runProjectionWithDWZ(inp, fn);
+          };
           try {
             // Fix 1: dual-format detection for Scenario A.
             // — Flat key (scenarioAInputs): used by share-link exports; future-proofs JSON export if aligned.
