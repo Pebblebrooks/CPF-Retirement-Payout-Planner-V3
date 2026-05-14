@@ -10572,7 +10572,7 @@ ${milestones.length > 0 ? `<table>
               <div className={`sidebar-col-body${colOpen[1] ? "" : " col-collapsed"}`}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <SidebarSectionHeader id="profile" label="Profile" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} badge={null}
-                collapsedHint="Name · Age · Citizenship · Gender · Employment type · PR tenure" />
+                collapsedHint="Name · Age · Citizenship (SC / PR / Foreigner) · Gender · CPF scheme · Payout age · Milestone ages" />
               {openSections.has("profile") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div><label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>Name</label>
@@ -11005,7 +11005,7 @@ ${milestones.length > 0 ? `<table>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <SidebarSectionHeader id="cpfBalances" label="CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} badge={null}
-                collapsedHint="Current OA · SA / RA (post-55) · MA balances" />
+                collapsedHint="Ordinary (OA) · Special / Retirement (SA/RA) · MediSave (MA) · Progress trackers toward FRS, ERS and BHS" />
               {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Balance inputs */}
@@ -11064,8 +11064,8 @@ ${milestones.length > 0 ? `<table>
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
               <SidebarSectionHeader id="contribs" label={`Mandatory Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 9, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}</>}
                 collapsedHint={isSelfEmployed
-                  ? "SEP · MA contribution · Salary for MediSave allocation"
-                  : "Salary (OW / AW) · OA / SA / MA contributions · Auto-Calc ⚡ · PR tenure rates"} />
+                  ? "SEP — MediSave contributions only · Salary reference for retirement sum projections"
+                  : "OA · SA · MA employee & employer amounts · Auto-Calc from OW + AW · Salary growth · Phase 2 salary · Career break · PR tenure"} />
               {openSections.has("contribs") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 10 }}>
                   <button onClick={() => setInputs(p => ({ ...p, isSelfEmployed: !p.isSelfEmployed, empOaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empOaCont : 0, empSaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empSaCont : 0, empMaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empMaCont : 0 }))} style={{ fontSize: 10, background: isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.15)" : "rgba(100,116,139,0.15)", color: isSelfEmployed ? "var(--clr-orange)" : "var(--text-subtle)", padding: "4px 10px", borderRadius: 6, fontWeight: 700, border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer" }}>
