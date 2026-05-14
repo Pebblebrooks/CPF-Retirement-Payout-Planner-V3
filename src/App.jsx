@@ -1570,7 +1570,11 @@ function runRSSEngine(inputs, {
         const actualMA = actualMandatoryMA_emp + actualVcMA_emp + actualWisMA_emp;
         const maSpillEmp = (mandatoryMA_i + cappedVcMA + wisMA) - actualMA;
         oa += totalOA; ma += actualMA;
-        const empContribInflowBase = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + wisSA;
+        // FIX-maSpill: include maSpillEmp in the inflow base so MA contributions that
+        // overflow BHS and redirect to SA/RA/OA are tracked in totalInjected.
+        // Previously maSpillEmp credited SA or RA but was excluded from yearInflow /
+        // totalInjected, causing the "How your CPF grew" formula to undercount by ~$9k.
+        const empContribInflowBase = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + maSpillEmp + wisSA;
         yearMandatory += mandatoryOA_i + mandatorySA_dyn + actualMandatoryMA_emp;
         const govGrantContrib_emp = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
         yearVoluntary += (cappedVcOA - vcVhrAmtEff) + (vc3aCashEff > 0 ? actualVcMA_emp : 0) + (cappedVcSA - govGrantContrib_emp) + vcVhrAmtEff;
@@ -2696,9 +2700,9 @@ function runProjectionEngine(inputs, {
         // MMSS carry already accumulated into yearInflow before the contrib block.
         // BUG-02 fix: actualMrss_emp is computed below (line ~1181) but must be included
         // in empContribInflow so yearInflow and totalInjected are accurate.
-        // We defer the final empContribInflow addition until after actualMrss_emp is known.
-        // The base portion (without MRSS) is accumulated first; MRSS is added after line 1182.
-        const empContribInflowBase = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + wisSA;
+        // FIX-maSpill (RSS engine): include maSpillEmp so MA contributions that overflow
+        // BHS and redirect to SA/RA/OA are tracked in totalInjected (same fix as LIFE engine).
+        const empContribInflowBase = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + maSpillEmp + wisSA;
         // yearInflow and totalInjected updated below after actualMrss_emp is resolved.
         // Cashflow ledger breakdown (employed) — B3: use priority-split actuals, not Math.min on raw
         yearMandatory += mandatoryOA_i + mandatorySA_dyn + actualMandatoryMA_emp;
@@ -5419,12 +5423,17 @@ export default function App() {
 
   // ── Save Profile: saves ALL app state — inputs + scenarios + UI choices — as JSON directly ──
   const handleExportProfile = () => {
-    lastSavedRef.current = JSON.stringify(inputs);
+    // FIX-export-debounce: export debouncedInputs (the engine-stable state that drives all charts)
+    // rather than live inputs. If the user edits a field and immediately clicks Export before the
+    // 180ms debounce fires, live inputs differ from the displayed projection — the saved file would
+    // be internally inconsistent (new inputs but old chart values). debouncedInputs always matches
+    // what is shown on screen, making the exported file self-consistent.
+    lastSavedRef.current = JSON.stringify(debouncedInputs);
     setSavedSeq(s => s + 1); // Rev#18: trigger hasUnsaved recompute → badge disappears
-    const memberName = (inputs.name || "Member").replace(/[^a-zA-Z0-9]/g, "_");
+    const memberName = (debouncedInputs.name || "Member").replace(/[^a-zA-Z0-9]/g, "_");
     const fullState = {
-      // Core inputs
-      inputs,
+      // Core inputs (use debouncedInputs so export always matches the charts on screen)
+      inputs: debouncedInputs,
       // Tab + LIFE tab choices
       activeTab,
       highlightPlan,
@@ -5586,6 +5595,11 @@ export default function App() {
         }
         const safeIn = sanitiseInputs(rawInputs);
         setInputs(safeIn);
+        // FIX-import-debounce: bypass the 180ms debounce on bulk profile load so the engine
+        // and charts update immediately. Without this, setInputs fires but debouncedInputs (which
+        // drives the projection) still holds the old profile for 180ms — charts show stale data
+        // against fresh sidebar values during that window.
+        setDebouncedInputs(safeIn);
         // FIX-lastSaved: stamp immediately after setInputs so the beforeunload "Unsaved changes"
         // guard is cleared for ALL profile formats (old flat JSON + new {inputs:…} wrapper).
         // The stamp inside if(p.inputs) below is redundant but kept as a safety net.
@@ -10023,16 +10037,28 @@ ${milestones.length > 0 ? `<table>
           {/* ── Header actions ── */}
           <div className="cpf-header-actions" style={{ display: "flex", alignItems: "center", gap: 5, flex: "1 1 auto", minWidth: 0, justifyContent: "flex-end" }}>
 
-            {/* 1. Nom($) / Real($) toggle — desktop + tablet only; hidden on mobile (inside gear) */}
+            {/* NAV ORDER (desktop): Unsaved | Nom/Real | Samples | Share▾ | Report▾ | Display▾ | Reset | ⚙(tablet/mobile) */}
+
+            {/* 1. Unsaved badge — all viewports (moved first: highest-priority signal) */}
+            {hasUnsaved && (
+              <span title="Inputs changed since last export"
+                style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(var(--clr-amber-rgb),0.15)", color: "var(--clr-amber)", padding: "5px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.4)", animation: "unsavedPulse 2.4s ease-in-out infinite", whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
+                ● Unsaved
+              </span>
+            )}
+
+            {/* 2. Nom($) / Real($) toggle — desktop + tablet only; hidden on mobile (inside gear) */}
             <div className="cpf-nav-nomreal" style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1, flexShrink: 0 }}>
               <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nom($)</button>
               <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real($)</button>
             </div>
 
-            {/* UX-P1: Reset and Samples moved exclusively to the ⚙ gear menu.
-                Both actions are already there; having them here too doubles the toolbar from
-                4 items to 6 without adding discoverability. Toolbar now reads:
-                [Nom/Real] [Share▾] [Report▾] [⚙] on desktop+tablet. */}
+            {/* 3. Samples — desktop only (promoted before Share for discoverability) */}
+            <button className="cpf-nav-d-only" onClick={() => setShowPresets(true)}
+              style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+              title="Load a sample profile">
+              <Users style={{ width: 13, height: 13 }} />Samples
+            </button>
 
             {/* 4. Share dropdown — desktop + tablet */}
             <div className="cpf-nav-dt-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
@@ -10079,37 +10105,7 @@ ${milestones.length > 0 ? `<table>
               )}
             </div>
 
-            {/* UX-P1: Display dropdown removed — FHD/HD/Auto and theme are in the ⚙ gear menu.
-                Removing this desktop-only duplicate reduces toolbar to 4 items: [Nom/Real] [Share▾] [Report▾] [⚙].
-                Unsaved badge moved here (all viewports). Gear promoted from tablet+mobile to all viewports. */}
-
-            {/* Unsaved badge — all viewports */}
-            {hasUnsaved && (
-              <span title="Inputs changed since last export"
-                style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(var(--clr-amber-rgb),0.15)", color: "var(--clr-amber)", padding: "5px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.4)", animation: "unsavedPulse 2.4s ease-in-out infinite", whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
-                ● Unsaved
-              </span>
-            )}
-
-            {/* UX: On desktop (≥1025px) all settings are exposed directly as navbar buttons —
-                no gear icon, no settings icon. Tablet+mobile use the ⚙ gear below.
-                Layout: [Nom/Real] [↺ Reset] [👥 Samples] [Share▾] [Report▾] [Display▾] */}
-
-            {/* Reset — desktop only */}
-            <button className="cpf-nav-d-only" onClick={handleReset}
-              style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.08)", color: "var(--clr-red)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1px solid rgba(239,68,68,0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-              title="Reset all inputs to defaults">
-              <RotateCcw style={{ width: 13, height: 13 }} />Reset
-            </button>
-
-            {/* Samples — desktop only */}
-            <button className="cpf-nav-d-only" onClick={() => setShowPresets(true)}
-              style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-              title="Load a sample profile">
-              <Users style={{ width: 13, height: 13 }} />Samples
-            </button>
-
-            {/* Display — desktop only: FHD/HD/Auto + Dark/Light + Sidebar toggle + Setup Wizard */}
+            {/* 6. Display — desktop only: FHD/HD/Auto + Dark/Light + Sidebar toggle + Setup Wizard */}
             <div className="cpf-nav-d-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
                 onClick={() => { setShowSettingsMenu(v => !v); setShowShareMenu(false); setShowReportMenu(false); }}
@@ -10145,9 +10141,16 @@ ${milestones.length > 0 ? `<table>
               )}
             </div>
 
+            {/* 7. Reset — desktop only, moved to end (destructive action goes last) */}
+            <button className="cpf-nav-d-only" onClick={handleReset}
+              style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.08)", color: "var(--clr-red)", padding: "6px 13px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1px solid rgba(239,68,68,0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+              title="Reset all inputs to defaults">
+              <RotateCcw style={{ width: 13, height: 13 }} />Reset
+            </button>
+
             {/* ⚙ Settings gear icon — TABLET + MOBILE ONLY (<1025px).
                 On smaller viewports the navbar is tight so a compact icon is shown instead
-                of the labeled Settings button above. Same state, richer dropdown (includes
+                of the labeled buttons above. Same state, richer dropdown (includes
                 Share/Report sections that are hidden from the navbar on mobile). */}
             <div className="cpf-nav-tm-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
@@ -10395,7 +10398,8 @@ ${milestones.length > 0 ? `<table>
             <div className="sidebar-col sidebar-col-1">
               <div className={`sidebar-col-body${colOpen[1] ? "" : " col-collapsed"}`}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="profile" label="Profile" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} badge={null} />
+              <SidebarSectionHeader id="profile" label="Profile" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} badge={null}
+                collapsedHint={[debouncedInputs.name, `Age ${debouncedInputs.currentAge||"—"}`, debouncedInputs.citizenship||"SC", debouncedInputs.gender||"Male", debouncedInputs.employmentType === "sep" ? "SEP" : "Employed"].filter(Boolean).join(" · ")} />
               {openSections.has("profile") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div><label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>Name</label>
@@ -10827,7 +10831,8 @@ ${milestones.length > 0 ? `<table>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="cpfBalances" label="CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} badge={null} />
+              <SidebarSectionHeader id="cpfBalances" label="CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} badge={null}
+                collapsedHint={`OA ${formatCurrency(Number(debouncedInputs.oaBalance)||0)} · ${Number(debouncedInputs.currentAge||35)>=55?"RA":"SA"} ${formatCurrency(Number(debouncedInputs.saBalance)||0)} · MA ${formatCurrency(Number(debouncedInputs.maBalance)||0)}`} />
               {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Balance inputs */}
@@ -10884,7 +10889,10 @@ ${milestones.length > 0 ? `<table>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="contribs" label={`Mandatory Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 9, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}</>} />
+              <SidebarSectionHeader id="contribs" label={`Mandatory Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 9, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}</>}
+                collapsedHint={isSelfEmployed
+                  ? `SEP · MA ${formatCurrency(Number(debouncedInputs.empMaCont)||0)}/yr · Salary ${formatCurrency(Number(debouncedInputs.salaryGross)||0)}`
+                  : `OA ${formatCurrency(Number(debouncedInputs.empOaCont)||0)} · SA ${formatCurrency(Number(debouncedInputs.empSaCont)||0)} · MA ${formatCurrency(Number(debouncedInputs.empMaCont)||0)} · Salary ${formatCurrency(Number(debouncedInputs.salaryGross)||0)}`} />
               {openSections.has("contribs") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 10 }}>
                   <button onClick={() => setInputs(p => ({ ...p, isSelfEmployed: !p.isSelfEmployed, empOaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empOaCont : 0, empSaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empSaCont : 0, empMaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empMaCont : 0 }))} style={{ fontSize: 10, background: isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.15)" : "rgba(100,116,139,0.15)", color: isSelfEmployed ? "var(--clr-orange)" : "var(--text-subtle)", padding: "4px 10px", borderRadius: 6, fontWeight: 700, border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer" }}>
@@ -13815,8 +13823,13 @@ ${milestones.length > 0 ? `<table>
                     const mRA    = mRow.ra  || 0;
                     const mSRS   = mRow.srsBalance    || 0;
                     const mPriv  = mRow.privateAssets || 0;
-                    const mTotal = mOA + mSA + mMA + mRA;
-                    return { mAge, mRow, mOA, mSA, mMA, mRA, mSRS, mPriv, mTotal,
+                    // FIX-mTotal: SA closes at age 55 and its balance transfers into RA.
+                    // The engine zeroes sa after closure, but any accounting residual in mSA
+                    // would be double-counted if we add both mSA and mRA. For post-55 milestone
+                    // ages, use mRA (the active retirement account); for pre-55, use mSA.
+                    const mIsPost55 = mAge >= 55;
+                    const mTotal = mOA + mMA + (mIsPost55 ? mRA : mSA);
+                    return { mAge, mRow, mOA, mSA, mMA, mRA, mSRS, mPriv, mTotal, mIsPost55,
                              mNetWorth: mTotal + mSRS + mPriv,
                              yearsToM: Math.max(0, mAge - ca_m),
                              mRealTotal: mTotal > 0 ? Math.round(mTotal / Math.pow(1 + inflRate, Math.max(0, mAge - ca_m))) : 0,
@@ -14065,11 +14078,23 @@ ${milestones.length > 0 ? `<table>
                     // projectionByAge (always nominal) so all three bars and the grand total
                     // respond correctly to the Nom/Real$ toggle.
                     const paRowBase = accumulationByAge.get(pa_z3) || {};
-                    const startBal = (Number(inputs.oaBalance)||0) + (Number(inputs.saBalance)||0) + (Number(inputs.maBalance)||0);
+                    // FIX-grandTotal: Replace the formula (startBal + totalInj + totalInt - totalOut)
+                    // with a direct balance sum from accumulationByAge. The formula had three problems:
+                    //   1. startBal used live `inputs` (not debouncedInputs) → wrong during 180ms debounce
+                    //   2. In Real$ mode, startBal was nominal but cumulative values were deflated → mixed vintages
+                    //   3. maSpillEmp was excluded from totalInjected → ~$9k accounting gap
+                    // The direct sum is always correct: accumulationByAge is nominal in Nom mode and
+                    // deflated in Real$ mode, so the total correctly tracks the toggle.
+                    // Note: paRowBase.ra already incorporates SA (SA closes into RA at 55), so
+                    // we add oa + ma + ra only. SA is 0 post-55; pre-55 we add sa explicitly.
+                    const paIsPost55 = pa_z3 >= 55;
+                    const grandTotal = (paRowBase.oa||0) + (paRowBase.ma||0) + (paIsPost55 ? (paRowBase.ra||0) : (paRowBase.sa||0) + (paRowBase.ra||0));
+                    // Opening balances for the "You & employer contributed" bar label
+                    // (still uses debouncedInputs to stay in sync with the engine)
+                    const startBal = (Number(debouncedInputs.oaBalance)||0) + (Number(debouncedInputs.saBalance)||0) + (Number(debouncedInputs.maBalance)||0);
                     const totalInj = paRowBase.cumulativeInjected || 0;
                     const totalInt = paRowBase.cumulativeInterest || 0;
                     const totalOut = paRowBase.cumulativeOutflow || 0;
-                    const grandTotal = startBal + totalInj + totalInt - totalOut;
                     const biggerBar = Math.max(totalInj + startBal, totalInt, 1);
                     const contribPct = Math.min(100, Math.round(((totalInj + startBal) / biggerBar) * 100));
                     const intPct = Math.min(100, Math.round((totalInt / biggerBar) * 100));
@@ -14806,39 +14831,138 @@ ${milestones.length > 0 ? `<table>
                               style={{ width: 120, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 12, fontFamily: "monospace" }} />
                             <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>Max $37,740</span>
                           </div>
-                          {/* What-if chart */}
+                          {/* What-if chart — FIX-3a: hover tooltip; FIX-3b: deflate wiRows in Real$ mode */}
                           {whatIfProjection ? (() => {
-                            const wiRows = whatIfProjection.rows || [];
+                            // FIX-3b: deflate wiRows so both curves are in the same dollar vintage.
+                            // displayAccumulation (baseRows) is already deflated when isRealDollars=true.
+                            // Previously wiRows were always nominal engine output → curves on mismatched scales.
+                            const inflD_wi = (Number(debouncedInputs.inflationRate) || 2) / 100;
+                            const caD_wi   = Number(debouncedInputs.currentAge) || 35;
+                            const rawWiRows = whatIfProjection.rows || [];
+                            const wiRows = isRealDollars
+                              ? rawWiRows.map(r => {
+                                  const f = Math.pow(1 + inflD_wi, Math.max(0, r.age - caD_wi));
+                                  return { ...r,
+                                    oa: Math.round((r.oa||0)/f), sa: Math.round((r.sa||0)/f),
+                                    ma: Math.round((r.ma||0)/f), ra: Math.round((r.ra||0)/f) };
+                                })
+                              : rawWiRows;
                             const baseRows = displayAccumulation || [];
+                            // Build O(1) lookup Maps for tooltip data
+                            const wiByAge   = new Map(wiRows.map(r => [r.age, r]));
+                            const baseByAge = new Map(baseRows.map(r => [r.age, r]));
                             const maxAge = Math.max(...wiRows.map(r => r.age), ...baseRows.map(r => r.age), effPA);
-                            const allTotals = [...wiRows.map(r => r.oa+r.sa+r.ma+r.ra), ...baseRows.map(r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0))].filter(v => v > 0);
+                            const wiTotal   = r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0);
+                            const baseTotal = r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0);
+                            const allTotals = [...wiRows.map(wiTotal), ...baseRows.map(baseTotal)].filter(v => v > 0);
                             const maxVal = Math.max(...allTotals, 1);
                             const chartW = 560; const chartH = 160; const pad = { t: 10, r: 20, b: 28, l: 58 };
-                            const xScale = age => pad.l + ((age - (Number(debouncedInputs.currentAge)||35)) / Math.max(1, maxAge - (Number(debouncedInputs.currentAge)||35))) * (chartW - pad.l - pad.r);
+                            const xScale = age => pad.l + ((age - caD_wi) / Math.max(1, maxAge - caD_wi)) * (chartW - pad.l - pad.r);
                             const yScale = val => chartH - pad.b - (val / maxVal) * (chartH - pad.t - pad.b);
-                            const basePath = baseRows.map((r,i) => `${i===0?"M":"L"}${xScale(r.age).toFixed(1)},${yScale((r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0)).toFixed(1)}`).join(" ");
-                            const wiPath   = wiRows.map((r,i) => `${i===0?"M":"L"}${xScale(r.age).toFixed(1)},${yScale(r.oa+r.sa+r.ma+r.ra).toFixed(1)}`).join(" ");
+                            const basePath = baseRows.map((r,i) => `${i===0?"M":"L"}${xScale(r.age).toFixed(1)},${yScale(baseTotal(r)).toFixed(1)}`).join(" ");
+                            const wiPath   = wiRows.map((r,i)   => `${i===0?"M":"L"}${xScale(r.age).toFixed(1)},${yScale(wiTotal(r)).toFixed(1)}`).join(" ");
                             const tickVals = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(maxVal * f));
+                            // FIX-3a: hover tooltip state — track hovered age from mouse X
+                            // We use a data-witooltip attribute trick to avoid useState inside render:
+                            // onMouseMove updates a sibling tooltip div's innerHTML directly (no React re-render).
+                            const svgContainerId = "wi-chart-svg-wrap";
+                            const tooltipId = "wi-chart-tooltip";
+                            const handleWiMouseMove = (e) => {
+                              const wrap = document.getElementById(svgContainerId);
+                              const tip  = document.getElementById(tooltipId);
+                              if (!wrap || !tip) return;
+                              const rect = wrap.getBoundingClientRect();
+                              const svgWidth = rect.width;
+                              // Map pixel X → age
+                              const relX = e.clientX - rect.left;
+                              const plotW = svgWidth * (chartW - pad.l - pad.r) / chartW;
+                              const plotX = relX - svgWidth * pad.l / chartW;
+                              const hAge = Math.round(caD_wi + (plotX / plotW) * (maxAge - caD_wi));
+                              const clampedAge = Math.max(caD_wi, Math.min(maxAge, hAge));
+                              // Find closest age with data
+                              let bestAge = clampedAge;
+                              for (let d = 0; d <= 3; d++) {
+                                if (wiByAge.has(clampedAge - d)) { bestAge = clampedAge - d; break; }
+                                if (wiByAge.has(clampedAge + d)) { bestAge = clampedAge + d; break; }
+                              }
+                              const wr = wiByAge.get(bestAge);
+                              const br = baseByAge.get(bestAge);
+                              if (!wr && !br) { tip.style.display = "none"; return; }
+                              const wt = wr ? wiTotal(wr) : 0;
+                              const bt = br ? baseTotal(br) : 0;
+                              const delta = wt - bt;
+                              const fmt = v => v >= 1000000 ? `$${(v/1e6).toFixed(2)}M` : v >= 1000 ? `$${Math.round(v/1000)}k` : `$${v}`;
+                              const deltaStr = (delta >= 0 ? "+" : "") + fmt(Math.abs(delta));
+                              const deltaCol = delta >= 0 ? "var(--clr-green)" : "var(--clr-red)";
+                              const saLabel = bestAge >= 55 ? "RA" : "SA";
+                              const wSaRa = wr ? ((wr.sa||0)+(wr.ra||0)) : 0;
+                              const bSaRa = br ? ((br.sa||0)+(br.ra||0)) : 0;
+                              const modeTag = isRealDollars ? " (Real$)" : "";
+                              tip.innerHTML = `
+                                <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;letter-spacing:.04em">
+                                  Age ${bestAge}${modeTag}
+                                </div>
+                                <table style="border-collapse:collapse;width:100%;font-size:10px">
+                                  <tr style="color:var(--text-muted)"><th></th><th style="text-align:right;padding:1px 4px">Base</th><th style="text-align:right;padding:1px 4px;color:var(--clr-green)">What-If</th></tr>
+                                  <tr><td style="color:var(--text-muted);padding:1px 0">OA</td>
+                                    <td style="text-align:right;padding:1px 4px;font-family:monospace">${br ? fmt(br.oa||0) : "—"}</td>
+                                    <td style="text-align:right;padding:1px 4px;font-family:monospace;color:var(--clr-green)">${wr ? fmt(wr.oa||0) : "—"}</td></tr>
+                                  <tr><td style="color:var(--text-muted);padding:1px 0">${saLabel}</td>
+                                    <td style="text-align:right;padding:1px 4px;font-family:monospace">${br ? fmt(bSaRa) : "—"}</td>
+                                    <td style="text-align:right;padding:1px 4px;font-family:monospace;color:var(--clr-green)">${wr ? fmt(wSaRa) : "—"}</td></tr>
+                                  <tr><td style="color:var(--text-muted);padding:1px 0">MA</td>
+                                    <td style="text-align:right;padding:1px 4px;font-family:monospace">${br ? fmt(br.ma||0) : "—"}</td>
+                                    <td style="text-align:right;padding:1px 4px;font-family:monospace;color:var(--clr-green)">${wr ? fmt(wr.ma||0) : "—"}</td></tr>
+                                  <tr style="border-top:1px solid var(--border-subtle)">
+                                    <td style="font-weight:700;padding:2px 0">Total</td>
+                                    <td style="text-align:right;padding:2px 4px;font-family:monospace;font-weight:700">${fmt(bt)}</td>
+                                    <td style="text-align:right;padding:2px 4px;font-family:monospace;font-weight:700;color:var(--clr-green)">${fmt(wt)}</td></tr>
+                                  <tr><td colspan="2" style="padding-top:4px;color:var(--text-muted);font-size:9px">Net difference</td>
+                                    <td style="text-align:right;padding:2px 4px;font-family:monospace;font-weight:700;color:${deltaCol}">${deltaStr}</td></tr>
+                                </table>`;
+                              // Position tooltip: left of cursor, flip right if near edge
+                              const tipLeft = e.clientX - rect.left + 12;
+                              tip.style.left  = tipLeft + 180 > svgWidth ? (tipLeft - 200) + "px" : tipLeft + "px";
+                              tip.style.top   = Math.max(0, e.clientY - rect.top - 60) + "px";
+                              tip.style.display = "block";
+                            };
+                            const handleWiMouseLeave = () => {
+                              const tip = document.getElementById(tooltipId);
+                              if (tip) tip.style.display = "none";
+                            };
                             return (
                               <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "14px 16px" }}>
-                                <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 10px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Base vs What-If · Total CPF Balance</p>
-                                <svg viewBox={`0 0 ${chartW} ${chartH}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
-                                  {tickVals.map(v => (
-                                    <g key={v}>
-                                      <line x1={pad.l} x2={chartW-pad.r} y1={yScale(v)} y2={yScale(v)} stroke="var(--border-subtle)" strokeWidth={0.5} />
-                                      <text x={pad.l-4} y={yScale(v)+3} textAnchor="end" fontSize={8} fill="var(--text-subtle)">{v>=1000000?`$${(v/1000000).toFixed(1)}M`:v>=1000?`$${Math.round(v/1000)}k`:v===0?"$0":""}</text>
-                                    </g>
-                                  ))}
-                                  {[...new Set([...(Number(debouncedInputs.currentAge)||35) % 5 === 0 ? [] : [], 35,40,45,50,55,60,65,70,75,80,85,90,95].filter(a => a >= (Number(debouncedInputs.currentAge)||35) && a <= maxAge))].map(a => (
-                                    <g key={a}>
-                                      <line x1={xScale(a)} x2={xScale(a)} y1={pad.t} y2={chartH-pad.b} stroke="var(--border-subtle)" strokeWidth={0.5} strokeDasharray="2,3" />
-                                      <text x={xScale(a)} y={chartH-pad.b+10} textAnchor="middle" fontSize={8} fill="var(--text-subtle)">{a}</text>
-                                    </g>
-                                  ))}
-                                  <path d={basePath} fill="none" stroke="var(--border-strong)" strokeWidth={1.5} strokeDasharray="4,3" />
-                                  <path d={wiPath} fill="none" stroke="var(--clr-green)" strokeWidth={2} />
-                                  <line x1={xScale(effPA)} x2={xScale(effPA)} y1={pad.t} y2={chartH-pad.b} stroke="var(--clr-blue)" strokeWidth={1} strokeDasharray="3,2" />
-                                </svg>
+                                <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 10px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                                  Base vs What-If · Total CPF Balance{isRealDollars ? " · Real$" : ""}
+                                  <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 8, opacity: 0.6 }}>Hover for per-account breakdown</span>
+                                </p>
+                                <div id={svgContainerId} style={{ position: "relative", cursor: "crosshair" }}
+                                  onMouseMove={handleWiMouseMove} onMouseLeave={handleWiMouseLeave}>
+                                  <svg viewBox={`0 0 ${chartW} ${chartH}`} style={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
+                                    {tickVals.map(v => (
+                                      <g key={v}>
+                                        <line x1={pad.l} x2={chartW-pad.r} y1={yScale(v)} y2={yScale(v)} stroke="var(--border-subtle)" strokeWidth={0.5} />
+                                        <text x={pad.l-4} y={yScale(v)+3} textAnchor="end" fontSize={8} fill="var(--text-subtle)">{v>=1000000?`$${(v/1000000).toFixed(1)}M`:v>=1000?`$${Math.round(v/1000)}k`:v===0?"$0":""}</text>
+                                      </g>
+                                    ))}
+                                    {[...new Set([35,40,45,50,55,60,65,70,75,80,85,90,95].filter(a => a >= caD_wi && a <= maxAge))].map(a => (
+                                      <g key={a}>
+                                        <line x1={xScale(a)} x2={xScale(a)} y1={pad.t} y2={chartH-pad.b} stroke="var(--border-subtle)" strokeWidth={0.5} strokeDasharray="2,3" />
+                                        <text x={xScale(a)} y={chartH-pad.b+10} textAnchor="middle" fontSize={8} fill="var(--text-subtle)">{a}</text>
+                                      </g>
+                                    ))}
+                                    <path d={basePath} fill="none" stroke="var(--border-strong)" strokeWidth={1.5} strokeDasharray="4,3" />
+                                    <path d={wiPath} fill="none" stroke="var(--clr-green)" strokeWidth={2} />
+                                    <line x1={xScale(effPA)} x2={xScale(effPA)} y1={pad.t} y2={chartH-pad.b} stroke="var(--clr-blue)" strokeWidth={1} strokeDasharray="3,2" />
+                                  </svg>
+                                  {/* Floating tooltip — updated imperatively via DOM to avoid React re-renders */}
+                                  <div id={tooltipId} style={{
+                                    display: "none", position: "absolute", pointerEvents: "none",
+                                    background: "var(--bg-panel)", border: "1px solid var(--border-strong)",
+                                    borderRadius: 10, padding: "10px 12px", minWidth: 190,
+                                    boxShadow: "0 4px 16px rgba(0,0,0,0.28)", zIndex: 20,
+                                  }} />
+                                </div>
                                 <div style={{ display: "flex", gap: 16, marginTop: 4, flexWrap: "wrap" }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}><div style={{ width: 18, height: 2, background: "var(--border-strong)", borderTop: "2px dashed var(--border-strong)" }} /><span style={{ fontSize: 10, color: "var(--text-muted)" }}>Base</span></div>
                                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}><div style={{ width: 18, height: 2, background: "var(--clr-green)" }} /><span style={{ fontSize: 10, color: "var(--text-muted)" }}>What-if</span></div>
