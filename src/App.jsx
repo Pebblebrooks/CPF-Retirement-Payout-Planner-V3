@@ -1210,7 +1210,10 @@ function runRSSEngine(inputs, {
   const housingStop = Number(inputs.housingStopAge) || 95;
   const salaryGrowth = (Number(inputs.salaryGrowthRate) || 0) / 100;
   const salaryBump = (overrideSalaryBump || 0) / 100;
-  const salaryPhaseAge    = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null ? Number(inputs.salaryPhaseAge) : null;
+  // Phase 2 is optional: "", null, and 0 all mean "no Phase 2". handleKeyDown can set
+  // unedited fields to 0, so 0 must be treated identically to empty/null.
+  const _salaryPhaseRaw = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null ? Number(inputs.salaryPhaseAge) : null;
+  const salaryPhaseAge  = _salaryPhaseRaw === 0 ? null : _salaryPhaseRaw;
   const salaryGrowthRate2 = (Number(inputs.salaryGrowthRate2) || 0) / 100;
   // Career break is now handled exclusively via Life Events (type: 'career_break') through leContribPaused.
   // The old careerBreakStartAge/EndAge fields have been removed from DEFAULT_INPUTS and are no longer read here.
@@ -2022,7 +2025,9 @@ function runProjectionEngine(inputs, {
   const salaryGrowth = (Number(inputs.salaryGrowthRate) || 0) / 100;
   const salaryBump = (overrideSalaryBump || 0) / 100;
   // Rev #22: phased salary & career break constants
-  const salaryPhaseAge       = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null ? Number(inputs.salaryPhaseAge) : null;
+  // Phase 2 optional: 0 treated same as "" — Phase 2 disabled.
+  const _salaryPhaseRaw2     = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null ? Number(inputs.salaryPhaseAge) : null;
+  const salaryPhaseAge       = _salaryPhaseRaw2 === 0 ? null : _salaryPhaseRaw2;
   const salaryGrowthRate2    = (Number(inputs.salaryGrowthRate2) || 0) / 100;
   // Career break is now handled exclusively via Life Events (type: 'career_break') through leContribPaused.
   // computeGF: returns the salary growth factor at a given age, respecting phase change only.
@@ -3347,10 +3352,13 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
       {/* Duration input — only shown for Recurring + durKey provided */}
       {isAnnual && durKey && (
         <span style={{ display: "inline-flex", alignItems: "center", marginLeft: 4,
-          background: "rgba(14,165,233,0.08)", border: "1px solid rgba(14,165,233,0.25)",
-          borderRadius: 3, padding: "0 6px 0 6px", height: 28 }}
-          title="Number of years to apply this recurring contribution (0 or blank = indefinite ∞)">
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em", marginRight: 2 }}>for</span>
+          background: durVal > 0 ? "rgba(14,165,233,0.12)" : "rgba(100,116,139,0.06)",
+          border: `1px solid ${durVal > 0 ? "rgba(14,165,233,0.40)" : "rgba(100,116,139,0.20)"}`,
+          borderRadius: 3, padding: "0 6px 0 6px", height: 28, transition: "all 0.15s" }}
+          title={durVal === 0
+            ? "Indefinite — this recurring contribution continues every year for the full projection (∞). Enter a number to limit to N years from your current age."
+            : `Active for ${durVal} year${durVal !== 1 ? "s" : ""} from your current age, then stops.`}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: durVal > 0 ? "var(--clr-sky)" : "var(--text-subtle)", letterSpacing: "0.03em", marginRight: 2, transition: "color 0.15s" }}>for</span>
           <input
             type="text"
             inputMode="numeric"
@@ -3366,7 +3374,9 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
               textAlign: "center", padding: 0, lineHeight: 1
             }}
           />
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.03em" }}>yr{durVal !== 1 ? "s" : ""}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: durVal > 0 ? "var(--clr-sky)" : "var(--text-subtle)", letterSpacing: "0.03em", transition: "color 0.15s" }}>
+            {durVal === 0 ? "yrs" : (durVal !== 1 ? "yrs" : "yr")}
+          </span>
         </span>
       )}
     </span>
@@ -4625,7 +4635,10 @@ export default function App() {
     const sgr = Number(inp.salaryGrowthRate) || 0;
     if (sgr < -50 || sgr > 50) errs.salaryGrowthRate = "-50% to 50%";
     // Rev #22: phased salary validation
-    const phaseAge = inp.salaryPhaseAge !== "" && inp.salaryPhaseAge != null ? Number(inp.salaryPhaseAge) : null;
+    // Phase 2 is optional — treat "", null, and 0 all as "no Phase 2 configured".
+    // handleKeyDown sets empty fields to 0 on Tab/Enter, so 0 must not trigger an error.
+    const phaseAgeRaw = inp.salaryPhaseAge !== "" && inp.salaryPhaseAge != null ? Number(inp.salaryPhaseAge) : null;
+    const phaseAge = phaseAgeRaw === 0 ? null : phaseAgeRaw;
     const sgr2 = Number(inp.salaryGrowthRate2) || 0;
     if (phaseAge !== null) {
       if (isNaN(phaseAge) || phaseAge < ca || phaseAge > 95) errs.salaryPhaseAge = `Must be ${ca}–95`;
@@ -11411,7 +11424,7 @@ ${milestones.length > 0 ? `<table>
                     </div>
                     {/* Rev #22: Phase 2 Salary sub-section (career break moved to Life Events) */}
                     {(() => {
-                      const hasPhase = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null;
+                      const hasPhase = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null && Number(inputs.salaryPhaseAge) !== 0;
                       return (
                         <div style={{ borderTop: "1px dashed var(--border-strong)", paddingTop: 8, marginTop: 2 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
@@ -11581,7 +11594,7 @@ ${milestones.length > 0 ? `<table>
                       {displayIsPR && displayPrYr < 3 && (() => {
                         const growthRate  = (Number(inputs.salaryGrowthRate)  || 0) / 100;
                         const growthRate2 = (Number(inputs.salaryGrowthRate2) || 0) / 100;
-                        const phaseAge_ui  = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null ? Number(inputs.salaryPhaseAge) : null;
+                        const phaseAge_ui  = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null && Number(inputs.salaryPhaseAge) !== 0 ? Number(inputs.salaryPhaseAge) : null;
                         const baseMonthly = Math.min(Number(inputs.salaryGross) || 0, 8000);
                         const bonusBase   = Number(inputs.salaryBonus) || 0;
                         // Phase-aware GF for UI preview (career break handled by Life Events leContribPaused in engine)
@@ -11686,7 +11699,7 @@ ${milestones.length > 0 ? `<table>
                             <div style={{ padding: "5px 10px", background: "rgba(var(--clr-amber-rgb),0.04)", fontSize: 12, color: "var(--text-subtle)", lineHeight: 1.6 }}>
                               Auto-Calc fills Year 1 figures into the OA/SA/MA fields below. Year 2–4+ are projections only — the engine advances the tier automatically each year without further input.
                               {growthRate > 0 && ` Salary growth of ${inputs.salaryGrowthRate}%/yr applied.`}
-                              {(inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null) && <span style={{ color: "var(--clr-amber)" }}> Phase 2 growth ({inputs.salaryGrowthRate2 || 0}%/yr from age {inputs.salaryPhaseAge}) is modelled in the projection but not reflected in this Year-1 Auto-Calc.</span>}
+                              {(inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null && Number(inputs.salaryPhaseAge) !== 0) && <span style={{ color: "var(--clr-amber)" }}> Phase 2 growth ({inputs.salaryGrowthRate2 || 0}%/yr from age {inputs.salaryPhaseAge}) is modelled in the projection but not reflected in this Year-1 Auto-Calc.</span>}
                               {(inputs.lifeEvents || []).some(e => e.type === 'career_break' && e.enabled !== false) && <span style={{ color: "#fdba74" }}> Career break(s) from Life Events will zero contributions for those ages in the projection.</span>}
                             </div>
                           </div>
@@ -11707,7 +11720,7 @@ ${milestones.length > 0 ? `<table>
                     if (!_isPR2 || _prYr2 >= 3) return null;
                     const _growthRate  = (Number(inputs.salaryGrowthRate)  || 0) / 100;
                     const _growthRate2 = (Number(inputs.salaryGrowthRate2) || 0) / 100;
-                    const _phaseAge    = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null ? Number(inputs.salaryPhaseAge) : null;
+                    const _phaseAge    = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null && Number(inputs.salaryPhaseAge) !== 0 ? Number(inputs.salaryPhaseAge) : null;
                     const _baseMonthly = Math.min(Number(inputs.salaryGross) || 0, 8000);
                     const _bonusBase = Number(inputs.salaryBonus) || 0;
                     const _rateType = inputs.prRateType || 'GG';
@@ -15441,7 +15454,7 @@ ${milestones.length > 0 ? `<table>
                       })()}
                       {/* Phase 2 salary marker — shown alongside life event markers when salaryPhaseAge is set */}
                       {showLifeEventMarkers && (() => {
-                        const p2Age = debouncedInputs.salaryPhaseAge !== "" && debouncedInputs.salaryPhaseAge != null
+                        const p2Age = debouncedInputs.salaryPhaseAge !== "" && debouncedInputs.salaryPhaseAge != null && Number(debouncedInputs.salaryPhaseAge) !== 0
                           ? Number(debouncedInputs.salaryPhaseAge) : null;
                         const p2Rate = debouncedInputs.salaryGrowthRate2 ?? 0;
                         if (p2Age === null || isNaN(p2Age)) return null;
@@ -18522,7 +18535,7 @@ ${milestones.length > 0 ? `<table>
 
                     {/* Phase 2 salary Gantt row — point dot at salaryPhaseAge */}
                     {(() => {
-                      const p2Age = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null
+                      const p2Age = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null && Number(inputs.salaryPhaseAge) !== 0
                         ? Number(inputs.salaryPhaseAge) : null;
                       const p2Rate = inputs.salaryGrowthRate2 ?? 0;
                       if (p2Age === null || isNaN(p2Age)) return null;
