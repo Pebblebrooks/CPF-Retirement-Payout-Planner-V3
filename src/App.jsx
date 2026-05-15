@@ -4213,6 +4213,7 @@ export default function App() {
   // spouseOpenSections: independent sidebar accordion state for spouse panel
   // housingSharePct: 0–100 — primary member's % share of housingOutflow for household view
   const [householdEnabled, setHouseholdEnabled] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [spouseInputs, setSpouseInputs] = useState({ ...SPOUSE_DEFAULT_INPUTS });
   const [debouncedSpouseInputs, setDebouncedSpouseInputs] = useState({ ...SPOUSE_DEFAULT_INPUTS });
   const [spouseOpenSections, setSpouseOpenSections] = useState(new Set(["spouseProfile"]));
@@ -4369,6 +4370,25 @@ export default function App() {
     const t = setTimeout(() => setDebouncedSpouseInputs(spouseInputs), 180);
     return () => clearTimeout(t);
   }, [spouseInputs, householdEnabled]);
+
+  // Advanced Settings gate — auto-expand if imported/shared profile has advanced data
+  useEffect(() => {
+    if (
+      (Number(inputs.cpfisOaAmount) || 0) > 0 ||
+      (Number(inputs.cpfisSaAmount) || 0) > 0 ||
+      (Number(inputs.oaEduLoan) || 0) > 0 ||
+      (Number(inputs.oaWithdrawalAt55) || 0) > 0 ||
+      (Number(inputs.housingOutflow) || 0) > 0 ||
+      (Number(inputs.plannedDownpaymentOA) || 0) > 0 ||
+      (Number(inputs.sellPropertyAge) || 0) > 0 ||
+      inputs.propMonetiseEnabled === true ||
+      (Number(inputs.currentPrivateAssets) || 0) > 0 ||
+      (Number(inputs.annualPrivateSaving) || 0) > 0 ||
+      (Number(inputs.srsBalance) || 0) > 0 ||
+      (Number(inputs.srsAnnualContribution) || 0) > 0 ||
+      (Array.isArray(inputs.lifeEvents) && inputs.lifeEvents.length > 0)
+    ) setShowAdvanced(true);
+  }, [inputs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // #8 — Warn before leaving if inputs differ from last saved state
   const lastSavedRef = useRef(JSON.stringify(inputs));
@@ -12208,6 +12228,29 @@ ${milestones.length > 0 ? `<table>
               </div>}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
+
+            {/* ── Advanced Settings Gate toggle ─────────────────────────────────────── */}
+            <button
+              onClick={() => setShowAdvanced(v => !v)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                gap: 8, padding: "10px 16px", marginTop: 4,
+                background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.08)" : "var(--bg-panel)",
+                border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.35)" : "var(--border-subtle)"}`,
+                borderRadius: 12, cursor: "pointer",
+                color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.03em",
+              }}
+            >
+              <span style={{ fontSize: 13 }}>{showAdvanced ? "▲" : "▼"}</span>
+              {showAdvanced ? "Hide Advanced Settings" : "⚙ Advanced Settings"}
+              {!showAdvanced && (
+                <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-subtle)", marginLeft: 4 }}>
+                  Property · CPFIS · Private Assets · SRS · Life Events
+                </span>
+              )}
+            </button>
+
               </div>{/* /sidebar-col-1-body */}
             </div>{/* /sidebar-col-1 */}
 
@@ -12223,7 +12266,7 @@ ${milestones.length > 0 ? `<table>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · CPFIS OA & SA · Education loan · OA lump-sum withdrawal" />
+              <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint={showAdvanced ? "Medical MA · MediShield Life · ElderShield/CareShield · CPFIS OA & SA · Education loan · OA lump-sum withdrawal" : "Medical MA · MediShield Life · ElderShield/CareShield  [CPFIS · Education Loan · OA Withdrawal in ⚙ Advanced]"} />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -12237,8 +12280,10 @@ ${milestones.length > 0 ? `<table>
                     <div key={n}><div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>{l.replace(" — Annual","")}</div>
                       <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
                   ))}
-                  {/* CPFIS — OA and SA separate fields */}
-                  {/* ── SUB-SECTION: Investment ───────────────────────────────── */}
+                  {/* ── SUB-SECTION: Investment + Withdrawals — Advanced ──────── */}
+                  {showAdvanced && (
+                  <>
+                  {/* ── Investment: CPFIS OA + SA ─────────────────────────────── */}
                   <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.22)", margin: "6px 0 4px" }}>
                     <TrendingUp style={{ width: 11, height: 11, color: "#f472b6", flexShrink: 0 }} />
                     <span style={{ fontSize: 10, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.07em" }}>Investment</span>
@@ -12382,6 +12427,8 @@ ${milestones.length > 0 ? `<table>
                     <input type="text" inputMode="decimal" name="oaWithdrawalAt55" value={getDisplayValue("oaWithdrawalAt55", inputs.oaWithdrawalAt55)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="OA lump sum withdrawal from age 55" onFocus={() => setFocusedField("oaWithdrawalAt55")} className={fieldChanged("oaWithdrawalAt55") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>From age 55 · partial or full withdrawal · OA balance reduces accordingly</p>
                   </div>
+                  </>
+                  )}
                   <div><div style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>Medical Inflation Rate (%)</div>
                     <input type="text" inputMode="decimal" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" aria-label="Medical inflation rate" className={fieldChanged("medicalInflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 8, color: "var(--text-bright)", fontSize: 12, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
                 </div>
@@ -12538,6 +12585,9 @@ ${milestones.length > 0 ? `<table>
               </div>}
             </div>{/* /transfers inner */}
             </div>{/* /transfers gate wrapper */}
+            {/* ── Property — Advanced Setting ────────────────────────────────── */}
+            {showAdvanced && (
+            <>
             {/* Property — consolidated section (3rd section of col2) */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
               <SidebarSectionHeader id="property" label="Property & Timelines" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => toggleSection("property")} badge={null} collapsedHint="Housing loan timelines · OA used for housing · Property sale & CPF refund · LBS · Monetisation" />
@@ -12771,6 +12821,8 @@ ${milestones.length > 0 ? `<table>
                 </div>
               </div>}
             </div>
+</>
+            )}
               </div>{/* /sidebar-col-2-body */}
             </div>{/* /sidebar-col-2 */}
 
@@ -12778,6 +12830,9 @@ ${milestones.length > 0 ? `<table>
                 Passthrough flex-column on ≤1919px; grid column on ≥1920px. */}
             <div className="sidebar-col sidebar-col-3">
               <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
+            {/* ── Private Assets + Life Events — Advanced Settings ─────────────── */}
+            {showAdvanced && (
+            <>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader id="privateAssets" label="Private Assets" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & contributions" />
@@ -13144,6 +13199,8 @@ ${milestones.length > 0 ? `<table>
               );
             })()}
 
+</>
+            )}
             {/* Decumulation & Goals — income targets, OA drawdown, Die with Zero */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
