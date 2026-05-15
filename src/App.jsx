@@ -6101,15 +6101,11 @@ export default function App() {
       "Bas Monthly Payout", "Bas Annual Payout", "Bas Bequest",
       "Std Total Yield", "Esc Total Yield", "Bas Total Yield",
       "Net Worth - Std (incl. Property)", "Net Worth - Esc (incl. Property)", "Net Worth - Bas (incl. Property)",
-      "Yield (B) Amount", "Yield (S) Amount", "Yield (E) Amount", "CPF Eff. Rate %", "Yield IRR % (Std)", "Yield IRR % (Esc)", "Yield IRR % (Bas)"
+      "Yield (B) Amount", "Yield (S) Amount", "Yield (E) Amount", "Yield IRR % (Std)", "Yield IRR % (Esc)", "Yield IRR % (Bas)"
     ];
     const rows = projection.map(row => {
       const lr = payoutByAge.get(row.age) || {};
       const yr = baseYear + (row.age - startAge);
-      // CPF effective blended rate: total interest / total balance
-      const csvTotalInt = (row.yearOaInterest || 0) + (row.yearSaRaInterest || 0) + (row.yearMaInterest || 0);
-      const csvTotalBal = row.total || 0;
-      const csvEffRate = csvTotalBal > 100 ? (csvTotalInt / csvTotalBal * 100).toFixed(2) + "%" : "";
       return [
         row.age, yr,
         row.oa, row.sa, row.ma, row.ra, row.total,
@@ -6124,8 +6120,6 @@ export default function App() {
         lr.standardNetWorth || "", lr.escalatingNetWorth || "", lr.basicNetWorth || "",
         // Yield amounts (annual payout per plan)
         lr.basicAnnual || "", lr.standardAnnual || "", lr.escalatingAnnual || "",
-        // CPF effective blended rate
-        csvEffRate,
         // Yield XIRR % — pre-computed Newton-Raphson XIRR for each plan
         ...(["standard", "escalating", "basic"].map(plan => {
           const pa = payoutAge65; // use debounced value — matches xirrByAge which is keyed on debounced pa
@@ -6321,10 +6315,6 @@ export default function App() {
       const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
       const isPA = row.age >= pa;
       const bg = row.age === pa ? "#e8f5e9" : row.age % 2 === 0 ? "#f8fafc" : "#ffffff";
-      // CPF effective blended rate for print
-      const pTotalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
-      const pTotalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
-      const pEffRate = pTotalBal > 100 ? (pTotalInt / pTotalBal * 100).toFixed(2) + "%" : "—";
       return `<tr style="background:${bg}">
         <td style="font-weight:700">${row.age}</td>
         <td>${fmt(baseRow.oa)}</td><td>${fmt(baseRow.ma)}</td><td>${fmt(raSaBal)}</td>
@@ -6333,7 +6323,6 @@ export default function App() {
         <td>${isPA ? fmt(row.standardAnnual) : "-"}</td><td>${fmt(row.standardBequest)}</td>
         <td>${isPA ? fmt(row.escalatingAnnual) : "-"}</td><td>${fmt(row.escalatingBequest)}</td>
         <td style="font-weight:700">${fmt(row[`${highlightPlan}Total`])}</td>
-        <td style="font-weight:700">${pEffRate}</td>
       </tr>`;
     }).join("");
 
@@ -6354,7 +6343,7 @@ export default function App() {
 <p>Plan shown: ${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} | Payout Age: ${pa} | Generated: ${new Date().toLocaleDateString("en-SG")}</p>
 <table>
 <thead><tr><th>Age</th><th>OA</th><th>MA</th><th>SA/RA</th><th>Inflows</th><th>Outflows</th>
-<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th><th>CPF Rate</th></tr></thead>
+<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th></tr></thead>
 <tbody>${rowsHtml}</tbody>
 </table>
 </body></html>`;
@@ -6375,15 +6364,12 @@ export default function App() {
       // R2 fix: derive is55Plus from debouncedInputs so the SA/RA column label
       // matches the same data source as the rest of the print function.
       const is55PlusAtPrint = (Number(debouncedInputs.currentAge) || 0) >= 55;
-      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield", "CPF Rate"].join("\t");
+      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield"].join("\t");
       const textRows = displayProjection.map(row => {
         const baseRow = accumulationByAge.get(row.age) || {};
         const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
         const isPA = row.age >= pa;
-        const tTotalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
-        const tTotalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
-        const tEffRate = tTotalBal > 100 ? (tTotalInt / tTotalBal * 100).toFixed(2) + "%" : "—";
-        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`]), tEffRate].join("\t");
+        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`])].join("\t");
       }).join("\n");
       setExportModal({ type: "print", content: `CPF Projection — ${memberName} (Age ${startAge} to 95)\n${"=".repeat(60)}\n${headers}\n${textRows}` });
     }
@@ -10625,14 +10611,14 @@ ${milestones.length > 0 ? `<table>
                 State: if any section in col is open → clicking collapses all; if all closed → expands all. */}
             {(() => {
               const colSections = {
-                1: ["profile", "cpfBalances", "contribs", "topups"],
+                1: ["profile", "cpfBalances", "contribs", "topups", "decumulation"],
                 2: ["outflows", "transfers", "investments", "property"],
-                3: ["privateAssets", "lifeevents", "decumulation"],
+                3: ["privateAssets", "lifeevents"],
               };
               const colMeta = [
                 { n: 1, label: "Profile & Contributions", clr: "var(--clr-sky)",  bg: "rgba(56,189,248,0.08)",           bdr: "rgba(56,189,248,0.5)",         solid: "rgba(56,189,248,0.55)"           },
                 { n: 2, label: "Outflows & Transfers",    clr: "var(--clr-lime)", bg: "rgba(163,230,53,0.08)",           bdr: "rgba(163,230,53,0.5)",         solid: "rgba(163,230,53,0.55)"           },
-                { n: 3, label: showAdvanced ? "Assets & Goals" : "Decumulation",          clr: "var(--clr-blue)", bg: "rgba(var(--clr-blue-rgb),0.08)", bdr: "rgba(var(--clr-blue-rgb),0.5)", solid: "rgba(var(--clr-blue-rgb),0.55)" },
+                { n: 3, label: "Assets & Goals",          clr: "var(--clr-blue)", bg: "rgba(var(--clr-blue-rgb),0.08)", bdr: "rgba(var(--clr-blue-rgb),0.5)", solid: "rgba(var(--clr-blue-rgb),0.55)" },
               ];
               return colMeta.map(({ n, label, clr, bg, bdr, solid }) => {
                 const ids = colSections[n];
@@ -10646,6 +10632,22 @@ ${milestones.length > 0 ? `<table>
                     return next;
                   });
                 };
+                /* Col 3 when advanced is OFF: repurpose as an "unlock col 3" shortcut
+                   so clicking it activates showAdvanced rather than being a no-op toggle */
+                if (n === 3 && !showAdvanced) {
+                  return (
+                    <button key={n} className="fhd-col-btn" onClick={() => setShowAdvanced(true)}
+                      title="Enable Advanced Settings to unlock: Investments · Property · Private Assets · Life Events"
+                      style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                        gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer",
+                        border: "1px dashed rgba(var(--clr-amber-rgb),0.35)",
+                        background: "rgba(var(--clr-amber-rgb),0.04)",
+                        transition: "all 0.15s ease" }}>
+                      <Settings style={{ width: 10, height: 10, color: "var(--clr-amber)", opacity: 0.6, flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-amber)", opacity: 0.6, letterSpacing: "0.03em" }}>ADV</span>
+                    </button>
+                  );
+                }
                 return (
                   /* Colored tab — no text label, just a solid color strip + chevron.
                      Expanded: full solid color. Collapsed: dim transparent tint. */
@@ -10668,8 +10670,8 @@ ${milestones.length > 0 ? `<table>
               onClick={() => setShowAdvanced(v => !v)}
               title={showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings: Property · CPFIS · Investments · Private Assets · SRS · Life Events"}
               style={{
-                flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                gap: 4, padding: "0 8px", borderRadius: 7, cursor: "pointer",
+                flex: "none", height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                gap: 4, padding: "0 12px", borderRadius: 7, cursor: "pointer",
                 background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.18)" : "rgba(100,116,139,0.07)",
                 border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.55)" : "rgba(100,116,139,0.22)"}`,
                 color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
@@ -12316,6 +12318,290 @@ ${milestones.length > 0 ? `<table>
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
 
+            {/* Decumulation & Goals — income targets, OA drawdown, Die with Zero */}
+            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
+              <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
+              {openSections.has("decumulation") && <div style={{ padding: "0 16px 16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {/* Monthly Goal */}
+                  <div style={{ background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.2)", borderRadius: 10, padding: 12, marginBottom: 4 }}>
+                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f43f5e", textTransform: "uppercase", marginBottom: 4 }}>
+                      Target Retirement Income ($/mo)
+                      <TooltipBox id="t-target-inc" text="Your desired total monthly income in retirement — covering all expenses. Compared against the combined total of CPF LIFE + OA Drawdown + SRS + Private Assets in the Strategy tab. Use ⚡ Fill Gap below to automatically set the OA Drawdown amount needed to close any shortfall." />
+                    </div>
+                    <input type="text" inputMode="decimal" name="targetMonthlyIncome" value={getDisplayValue("targetMonthlyIncome", inputs.targetMonthlyIncome)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("targetMonthlyIncome"); e.target.select(); }} aria-label="Target monthly income" className={fieldChanged("targetMonthlyIncome") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "monospace", fontWeight: 700 }} />
+                  </div>
+
+
+                  {/* OA Drawdown — locked for foreigners (no OA account) */}
+                  <div style={{ position: "relative" }}>
+                  {isForeigner && (
+                    <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                      <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 OA Drawdown — no CPF account for foreigners</div>
+                    </div>
+                  )}
+                  <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.15)", marginTop: 4 }}>
+                    {/* Change 5: DwZ-managed state */}
+                    {(() => {
+                      const dwzOn = !!inputs.dieWithZeroEnabled;
+                      const dwzPmt = projection._dwzOaMonthly || 0;
+                      const pa = payoutAge65; // CQ-2 fix: cosmetic — keeps "from age X" banner in sync with debounced data
+                      return (
+                        <>
+                          <div style={{ background: "rgba(var(--clr-amber-rgb),0.06)", border: "1px solid rgba(var(--clr-amber-rgb),0.2)", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+                            <p style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 3, letterSpacing: "0.06em" }}>
+                              OA Drawdown
+                              <TooltipBox id="t-oa-draw" text="Draw monthly cash from OA after CPF LIFE starts — supplements shortfall against your retirement income goal. OA continues earning 2.5%/yr on remaining balance. Drawdown stops when OA falls to your chosen floor (bequest reserve). Set Start Age to 0 to disable." />
+                            </p>
+                            <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>Supplements CPF LIFE payout · OA earns 2.5%/yr on remaining balance · set floor to preserve bequest</p>
+                          </div>
+                          {/* DwZ amber banner — shown when Die with Zero is active */}
+                          {dwzOn && (
+                            <div style={{ background: "rgba(var(--clr-amber-rgb),0.08)", border: "1px solid rgba(var(--clr-amber-rgb),0.35)", borderRadius: 8, padding: "8px 12px", marginBottom: 8, fontSize: 12, color: "#fde68a", lineHeight: 1.6 }}>
+                              ⏳ <strong style={{ color: "var(--clr-amber)" }}>Managed by Die with Zero</strong> — the OA draw ({dwzPmt > 0 ? `${formatCurrency(dwzPmt)}/mo from age ${pa}` : "$0/mo"}) is computed automatically. Disable Die with Zero above to edit manually.
+                            </div>
+                          )}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8, opacity: dwzOn ? 0.45 : 1, pointerEvents: dwzOn ? "none" : "auto" }}>
+                      <div>
+                        <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
+                          Start Age
+                          <TooltipBox id="t-oa-draw-age" text="Age to begin OA drawdown. Must be at or after your CPF LIFE payout age. Set to 0 to disable." />
+                        </div>
+                        <input type="text" inputMode="decimal" name="oaDrawdownStartAge" value={inputs.oaDrawdownStartAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownStartAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownStartAge ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
+                        {inputErrors.oaDrawdownStartAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownStartAge}</p>}
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>0 = disabled · ≥ payout age</p>
+                      </div>
+                      <div>
+                        <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
+                          Monthly Draw ($)
+                          <TooltipBox id="t-oa-draw-amt" text="Monthly cash drawn from OA to supplement CPF LIFE. OA continues earning 2.5%/yr on the remaining balance. Draw stops automatically when OA hits the bequest floor. Use ⚡ Fill Gap to auto-calculate the exact amount needed to meet your retirement income target." />
+                        </div>
+                        <input type="text" inputMode="decimal" name="oaDrawdownMonthly" value={inputs.oaDrawdownMonthly} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownMonthly") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownMonthly ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
+                        {inputErrors.oaDrawdownMonthly && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownMonthly}</p>}
+                      </div>
+                    </div>
+                          {/* ⚡ Fill Gap button — auto-sets OA draw to close income shortfall */}
+                          {/* Hidden when DwZ is ON — draw is engine-managed */}
+                          {!dwzOn && (() => {
+                            const target = Number(inputs.targetMonthlyIncome) || 0;
+                            if (target <= 0) return null;
+                      const pa = payoutAge65; // CQ-2 fix: use debounced value to match payoutProjection/projection data
+                      // R-2 fix: read cpfLife from displayProjectionByAge (deflated when isRealDollars=true)
+                      // instead of payoutByAge (always nominal). Mirrors the I-1 / I-2 / I-5 fixes.
+                      const cpfLife = displayProjectionByAge.get(pa)?.[`${highlightPlan}Monthly`] || 0;
+                      // H5 fix: use debouncedInputs (not live inputs) so Fill Gap reads the same
+                      // SRS parameters the projection was computed from during the debounce window.
+                      const srsStart = Math.max(Number(debouncedInputs.srsDrawdownStartAge) || 63, 63);
+                      const srsYears = Math.min(Math.max(Number(debouncedInputs.srsDrawdownYears) || 10, 1), 10);
+                      // R-2 fix: switch srsRowAtStart from projectionByAge (nominal) to
+                      // accumulationByAge (deflated when isRealDollars=true).
+                      // accumulationByAge carries srsBalance, so the PMT formula produces a
+                      // real-dollar SRS monthly draw when Real$ mode is active.
+                      const srsRowAtStart = accumulationByAge.get(srsStart);
+                      const srsBalAtStart = srsRowAtStart?.srsBalance || 0;
+                      const srsRate = Math.max(0, (Number(debouncedInputs.srsReturnRate) || 0) / 100);
+                      const srsMo = srsYears > 0
+                        ? Math.round((srsRate > 0
+                            ? srsBalAtStart * srsRate / (1 - Math.pow(1 + srsRate, -srsYears))
+                            : srsBalAtStart / srsYears) / 12)
+                        : 0;
+                      // R-2 fix: switch privRow / prevPrivRow from projectionByAge (nominal) to
+                      // accumulationByAge (deflated). The private asset draw estimate (year-on-year
+                      // decline divided by 12) is now in real dollars when Real$ mode is active.
+                      const privRow     = accumulationByAge.get(pa)     || {};
+                      const prevPrivRow = accumulationByAge.get(pa - 1) || {};
+                      const privMo = Math.max(0, Math.round(((prevPrivRow.privateAssets || 0) - (privRow.privateAssets || 0)) / 12));
+                      const nonOaDraw = cpfLife + srsMo + privMo;
+                      const requiredOADraw = Math.max(0, Math.round(target - nonOaDraw));
+                      const currentDraw = Number(inputs.oaDrawdownMonthly) || 0;
+                      const alreadyMet = nonOaDraw >= target;
+                      return (
+                        <div style={{ marginBottom: 8 }}>
+                          {alreadyMet ? (
+                            <div style={{ background: "rgba(var(--clr-emerald-rgb),0.08)", border: "1px solid rgba(var(--clr-emerald-rgb),0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#6ee7b7" }}>
+                              ✓ Income target met by CPF LIFE + SRS + Private Assets — no OA drawdown needed.
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <button
+                                onClick={() => setInputs(p => ({
+                                  ...p,
+                                  oaDrawdownMonthly: requiredOADraw,
+                                  // UX-1 fix: always use Math.max(pa, existing) so a pre-existing start age below
+                                  // payoutAge (e.g. 55 when pa=65) is corrected, not silently preserved.
+                                  oaDrawdownStartAge: Math.max(pa, p.oaDrawdownStartAge > 0 ? p.oaDrawdownStartAge : pa)
+                                }))}
+                                style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : "var(--btn-on-accent)", fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 12, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
+                              >
+                                <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Fill Gap — Set Draw to {formatCurrency(requiredOADraw)}/mo
+                              </button>
+                            </div>
+                          )}
+                          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                            Gap = {formatCurrency(target)}/mo target − {formatCurrency(nonOaDraw)}/mo (CPF LIFE + SRS + Private) = <strong style={{ color: alreadyMet ? "var(--clr-emerald)" : "var(--clr-amber)" }}>{alreadyMet ? "No gap" : formatCurrency(requiredOADraw) + "/mo needed from OA"}</strong>
+                          </p>
+                        </div>
+                            );
+                          })()
+                          }
+                          {/* Bequest Floor — dims with the grid when DwZ ON */}
+                          <div>
+                            <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
+                              OA Bequest Floor ($)
+                              <TooltipBox id="t-oa-floor" text="Minimum OA balance to preserve at all times. Drawdown stops when OA reaches this amount. Set to 0 to allow full depletion. When Die with Zero is active, floor is set to $0 automatically." />
+                            </div>
+                            <input type="text" inputMode="decimal" name="oaDrawdownFloor" value={getDisplayValue("oaDrawdownFloor", inputs.oaDrawdownFloor)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("oaDrawdownFloor"); e.target.select(); }} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownFloor") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownFloor ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
+                            {inputErrors.oaDrawdownFloor && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownFloor}</p>}
+                            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>0 = deplete fully · preserves bequest from OA</p>
+                          </div>
+                          {/* OA exhaustion + sustainability warning — uses effectiveOaDraw* so DwZ is reflected */}
+                          {(() => {
+                            const drawActive = effectiveOaDrawStartAge > 0 && effectiveOaDrawMonthly > 0;
+                            if (!drawActive) return null;
+                            const exhaustAge = oaExhaustAge;
+                            // NEWBug-1 fix: use projectionByAge Map (O(1)) — was projection.find() O(n)
+                            const oaAtDrawStart = projectionByAge.get(effectiveOaDrawStartAge)?.oa || 0;
+                            const annualDraw = effectiveOaDrawMonthly * 12;
+                            const annualInterest = oaAtDrawStart * 0.025;
+                            const isEroding = annualDraw > annualInterest;
+                            return (
+                              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                                <div style={{ background: exhaustAge ? "rgba(244,63,94,0.07)" : "rgba(var(--clr-emerald-rgb),0.07)", border: `1px solid ${exhaustAge ? "rgba(244,63,94,0.25)" : "rgba(var(--clr-emerald-rgb),0.25)"}`, borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>OA Exhaustion</span>
+                                  <span style={{ fontSize: 13, fontWeight: 900, fontFamily: "monospace", color: exhaustAge ? "#f43f5e" : "var(--clr-emerald)" }}>
+                                    {exhaustAge ? `Age ${exhaustAge}` : "Sustains to 95+"}
+                                  </span>
+                                </div>
+                                {isEroding && (
+                                  <div style={{ background: "rgba(var(--clr-amber-rgb),0.07)", border: "1px solid rgba(var(--clr-amber-rgb),0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#fde68a", lineHeight: 1.5 }}>
+                                    ⚠ Draw ({formatCurrency(effectiveOaDrawMonthly)}/mo) exceeds OA interest ({formatCurrency(Math.round(annualInterest / 12))}/mo) — principal is being depleted.{exhaustAge ? ` OA reaches floor at age ${exhaustAge}.` : ""}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </>
+                      );
+                    })()}
+                  </div>{/* /OA Drawdown inner */}
+                  </div>{/* /OA Drawdown gate wrapper */}
+
+                  {/* ── Die with Zero ── */}
+                  <div style={{ paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.2)", marginTop: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div>
+                        <p style={{ fontSize: 12, fontWeight: 800, color: "#f43f5e", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
+                          Die with Zero
+                          <TooltipBox id="t-dwz" text="Based on Bill Perkins' concept: spend your liquid assets fully by a chosen age instead of leaving unspent wealth. The tool computes the optimal monthly draw from OA and Private Assets using the PMT annuity formula so both reach $0 at your target age. RA/CPF LIFE and MA cannot be depleted — these are governed by CPF Board rules." />
+                        </p>
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Deplete OA + Private Assets by a target age · RA/MA excluded (CPF rules)</p>
+                      </div>
+                      <button onClick={() => setInputs(p => ({ ...p, dieWithZeroEnabled: !p.dieWithZeroEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.dieWithZeroEnabled ? "#f43f5e" : "var(--bg-input)", color: inputs.dieWithZeroEnabled ? "#fff" : "var(--text-muted)", flexShrink: 0 }}>{inputs.dieWithZeroEnabled ? "ON" : "OFF"}</button>
+                    </div>
+                    {inputs.dieWithZeroEnabled && (() => {
+                      // Change 4: pmtOA is now sourced directly from the two-pass projection.
+                      // The engine has already computed and applied this draw — no Apply button needed.
+                      const pa       = payoutAge65; // CQ-2 fix: use debounced value to match projection/payoutProjection data
+                      const dwzAge   = Number(inputs.dieWithZeroAge) || 85;
+                      const n        = Math.max(1, dwzAge - pa);
+                      const pmtOA    = projection._dwzOaMonthly || 0;  // from two-pass engine (OA)
+                      // P1-D fix: read pmtPriv from the engine's stored value (_dwzPrivMonthly),
+                      // which was computed by the DWZ two-pass and injected into the final engine run.
+                      // The old local recalculation was display-only and never matched actual engine deductions.
+                      const pmtPriv  = projection._dwzPrivMonthly || 0; // from two-pass engine (private)
+                      // I-2 fix: read cpfLife from displayProjectionByAge (deflated when isRealDollars=true)
+                      // instead of payoutByAge (always nominal). Also use accumulationByAge for
+                      // oaAtPayout and privAtPayout so they are deflation-aware.
+                      const paRow         = accumulationByAge.get(pa) || {};
+                      const oaAtPayout    = paRow.oa || 0;
+                      const privAtPayout  = paRow.privateAssets || 0;
+                      const cpfLife       = displayProjectionByAge.get(pa)?.[`${highlightPlan}Monthly`] || 0;
+                      const totalMonthly  = cpfLife + pmtOA + pmtPriv;
+                      const srsDwzStart   = Math.max(Number(debouncedInputs.srsDrawdownStartAge) || 63, 63);
+                      const srsDwzYrs     = Math.min(Math.max(Number(debouncedInputs.srsDrawdownYears) || 10, 1), 10);
+                      const srsAtStart    = projectionByAge.get(srsDwzStart)?.srsBalance || 0;
+                      // P2-B fix: PMT annuity formula to match engine depletion (was naive balance/years/12)
+                      const srsDwzRate    = Math.max(0, (Number(debouncedInputs.srsReturnRate) || 0) / 100);
+                      const srsAnnualDwz  = srsDwzYrs > 0
+                        ? (srsDwzRate > 0
+                            ? Math.round(srsAtStart * srsDwzRate / (1 - Math.pow(1 + srsDwzRate, -srsDwzYrs)))
+                            : Math.round(srsAtStart / srsDwzYrs))
+                        : srsAtStart;
+                      const srsMoDwz      = Math.round(srsAnnualDwz / 12);
+                      const srsWarning    = dwzAge > srsDwzStart + srsDwzYrs;
+                      const dwzAgeErr     = inputErrors.dieWithZeroAge;
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {/* Target depletion age input */}
+                          <div>
+                            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f43f5e", textTransform: "uppercase", marginBottom: 4 }}>Target Age (Deplete by)</label>
+                            <input type="text" inputMode="decimal" name="dieWithZeroAge" value={inputs.dieWithZeroAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={e => e.target.select()} className={fieldChanged("dieWithZeroAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${dwzAgeErr ? "var(--clr-red)" : "rgba(244,63,94,0.35)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                            {dwzAgeErr
+                              ? <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {dwzAgeErr}</p>
+                              : <>
+                                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Age {pa} (payout) → Age {dwzAge} = {n} year drawdown window</p>
+                                  {/* NX3 fix: disclose residual OA if correction was needed */}
+                                  {(projection._dwzResidualOa || 0) > 500 && (
+                                    <p style={{ fontSize: 12, color: "var(--clr-amber)", marginTop: 3 }}>
+                                      ⚠ OA projected to retain ~{formatCurrency(Math.round(projection._dwzResidualOa / 1000) * 1000)} at age {dwzAge} due to ongoing contributions — draw auto-corrected upward to compensate.
+                                    </p>
+                                  )}
+                                </>
+                            }
+                          </div>
+                          {/* Auto-applied badge — replaces the old ⚡ Apply button */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(var(--clr-emerald-rgb),0.08)", border: "1px solid rgba(var(--clr-emerald-rgb),0.25)", borderRadius: 8, padding: "7px 12px" }}>
+                            <span style={{ fontSize: 14 }}>✓</span>
+                            <div>
+                              <p style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-emerald)", margin: 0 }}>OA Draw auto-applied to projection</p>
+                              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, marginTop: 1 }}>{pmtOA > 0 ? `${formatCurrency(pmtOA)}/mo drawn from OA starting age ${pa}` : "OA balance at payout age is $0 — no draw computed"}</p>
+                            </div>
+                          </div>
+                          {/* Computed PMT summary table */}
+                          <div style={{ background: "rgba(244,63,94,0.06)", border: "1px solid rgba(244,63,94,0.2)", borderRadius: 10, padding: "12px 14px" }}>
+                            <p style={{ fontSize: 12, fontWeight: 800, color: "#f43f5e", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.06em" }}>Computed Draw Schedule (PMT)</p>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                              {[
+                                // OA Draw — hidden for foreigners (no OA account)
+                                ...(!isForeigner ? [["OA Draw/mo", pmtOA > 0 ? formatCurrency(pmtOA) : "—", "var(--clr-amber)", `OA at age ${pa}: ${formatCurrency(oaAtPayout)} · 2.5%/yr · ${n}yr window`]] : []),
+                                ["SRS Draw/mo", srsMoDwz > 0 ? formatCurrency(srsMoDwz) : "—", "#0ea5e9", `IRAS-governed: max 10yr from age ${srsDwzStart}`],
+                                ["Private Draw/mo", pmtPriv > 0 ? formatCurrency(pmtPriv) : "—", "var(--clr-emerald)", `Private assets ${formatCurrency(privAtPayout)} at age ${pa}`],
+                                // CPF LIFE — hidden for foreigners (no CPF account, $0 payout is misleading)
+                                ...(!isForeigner ? [["CPF LIFE/mo", formatCurrency(cpfLife), "var(--clr-purple)", "Lifetime annuity — cannot be depleted"]] : []),
+                              ].map(([lbl, val, color, note]) => (
+                                <div key={lbl} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 5, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                  <div>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color }}>{lbl}</span>
+                                    <p style={{ fontSize: 12, color: "var(--text-subtle)", margin: 0, marginTop: 1 }}>{note}</p>
+                                  </div>
+                                  <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 14, color }}>{val}</span>
+                                </div>
+                              ))}
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4 }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)" }}>Total/mo</span>
+                                <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 14, color: "#f43f5e" }}>{formatCurrency(totalMonthly + srsMoDwz)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          {/* CPF constraints notice */}
+                          <div style={{ background: "rgba(var(--clr-amber-rgb),0.06)", border: "1px solid rgba(var(--clr-amber-rgb),0.2)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#fde68a", lineHeight: 1.6 }}>
+                            {isForeigner ? (
+                              <><strong style={{ color: "var(--clr-amber)" }}>Foreigner constraints:</strong> OA, RA, and MA are not applicable — only SRS and Private Assets are included in the draw schedule. SRS is capped at a 10-year withdrawal window by IRAS regardless of target age.
+                              {srsWarning && <span style={{ color: "var(--clr-red)" }}> ⚠ Your Die with Zero age ({dwzAge}) exceeds your SRS window ({srsDwzStart + srsDwzYrs}) — SRS depletes at age {srsDwzStart + srsDwzYrs}.</span>}</>
+                            ) : (
+                              <><strong style={{ color: "var(--clr-amber)" }}>CPF Constraints:</strong> RA and MA cannot be depleted by choice — RA funds CPF LIFE for life; MA withdrawals are limited to approved medical uses. SRS is capped at a 10-year withdrawal window by IRAS regardless of target age.
+                              {srsWarning && <span style={{ color: "var(--clr-red)" }}> ⚠ Your Die with Zero age ({dwzAge}) exceeds your SRS window ({srsDwzStart + srsDwzYrs}) — SRS depletes at age {srsDwzStart + srsDwzYrs}.</span>}</>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+
+                </div>
+              </div>}
+            </div>
               </div>{/* /sidebar-col-1-body */}
             </div>{/* /sidebar-col-1 */}
 
@@ -13291,290 +13577,6 @@ ${milestones.length > 0 ? `<table>
 
 </>
             )}
-            {/* Decumulation & Goals — income targets, OA drawdown, Die with Zero */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
-              {openSections.has("decumulation") && <div style={{ padding: "0 16px 16px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {/* Monthly Goal */}
-                  <div style={{ background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.2)", borderRadius: 10, padding: 12, marginBottom: 4 }}>
-                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f43f5e", textTransform: "uppercase", marginBottom: 4 }}>
-                      Target Retirement Income ($/mo)
-                      <TooltipBox id="t-target-inc" text="Your desired total monthly income in retirement — covering all expenses. Compared against the combined total of CPF LIFE + OA Drawdown + SRS + Private Assets in the Strategy tab. Use ⚡ Fill Gap below to automatically set the OA Drawdown amount needed to close any shortfall." />
-                    </div>
-                    <input type="text" inputMode="decimal" name="targetMonthlyIncome" value={getDisplayValue("targetMonthlyIncome", inputs.targetMonthlyIncome)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("targetMonthlyIncome"); e.target.select(); }} aria-label="Target monthly income" className={fieldChanged("targetMonthlyIncome") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "monospace", fontWeight: 700 }} />
-                  </div>
-
-
-                  {/* OA Drawdown — locked for foreigners (no OA account) */}
-                  <div style={{ position: "relative" }}>
-                  {isForeigner && (
-                    <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                      <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 OA Drawdown — no CPF account for foreigners</div>
-                    </div>
-                  )}
-                  <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.15)", marginTop: 4 }}>
-                    {/* Change 5: DwZ-managed state */}
-                    {(() => {
-                      const dwzOn = !!inputs.dieWithZeroEnabled;
-                      const dwzPmt = projection._dwzOaMonthly || 0;
-                      const pa = payoutAge65; // CQ-2 fix: cosmetic — keeps "from age X" banner in sync with debounced data
-                      return (
-                        <>
-                          <div style={{ background: "rgba(var(--clr-amber-rgb),0.06)", border: "1px solid rgba(var(--clr-amber-rgb),0.2)", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
-                            <p style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 3, letterSpacing: "0.06em" }}>
-                              OA Drawdown
-                              <TooltipBox id="t-oa-draw" text="Draw monthly cash from OA after CPF LIFE starts — supplements shortfall against your retirement income goal. OA continues earning 2.5%/yr on remaining balance. Drawdown stops when OA falls to your chosen floor (bequest reserve). Set Start Age to 0 to disable." />
-                            </p>
-                            <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>Supplements CPF LIFE payout · OA earns 2.5%/yr on remaining balance · set floor to preserve bequest</p>
-                          </div>
-                          {/* DwZ amber banner — shown when Die with Zero is active */}
-                          {dwzOn && (
-                            <div style={{ background: "rgba(var(--clr-amber-rgb),0.08)", border: "1px solid rgba(var(--clr-amber-rgb),0.35)", borderRadius: 8, padding: "8px 12px", marginBottom: 8, fontSize: 12, color: "#fde68a", lineHeight: 1.6 }}>
-                              ⏳ <strong style={{ color: "var(--clr-amber)" }}>Managed by Die with Zero</strong> — the OA draw ({dwzPmt > 0 ? `${formatCurrency(dwzPmt)}/mo from age ${pa}` : "$0/mo"}) is computed automatically. Disable Die with Zero above to edit manually.
-                            </div>
-                          )}
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8, opacity: dwzOn ? 0.45 : 1, pointerEvents: dwzOn ? "none" : "auto" }}>
-                      <div>
-                        <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
-                          Start Age
-                          <TooltipBox id="t-oa-draw-age" text="Age to begin OA drawdown. Must be at or after your CPF LIFE payout age. Set to 0 to disable." />
-                        </div>
-                        <input type="text" inputMode="decimal" name="oaDrawdownStartAge" value={inputs.oaDrawdownStartAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownStartAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownStartAge ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
-                        {inputErrors.oaDrawdownStartAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownStartAge}</p>}
-                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>0 = disabled · ≥ payout age</p>
-                      </div>
-                      <div>
-                        <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
-                          Monthly Draw ($)
-                          <TooltipBox id="t-oa-draw-amt" text="Monthly cash drawn from OA to supplement CPF LIFE. OA continues earning 2.5%/yr on the remaining balance. Draw stops automatically when OA hits the bequest floor. Use ⚡ Fill Gap to auto-calculate the exact amount needed to meet your retirement income target." />
-                        </div>
-                        <input type="text" inputMode="decimal" name="oaDrawdownMonthly" value={inputs.oaDrawdownMonthly} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownMonthly") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownMonthly ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
-                        {inputErrors.oaDrawdownMonthly && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownMonthly}</p>}
-                      </div>
-                    </div>
-                          {/* ⚡ Fill Gap button — auto-sets OA draw to close income shortfall */}
-                          {/* Hidden when DwZ is ON — draw is engine-managed */}
-                          {!dwzOn && (() => {
-                            const target = Number(inputs.targetMonthlyIncome) || 0;
-                            if (target <= 0) return null;
-                      const pa = payoutAge65; // CQ-2 fix: use debounced value to match payoutProjection/projection data
-                      // R-2 fix: read cpfLife from displayProjectionByAge (deflated when isRealDollars=true)
-                      // instead of payoutByAge (always nominal). Mirrors the I-1 / I-2 / I-5 fixes.
-                      const cpfLife = displayProjectionByAge.get(pa)?.[`${highlightPlan}Monthly`] || 0;
-                      // H5 fix: use debouncedInputs (not live inputs) so Fill Gap reads the same
-                      // SRS parameters the projection was computed from during the debounce window.
-                      const srsStart = Math.max(Number(debouncedInputs.srsDrawdownStartAge) || 63, 63);
-                      const srsYears = Math.min(Math.max(Number(debouncedInputs.srsDrawdownYears) || 10, 1), 10);
-                      // R-2 fix: switch srsRowAtStart from projectionByAge (nominal) to
-                      // accumulationByAge (deflated when isRealDollars=true).
-                      // accumulationByAge carries srsBalance, so the PMT formula produces a
-                      // real-dollar SRS monthly draw when Real$ mode is active.
-                      const srsRowAtStart = accumulationByAge.get(srsStart);
-                      const srsBalAtStart = srsRowAtStart?.srsBalance || 0;
-                      const srsRate = Math.max(0, (Number(debouncedInputs.srsReturnRate) || 0) / 100);
-                      const srsMo = srsYears > 0
-                        ? Math.round((srsRate > 0
-                            ? srsBalAtStart * srsRate / (1 - Math.pow(1 + srsRate, -srsYears))
-                            : srsBalAtStart / srsYears) / 12)
-                        : 0;
-                      // R-2 fix: switch privRow / prevPrivRow from projectionByAge (nominal) to
-                      // accumulationByAge (deflated). The private asset draw estimate (year-on-year
-                      // decline divided by 12) is now in real dollars when Real$ mode is active.
-                      const privRow     = accumulationByAge.get(pa)     || {};
-                      const prevPrivRow = accumulationByAge.get(pa - 1) || {};
-                      const privMo = Math.max(0, Math.round(((prevPrivRow.privateAssets || 0) - (privRow.privateAssets || 0)) / 12));
-                      const nonOaDraw = cpfLife + srsMo + privMo;
-                      const requiredOADraw = Math.max(0, Math.round(target - nonOaDraw));
-                      const currentDraw = Number(inputs.oaDrawdownMonthly) || 0;
-                      const alreadyMet = nonOaDraw >= target;
-                      return (
-                        <div style={{ marginBottom: 8 }}>
-                          {alreadyMet ? (
-                            <div style={{ background: "rgba(var(--clr-emerald-rgb),0.08)", border: "1px solid rgba(var(--clr-emerald-rgb),0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#6ee7b7" }}>
-                              ✓ Income target met by CPF LIFE + SRS + Private Assets — no OA drawdown needed.
-                            </div>
-                          ) : (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <button
-                                onClick={() => setInputs(p => ({
-                                  ...p,
-                                  oaDrawdownMonthly: requiredOADraw,
-                                  // UX-1 fix: always use Math.max(pa, existing) so a pre-existing start age below
-                                  // payoutAge (e.g. 55 when pa=65) is corrected, not silently preserved.
-                                  oaDrawdownStartAge: Math.max(pa, p.oaDrawdownStartAge > 0 ? p.oaDrawdownStartAge : pa)
-                                }))}
-                                style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : "var(--btn-on-accent)", fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 12, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
-                              >
-                                <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Fill Gap — Set Draw to {formatCurrency(requiredOADraw)}/mo
-                              </button>
-                            </div>
-                          )}
-                          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                            Gap = {formatCurrency(target)}/mo target − {formatCurrency(nonOaDraw)}/mo (CPF LIFE + SRS + Private) = <strong style={{ color: alreadyMet ? "var(--clr-emerald)" : "var(--clr-amber)" }}>{alreadyMet ? "No gap" : formatCurrency(requiredOADraw) + "/mo needed from OA"}</strong>
-                          </p>
-                        </div>
-                            );
-                          })()
-                          }
-                          {/* Bequest Floor — dims with the grid when DwZ ON */}
-                          <div>
-                            <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
-                              OA Bequest Floor ($)
-                              <TooltipBox id="t-oa-floor" text="Minimum OA balance to preserve at all times. Drawdown stops when OA reaches this amount. Set to 0 to allow full depletion. When Die with Zero is active, floor is set to $0 automatically." />
-                            </div>
-                            <input type="text" inputMode="decimal" name="oaDrawdownFloor" value={getDisplayValue("oaDrawdownFloor", inputs.oaDrawdownFloor)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("oaDrawdownFloor"); e.target.select(); }} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownFloor") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownFloor ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
-                            {inputErrors.oaDrawdownFloor && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownFloor}</p>}
-                            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>0 = deplete fully · preserves bequest from OA</p>
-                          </div>
-                          {/* OA exhaustion + sustainability warning — uses effectiveOaDraw* so DwZ is reflected */}
-                          {(() => {
-                            const drawActive = effectiveOaDrawStartAge > 0 && effectiveOaDrawMonthly > 0;
-                            if (!drawActive) return null;
-                            const exhaustAge = oaExhaustAge;
-                            // NEWBug-1 fix: use projectionByAge Map (O(1)) — was projection.find() O(n)
-                            const oaAtDrawStart = projectionByAge.get(effectiveOaDrawStartAge)?.oa || 0;
-                            const annualDraw = effectiveOaDrawMonthly * 12;
-                            const annualInterest = oaAtDrawStart * 0.025;
-                            const isEroding = annualDraw > annualInterest;
-                            return (
-                              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                                <div style={{ background: exhaustAge ? "rgba(244,63,94,0.07)" : "rgba(var(--clr-emerald-rgb),0.07)", border: `1px solid ${exhaustAge ? "rgba(244,63,94,0.25)" : "rgba(var(--clr-emerald-rgb),0.25)"}`, borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                  <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>OA Exhaustion</span>
-                                  <span style={{ fontSize: 13, fontWeight: 900, fontFamily: "monospace", color: exhaustAge ? "#f43f5e" : "var(--clr-emerald)" }}>
-                                    {exhaustAge ? `Age ${exhaustAge}` : "Sustains to 95+"}
-                                  </span>
-                                </div>
-                                {isEroding && (
-                                  <div style={{ background: "rgba(var(--clr-amber-rgb),0.07)", border: "1px solid rgba(var(--clr-amber-rgb),0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#fde68a", lineHeight: 1.5 }}>
-                                    ⚠ Draw ({formatCurrency(effectiveOaDrawMonthly)}/mo) exceeds OA interest ({formatCurrency(Math.round(annualInterest / 12))}/mo) — principal is being depleted.{exhaustAge ? ` OA reaches floor at age ${exhaustAge}.` : ""}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </>
-                      );
-                    })()}
-                  </div>{/* /OA Drawdown inner */}
-                  </div>{/* /OA Drawdown gate wrapper */}
-
-                  {/* ── Die with Zero ── */}
-                  <div style={{ paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.2)", marginTop: 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                      <div>
-                        <p style={{ fontSize: 12, fontWeight: 800, color: "#f43f5e", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
-                          Die with Zero
-                          <TooltipBox id="t-dwz" text="Based on Bill Perkins' concept: spend your liquid assets fully by a chosen age instead of leaving unspent wealth. The tool computes the optimal monthly draw from OA and Private Assets using the PMT annuity formula so both reach $0 at your target age. RA/CPF LIFE and MA cannot be depleted — these are governed by CPF Board rules." />
-                        </p>
-                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Deplete OA + Private Assets by a target age · RA/MA excluded (CPF rules)</p>
-                      </div>
-                      <button onClick={() => setInputs(p => ({ ...p, dieWithZeroEnabled: !p.dieWithZeroEnabled }))} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: inputs.dieWithZeroEnabled ? "#f43f5e" : "var(--bg-input)", color: inputs.dieWithZeroEnabled ? "#fff" : "var(--text-muted)", flexShrink: 0 }}>{inputs.dieWithZeroEnabled ? "ON" : "OFF"}</button>
-                    </div>
-                    {inputs.dieWithZeroEnabled && (() => {
-                      // Change 4: pmtOA is now sourced directly from the two-pass projection.
-                      // The engine has already computed and applied this draw — no Apply button needed.
-                      const pa       = payoutAge65; // CQ-2 fix: use debounced value to match projection/payoutProjection data
-                      const dwzAge   = Number(inputs.dieWithZeroAge) || 85;
-                      const n        = Math.max(1, dwzAge - pa);
-                      const pmtOA    = projection._dwzOaMonthly || 0;  // from two-pass engine (OA)
-                      // P1-D fix: read pmtPriv from the engine's stored value (_dwzPrivMonthly),
-                      // which was computed by the DWZ two-pass and injected into the final engine run.
-                      // The old local recalculation was display-only and never matched actual engine deductions.
-                      const pmtPriv  = projection._dwzPrivMonthly || 0; // from two-pass engine (private)
-                      // I-2 fix: read cpfLife from displayProjectionByAge (deflated when isRealDollars=true)
-                      // instead of payoutByAge (always nominal). Also use accumulationByAge for
-                      // oaAtPayout and privAtPayout so they are deflation-aware.
-                      const paRow         = accumulationByAge.get(pa) || {};
-                      const oaAtPayout    = paRow.oa || 0;
-                      const privAtPayout  = paRow.privateAssets || 0;
-                      const cpfLife       = displayProjectionByAge.get(pa)?.[`${highlightPlan}Monthly`] || 0;
-                      const totalMonthly  = cpfLife + pmtOA + pmtPriv;
-                      const srsDwzStart   = Math.max(Number(debouncedInputs.srsDrawdownStartAge) || 63, 63);
-                      const srsDwzYrs     = Math.min(Math.max(Number(debouncedInputs.srsDrawdownYears) || 10, 1), 10);
-                      const srsAtStart    = projectionByAge.get(srsDwzStart)?.srsBalance || 0;
-                      // P2-B fix: PMT annuity formula to match engine depletion (was naive balance/years/12)
-                      const srsDwzRate    = Math.max(0, (Number(debouncedInputs.srsReturnRate) || 0) / 100);
-                      const srsAnnualDwz  = srsDwzYrs > 0
-                        ? (srsDwzRate > 0
-                            ? Math.round(srsAtStart * srsDwzRate / (1 - Math.pow(1 + srsDwzRate, -srsDwzYrs)))
-                            : Math.round(srsAtStart / srsDwzYrs))
-                        : srsAtStart;
-                      const srsMoDwz      = Math.round(srsAnnualDwz / 12);
-                      const srsWarning    = dwzAge > srsDwzStart + srsDwzYrs;
-                      const dwzAgeErr     = inputErrors.dieWithZeroAge;
-                      return (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {/* Target depletion age input */}
-                          <div>
-                            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f43f5e", textTransform: "uppercase", marginBottom: 4 }}>Target Age (Deplete by)</label>
-                            <input type="text" inputMode="decimal" name="dieWithZeroAge" value={inputs.dieWithZeroAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={e => e.target.select()} className={fieldChanged("dieWithZeroAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${dwzAgeErr ? "var(--clr-red)" : "rgba(244,63,94,0.35)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                            {dwzAgeErr
-                              ? <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {dwzAgeErr}</p>
-                              : <>
-                                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Age {pa} (payout) → Age {dwzAge} = {n} year drawdown window</p>
-                                  {/* NX3 fix: disclose residual OA if correction was needed */}
-                                  {(projection._dwzResidualOa || 0) > 500 && (
-                                    <p style={{ fontSize: 12, color: "var(--clr-amber)", marginTop: 3 }}>
-                                      ⚠ OA projected to retain ~{formatCurrency(Math.round(projection._dwzResidualOa / 1000) * 1000)} at age {dwzAge} due to ongoing contributions — draw auto-corrected upward to compensate.
-                                    </p>
-                                  )}
-                                </>
-                            }
-                          </div>
-                          {/* Auto-applied badge — replaces the old ⚡ Apply button */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(var(--clr-emerald-rgb),0.08)", border: "1px solid rgba(var(--clr-emerald-rgb),0.25)", borderRadius: 8, padding: "7px 12px" }}>
-                            <span style={{ fontSize: 14 }}>✓</span>
-                            <div>
-                              <p style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-emerald)", margin: 0 }}>OA Draw auto-applied to projection</p>
-                              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, marginTop: 1 }}>{pmtOA > 0 ? `${formatCurrency(pmtOA)}/mo drawn from OA starting age ${pa}` : "OA balance at payout age is $0 — no draw computed"}</p>
-                            </div>
-                          </div>
-                          {/* Computed PMT summary table */}
-                          <div style={{ background: "rgba(244,63,94,0.06)", border: "1px solid rgba(244,63,94,0.2)", borderRadius: 10, padding: "12px 14px" }}>
-                            <p style={{ fontSize: 12, fontWeight: 800, color: "#f43f5e", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.06em" }}>Computed Draw Schedule (PMT)</p>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                              {[
-                                // OA Draw — hidden for foreigners (no OA account)
-                                ...(!isForeigner ? [["OA Draw/mo", pmtOA > 0 ? formatCurrency(pmtOA) : "—", "var(--clr-amber)", `OA at age ${pa}: ${formatCurrency(oaAtPayout)} · 2.5%/yr · ${n}yr window`]] : []),
-                                ["SRS Draw/mo", srsMoDwz > 0 ? formatCurrency(srsMoDwz) : "—", "#0ea5e9", `IRAS-governed: max 10yr from age ${srsDwzStart}`],
-                                ["Private Draw/mo", pmtPriv > 0 ? formatCurrency(pmtPriv) : "—", "var(--clr-emerald)", `Private assets ${formatCurrency(privAtPayout)} at age ${pa}`],
-                                // CPF LIFE — hidden for foreigners (no CPF account, $0 payout is misleading)
-                                ...(!isForeigner ? [["CPF LIFE/mo", formatCurrency(cpfLife), "var(--clr-purple)", "Lifetime annuity — cannot be depleted"]] : []),
-                              ].map(([lbl, val, color, note]) => (
-                                <div key={lbl} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 5, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                                  <div>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color }}>{lbl}</span>
-                                    <p style={{ fontSize: 12, color: "var(--text-subtle)", margin: 0, marginTop: 1 }}>{note}</p>
-                                  </div>
-                                  <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 14, color }}>{val}</span>
-                                </div>
-                              ))}
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4 }}>
-                                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)" }}>Total/mo</span>
-                                <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 14, color: "#f43f5e" }}>{formatCurrency(totalMonthly + srsMoDwz)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          {/* CPF constraints notice */}
-                          <div style={{ background: "rgba(var(--clr-amber-rgb),0.06)", border: "1px solid rgba(var(--clr-amber-rgb),0.2)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#fde68a", lineHeight: 1.6 }}>
-                            {isForeigner ? (
-                              <><strong style={{ color: "var(--clr-amber)" }}>Foreigner constraints:</strong> OA, RA, and MA are not applicable — only SRS and Private Assets are included in the draw schedule. SRS is capped at a 10-year withdrawal window by IRAS regardless of target age.
-                              {srsWarning && <span style={{ color: "var(--clr-red)" }}> ⚠ Your Die with Zero age ({dwzAge}) exceeds your SRS window ({srsDwzStart + srsDwzYrs}) — SRS depletes at age {srsDwzStart + srsDwzYrs}.</span>}</>
-                            ) : (
-                              <><strong style={{ color: "var(--clr-amber)" }}>CPF Constraints:</strong> RA and MA cannot be depleted by choice — RA funds CPF LIFE for life; MA withdrawals are limited to approved medical uses. SRS is capped at a 10-year withdrawal window by IRAS regardless of target age.
-                              {srsWarning && <span style={{ color: "var(--clr-red)" }}> ⚠ Your Die with Zero age ({dwzAge}) exceeds your SRS window ({srsDwzStart + srsDwzYrs}) — SRS depletes at age {srsDwzStart + srsDwzYrs}.</span>}</>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-
-                </div>
-              </div>}
-            </div>
             {/* Gap Alert — compact summary banner; full detail card lives under RSTU in Inflows.
                 Hidden for foreigners: no CPF account means no RA, no FRS, no gap concept. */}
               </div>{/* /sidebar-col-3-body */}
@@ -17215,7 +17217,6 @@ ${milestones.length > 0 ? `<table>
                       ["Bas/Std/Esc Pay", "Annual payout received under each LIFE plan. Shows '−' before payout age.", "var(--clr-orange)"],
                       ["Bas/Std/Esc Beq", "Bequest (death benefit) value at that age under each plan.", "var(--text-muted)"],
                       ["Yield (B/S/E)", "Cumulative total yield = all payouts received + current bequest value. Measures the total financial return of each plan.", "var(--clr-blue)"],
-                      ["CPF Rate", "Blended CPF effective rate that year: total interest credited (OA + SA/RA + MA, including the extra 1% bonus tier) divided by total CPF balance. Shows at all ages. Compare against XIRR — if XIRR exceeds CPF Rate, CPF LIFE is beating passive CPF interest.", "#5eead4"],
                       ["XIRR", "Internal Rate of Return of the highlighted plan at each age. Compares total return vs all contributions made. Green = good (>4%), amber = moderate (2–4%), red = below CPF deposit rates (<2%). — † = pre-breakeven: at that death age the payouts + bequest do not yet exceed contributions at any positive rate; XIRR turns positive once enough payouts accumulate.", "var(--clr-violet)"],
                     ].map(([col, desc, color]) => (
                       <div key={col} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
@@ -17293,7 +17294,7 @@ ${milestones.length > 0 ? `<table>
                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700, fontSize: 13, fontFamily: "monospace", tableLayout: "auto" }}>
                       <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                         <tr style={{ background: "var(--header-bg)", borderBottom: "1px solid var(--border-strong)" }}>
-                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", "CPF Rate", `XIRR (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`].map((h, i) => (
+                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", `XIRR (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`].map((h, i) => (
                             <th key={h} style={{
                               padding: "10px 8px", textAlign: i === 0 ? "left" : "right", fontSize: 12, fontWeight: 800, textTransform: "uppercase", color: i >= 12 ? "var(--clr-blue)" : "var(--text-muted)", whiteSpace: "nowrap",
                               ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--header-bg)", boxShadow: "var(--shadow-sticky)" } : {})
@@ -17331,22 +17332,6 @@ ${milestones.length > 0 ? `<table>
                             {c(row.basicTotal, "var(--clr-orange)")}
                             {c(row.standardTotal, "var(--clr-slate)")}
                             {c(row.escalatingTotal, "var(--clr-green)")}
-                            {/* CPF Effective Rate — blended interest rate CPF credited this year (OA+SA/RA+MA interest ÷ total balance).
-                                Reflects the extra 1% bonus tier automatically. Shown at all ages since interest accrues from day one.
-                                Comparing this against XIRR shows whether CPF LIFE payouts beat simply leaving money in CPF. */}
-                            {(() => {
-                              const totalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
-                              const totalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
-                              if (totalBal < 100) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>—</td>;
-                              const effRate = (totalInt / totalBal) * 100;
-                              const rateColor = effRate > 4 ? "var(--clr-green)" : effRate > 2.5 ? "var(--clr-amber)" : "var(--clr-red)";
-                              return (
-                                <td style={{ padding: "7px 8px", textAlign: "right", whiteSpace: "nowrap" }}
-                                  title={`CPF blended effective rate at age ${row.age}: ${effRate.toFixed(2)}% — total interest credited (OA + SA/RA + MA, incl. extra 1% bonus) divided by total CPF balance. Compare this against XIRR to see if CPF LIFE payouts beat simply earning CPF interest.`}>
-                                  <span style={{ fontSize: 13, fontWeight: 700, color: rateColor, fontFamily: "monospace" }}>{effRate.toFixed(2)}%</span>
-                                </td>
-                              );
-                            })()}
                             {(() => {
                               const pa = payoutAge65; // BUG-43 fix: use debounced payoutAge65
                               if (row.age < pa) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>-</td>;
@@ -18131,7 +18116,6 @@ ${milestones.length > 0 ? `<table>
                         ))}
                       </div>
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>Why it shows — before payout age:</strong> XIRR requires at least one positive cashflow (a payout or bequest) to produce a meaningful result. Before your payout age, the entire cashflow series is negative contributions with no inflows yet — the IRR is mathematically undefined, so the column shows <strong>—</strong> for all pre-payout rows.</p>
-                      <p style={{ marginBottom: 10 }}><strong style={{ color: "#5eead4" }}>CPF Rate column (teal) — the benchmark to beat:</strong> The adjacent <em>CPF Rate</em> column shows the blended effective interest rate CPF actually credited to your accounts that year — total OA + SA/RA + MA interest divided by your total CPF balance. Because it includes the extra 1% bonus on the first $60k, it will typically sit between 3.8% and 4.3%, above the flat 4% SA/RA floor. This is the most relevant benchmark for XIRR: when your XIRR crosses above the CPF Rate line, CPF LIFE is returning more value than you would have earned simply leaving the money in CPF and earning interest. Unlike XIRR, CPF Rate is shown at every age from the start — because CPF accrues interest from day one regardless of whether payouts have begun.</p>
                       <p style={{ marginBottom: 0 }}><strong style={{ color: "var(--text-highlight)" }}>Display cap ±10%:</strong> To prevent extreme outliers from distorting the table, XIRR results are clamped to a ±10% display range. Any computed value outside this range is pinned at the boundary. This is a display-only cap — the underlying Newton-Raphson result is unchanged.</p>
                     </div>
                   </section>
