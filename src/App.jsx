@@ -17258,7 +17258,7 @@ ${milestones.length > 0 ? `<table>
                     ["#doc-lifeevents",  HeartPulse,       "Life Events"],
                     ["#doc-household",   Users,            "Household"],
                   ].map(([href, NavIcon, label]) => (
-                    <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--bg-input)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", textDecoration: "none", cursor: "pointer" }}
+                    <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-subtle)", textDecoration: "none", cursor: "pointer" }}
                       onClick={e => {
                         e.preventDefault();
                         const target = document.querySelector(href);
@@ -17291,7 +17291,7 @@ ${milestones.length > 0 ? `<table>
                           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                       }}>
-                      <NavIcon style={{ width: 12, height: 12, flexShrink: 0 }} />
+                      <NavIcon style={{ width: 14, height: 14, flexShrink: 0 }} />
                       {label}
                     </a>
                   ))}
