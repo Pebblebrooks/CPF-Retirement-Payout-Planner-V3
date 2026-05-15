@@ -16,7 +16,7 @@ import {
   ArrowRightLeft, LogOut, Users, ExternalLink, Home, Upload,
   RefreshCw, Share2, Settings,
   Eraser, UserCheck, Building2, Baby,
-  TrendingDown, Pause, HeartPulse, DollarSign, Sunset, Star
+  TrendingDown, Pause, HeartPulse, DollarSign, Sunset, Star, Smartphone, Zap
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
@@ -11003,6 +11003,18 @@ ${milestones.length > 0 ? `<table>
                     </div>
                   )}
                 </div>{/* /flex column L5279 */}
+                {/* ── Household Mode toggle — surfaced here for discoverability; spouse inputs appear below in their own panel ── */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 6, paddingTop: 10, borderTop: "1px solid var(--border-subtle)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Users style={{ width: 13, height: 13, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }}>Household Mode</span>
+                    {householdEnabled && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "rgba(139,92,246,0.15)", color: "#8b5cf6", fontWeight: 700, border: "1px solid rgba(139,92,246,0.3)" }}>ON</span>}
+                  </div>
+                  <button onClick={() => { const next = !householdEnabled; setHouseholdEnabled(next); if (next) setActiveTab("household"); }}
+                    style={{ padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: "pointer", background: householdEnabled ? "rgba(139,92,246,0.15)" : "rgba(100,116,139,0.12)", color: householdEnabled ? "#8b5cf6" : "var(--text-muted)", border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
+                    {householdEnabled ? "Disable" : "Enable"}
+                  </button>
+                </div>
               </div>}{/* /openSections profile body */}
             </div>{/* /profile section outer */}
 
@@ -11186,7 +11198,7 @@ ${milestones.length > 0 ? `<table>
                         </div>
                       );
                     })()}
-                    <button onClick={handleAutoCalc} className="auto-calc-btn" style={{ width: "100%", background: "var(--clr-lime)", color: "#14532d", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 11, border: "none", cursor: "pointer" }}>⚡ Auto-Calc CPF Contributions</button>
+                    <button onClick={handleAutoCalc} className="auto-calc-btn" style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, background: "var(--clr-lime)", color: "#14532d", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 11, border: "none", cursor: "pointer" }}><Zap style={{ width: 12, height: 12, flexShrink: 0 }} />Auto-Calc CPF Contributions</button>
                   </div>
                 )}
                 {inputs.showSalaryCalc && !isSelfEmployed && (() => {
@@ -12017,45 +12029,15 @@ ${milestones.length > 0 ? `<table>
               </div>}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
-            {/* ── Household Mode: Enable toggle + Spouse inputs panel ──────── */}
+            {/* ── Household Mode: Spouse inputs panel (toggle is in Profile section above) ──────── */}
             {/* Placement: inside sidebar-col-1 so it takes 1-column width in FHD 3-col grid */}
-            <div style={{ margin: "4px 0 0", padding: "12px 14px", borderRadius: 12,
-            background: householdEnabled ? "rgba(139,92,246,0.07)" : "var(--bg-muted)",
-            border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.3)" : "var(--border-subtle)"}`,
+            {householdEnabled && <div style={{ margin: "4px 0 0", padding: "12px 14px", borderRadius: 12,
+            background: "rgba(139,92,246,0.07)",
+            border: "1px solid rgba(139,92,246,0.3)",
             transition: "all 0.2s" }}>
-            {/* Toggle row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Users style={{ width: 14, height: 14, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }}>
-                  Household Mode
-                </span>
-                {householdEnabled && (
-                  <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: "rgba(139,92,246,0.15)",
-                    color: "#8b5cf6", fontWeight: 700, border: "1px solid rgba(139,92,246,0.3)" }}>
-                    ON
-                  </span>
-                )}
-              </div>
-              <button onClick={() => {
-                const next = !householdEnabled;
-                setHouseholdEnabled(next);
-                if (next) setActiveTab("household");
-              }} style={{ padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                background: householdEnabled ? "rgba(139,92,246,0.15)" : "rgba(100,116,139,0.12)",
-                color: householdEnabled ? "#8b5cf6" : "var(--text-muted)",
-                border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
-                {householdEnabled ? "Disable" : "Enable"}
-              </button>
-            </div>
-            {!householdEnabled && (
-              <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.4 }}>
-                Add a spouse / partner to see combined CPF LIFE income, shared housing model, and household net worth.
-              </p>
-            )}
 
-            {/* Spouse inputs — only shown when household is enabled */}
-            {householdEnabled && (() => {
+            {/* Spouse inputs — rendered when household is enabled */}
+            {(() => {
               const spH = (field, val) => setSpouseInputs(prev => ({ ...prev, [field]: val }));
               const spouseIsForeigner = debouncedSpouseInputs.citizenStatus === 'foreigner';
               const spouseIs55Plus = (Number(debouncedSpouseInputs.currentAge) || 0) >= 55;
@@ -13276,9 +13258,9 @@ ${milestones.length > 0 ? `<table>
                                   // payoutAge (e.g. 55 when pa=65) is corrected, not silently preserved.
                                   oaDrawdownStartAge: Math.max(pa, p.oaDrawdownStartAge > 0 ? p.oaDrawdownStartAge : pa)
                                 }))}
-                                style={{ flex: 1, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : "var(--btn-on-accent)", fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 10, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
+                                style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, background: currentDraw === requiredOADraw ? "rgba(var(--clr-amber-rgb),0.15)" : "var(--clr-amber)", color: currentDraw === requiredOADraw ? "var(--clr-amber)" : "var(--btn-on-accent)", fontWeight: 800, padding: "7px 10px", borderRadius: 8, fontSize: 10, border: currentDraw === requiredOADraw ? "1px solid rgba(var(--clr-amber-rgb),0.4)" : "none", cursor: "pointer", textAlign: "center" }}
                               >
-                                ⚡ Fill Gap — Set Draw to {formatCurrency(requiredOADraw)}/mo
+                                <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Fill Gap — Set Draw to {formatCurrency(requiredOADraw)}/mo
                               </button>
                             </div>
                           )}
@@ -13599,7 +13581,7 @@ ${milestones.length > 0 ? `<table>
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#faf5ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Exploring the Dashboard</h4><p style={{ fontSize: 11, color: "rgba(250,245,255,0.8)", margin: 0 }}>Step 2 — The right panel tabs</p></div>
                     </div>
                     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[["Summary", PieChart, "var(--clr-emerald)", "Key metrics at a glance: total CPF at payout age, net worth breakdown doughnut chart, estate planning panel, milestone alerts, 20% RA-to-OA transfer notice, and What-If Explorer with SA/RA text override."], ["Strategy", Target, "#f43f5e", "Holistic income planner for retirement. Set your Target Monthly Income, then click ⚡ Fill Gap to auto-set the OA Drawdown needed to close the income gap. Gantt timeline shows all income streams. Income table shows CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets side by side."], ["Accumulation", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance. Real vs Nominal dollar toggle adjusts for inflation."], ["LIFE Comparison", ShieldCheck, "var(--clr-purple)", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."], ["Compare", Split, "var(--clr-orange)", "Two tools in one tab. (1) What-If Explorer — drag sliders to instantly simulate how changes to payout age, SA/RA top-up, housing outflow, salary, contribution stop age, OA drawdown, SRS, or private growth affect your total balance without touching your saved inputs. (2) Scenario A vs B diff — save your current profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded side-by-side diff of every metric that changes."], ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, and interest component. Download either view as CSV."]].map(([title, Icon, color, desc]) => (
+                      {[["Summary", PieChart, "var(--clr-emerald)", "Three-tile hero row: Total CPF at payout age · Monthly CPF LIFE payout · Payout Age — each in its own floating tile. Below: net worth doughnut, estate planning panel, Milestone Snapshots chart, contribution gap alert, What-If Explorer sliders, and milestone alerts. Footer row aligns Display toggle, Plan selector, and Alert badge directly under their tile."], ["Strategy", Target, "#f43f5e", "Holistic income planner for retirement. Set your Target Monthly Income, then click Fill Gap to auto-set the OA Drawdown needed to close the income gap. Gantt timeline shows all income streams. Income table shows CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets side by side."], ["Accumulation", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance. Life Events overlay shows coloured bands for retrenchment, career break, windfall and other stress scenarios. Real vs Nominal dollar toggle adjusts for inflation."], ["LIFE Comparison", ShieldCheck, "var(--clr-purple)", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."], ["Compare", Split, "var(--clr-orange)", "Scenario A vs B diff — save your current profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded side-by-side diff of every metric that changes. The What-If Explorer is in the Summary tab."], ["Household", Users, "#8b5cf6", "Enable Household Mode in the Profile section sidebar toggle to add a spouse or partner. Shows combined CPF accumulation, side-by-side payout cards (with gender, citizenship, FRS headroom), Income Coverage vs your target, OA Depletion Risk, Key Ages table (5-year intervals), and a Children & Dependants milestone guide. Each member runs a fully independent projection engine."], ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, interest, and transfer component. Download either view as CSV."]].map(([title, Icon, color, desc]) => (
                         <div key={title}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}15`, border: `1px solid ${color}33`, padding: "4px 10px", borderRadius: 10, marginBottom: 5 }}>
                             <Icon style={{ width: 12, height: 12, color }} />
@@ -13671,8 +13653,8 @@ ${milestones.length > 0 ? `<table>
                           style={{ padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700,
                             border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
                             background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)",
-                            color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", whiteSpace: "nowrap" }}>
-                          ⚡ Apply top-up
+                            color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Apply top-up
                         </button>
                       )}
                       <button type="button" onClick={() => setGapAlertDismissed(true)}
@@ -16852,8 +16834,8 @@ ${milestones.length > 0 ? `<table>
                       <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>Year-by-year balances, cashflows and payout projections from age {inputs.currentAge} to 95</p>
                     </div>
                   </div>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)", background: "var(--bg-muted)", padding: "6px 12px", borderRadius: 8, lineHeight: 1.5 }}>
-                    📱 Tip: scroll horizontally to see all columns · tap Age to pin row
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", background: "var(--bg-muted)", padding: "6px 12px", borderRadius: 8, lineHeight: 1.5, display: "flex", alignItems: "center", gap: 5 }}>
+                    <Smartphone style={{ width: 11, height: 11, flexShrink: 0 }} />Tip: scroll horizontally to see all columns · tap Age to pin row
                   </div>
                 </div>
                 {/* Scenario context banner */}
@@ -17303,22 +17285,24 @@ ${milestones.length > 0 ? `<table>
                   {/* ── What's New ─────────────────────────────────────────────────────── */}
                   <section id="doc-whatsnew" style={{ marginBottom: 32 }}>
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#22d3ee", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-                      <Lightbulb style={{ width: 18, height: 18 }} />What's New — v2826 UI Refresh
+                      <Lightbulb style={{ width: 18, height: 18 }} />What's New — v47 UI & Policy Update
                     </h4>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
-                        [Lightbulb, "Setup Wizard", "#22d3ee",
-                          "First-time users are greeted with a 3-step onboarding wizard — Profile → CPF Balances → Income & Goals — before the main app loads. The wizard writes directly to your profile and jumps to the Summary tab on completion. Returning users skip it automatically. You can relaunch it any time from the ⚙ Display menu (desktop) or ⚙ Settings menu (mobile)."],
+                        [Star, "Summary Tab — 3-tile layout", "#22d3ee",
+                          "The Summary tab hero row is now three equal floating tiles (Total CPF · Monthly Payout · Payout Age), each with a tinted border and background matching its data category (neutral / green / blue). The footer row uses the same repeat(3,1fr) grid so Display toggle, Plan selector, and Alert badge each sit precisely below their tile. 'Payout starts at Age X' is now simply 'Payout Age' with the number in blue accent."],
                         [LayoutDashboard, "Adaptive Navbar", "var(--clr-green)",
                           "On desktop (HD/FHD) all settings are exposed as direct buttons: ↺ Reset, Samples, Share▾, Report▾, and a Display▾ dropdown (Resolution, Appearance, Sidebar toggle, Setup Wizard). The ⚙ gear icon only appears on tablet and mobile where navbar space is limited."],
-                        [BarChart2, "Milestone Hero Chart", "var(--clr-blue2)",
-                          "The Milestone Snapshots section in the Summary tab now renders a full-width Recharts stacked bar chart (OA / SA / RA / MA) from your current age to payout age + 5 years. Cyan reference lines mark each milestone age with an interactive tooltip per bar. The compact stat chips (age, totals, growth %) remain below the chart."],
+                        [BookOpen, "Docs nav — Lucide icons", "var(--clr-blue2)",
+                          "All 18 docs section navigation pills now use Lucide icons instead of emoji. Icons are 14×14 matching the header tab icon size. Pills are flat (transparent background, border-subtle border, borderRadius 6) consistent with the header tab style."],
+                        [Lightbulb, "Household Mode — moved to Profile section", "var(--clr-purple)",
+                          "The Household Mode toggle is now surfaced at the bottom of the Profile section (previously buried at the foot of the sidebar). Enabling it opens the spouse inputs panel immediately below. The toggle is visible as soon as you open the sidebar Profile section — no more scrolling to the bottom to find it."],
                         [Bell, "Contribution Gap Alert", "var(--clr-amber)",
-                          "When your projected RA at payout age falls short of FRS, the alert now appears as a full-width banner at the very top of the Summary tab — immediately visible without scrolling the sidebar. The Apply top-up button is right there in the banner; dismissing it with ✕ clears it until the gap changes."],
-                        [SlidersHorizontal, "Smart Sidebar Collapse", "var(--clr-purple)",
-                          "New users see only the 3 essential sections open on first load (Profile, CPF Balances, Mandatory Contributions), reducing the visible field count from ~60 to ~15. Returning users restore their last-saved collapse state. Each closed section shows a one-line hint of what's inside. Expand All / Collapse All buttons remain in the sidebar header."],
-                        [CheckCircle2, "Accessibility & Readability", "var(--clr-orange)",
-                          "Frequency toggle (Recurring / One-Time) buttons bumped from 9 px to 11 px minimum, touch target height raised to 30 px. All section headers are keyboard-accessible (Enter / Space to toggle). The contribution gap alert and post-wizard tip are each dismissible and ARIA-labelled."],
+                          "When your projected RA at payout age falls short of FRS, the alert appears as a full-width banner at the top of the Summary tab. The Apply top-up button closes the gap in one click. Dismissing it with ✕ clears it until the gap amount changes."],
+                        [CheckCircle2, "Lucide icons replace all emoji in action buttons", "var(--clr-orange)",
+                          "⚡ Fill Gap, ⚡ Apply top-up, ⚡ Auto-Calc, and the 📱 Data Table tip all now use Lucide icon components (Zap, Smartphone) for visual consistency. Emoji are retained only in descriptive text strings and tooltips where they serve a purely informational role."],
+                        [SlidersHorizontal, "Welcome tab banners — light mode opacity", "var(--clr-emerald)",
+                          "In light mode, the three welcome tab banner gradients (green / blue / purple) now render at 82% opacity, softening their visual weight against the light page background while keeping white text clearly readable."],
                       ].map(([WNIcon, title, color, desc]) => (
                         <div key={title} style={{ display: "flex", gap: 14, padding: "14px 16px", borderRadius: 12,
                           border: `1px solid ${color}33`, background: `${color}08` }}>
@@ -17342,7 +17326,7 @@ ${milestones.length > 0 ? `<table>
                       ["2", "Auto-Calc Contributions (SC / PR / SEP)", "var(--clr-emerald)", "rgba(var(--clr-emerald-rgb),0.08)", "rgba(var(--clr-emerald-rgb),0.2)", "Enter OW (Monthly Gross), AW (Annual Bonus), and Salary Growth %, then click ⚡ Auto-Calc. SC uses full rates. PR G/G: graduated employer — no application needed. PR F/G: full employer 17%, employee pays graduated rate — requires joint CPF application. OW ceiling $8,000/mo, AW ceiling $102,000/yr. SEP members use the Inflows (VC3A) panel. Important: if citizenship is PR (Year 1 or 2) and Monthly Gross is left at $0, a validation warning will appear — the engine derives PR contributions from salary so gross pay must be entered before Auto-Calc can apply the correct rates."],
                       ["3", "Add Voluntary Top-Ups & CPF Transfers", "var(--clr-purple)", "rgba(var(--clr-purple-rgb),0.08)", "rgba(var(--clr-purple-rgb),0.2)", "Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the first projection year. RSTU tops up SA (pre-55) or RA (post-55). CPF Transfers support For Self (internal move with FRS/ERS cap) and For Loved One (OA outflow only). CPFIS: OA above $20k and SA above $40k are investible separately with their own frequency toggles."],
                       ["4", "Compare CPF LIFE Plans", "var(--clr-amber)", "rgba(var(--clr-amber3-rgb),0.08)", "rgba(var(--clr-amber3-rgb),0.2)", "Open the LIFE Comparison tab to evaluate Standard, Escalating, and Basic plans. Vertical lines explicitly mark age intersections for total yield and payouts. Toggle between Bequest and Cumulative Payout views."],
-                      ["5", "Explore What-If & Compare Scenarios", "var(--clr-orange)", "rgba(249,115,22,0.08)", "rgba(249,115,22,0.2)", "The Compare tab contains two tools. (1) What-If Explorer (top of tab, also accessible from the Summary tab): drag sliders to instantly see how changes to payout age, SA/RA top-up, annual housing outflow, salary bump, contribution stop age, OA drawdown, SRS contribution, or private growth rate affect your total balance — without touching your saved inputs. Changes reflect immediately with a live impact delta. (2) Scenario A vs B diff: save your current inputs as Scenario A, adjust parameters (e.g. delay payout age to 70), then save as Scenario B for a colour-coded side-by-side diff of every metric."],
+                      ["5", "Explore What-If & Compare Scenarios", "var(--clr-orange)", "rgba(249,115,22,0.08)", "rgba(249,115,22,0.2)", "The What-If Explorer is in the Summary tab (scroll down past the milestone alerts). Drag sliders to instantly see how changes to payout age, SA/RA top-up, housing outflow, salary, contribution stop age, OA drawdown, SRS, or private growth affect your total balance — no saved inputs are touched. The Compare tab is dedicated to Scenario A vs B diffs: save your current inputs as Scenario A, adjust any parameters, then save as Scenario B for a colour-coded side-by-side diff of every metric that changes."],
                       ["6", "Share & Export", "#f43f5e", "rgba(244,63,94,0.08)", "rgba(244,63,94,0.2)", "Use Share to encode your entire profile into a URL. Download a PDF report or CSV. On desktop, all primary actions (Share, Report, Display settings) are direct buttons in the navbar — no gear icon. On tablet/mobile, the ⚙ gear gives access to everything including Share and Report. Keyboard shortcuts: Ctrl+S (Share), Ctrl+Shift+R (Reset), Ctrl+]/[ (switch tabs). To relaunch the Setup Wizard at any time, open the Display▾ menu (desktop) or ⚙ Settings (mobile/tablet) and click Setup Wizard."],
                       ["7", "Load a Sample Profile", "#0ea5e9", "rgba(14,165,233,0.08)", "rgba(14,165,233,0.2)", "Click Samples in the header (desktop) or ☰ hamburger menu (mobile) to choose from 7 pre-built scenarios: Blank Slate, Typical Employee (35), Late Starter (50), Self-Employed (40), High Earner (40), Near Retirement (54), and Post-55 RA Builder (57). Loading a sample overwrites current inputs — export your profile first."],
                       ["8", "Annual Cashflow Ledger", "#2dd4bf", "rgba(45,212,191,0.08)", "rgba(45,212,191,0.2)", "In the Data Table tab, switch to the Cashflow Ledger sub-tab for a complete year-by-year breakdown of every flow: mandatory contributions, voluntary top-ups, gov grants/WIS, OA/SA-RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with a column totals row at the bottom. Download as CSV."],
@@ -17982,6 +17966,19 @@ ${milestones.length > 0 ? `<table>
                     </div>
                   </section>
 
+                </div>
+
+                {/* ── Floating Back to Top ── */}
+                <div style={{ position: "sticky", bottom: 16, display: "flex", justifyContent: "flex-end", pointerEvents: "none", zIndex: 10, marginTop: 8 }}>
+                  <button
+                    onClick={() => {
+                      const nav = document.getElementById("docs-sticky-nav");
+                      const scroller = nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content");
+                      if (scroller) { scroller.scrollTop = 0; } else { window.scrollTo({ top: 0, behavior: "smooth" }); }
+                    }}
+                    style={{ pointerEvents: "all", display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
+                    <ChevronUp style={{ width: 13, height: 13 }} />Back to top
+                  </button>
                 </div>
               </div>
             )}
