@@ -6101,11 +6101,15 @@ export default function App() {
       "Bas Monthly Payout", "Bas Annual Payout", "Bas Bequest",
       "Std Total Yield", "Esc Total Yield", "Bas Total Yield",
       "Net Worth - Std (incl. Property)", "Net Worth - Esc (incl. Property)", "Net Worth - Bas (incl. Property)",
-      "Yield (B) Amount", "Yield (S) Amount", "Yield (E) Amount", "Yield IRR % (Std)", "Yield IRR % (Esc)", "Yield IRR % (Bas)"
+      "Yield (B) Amount", "Yield (S) Amount", "Yield (E) Amount", "CPF Eff. Rate %", "Yield IRR % (Std)", "Yield IRR % (Esc)", "Yield IRR % (Bas)"
     ];
     const rows = projection.map(row => {
       const lr = payoutByAge.get(row.age) || {};
       const yr = baseYear + (row.age - startAge);
+      // CPF effective blended rate: total interest / total balance
+      const csvTotalInt = (row.yearOaInterest || 0) + (row.yearSaRaInterest || 0) + (row.yearMaInterest || 0);
+      const csvTotalBal = row.total || 0;
+      const csvEffRate = csvTotalBal > 100 ? (csvTotalInt / csvTotalBal * 100).toFixed(2) + "%" : "";
       return [
         row.age, yr,
         row.oa, row.sa, row.ma, row.ra, row.total,
@@ -6120,6 +6124,8 @@ export default function App() {
         lr.standardNetWorth || "", lr.escalatingNetWorth || "", lr.basicNetWorth || "",
         // Yield amounts (annual payout per plan)
         lr.basicAnnual || "", lr.standardAnnual || "", lr.escalatingAnnual || "",
+        // CPF effective blended rate
+        csvEffRate,
         // Yield XIRR % — pre-computed Newton-Raphson XIRR for each plan
         ...(["standard", "escalating", "basic"].map(plan => {
           const pa = payoutAge65; // use debounced value — matches xirrByAge which is keyed on debounced pa
@@ -6315,6 +6321,10 @@ export default function App() {
       const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
       const isPA = row.age >= pa;
       const bg = row.age === pa ? "#e8f5e9" : row.age % 2 === 0 ? "#f8fafc" : "#ffffff";
+      // CPF effective blended rate for print
+      const pTotalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
+      const pTotalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
+      const pEffRate = pTotalBal > 100 ? (pTotalInt / pTotalBal * 100).toFixed(2) + "%" : "—";
       return `<tr style="background:${bg}">
         <td style="font-weight:700">${row.age}</td>
         <td>${fmt(baseRow.oa)}</td><td>${fmt(baseRow.ma)}</td><td>${fmt(raSaBal)}</td>
@@ -6323,6 +6333,7 @@ export default function App() {
         <td>${isPA ? fmt(row.standardAnnual) : "-"}</td><td>${fmt(row.standardBequest)}</td>
         <td>${isPA ? fmt(row.escalatingAnnual) : "-"}</td><td>${fmt(row.escalatingBequest)}</td>
         <td style="font-weight:700">${fmt(row[`${highlightPlan}Total`])}</td>
+        <td style="font-weight:700">${pEffRate}</td>
       </tr>`;
     }).join("");
 
@@ -6343,7 +6354,7 @@ export default function App() {
 <p>Plan shown: ${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} | Payout Age: ${pa} | Generated: ${new Date().toLocaleDateString("en-SG")}</p>
 <table>
 <thead><tr><th>Age</th><th>OA</th><th>MA</th><th>SA/RA</th><th>Inflows</th><th>Outflows</th>
-<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th></tr></thead>
+<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th><th>CPF Rate</th></tr></thead>
 <tbody>${rowsHtml}</tbody>
 </table>
 </body></html>`;
@@ -6364,12 +6375,15 @@ export default function App() {
       // R2 fix: derive is55Plus from debouncedInputs so the SA/RA column label
       // matches the same data source as the rest of the print function.
       const is55PlusAtPrint = (Number(debouncedInputs.currentAge) || 0) >= 55;
-      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield"].join("\t");
+      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield", "CPF Rate"].join("\t");
       const textRows = displayProjection.map(row => {
         const baseRow = accumulationByAge.get(row.age) || {};
         const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
         const isPA = row.age >= pa;
-        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`])].join("\t");
+        const tTotalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
+        const tTotalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
+        const tEffRate = tTotalBal > 100 ? (tTotalInt / tTotalBal * 100).toFixed(2) + "%" : "—";
+        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`]), tEffRate].join("\t");
       }).join("\n");
       setExportModal({ type: "print", content: `CPF Projection — ${memberName} (Age ${startAge} to 95)\n${"=".repeat(60)}\n${headers}\n${textRows}` });
     }
@@ -17201,6 +17215,7 @@ ${milestones.length > 0 ? `<table>
                       ["Bas/Std/Esc Pay", "Annual payout received under each LIFE plan. Shows '−' before payout age.", "var(--clr-orange)"],
                       ["Bas/Std/Esc Beq", "Bequest (death benefit) value at that age under each plan.", "var(--text-muted)"],
                       ["Yield (B/S/E)", "Cumulative total yield = all payouts received + current bequest value. Measures the total financial return of each plan.", "var(--clr-blue)"],
+                      ["CPF Rate", "Blended CPF effective rate that year: total interest credited (OA + SA/RA + MA, including the extra 1% bonus tier) divided by total CPF balance. Shows at all ages. Compare against XIRR — if XIRR exceeds CPF Rate, CPF LIFE is beating passive CPF interest.", "#5eead4"],
                       ["XIRR", "Internal Rate of Return of the highlighted plan at each age. Compares total return vs all contributions made. Green = good (>4%), amber = moderate (2–4%), red = below CPF deposit rates (<2%). — † = pre-breakeven: at that death age the payouts + bequest do not yet exceed contributions at any positive rate; XIRR turns positive once enough payouts accumulate.", "var(--clr-violet)"],
                     ].map(([col, desc, color]) => (
                       <div key={col} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
@@ -17278,7 +17293,7 @@ ${milestones.length > 0 ? `<table>
                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700, fontSize: 13, fontFamily: "monospace", tableLayout: "auto" }}>
                       <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                         <tr style={{ background: "var(--header-bg)", borderBottom: "1px solid var(--border-strong)" }}>
-                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", `XIRR (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`].map((h, i) => (
+                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", "CPF Rate", `XIRR (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`].map((h, i) => (
                             <th key={h} style={{
                               padding: "10px 8px", textAlign: i === 0 ? "left" : "right", fontSize: 12, fontWeight: 800, textTransform: "uppercase", color: i >= 12 ? "var(--clr-blue)" : "var(--text-muted)", whiteSpace: "nowrap",
                               ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--header-bg)", boxShadow: "var(--shadow-sticky)" } : {})
@@ -17316,6 +17331,22 @@ ${milestones.length > 0 ? `<table>
                             {c(row.basicTotal, "var(--clr-orange)")}
                             {c(row.standardTotal, "var(--clr-slate)")}
                             {c(row.escalatingTotal, "var(--clr-green)")}
+                            {/* CPF Effective Rate — blended interest rate CPF credited this year (OA+SA/RA+MA interest ÷ total balance).
+                                Reflects the extra 1% bonus tier automatically. Shown at all ages since interest accrues from day one.
+                                Comparing this against XIRR shows whether CPF LIFE payouts beat simply leaving money in CPF. */}
+                            {(() => {
+                              const totalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
+                              const totalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
+                              if (totalBal < 100) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>—</td>;
+                              const effRate = (totalInt / totalBal) * 100;
+                              const rateColor = effRate > 4 ? "var(--clr-green)" : effRate > 2.5 ? "var(--clr-amber)" : "var(--clr-red)";
+                              return (
+                                <td style={{ padding: "7px 8px", textAlign: "right", whiteSpace: "nowrap" }}
+                                  title={`CPF blended effective rate at age ${row.age}: ${effRate.toFixed(2)}% — total interest credited (OA + SA/RA + MA, incl. extra 1% bonus) divided by total CPF balance. Compare this against XIRR to see if CPF LIFE payouts beat simply earning CPF interest.`}>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: rateColor, fontFamily: "monospace" }}>{effRate.toFixed(2)}%</span>
+                                </td>
+                              );
+                            })()}
                             {(() => {
                               const pa = payoutAge65; // BUG-43 fix: use debounced payoutAge65
                               if (row.age < pa) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>-</td>;
@@ -18100,6 +18131,7 @@ ${milestones.length > 0 ? `<table>
                         ))}
                       </div>
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>Why it shows — before payout age:</strong> XIRR requires at least one positive cashflow (a payout or bequest) to produce a meaningful result. Before your payout age, the entire cashflow series is negative contributions with no inflows yet — the IRR is mathematically undefined, so the column shows <strong>—</strong> for all pre-payout rows.</p>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "#5eead4" }}>CPF Rate column (teal) — the benchmark to beat:</strong> The adjacent <em>CPF Rate</em> column shows the blended effective interest rate CPF actually credited to your accounts that year — total OA + SA/RA + MA interest divided by your total CPF balance. Because it includes the extra 1% bonus on the first $60k, it will typically sit between 3.8% and 4.3%, above the flat 4% SA/RA floor. This is the most relevant benchmark for XIRR: when your XIRR crosses above the CPF Rate line, CPF LIFE is returning more value than you would have earned simply leaving the money in CPF and earning interest. Unlike XIRR, CPF Rate is shown at every age from the start — because CPF accrues interest from day one regardless of whether payouts have begun.</p>
                       <p style={{ marginBottom: 0 }}><strong style={{ color: "var(--text-highlight)" }}>Display cap ±10%:</strong> To prevent extreme outliers from distorting the table, XIRR results are clamped to a ±10% display range. Any computed value outside this range is pinned at the boundary. This is a display-only cap — the underlying Newton-Raphson result is unchanged.</p>
                     </div>
                   </section>
