@@ -12207,7 +12207,7 @@ ${milestones.length > 0 ? `<table>
                 </div>
               );
             })()}
-          </div>
+          </div>}
             {/* /household-panel */}
               </div>{/* /sidebar-col-1-body */}
             </div>{/* /sidebar-col-1 */}
