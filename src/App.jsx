@@ -15444,13 +15444,45 @@ ${milestones.length > 0 ? `<table>
                       // CPF LIFE members keep the existing filter (accumulation up to payout age).
                       const isRSSChart = debouncedInputs.cpfScheme === 'rss';
                       const ageLimit = isRSSChart ? 95 : payoutAge65;
-                      const base = displayAccumulation.filter(d => d.age <= ageLimit).map(row => ({
-                        ...row,
-                        // SA is closed at 55 — zero it out post-55 so the area ends cleanly.
-                        // RA only exists post-55 — zero it out pre-55 so it doesn't ghost below the axis.
-                        sa: row.age >= 55 ? 0 : (row.sa || 0),
-                        ra: row.age < 55 ? 0 : (row.ra || 0),
-                      }));
+                      // Build chart data with a bridging row at the age-55 SA-closure transition.
+                      // Four visual bugs fixed here:
+                      //   1. RA ghost stroke pre-55: use null (not 0) so Recharts breaks the stroke
+                      //      path and the purple RA line does not bleed across the pre-55 chart.
+                      //   2. SA gradual monotone curve into 55: inject a row at 54.999 holding the
+                      //      age-54 SA value so the monotone interpolation stays flat right up to
+                      //      age 55, then drops nearly vertically — a cliff, not a slope.
+                      //   3. MA visual drop at 55: fixed by reordering <Area> components below
+                      //      (OA→MA→SA→RA) so MA sits above only OA, not OA+SA, making it immune
+                      //      to SA's disappearance from the stack.
+                      //   4. OA near-zero at 55: genuine engine behaviour (housing outflow drains OA
+                      //      for 20 years; drain stops at housingStopAge 55 and OA recovers). No fix
+                      //      needed — the bridging row ensures any remaining OA drop looks like a
+                      //      discrete event rather than a smooth monotone curve.
+                      const filtered55 = displayAccumulation.filter(d => d.age <= ageLimit);
+                      const base = [];
+                      for (let i = 0; i < filtered55.length; i++) {
+                        const row = filtered55[i];
+                        const prev = filtered55[i - 1];
+                        // Inject bridging row just before age-55 only when the simulation spans
+                        // the boundary (prev row is pre-55). The bridging row holds the age-54
+                        // values so monotone interpolation stays flat until the cliff at age 55.
+                        if (row.age === 55 && prev && prev.age < 55) {
+                          base.push({
+                            ...prev,
+                            age: 54.999,
+                            sa: prev.sa || 0,
+                            ra: null, // RA does not yet exist at 54.999
+                          });
+                        }
+                        base.push({
+                          ...row,
+                          // SA is closed at 55 — zero it out post-55 so the area ends cleanly.
+                          sa: row.age >= 55 ? 0 : (row.sa || 0),
+                          // RA only exists post-55 — use null pre-55 (not 0) to break the Recharts
+                          // stroke path and prevent a ghost purple line running across the pre-55 chart.
+                          ra: row.age < 55 ? null : (row.ra || 0),
+                        });
+                      }
                       let merged = base;
                       if (showMonteCarlo && monteCarloData) {
                         // O(1) Map lookup — replaces O(n²) .find(m => m.age === row.age) inside .map()
@@ -15465,9 +15497,9 @@ ${milestones.length > 0 ? `<table>
                       return merged;
                     })()}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                      <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 11 }} />
+                      <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} tickFormatter={v => Number.isInteger(Number(v)) ? v : ''} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 11 }} />
                       <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "CPF Balance ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 11, style: { textAnchor: "middle" } }} />
-                      <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={(v, n) => { if (n === "MC Band") return null; return [formatCurrency(v), n]; }} wrapperStyle={STYLES.chartTooltipWrapper} />
+                      <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={(v, n) => { if (n === "MC Band") return null; return [formatCurrency(v), n]; }} labelFormatter={v => `Age ${Math.round(Number(v))}`} wrapperStyle={STYLES.chartTooltipWrapper} />
                       <Legend verticalAlign="top" height={28} iconSize={8} wrapperStyle={STYLES.chartLegend} />
                       {milestones.filter(m => m.age <= (debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)).map((m, idx) => { // S1: RSS shows milestones to 95
                         const sc = m.type === "success" ? "var(--clr-emerald)" : m.type === "gold" ? "var(--clr-amber3)" : m.type === "warning" ? "#f97316" : "#ef4444";
@@ -15542,9 +15574,13 @@ ${milestones.length > 0 ? `<table>
                         </linearGradient>
                       </defs>
                       <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" strokeWidth={2} fill="url(#accOaGrad)" name="OA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#f59e0b" strokeWidth={2} fill="url(#accSaGrad)" name="SA (pre-55)" />
+                      {/* MA placed above OA (not above OA+SA) so its stroke position is unaffected
+                          when SA closes at 55 — fixes the visual MA drop artifact at age 55. */}
                       <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="url(#accMaGrad)" name="MA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
+                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#f59e0b" strokeWidth={2} fill="url(#accSaGrad)" name="SA (pre-55)" />
+                      {/* connectNulls={false} (default, stated explicitly) ensures the purple stroke
+                          does not draw pre-55 where ra=null — fixes the ghost RA line across the chart. */}
+                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" connectNulls={false} stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
                       {/* MC band rendered AFTER stacked areas so it overlays on top without
                           hiding the account breakdown. P90 = semi-transparent upper bound fill;
                           no bg-base "eraser" (the old eraser covered the stacked areas entirely).
