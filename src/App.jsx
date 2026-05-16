@@ -6101,11 +6101,15 @@ export default function App() {
       "Bas Monthly Payout", "Bas Annual Payout", "Bas Bequest",
       "Std Total Yield", "Esc Total Yield", "Bas Total Yield",
       "Net Worth - Std (incl. Property)", "Net Worth - Esc (incl. Property)", "Net Worth - Bas (incl. Property)",
-      "Yield (B) Amount", "Yield (S) Amount", "Yield (E) Amount", "Yield IRR % (Std)", "Yield IRR % (Esc)", "Yield IRR % (Bas)"
+      "Yield (B) Amount", "Yield (S) Amount", "Yield (E) Amount", "CPF Eff. Rate %", "Yield IRR % (Std)", "Yield IRR % (Esc)", "Yield IRR % (Bas)"
     ];
     const rows = projection.map(row => {
       const lr = payoutByAge.get(row.age) || {};
       const yr = baseYear + (row.age - startAge);
+      // CPF effective blended rate: total interest / total balance
+      const csvTotalInt = (row.yearOaInterest || 0) + (row.yearSaRaInterest || 0) + (row.yearMaInterest || 0);
+      const csvTotalBal = row.total || 0;
+      const csvEffRate = csvTotalBal > 100 ? (csvTotalInt / csvTotalBal * 100).toFixed(2) + "%" : "";
       return [
         row.age, yr,
         row.oa, row.sa, row.ma, row.ra, row.total,
@@ -6120,6 +6124,8 @@ export default function App() {
         lr.standardNetWorth || "", lr.escalatingNetWorth || "", lr.basicNetWorth || "",
         // Yield amounts (annual payout per plan)
         lr.basicAnnual || "", lr.standardAnnual || "", lr.escalatingAnnual || "",
+        // CPF effective blended rate
+        csvEffRate,
         // Yield XIRR % — pre-computed Newton-Raphson XIRR for each plan
         ...(["standard", "escalating", "basic"].map(plan => {
           const pa = payoutAge65; // use debounced value — matches xirrByAge which is keyed on debounced pa
@@ -6315,6 +6321,10 @@ export default function App() {
       const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
       const isPA = row.age >= pa;
       const bg = row.age === pa ? "#e8f5e9" : row.age % 2 === 0 ? "#f8fafc" : "#ffffff";
+      // CPF effective blended rate for print
+      const pTotalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
+      const pTotalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
+      const pEffRate = pTotalBal > 100 ? (pTotalInt / pTotalBal * 100).toFixed(2) + "%" : "—";
       return `<tr style="background:${bg}">
         <td style="font-weight:700">${row.age}</td>
         <td>${fmt(baseRow.oa)}</td><td>${fmt(baseRow.ma)}</td><td>${fmt(raSaBal)}</td>
@@ -6323,6 +6333,7 @@ export default function App() {
         <td>${isPA ? fmt(row.standardAnnual) : "-"}</td><td>${fmt(row.standardBequest)}</td>
         <td>${isPA ? fmt(row.escalatingAnnual) : "-"}</td><td>${fmt(row.escalatingBequest)}</td>
         <td style="font-weight:700">${fmt(row[`${highlightPlan}Total`])}</td>
+        <td style="font-weight:700">${pEffRate}</td>
       </tr>`;
     }).join("");
 
@@ -6343,7 +6354,7 @@ export default function App() {
 <p>Plan shown: ${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} | Payout Age: ${pa} | Generated: ${new Date().toLocaleDateString("en-SG")}</p>
 <table>
 <thead><tr><th>Age</th><th>OA</th><th>MA</th><th>SA/RA</th><th>Inflows</th><th>Outflows</th>
-<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th></tr></thead>
+<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th><th>CPF Rate</th></tr></thead>
 <tbody>${rowsHtml}</tbody>
 </table>
 </body></html>`;
@@ -6364,12 +6375,15 @@ export default function App() {
       // R2 fix: derive is55Plus from debouncedInputs so the SA/RA column label
       // matches the same data source as the rest of the print function.
       const is55PlusAtPrint = (Number(debouncedInputs.currentAge) || 0) >= 55;
-      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield"].join("\t");
+      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield", "CPF Rate"].join("\t");
       const textRows = displayProjection.map(row => {
         const baseRow = accumulationByAge.get(row.age) || {};
         const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
         const isPA = row.age >= pa;
-        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`])].join("\t");
+        const tTotalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
+        const tTotalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
+        const tEffRate = tTotalBal > 100 ? (tTotalInt / tTotalBal * 100).toFixed(2) + "%" : "—";
+        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`]), tEffRate].join("\t");
       }).join("\n");
       setExportModal({ type: "print", content: `CPF Projection — ${memberName} (Age ${startAge} to 95)\n${"=".repeat(60)}\n${headers}\n${textRows}` });
     }
@@ -10611,9 +10625,9 @@ ${milestones.length > 0 ? `<table>
                 State: if any section in col is open → clicking collapses all; if all closed → expands all. */}
             {(() => {
               const colSections = {
-                1: ["profile", "cpfBalances", "contribs", "topups", "decumulation"],
-                2: ["outflows", "transfers", "investments", "property"],
-                3: ["privateAssets", "lifeevents"],
+                1: ["profile", "cpfBalances", "contribs"],
+                2: ["topups", "outflows", "transfers", "decumulation"],
+                3: ["investments", "property", "privateAssets", "lifeevents"],
               };
               const colMeta = [
                 { n: 1, label: "Profile & Contributions", clr: "var(--clr-sky)",  bg: "rgba(56,189,248,0.08)",           bdr: "rgba(56,189,248,0.5)",         solid: "rgba(56,189,248,0.55)"           },
@@ -10670,7 +10684,7 @@ ${milestones.length > 0 ? `<table>
               onClick={() => setShowAdvanced(v => !v)}
               title={showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings: Property · CPFIS · Investments · Private Assets · SRS · Life Events"}
               style={{
-                flex: "none", height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                flex: "none", marginLeft: "auto", height: 28, display: "flex", alignItems: "center", justifyContent: "center",
                 gap: 4, padding: "0 12px", borderRadius: 7, cursor: "pointer",
                 background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.18)" : "rgba(100,116,139,0.07)",
                 border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.55)" : "rgba(100,116,139,0.22)"}`,
@@ -11840,6 +11854,22 @@ ${milestones.length > 0 ? `<table>
               </div>}
             </div>{/* /contribs inner */}
             </div>{/* /contribs gate wrapper */}
+              </div>{/* /sidebar-col-1-body */}
+            </div>{/* /sidebar-col-1 */}
+
+            {/* ── FHD COL 2: Inflows, Outflows, Transfers & Decumulation ──────
+                Passthrough flex-column on ≤1919px; grid column on ≥1920px. */}
+            <div className="sidebar-col sidebar-col-2">
+              <div className={`sidebar-col-body${colOpen[2] ? "" : " col-collapsed"}`}>
+            {/* Outflows */}
+            <div style={{ position: "relative" }}>
+            {isForeigner && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
+              </div>
+            )}
+            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
+
             {/* Inflows */}
             <div style={{ position: "relative" }}>
             {isForeigner && (
@@ -12318,6 +12348,178 @@ ${milestones.length > 0 ? `<table>
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
 
+              <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
+              {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+                  {/* ── SUB-SECTION: Medical ──────────────────────────────────── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.22)", margin: "2px 0 4px" }}>
+                    <MinusCircle style={{ width: 11, height: 11, color: "#f472b6", flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.07em" }}>Medical</span>
+                  </div>
+
+                  {[["medicalUsage", "Medical Usage (MA) — Annual", "annual"], ["medishieldIP", "MediShield Life / IP (MA) — Annual", "annual"], ["elderCareShield", "ElderShield / CareShield (MA) — Annual", "annual"]].map(([n, l, freq]) => (
+                    <div key={n}><div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>{l.replace(" — Annual","")}</div>
+                      <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
+                  ))}
+                  {/* ── Medical Inflation Rate ──────────────────────────────── */}
+                  <div><div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>Medical Inflation Rate (%)</div>
+                    <input type="text" inputMode="decimal" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" aria-label="Medical inflation rate" className={fieldChanged("medicalInflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
+                </div>
+              </div>}
+            </div>{/* /outflows inner */}
+            </div>{/* /outflows gate wrapper */}
+
+            {/* CPF Transfers */}
+            <div style={{ position: "relative" }}>
+            {isForeigner && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
+              </div>
+            )}
+            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
+              <SidebarSectionHeader id="transfers" label="CPF Transfers ($/yr)" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One" />
+              {openSections.has("transfers") && <div style={{ padding: "0 16px 16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {/* OA → MA */}
+                  <div>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: inputErrors.oaToMaTransfer ? "var(--clr-orange)" : "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
+                      <span>OA → MA Transfer</span> <FreqToggle freqKey="oaToMaFreq" durKey="oaToMaDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-oatoma" text="CPF policy: OA→MA requires age 55+. You must have set aside FRS, or BRS if you own a property with sufficient lease. For self: internal move (OA ↓, MA ↑). For loved one (spouse/parent/sibling/grandparent): funds leave your OA permanently as an outflow — your MA does not increase." />
+                    </div>
+                    {/* Age gate warning */}
+                    {!is55Plus && (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "rgba(var(--clr-orange-rgb),0.1)", border: "1px solid rgba(var(--clr-orange-rgb),0.35)", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
+                        <AlertTriangle style={{ width: 11, height: 11, color: "var(--clr-orange)", flexShrink: 0, marginTop: 1 }} />
+                        <p style={{ fontSize: 12, color: "#fdba74", margin: 0, lineHeight: 1.5 }}>
+                          <strong>Age 55+ required.</strong> OA→MA transfers are not permitted before age 55 (CPF policy). Any amount entered here will be ignored by the engine until age 55 is reached.
+                        </p>
+                      </div>
+                    )}
+                    {/* For self / For loved one toggle */}
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      {[["For Self", false], ["For Loved One", true]].map(([label, val]) => (
+                        <button key={label} onClick={() => setInputs(p => ({ ...p, oaToMaForLovedOne: val }))}
+                          style={{ flex: 1, padding: "5px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, border: "1px solid", cursor: "pointer",
+                            background: inputs.oaToMaForLovedOne === val ? (val ? "rgba(244,63,94,0.2)" : "rgba(var(--clr-amber-rgb),0.15)") : "transparent",
+                            color: inputs.oaToMaForLovedOne === val ? (val ? "var(--clr-red)" : "var(--clr-amber)") : "var(--text-muted)",
+                            borderColor: inputs.oaToMaForLovedOne === val ? (val ? "rgba(244,63,94,0.5)" : "rgba(var(--clr-amber-rgb),0.4)") : "var(--border-strong)" }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {inputs.oaToMaForLovedOne && (
+                      <div style={{ background: "rgba(244,63,94,0.07)", border: "1px solid rgba(244,63,94,0.25)", borderRadius: 6, padding: "7px 10px", marginBottom: 8 }}>
+                        <p style={{ fontSize: 12, color: "#fca5a5", margin: 0, lineHeight: 1.5 }}>
+                          <strong style={{ color: "var(--clr-red)" }}>Outflow mode:</strong> Funds leave your OA permanently. Eligible recipients: spouse, parents, parents-in-law, grandparents, grandparents-in-law, or siblings. Recipient's MA must be below BHS.
+                        </p>
+                      </div>
+                    )}
+                    {(() => {
+                      const bhsNow = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, Math.max(0, (Number(inputs.currentYear) || 2026) - 2026)));
+                      const maRoom = Math.max(0, bhsNow - (Number(inputs.maBalance) || 0));
+                      const enteredAmt = Number(inputs.oaToMaTransfer) || 0;
+                      const isOver = !inputs.oaToMaForLovedOne && enteredAmt > maRoom;
+                      return (
+                        <>
+                          <input type="text" inputMode="decimal" name="oaToMaTransfer" value={getDisplayValue("oaToMaTransfer", inputs.oaToMaTransfer)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual OA to MA transfer" onFocus={() => setFocusedField("oaToMaTransfer")} className={fieldChanged("oaToMaTransfer") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: isOver ? "rgba(var(--clr-orange-rgb),0.07)" : "rgba(var(--clr-amber-rgb),0.05)", border: `1px solid ${inputErrors.oaToMaTransfer ? "var(--clr-red)" : isOver ? "rgba(var(--clr-orange-rgb),0.5)" : "rgba(var(--clr-amber-rgb),0.2)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          {inputErrors.oaToMaTransfer && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaToMaTransfer}</p>}
+                          {!inputs.oaToMaForLovedOne && (
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                              <p style={{ fontSize: 12, color: maRoom === 0 ? "var(--clr-red)" : "var(--text-muted)", margin: 0 }}>
+                                MA: <strong style={{ color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(Number(inputs.maBalance) || 0)}</strong>
+                                {" "}/ BHS: <strong style={{ color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(bhsNow)}</strong>
+                                {" "}· Headroom: <strong style={{ color: maRoom === 0 ? "var(--clr-red)" : "var(--clr-amber)", fontFamily: "monospace" }}>{formatCurrency(maRoom)}</strong>
+                              </p>
+                              {maRoom === 0 && <span style={{ fontSize: 12, color: "var(--clr-red)", fontWeight: 700 }}>BHS reached ✓</span>}
+                            </div>
+                          )}
+                          {isOver && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(var(--clr-orange-rgb),0.1)", border: "1px solid rgba(var(--clr-orange-rgb),0.3)", borderRadius: 6, padding: "5px 8px", marginTop: 4 }}>
+                              <AlertTriangle style={{ width: 10, height: 10, color: "var(--clr-orange)", flexShrink: 0 }} />
+                              <p style={{ fontSize: 12, color: "#fdba74", margin: 0 }}>Exceeds BHS headroom — engine auto-caps to {formatCurrency(maRoom)}/yr</p>
+                            </div>
+                          )}
+                          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+                            Age 55+ required · {inputs.oaToMaForLovedOne ? "outflow from your OA (loved one's MA not tracked here)" : "internal move OA→MA"} · irreversible · no tax relief
+                          </p>
+                        </>
+                      );
+                    })()}
+                  </div>
+                  {/* OA → SA (pre-55) / OA → RA (55 and above) */}
+                  <div>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: inputErrors.oaToSaTransfer ? "var(--clr-orange)" : "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
+                      <span>{is55Plus ? "OA → RA Transfer" : "OA → SA Transfer"}</span> <FreqToggle freqKey="oaToSaFreq" durKey="oaToSaDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-oatosa" text={is55Plus
+                        ? "Transfer OA savings to your RA (or a loved one's RA) to earn 4% instead of 2.5%. Available from age 55. For Self: capped at ERS ($440,800) in RA. Irreversible. No tax relief. For Loved One: OA is simply an outflow — their RA is not tracked here."
+                        : "Transfer OA savings to your SA (or a loved one's SA) to earn 4% instead of 2.5%. Before age 55 this goes to SA; from age 55 the engine automatically redirects the same amount to RA instead (SA is closed at 55). For Self: capped at FRS ($220,400) in SA pre-55, then ERS in RA post-55. Irreversible. No tax relief."
+                      } />
+                    </div>
+                    {/* For Self / For Loved One toggle — matches OA→MA style */}
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      {[["For Self", false], ["For Loved One", true]].map(([label, val]) => (
+                        <button key={label} onClick={() => setInputs(p => ({ ...p, oaToSaForLovedOne: val }))}
+                          style={{ flex: 1, padding: "5px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, border: "1px solid", cursor: "pointer",
+                            background: inputs.oaToSaForLovedOne === val ? (val ? "rgba(244,63,94,0.2)" : "rgba(var(--clr-amber-rgb),0.15)") : "transparent",
+                            color: inputs.oaToSaForLovedOne === val ? (val ? "var(--clr-red)" : "var(--clr-amber)") : "var(--text-muted)",
+                            borderColor: inputs.oaToSaForLovedOne === val ? (val ? "rgba(244,63,94,0.5)" : "rgba(var(--clr-amber-rgb),0.4)") : "var(--border-strong)" }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {inputs.oaToSaForLovedOne && (
+                      <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(244,63,94,0.07)", border: "1px solid rgba(244,63,94,0.25)", fontSize: 12, color: "#fca5a5", lineHeight: 1.6 }}>
+                        <strong style={{ color: "var(--clr-red)" }}>For Loved One:</strong> The entered amount is deducted from <em>your</em> OA each year and treated as an outflow. Your loved one's {is55Plus ? "RA" : "SA"} is not tracked in this tool. FRS/ERS headroom check is skipped — only your OA balance limits the transfer.
+                      </div>
+                    )}
+                    <input type="text" inputMode="decimal" name="oaToSaTransfer" value={getDisplayValue("oaToSaTransfer", inputs.oaToSaTransfer)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={is55Plus ? "Annual OA to RA transfer" : "Annual OA to SA transfer"} onFocus={() => setFocusedField("oaToSaTransfer")} className={fieldChanged("oaToSaTransfer") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: inputs.oaToSaForLovedOne ? "rgba(244,63,94,0.05)" : "rgba(var(--clr-amber-rgb),0.05)", border: `1px solid ${inputErrors.oaToSaTransfer ? "var(--clr-red)" : inputs.oaToSaForLovedOne ? "rgba(244,63,94,0.2)" : "rgba(var(--clr-amber-rgb),0.2)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                    {inputErrors.oaToSaTransfer && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaToSaTransfer}</p>}
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+                      {inputs.oaToSaForLovedOne
+                        ? `OA outflow only · loved one's ${is55Plus ? "RA" : "SA"} not tracked · irreversible · no tax relief`
+                        : is55Plus
+                          ? "Age 55+ · capped at ERS in RA · irreversible · not in Annual Limit · no tax relief"
+                          : "Pre-55 → SA · age 55+ auto-redirects to RA · capped at FRS/ERS · irreversible · no tax relief"}
+                    </p>
+                    {/* NX4 fix: clarify SA→RA auto-transition so users entering this field at 40
+                        understand the same amount continues as OA→RA after their 55th birthday */}
+                    {!inputs.oaToSaForLovedOne && !is55Plus && (
+                      <p style={{ fontSize: 12, color: "var(--text-subtle)", marginTop: 2 }}>
+                        ⚙ From age 55 this transfer automatically redirects to RA — SA closes at 55.
+                      </p>
+                    )}
+                    {/* Rev #10 — forward-looking auto-stop message */}
+                    {/* P3 fix: was an inline IIFE calling displayAccumulation.find() on every render;
+                        now reads from the oaToSaCrossover useMemo computed above */}
+                    {!inputs.oaToSaForLovedOne && (() => {
+                      const { alreadyMet, crossoverAge, label: _label, capLabel: _capLabel, targetSum: _targetSum } = oaToSaCrossover;
+                      if (alreadyMet) {
+                        return (
+                          <p style={{ fontSize: 12, color: "var(--clr-orange)", marginTop: 2 }}>
+                            ⚙ {_label} already at/above {_capLabel} ({formatCurrency(_targetSum)}) — transfers have no effect.
+                          </p>
+                        );
+                      }
+                      if (crossoverAge != null) {
+                        return (
+                          <p style={{ fontSize: 12, color: "var(--clr-green)", marginTop: 2 }}>
+                            ⚙ Engine auto-stops transfers at est. age <strong>{crossoverAge}</strong> when {_label} reaches projected {_capLabel}.
+                          </p>
+                        );
+                      }
+                      return (
+                        <p style={{ fontSize: 12, color: "var(--text-subtle)", marginTop: 2 }}>
+                          ⚙ {_label} does not reach {_capLabel} within the projection horizon at current inputs.
+                        </p>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>}
+            </div>{/* /transfers inner */}
+            </div>{/* /transfers gate wrapper */}
+
             {/* Decumulation & Goals — income targets, OA drawdown, Die with Zero */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
@@ -12602,193 +12804,15 @@ ${milestones.length > 0 ? `<table>
                 </div>
               </div>}
             </div>
-              </div>{/* /sidebar-col-1-body */}
-            </div>{/* /sidebar-col-1 */}
 
-            {/* ── FHD COL 2: Outflows, Transfers & Property (3 sections) ──────
+              </div>{/* /sidebar-col-2-body */}
+            </div>{/* /sidebar-col-2 */}
+
+            {/* ── FHD COL 3: Private Assets, Life Events & Decumulation (3 sections) ──
                 Passthrough flex-column on ≤1919px; grid column on ≥1920px. */}
-            <div className="sidebar-col sidebar-col-2">
-              <div className={`sidebar-col-body${colOpen[2] ? "" : " col-collapsed"}`}>
-            {/* Outflows */}
-            <div style={{ position: "relative" }}>
-            {isForeigner && (
-              <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
-              </div>
-            )}
-            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
-              {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-                  {/* ── SUB-SECTION: Medical ──────────────────────────────────── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.22)", margin: "2px 0 4px" }}>
-                    <MinusCircle style={{ width: 11, height: 11, color: "#f472b6", flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.07em" }}>Medical</span>
-                  </div>
-
-                  {[["medicalUsage", "Medical Usage (MA) — Annual", "annual"], ["medishieldIP", "MediShield Life / IP (MA) — Annual", "annual"], ["elderCareShield", "ElderShield / CareShield (MA) — Annual", "annual"]].map(([n, l, freq]) => (
-                    <div key={n}><div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>{l.replace(" — Annual","")}</div>
-                      <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
-                  ))}
-                  {/* ── Medical Inflation Rate ──────────────────────────────── */}
-                  <div><div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>Medical Inflation Rate (%)</div>
-                    <input type="text" inputMode="decimal" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" aria-label="Medical inflation rate" className={fieldChanged("medicalInflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
-                </div>
-              </div>}
-            </div>{/* /outflows inner */}
-            </div>{/* /outflows gate wrapper */}
-
-            {/* CPF Transfers */}
-            <div style={{ position: "relative" }}>
-            {isForeigner && (
-              <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
-              </div>
-            )}
-            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="transfers" label="CPF Transfers ($/yr)" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One" />
-              {openSections.has("transfers") && <div style={{ padding: "0 16px 16px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {/* OA → MA */}
-                  <div>
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: inputErrors.oaToMaTransfer ? "var(--clr-orange)" : "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>OA → MA Transfer</span> <FreqToggle freqKey="oaToMaFreq" durKey="oaToMaDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-oatoma" text="CPF policy: OA→MA requires age 55+. You must have set aside FRS, or BRS if you own a property with sufficient lease. For self: internal move (OA ↓, MA ↑). For loved one (spouse/parent/sibling/grandparent): funds leave your OA permanently as an outflow — your MA does not increase." />
-                    </div>
-                    {/* Age gate warning */}
-                    {!is55Plus && (
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "rgba(var(--clr-orange-rgb),0.1)", border: "1px solid rgba(var(--clr-orange-rgb),0.35)", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
-                        <AlertTriangle style={{ width: 11, height: 11, color: "var(--clr-orange)", flexShrink: 0, marginTop: 1 }} />
-                        <p style={{ fontSize: 12, color: "#fdba74", margin: 0, lineHeight: 1.5 }}>
-                          <strong>Age 55+ required.</strong> OA→MA transfers are not permitted before age 55 (CPF policy). Any amount entered here will be ignored by the engine until age 55 is reached.
-                        </p>
-                      </div>
-                    )}
-                    {/* For self / For loved one toggle */}
-                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                      {[["For Self", false], ["For Loved One", true]].map(([label, val]) => (
-                        <button key={label} onClick={() => setInputs(p => ({ ...p, oaToMaForLovedOne: val }))}
-                          style={{ flex: 1, padding: "5px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, border: "1px solid", cursor: "pointer",
-                            background: inputs.oaToMaForLovedOne === val ? (val ? "rgba(244,63,94,0.2)" : "rgba(var(--clr-amber-rgb),0.15)") : "transparent",
-                            color: inputs.oaToMaForLovedOne === val ? (val ? "var(--clr-red)" : "var(--clr-amber)") : "var(--text-muted)",
-                            borderColor: inputs.oaToMaForLovedOne === val ? (val ? "rgba(244,63,94,0.5)" : "rgba(var(--clr-amber-rgb),0.4)") : "var(--border-strong)" }}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    {inputs.oaToMaForLovedOne && (
-                      <div style={{ background: "rgba(244,63,94,0.07)", border: "1px solid rgba(244,63,94,0.25)", borderRadius: 6, padding: "7px 10px", marginBottom: 8 }}>
-                        <p style={{ fontSize: 12, color: "#fca5a5", margin: 0, lineHeight: 1.5 }}>
-                          <strong style={{ color: "var(--clr-red)" }}>Outflow mode:</strong> Funds leave your OA permanently. Eligible recipients: spouse, parents, parents-in-law, grandparents, grandparents-in-law, or siblings. Recipient's MA must be below BHS.
-                        </p>
-                      </div>
-                    )}
-                    {(() => {
-                      const bhsNow = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, Math.max(0, (Number(inputs.currentYear) || 2026) - 2026)));
-                      const maRoom = Math.max(0, bhsNow - (Number(inputs.maBalance) || 0));
-                      const enteredAmt = Number(inputs.oaToMaTransfer) || 0;
-                      const isOver = !inputs.oaToMaForLovedOne && enteredAmt > maRoom;
-                      return (
-                        <>
-                          <input type="text" inputMode="decimal" name="oaToMaTransfer" value={getDisplayValue("oaToMaTransfer", inputs.oaToMaTransfer)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual OA to MA transfer" onFocus={() => setFocusedField("oaToMaTransfer")} className={fieldChanged("oaToMaTransfer") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: isOver ? "rgba(var(--clr-orange-rgb),0.07)" : "rgba(var(--clr-amber-rgb),0.05)", border: `1px solid ${inputErrors.oaToMaTransfer ? "var(--clr-red)" : isOver ? "rgba(var(--clr-orange-rgb),0.5)" : "rgba(var(--clr-amber-rgb),0.2)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                          {inputErrors.oaToMaTransfer && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaToMaTransfer}</p>}
-                          {!inputs.oaToMaForLovedOne && (
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                              <p style={{ fontSize: 12, color: maRoom === 0 ? "var(--clr-red)" : "var(--text-muted)", margin: 0 }}>
-                                MA: <strong style={{ color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(Number(inputs.maBalance) || 0)}</strong>
-                                {" "}/ BHS: <strong style={{ color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(bhsNow)}</strong>
-                                {" "}· Headroom: <strong style={{ color: maRoom === 0 ? "var(--clr-red)" : "var(--clr-amber)", fontFamily: "monospace" }}>{formatCurrency(maRoom)}</strong>
-                              </p>
-                              {maRoom === 0 && <span style={{ fontSize: 12, color: "var(--clr-red)", fontWeight: 700 }}>BHS reached ✓</span>}
-                            </div>
-                          )}
-                          {isOver && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(var(--clr-orange-rgb),0.1)", border: "1px solid rgba(var(--clr-orange-rgb),0.3)", borderRadius: 6, padding: "5px 8px", marginTop: 4 }}>
-                              <AlertTriangle style={{ width: 10, height: 10, color: "var(--clr-orange)", flexShrink: 0 }} />
-                              <p style={{ fontSize: 12, color: "#fdba74", margin: 0 }}>Exceeds BHS headroom — engine auto-caps to {formatCurrency(maRoom)}/yr</p>
-                            </div>
-                          )}
-                          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
-                            Age 55+ required · {inputs.oaToMaForLovedOne ? "outflow from your OA (loved one's MA not tracked here)" : "internal move OA→MA"} · irreversible · no tax relief
-                          </p>
-                        </>
-                      );
-                    })()}
-                  </div>
-                  {/* OA → SA (pre-55) / OA → RA (55 and above) */}
-                  <div>
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: inputErrors.oaToSaTransfer ? "var(--clr-orange)" : "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>{is55Plus ? "OA → RA Transfer" : "OA → SA Transfer"}</span> <FreqToggle freqKey="oaToSaFreq" durKey="oaToSaDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-oatosa" text={is55Plus
-                        ? "Transfer OA savings to your RA (or a loved one's RA) to earn 4% instead of 2.5%. Available from age 55. For Self: capped at ERS ($440,800) in RA. Irreversible. No tax relief. For Loved One: OA is simply an outflow — their RA is not tracked here."
-                        : "Transfer OA savings to your SA (or a loved one's SA) to earn 4% instead of 2.5%. Before age 55 this goes to SA; from age 55 the engine automatically redirects the same amount to RA instead (SA is closed at 55). For Self: capped at FRS ($220,400) in SA pre-55, then ERS in RA post-55. Irreversible. No tax relief."
-                      } />
-                    </div>
-                    {/* For Self / For Loved One toggle — matches OA→MA style */}
-                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                      {[["For Self", false], ["For Loved One", true]].map(([label, val]) => (
-                        <button key={label} onClick={() => setInputs(p => ({ ...p, oaToSaForLovedOne: val }))}
-                          style={{ flex: 1, padding: "5px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, border: "1px solid", cursor: "pointer",
-                            background: inputs.oaToSaForLovedOne === val ? (val ? "rgba(244,63,94,0.2)" : "rgba(var(--clr-amber-rgb),0.15)") : "transparent",
-                            color: inputs.oaToSaForLovedOne === val ? (val ? "var(--clr-red)" : "var(--clr-amber)") : "var(--text-muted)",
-                            borderColor: inputs.oaToSaForLovedOne === val ? (val ? "rgba(244,63,94,0.5)" : "rgba(var(--clr-amber-rgb),0.4)") : "var(--border-strong)" }}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    {inputs.oaToSaForLovedOne && (
-                      <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(244,63,94,0.07)", border: "1px solid rgba(244,63,94,0.25)", fontSize: 12, color: "#fca5a5", lineHeight: 1.6 }}>
-                        <strong style={{ color: "var(--clr-red)" }}>For Loved One:</strong> The entered amount is deducted from <em>your</em> OA each year and treated as an outflow. Your loved one's {is55Plus ? "RA" : "SA"} is not tracked in this tool. FRS/ERS headroom check is skipped — only your OA balance limits the transfer.
-                      </div>
-                    )}
-                    <input type="text" inputMode="decimal" name="oaToSaTransfer" value={getDisplayValue("oaToSaTransfer", inputs.oaToSaTransfer)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={is55Plus ? "Annual OA to RA transfer" : "Annual OA to SA transfer"} onFocus={() => setFocusedField("oaToSaTransfer")} className={fieldChanged("oaToSaTransfer") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: inputs.oaToSaForLovedOne ? "rgba(244,63,94,0.05)" : "rgba(var(--clr-amber-rgb),0.05)", border: `1px solid ${inputErrors.oaToSaTransfer ? "var(--clr-red)" : inputs.oaToSaForLovedOne ? "rgba(244,63,94,0.2)" : "rgba(var(--clr-amber-rgb),0.2)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                    {inputErrors.oaToSaTransfer && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaToSaTransfer}</p>}
-                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
-                      {inputs.oaToSaForLovedOne
-                        ? `OA outflow only · loved one's ${is55Plus ? "RA" : "SA"} not tracked · irreversible · no tax relief`
-                        : is55Plus
-                          ? "Age 55+ · capped at ERS in RA · irreversible · not in Annual Limit · no tax relief"
-                          : "Pre-55 → SA · age 55+ auto-redirects to RA · capped at FRS/ERS · irreversible · no tax relief"}
-                    </p>
-                    {/* NX4 fix: clarify SA→RA auto-transition so users entering this field at 40
-                        understand the same amount continues as OA→RA after their 55th birthday */}
-                    {!inputs.oaToSaForLovedOne && !is55Plus && (
-                      <p style={{ fontSize: 12, color: "var(--text-subtle)", marginTop: 2 }}>
-                        ⚙ From age 55 this transfer automatically redirects to RA — SA closes at 55.
-                      </p>
-                    )}
-                    {/* Rev #10 — forward-looking auto-stop message */}
-                    {/* P3 fix: was an inline IIFE calling displayAccumulation.find() on every render;
-                        now reads from the oaToSaCrossover useMemo computed above */}
-                    {!inputs.oaToSaForLovedOne && (() => {
-                      const { alreadyMet, crossoverAge, label: _label, capLabel: _capLabel, targetSum: _targetSum } = oaToSaCrossover;
-                      if (alreadyMet) {
-                        return (
-                          <p style={{ fontSize: 12, color: "var(--clr-orange)", marginTop: 2 }}>
-                            ⚙ {_label} already at/above {_capLabel} ({formatCurrency(_targetSum)}) — transfers have no effect.
-                          </p>
-                        );
-                      }
-                      if (crossoverAge != null) {
-                        return (
-                          <p style={{ fontSize: 12, color: "var(--clr-green)", marginTop: 2 }}>
-                            ⚙ Engine auto-stops transfers at est. age <strong>{crossoverAge}</strong> when {_label} reaches projected {_capLabel}.
-                          </p>
-                        );
-                      }
-                      return (
-                        <p style={{ fontSize: 12, color: "var(--text-subtle)", marginTop: 2 }}>
-                          ⚙ {_label} does not reach {_capLabel} within the projection horizon at current inputs.
-                        </p>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>}
-            </div>{/* /transfers inner */}
-            </div>{/* /transfers gate wrapper */}
-
+            <div className="sidebar-col sidebar-col-3">
+              <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
+            {/* ── All Advanced Sections: Investments · Property · Private Assets · Life Events ── */}
             {/* ── Investments & Withdrawals — Advanced Setting ───────────────────────
                 Extracted from Outflows for conceptual clarity: these are capital decisions
                 (investing OA/SA via CPFIS, education loan draws, age-55 OA withdrawals),
@@ -13199,14 +13223,7 @@ ${milestones.length > 0 ? `<table>
             </div>
 </>
             )}
-              </div>{/* /sidebar-col-2-body */}
-            </div>{/* /sidebar-col-2 */}
 
-            {/* ── FHD COL 3: Private Assets, Life Events & Decumulation (3 sections) ──
-                Passthrough flex-column on ≤1919px; grid column on ≥1920px. */}
-            <div className="sidebar-col sidebar-col-3">
-              <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
-            {/* ── Private Assets + Life Events — Advanced Settings ─────────────── */}
             {showAdvanced && (
             <>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
@@ -17217,6 +17234,7 @@ ${milestones.length > 0 ? `<table>
                       ["Bas/Std/Esc Pay", "Annual payout received under each LIFE plan. Shows '−' before payout age.", "var(--clr-orange)"],
                       ["Bas/Std/Esc Beq", "Bequest (death benefit) value at that age under each plan.", "var(--text-muted)"],
                       ["Yield (B/S/E)", "Cumulative total yield = all payouts received + current bequest value. Measures the total financial return of each plan.", "var(--clr-blue)"],
+                      ["CPF Rate", "Blended CPF effective rate that year: total interest credited (OA + SA/RA + MA, including the extra 1% bonus tier) divided by total CPF balance. Shows at all ages. Compare against XIRR — if XIRR exceeds CPF Rate, CPF LIFE is beating passive CPF interest.", "#5eead4"],
                       ["XIRR", "Internal Rate of Return of the highlighted plan at each age. Compares total return vs all contributions made. Green = good (>4%), amber = moderate (2–4%), red = below CPF deposit rates (<2%). — † = pre-breakeven: at that death age the payouts + bequest do not yet exceed contributions at any positive rate; XIRR turns positive once enough payouts accumulate.", "var(--clr-violet)"],
                     ].map(([col, desc, color]) => (
                       <div key={col} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
@@ -17294,7 +17312,7 @@ ${milestones.length > 0 ? `<table>
                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700, fontSize: 13, fontFamily: "monospace", tableLayout: "auto" }}>
                       <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                         <tr style={{ background: "var(--header-bg)", borderBottom: "1px solid var(--border-strong)" }}>
-                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", `XIRR (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`].map((h, i) => (
+                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", "CPF Rate", `XIRR (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`].map((h, i) => (
                             <th key={h} style={{
                               padding: "10px 8px", textAlign: i === 0 ? "left" : "right", fontSize: 12, fontWeight: 800, textTransform: "uppercase", color: i >= 12 ? "var(--clr-blue)" : "var(--text-muted)", whiteSpace: "nowrap",
                               ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--header-bg)", boxShadow: "var(--shadow-sticky)" } : {})
@@ -17332,6 +17350,22 @@ ${milestones.length > 0 ? `<table>
                             {c(row.basicTotal, "var(--clr-orange)")}
                             {c(row.standardTotal, "var(--clr-slate)")}
                             {c(row.escalatingTotal, "var(--clr-green)")}
+                            {/* CPF Effective Rate — blended interest rate CPF credited this year (OA+SA/RA+MA interest ÷ total balance).
+                                Reflects the extra 1% bonus tier automatically. Shown at all ages since interest accrues from day one.
+                                Comparing this against XIRR shows whether CPF LIFE payouts beat simply leaving money in CPF. */}
+                            {(() => {
+                              const totalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
+                              const totalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
+                              if (totalBal < 100) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>—</td>;
+                              const effRate = (totalInt / totalBal) * 100;
+                              const rateColor = effRate > 4 ? "var(--clr-green)" : effRate > 2.5 ? "var(--clr-amber)" : "var(--clr-red)";
+                              return (
+                                <td style={{ padding: "7px 8px", textAlign: "right", whiteSpace: "nowrap" }}
+                                  title={`CPF blended effective rate at age ${row.age}: ${effRate.toFixed(2)}% — total interest credited (OA + SA/RA + MA, incl. extra 1% bonus) divided by total CPF balance. Compare this against XIRR to see if CPF LIFE payouts beat simply earning CPF interest.`}>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: rateColor, fontFamily: "monospace" }}>{effRate.toFixed(2)}%</span>
+                                </td>
+                              );
+                            })()}
                             {(() => {
                               const pa = payoutAge65; // BUG-43 fix: use debounced payoutAge65
                               if (row.age < pa) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>-</td>;
@@ -18116,6 +18150,7 @@ ${milestones.length > 0 ? `<table>
                         ))}
                       </div>
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>Why it shows — before payout age:</strong> XIRR requires at least one positive cashflow (a payout or bequest) to produce a meaningful result. Before your payout age, the entire cashflow series is negative contributions with no inflows yet — the IRR is mathematically undefined, so the column shows <strong>—</strong> for all pre-payout rows.</p>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "#5eead4" }}>CPF Rate column (teal) — the benchmark to beat:</strong> The adjacent <em>CPF Rate</em> column shows the blended effective interest rate CPF actually credited to your accounts that year — total OA + SA/RA + MA interest divided by your total CPF balance. Because it includes the extra 1% bonus on the first $60k, it will typically sit between 3.8% and 4.3%, above the flat 4% SA/RA floor. This is the most relevant benchmark for XIRR: when your XIRR crosses above the CPF Rate line, CPF LIFE is returning more value than you would have earned simply leaving the money in CPF and earning interest. Unlike XIRR, CPF Rate is shown at every age from the start — because CPF accrues interest from day one regardless of whether payouts have begun.</p>
                       <p style={{ marginBottom: 0 }}><strong style={{ color: "var(--text-highlight)" }}>Display cap ±10%:</strong> To prevent extreme outliers from distorting the table, XIRR results are clamped to a ±10% display range. Any computed value outside this range is pinned at the boundary. This is a display-only cap — the underlying Newton-Raphson result is unchanged.</p>
                     </div>
                   </section>
