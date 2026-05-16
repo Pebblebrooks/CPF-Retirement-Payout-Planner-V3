@@ -10646,32 +10646,63 @@ ${milestones.length > 0 ? `<table>
                     return next;
                   });
                 };
-                /* Col 3 when advanced is OFF: repurpose as an "unlock col 3" shortcut
-                   so clicking it activates showAdvanced rather than being a no-op toggle */
-                if (n === 3 && !showAdvanced) {
-                  return (
-                    <button key={n} className="fhd-col-btn" onClick={() => setShowAdvanced(true)}
+                /* ── Col 3 wrapper: col3 toggle + Adv button share the same flex:1 slot
+                   so their combined width equals col 3's column width exactly.            */
+                if (n === 3) {
+                  const col3Btn = !showAdvanced ? (
+                    <button className="fhd-col-btn" onClick={() => setShowAdvanced(true)}
                       title="Enable Advanced Settings to unlock: Investments · Property · Private Assets · Life Events"
                       style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                        gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer",
+                        gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer", minWidth: 0,
                         border: "1px dashed rgba(var(--clr-amber-rgb),0.35)",
                         background: "rgba(var(--clr-amber-rgb),0.04)",
                         transition: "all 0.15s ease" }}>
                       <Settings style={{ width: 10, height: 10, color: "var(--clr-amber)", opacity: 0.6, flexShrink: 0 }} />
-                      <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-amber)", opacity: 0.6, letterSpacing: "0.03em" }}>ADV</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-amber)", opacity: 0.6, letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>ADV</span>
                     </button>
+                  ) : (
+                    <button className="fhd-col-btn" onClick={handleColToggle}
+                      title={anyOpen ? `Collapse: ${label}` : `Expand: ${label}`}
+                      style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                        gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer", minWidth: 0,
+                        border: `1px solid ${anyOpen ? bdr : "rgba(100,116,139,0.2)"}`,
+                        background: anyOpen ? solid : "rgba(100,116,139,0.05)",
+                        transition: "all 0.15s ease" }}>
+                      <span style={{ fontSize: 13, fontWeight: 900, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65, flexShrink: 0, transition: "all 0.15s", lineHeight: 1 }}>
+                        {anyOpen ? "▲" : "▼"}
+                      </span>
+                    </button>
+                  );
+                  const advBtn = (
+                    <button onClick={() => setShowAdvanced(v => !v)}
+                      title={showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings: Property · CPFIS · Investments · Private Assets · SRS · Life Events"}
+                      style={{
+                        flex: "none", height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                        gap: 4, padding: "0 10px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
+                        background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.18)" : "rgba(100,116,139,0.07)",
+                        border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.55)" : "rgba(100,116,139,0.22)"}`,
+                        color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
+                        fontSize: 11, fontWeight: 800, letterSpacing: "0.02em", transition: "all 0.15s",
+                      }}>
+                      <Settings style={{ width: 10, height: 10, flexShrink: 0 }} />
+                      <span>Adv</span>
+                      <span style={{ fontSize: 10, lineHeight: 1 }}>{showAdvanced ? "▲" : "▼"}</span>
+                    </button>
+                  );
+                  return (
+                    <div key={n} style={{ flex: 1, display: "flex", gap: 4, minWidth: 0, justifyContent: "flex-end" }}>
+                      {col3Btn}
+                      {advBtn}
+                    </div>
                   );
                 }
                 return (
-                  /* Colored tab — no text label, just a solid color strip + chevron.
-                     Expanded: full solid color. Collapsed: dim transparent tint. */
                   <button key={n} className="fhd-col-btn" onClick={handleColToggle}
                     title={anyOpen ? `Collapse: ${label}` : `Expand: ${label}`}
                     style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer",
                       border: `1px solid ${anyOpen ? bdr : "rgba(100,116,139,0.2)"}`,
                       background: anyOpen ? solid : "rgba(100,116,139,0.05)",
                       transition: "all 0.15s ease" }}>
-                    {/* Triangle toggle icon — ▲ when open, ▼ when closed */}
                     <span style={{ fontSize: 13, fontWeight: 900, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65, flexShrink: 0, transition: "all 0.15s", lineHeight: 1 }}>
                       {anyOpen ? "▲" : "▼"}
                     </span>
@@ -10679,23 +10710,7 @@ ${milestones.length > 0 ? `<table>
                 );
               });
             })()}
-            {/* ── Advanced Settings toggle — always visible at all breakpoints where sticky bar shows (≥1024px) ── */}
-            <button
-              onClick={() => setShowAdvanced(v => !v)}
-              title={showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings: Property · CPFIS · Investments · Private Assets · SRS · Life Events"}
-              style={{
-                flex: "none", marginLeft: "auto", height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                gap: 4, padding: "0 12px", borderRadius: 7, cursor: "pointer",
-                background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.18)" : "rgba(100,116,139,0.07)",
-                border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.55)" : "rgba(100,116,139,0.22)"}`,
-                color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
-                fontSize: 11, fontWeight: 800, letterSpacing: "0.02em", transition: "all 0.15s", whiteSpace: "nowrap",
-              }}
-            >
-              <Settings style={{ width: 10, height: 10, flexShrink: 0 }} />
-              <span>⚙ Adv</span>
-              <span style={{ fontSize: 10, lineHeight: 1 }}>{showAdvanced ? "▲" : "▼"}</span>
-            </button>
+
           </div>
           <div className={`cpf-sidebar-inner${sidebarOpen ? "" : " sidebar-collapsed"}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {/* ── FHD COL 1: Profile & Contributions ──────────────────────────
