@@ -767,7 +767,7 @@ const PRESET_PROFILES = [
       // ── Primary member: Wei Ming, 38, SC male ────────────────────────────
       name: "Wei Ming", currentAge: 38, currentYear: 2026, payoutAge: 65,
       contributionStopAge: 65, housingStopAge: 55,
-      isMale: true, citizenStatus: "sc", prYear: 3, prRateType: "GG",
+      isMale: true, citizenStatus: "SC", prYear: 3, prRateType: "GG",
       isSelfEmployed: false,
       // CPF balances — typical 38yo with 15 yrs working history
       oaBalance: 98000, saBalance: 62000, maBalance: 42000,
@@ -817,7 +817,7 @@ const PRESET_PROFILES = [
       // ── Spouse: Hui Ling, 36, SC female ─────────────────────────────────
       name: "Hui Ling", currentAge: 36, currentYear: 2026, payoutAge: 65,
       contributionStopAge: 65, housingStopAge: 55,
-      isMale: false, citizenStatus: "sc", prYear: 3, prRateType: "GG",
+      isMale: false, citizenStatus: "SC", prYear: 3, prRateType: "GG",
       isSelfEmployed: false,
       // CPF balances — 36yo, slightly lower due to career break in late 20s
       oaBalance: 68000, saBalance: 44000, maBalance: 36000,
@@ -4669,7 +4669,11 @@ export default function App() {
         if (isNaN(ea) || ea < sa) evErrs.endAge = "Must be ≥ start age";
         if (ea > 95) evErrs.endAge = "Must be ≤ 95";
       }
-      if (isNaN(mag) || mag <= 0) evErrs.magnitude = "Must be > 0";
+      // career_break pauses contributions via leContribPaused — magnitude is unused and intentionally 0.
+      // early_retirement is a one-off point event with no cash amount — magnitude also unused.
+      // All other types (retrenchment, medical_crisis, windfall, hyperinflation) require magnitude > 0.
+      const magnitudeRequired = ev.type !== 'career_break' && ev.type !== 'early_retirement';
+      if (magnitudeRequired && (isNaN(mag) || mag <= 0)) evErrs.magnitude = "Must be > 0";
       if (ev.type === 'hyperinflation' && mag > 50) evErrs.magnitude = "Max 50%";
       // Overlap check: same type, overlapping age range, both enabled
       lifeEvs.forEach((other, otherIdx) => {
@@ -11353,7 +11357,7 @@ ${milestones.length > 0 ? `<table>
             <div style={{ position: "relative" }}>
             {isForeigner && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
@@ -11411,7 +11415,7 @@ ${milestones.length > 0 ? `<table>
             <div style={{ position: "relative" }}>
             {isForeigner && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
@@ -11894,7 +11898,7 @@ ${milestones.length > 0 ? `<table>
             <div style={{ position: "relative" }}>
             {isForeigner && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
@@ -11903,7 +11907,7 @@ ${milestones.length > 0 ? `<table>
             <div style={{ position: "relative" }}>
             {isForeigner && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit ? "#f97316" : isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
@@ -12403,7 +12407,7 @@ ${milestones.length > 0 ? `<table>
             <div style={{ position: "relative" }}>
             {isForeigner && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
+                <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
@@ -12568,7 +12572,7 @@ ${milestones.length > 0 ? `<table>
                   <div style={{ position: "relative" }}>
                   {isForeigner && (
                     <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                      <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> OA Drawdown — no CPF account for foreigners</div>
+                      <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> OA Drawdown — no CPF account for foreigners</div>
                     </div>
                   )}
                   <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", paddingTop: 8, borderTop: "1px solid rgba(244,63,94,0.15)", marginTop: 4 }}>
@@ -12850,7 +12854,7 @@ ${milestones.length > 0 ? `<table>
             <div style={{ position: "relative" }}>
               {isForeigner && (
                 <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                  <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
+                  <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}><Lock size={14} style={{ flexShrink: 0, marginTop: 2 }} /> CPF scheme — not available to foreigners</div>
                 </div>
               )}
               <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
