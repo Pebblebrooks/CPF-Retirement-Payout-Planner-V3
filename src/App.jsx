@@ -9948,7 +9948,7 @@ ${milestones.length > 0 ? `<table>
                   {exportModal.type === "csv" && "CSV Export — Year-by-Year Projection"}
                   {exportModal.type === "json" && "Profile Backup — JSON"}
                   {exportModal.type === "print" && "Data Table — Plain Text"}
-                  {exportModal.type === "milestone" && "<Target size={13} style={{ display:"inline", verticalAlign:"middle", marginRight:3 }} /> Milestone Report"}
+                  {exportModal.type === "milestone" && "Milestone Report"}
                 </h3>
                 <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
                   {exportModal.type === "pdf" && "Preview your report below. Use the buttons to print or save as PDF."}
