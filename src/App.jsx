@@ -4668,7 +4668,12 @@ export default function App() {
         if (isNaN(ea) || ea < sa) evErrs.endAge = "Must be ≥ start age";
         if (ea > 95) evErrs.endAge = "Must be ≤ 95";
       }
-      if (isNaN(mag) || mag <= 0) evErrs.magnitude = "Must be > 0";
+      // NEW-1 fix: only require magnitude > 0 for event types that consume it.
+      // retrenchment / career_break / early_retirement drive behaviour through type flags
+      // alone (leContribPaused, earlyRetireFired) — engine never reads ev.magnitude for them.
+      // The LIFE_EVENT_DEFAULTS skeleton already initialises magnitude: 0 for all types.
+      const requiresMagnitude = ['medical_crisis', 'windfall', 'hyperinflation'].includes(ev.type);
+      if (requiresMagnitude && (isNaN(mag) || mag <= 0)) evErrs.magnitude = "Must be > 0";
       if (ev.type === 'hyperinflation' && mag > 50) evErrs.magnitude = "Max 50%";
       // Overlap check: same type, overlapping age range, both enabled
       lifeEvs.forEach((other, otherIdx) => {
@@ -4804,7 +4809,11 @@ export default function App() {
     // OA transfers: negative not allowed
     const oaToSa = Number(inp.oaToSaTransfer) || 0;
     if (oaToSa < 0) errs.oaToSaTransfer = "Must be ≥ 0";
-    // Warn if OA balance is zero — transfers will have no effect
+    // NEW-4 fix: hoist isOaToSaForLovedOne before the balance check so the declaration is
+    // always visible to every guard in this block. The balance check below correctly applies
+    // to BOTH Self and Loved One paths — OA must have funds regardless of recipient.
+    const isOaToSaForLovedOne = inp.oaToSaForLovedOne === true;
+    // OA balance sufficiency — applies to both Self and Loved One (OA is the funding source either way)
     const currentOaBal = Number(inp.oaBalance) || 0;
     if (currentOaBal === 0 && oaToSa > 0) {
       errs.oaToSaTransfer = "OA balance is $0 — transfer has no effect until OA accumulates funds";
@@ -4813,7 +4822,6 @@ export default function App() {
     }
     const yearsFromBaseVal = Math.max(0, (Number(inp.currentYear) || 2026) - 2026);
     const currentAge_v = Number(inp.currentAge) || 0;
-    const isOaToSaForLovedOne = inp.oaToSaForLovedOne === true;
     // FRS/ERS headroom checks only apply for Self (not Loved One — their account isn't tracked here).
     // N2 fix: guard with !errs.oaToSaTransfer so an OA balance error set above is never silently
     // overwritten by a FRS/ERS headroom message (OA balance is the more actionable constraint).
@@ -7032,7 +7040,12 @@ export default function App() {
              yearsToGo, isUrgent, currentVcSa, newTopUp, raLabel, topupNote };
   // C3 fix: add debouncedInputs.retirementSumGrowth to deps (was missing — gapAlert wouldn't
   // recompute when this field changed even after debounce settled).
-  }, [projection, projectionByAge, displayAccumulation, accumulationByAge, debouncedInputs.currentAge, debouncedInputs.currentYear,
+  // NEW-2 fix: removed displayAccumulation and accumulationByAge — the E4 fix (line ~7004)
+  // switched gapAlert to read projectionByAge (always nominal) exclusively. Those two deps
+  // were never read inside this memo body; removing them eliminates unnecessary recomputes
+  // whenever the real/nominal display mode toggles (which rebuilds displayAccumulation).
+  // Intentional: gapAlert always compares nominal RA vs nominal FRS regardless of display mode.
+  }, [projection, projectionByAge, debouncedInputs.currentAge, debouncedInputs.currentYear,
       debouncedInputs.payoutAge, debouncedInputs.saBalance, debouncedInputs.vcSaTopup, debouncedInputs.retirementSumGrowth]);
 
   const monteCarloData = useMemo(() => {
