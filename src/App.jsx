@@ -6334,6 +6334,14 @@ export default function App() {
         <td>${isPA ? fmt(row.escalatingAnnual) : "-"}</td><td>${fmt(row.escalatingBequest)}</td>
         <td style="font-weight:700">${fmt(row[`${highlightPlan}Total`])}</td>
         <td style="font-weight:700">${pEffRate}</td>
+        ${["basic","standard","escalating"].map(plan => {
+          if (row.age < pa) return '<td style="text-align:right;color:#94a3b8">—</td>';
+          if (row.age < pa + 3) return '<td style="text-align:right;color:#94a3b8;font-size:8px">settling…</td>';
+          const xirr = xirrByAge[plan]?.[row.age];
+          if (xirr == null) return '<td style="text-align:right;color:#94a3b8">— <sup>†</sup></td>';
+          const c = xirr > 4 ? '#16a34a' : xirr > 2 ? '#d97706' : '#dc2626';
+          return `<td style="text-align:right;font-weight:700;color:${c}">${xirr.toFixed(2)}%</td>`;
+        }).join("")}
       </tr>`;
     }).join("");
 
@@ -6354,7 +6362,7 @@ export default function App() {
 <p>Plan shown: ${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} | Payout Age: ${pa} | Generated: ${new Date().toLocaleDateString("en-SG")}</p>
 <table>
 <thead><tr><th>Age</th><th>OA</th><th>MA</th><th>SA/RA</th><th>Inflows</th><th>Outflows</th>
-<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th><th>CPF Rate</th></tr></thead>
+<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th><th>CPF Rate</th><th>XIRR (B)</th><th>XIRR (S)</th><th>XIRR (E)</th></tr></thead>
 <tbody>${rowsHtml}</tbody>
 </table>
 </body></html>`;
@@ -6375,7 +6383,7 @@ export default function App() {
       // R2 fix: derive is55Plus from debouncedInputs so the SA/RA column label
       // matches the same data source as the rest of the print function.
       const is55PlusAtPrint = (Number(debouncedInputs.currentAge) || 0) >= 55;
-      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield", "CPF Rate"].join("\t");
+      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield", "CPF Rate", "XIRR (B)", "XIRR (S)", "XIRR (E)"].join("\t");
       const textRows = displayProjection.map(row => {
         const baseRow = accumulationByAge.get(row.age) || {};
         const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
@@ -6383,7 +6391,12 @@ export default function App() {
         const tTotalInt = (baseRow.yearOaInterest || 0) + (baseRow.yearSaRaInterest || 0) + (baseRow.yearMaInterest || 0);
         const tTotalBal = (baseRow.oa || 0) + (baseRow.sa || 0) + (baseRow.ma || 0) + (baseRow.ra || 0);
         const tEffRate = tTotalBal > 100 ? (tTotalInt / tTotalBal * 100).toFixed(2) + "%" : "—";
-        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`]), tEffRate].join("\t");
+        const xirrVals = ["basic","standard","escalating"].map(plan => {
+          if (!isPA || row.age < pa + 3) return "—";
+          const xirr = xirrByAge[plan]?.[row.age];
+          return xirr != null ? xirr.toFixed(2) + "%" : "—†";
+        });
+        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`]), tEffRate, ...xirrVals].join("\t");
       }).join("\n");
       setExportModal({ type: "print", content: `CPF Projection — ${memberName} (Age ${startAge} to 95)\n${"=".repeat(60)}\n${headers}\n${textRows}` });
     }
@@ -17250,7 +17263,7 @@ ${milestones.length > 0 ? `<table>
                       ["Bas/Std/Esc Beq", "Bequest (death benefit) value at that age under each plan.", "var(--text-muted)"],
                       ["Yield (B/S/E)", "Cumulative total yield = all payouts received + current bequest value. Measures the total financial return of each plan.", "var(--clr-blue)"],
                       ["CPF Rate", "Blended CPF effective rate that year: total interest credited (OA + SA/RA + MA, including the extra 1% bonus tier) divided by total CPF balance. Shows at all ages. Compare against XIRR — if XIRR exceeds CPF Rate, CPF LIFE is beating passive CPF interest.", "#5eead4"],
-                      ["XIRR", "Internal Rate of Return of the highlighted plan at each age. Compares total return vs all contributions made. Green = good (>4%), amber = moderate (2–4%), red = below CPF deposit rates (<2%). — † = pre-breakeven: at that death age the payouts + bequest do not yet exceed contributions at any positive rate; XIRR turns positive once enough payouts accumulate.", "var(--clr-violet)"],
+                      ["XIRR (B/S/E)", "Internal Rate of Return for all 3 CPF LIFE plans at each age (Basic · Standard · Escalating). Each shows independently — compare to see which plan beats the CPF Rate benchmark first. Green = >4%, amber = 2–4%, red = <2%. In RSS mode a single XIRR (RSS) column is shown instead. † = pre-breakeven: payouts + bequest do not yet exceed contributions at any positive rate.", "var(--clr-violet)"],
                     ].map(([col, desc, color]) => (
                       <div key={col} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 3 }}>{col}</div>
@@ -17327,7 +17340,7 @@ ${milestones.length > 0 ? `<table>
                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700, fontSize: 13, fontFamily: "monospace", tableLayout: "auto" }}>
                       <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                         <tr style={{ background: "var(--header-bg)", borderBottom: "1px solid var(--border-strong)" }}>
-                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", "CPF Rate", `XIRR (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`].map((h, i) => (
+                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", "CPF Rate", ...(isRSSMode ? ["XIRR (RSS)"] : ["XIRR (B)", "XIRR (S)", "XIRR (E)"])].map((h, i) => (
                             <th key={h} style={{
                               padding: "10px 8px", textAlign: i === 0 ? "left" : "right", fontSize: 12, fontWeight: 800, textTransform: "uppercase", color: i >= 12 ? "var(--clr-blue)" : "var(--text-muted)", whiteSpace: "nowrap",
                               ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--header-bg)", boxShadow: "var(--shadow-sticky)" } : {})
@@ -17381,31 +17394,46 @@ ${milestones.length > 0 ? `<table>
                                 </td>
                               );
                             })()}
+                            {/* XIRR columns — 3 plans in CPF LIFE mode, 1 in RSS mode. No sparkbars (too wide). */}
                             {(() => {
-                              const pa = payoutAge65; // BUG-43 fix: use debounced payoutAge65
-                              if (row.age < pa) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>-</td>;
-                              if (row.age < pa + 3) return <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap", fontSize: 11 }}>settling...</td>;
-                              const xirr = xirrByAge[highlightPlan]?.[row.age];
-                              if (xirr == null) return (
-                                <td style={{ padding: "7px 8px", textAlign: "right", whiteSpace: "nowrap" }}
-                                  title="Pre-breakeven: at this death age, cumulative payouts + bequest do not yet yield a positive return on all CPF contributions. XIRR becomes positive once enough payouts have been received. Hover to see when it turns green.">
-                                  <span style={{ color: "var(--text-muted)" }}>—</span>
-                                  <span style={{ fontSize: 10, color: "var(--clr-amber)", verticalAlign: "super", marginLeft: 1, cursor: "help" }}>†</span>
-                                </td>
-                              );
-                              const irrColor = xirr > 4 ? "var(--clr-green)" : xirr > 2 ? "var(--clr-amber)" : "var(--clr-red)";
-                              // Sparkline: map xirr 0–5% to 0–100% bar width (positive-only range now that negatives are suppressed)
-                              const barPct = Math.max(0, Math.min(100, (xirr / 5) * 100));
-                              return (
-                                <td style={{ padding: "5px 8px", whiteSpace: "nowrap" }} title={`XIRR at age ${row.age}: ${xirr.toFixed(2)}%`}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-                                    <div style={{ width: 48, height: 6, background: "var(--bg-muted)", borderRadius: 3, overflow: "hidden", flexShrink: 0 }}>
-                                      <div style={{ width: `${barPct}%`, height: "100%", background: irrColor, borderRadius: 3, transition: "width 0.3s" }} />
-                                    </div>
-                                    <span style={{ fontSize: 13, fontWeight: 800, color: irrColor, fontFamily: "monospace", minWidth: 38, textAlign: "right" }}>{xirr.toFixed(2)}%</span>
-                                  </div>
-                                </td>
-                              );
+                              const pa = payoutAge65;
+                              if (row.age < pa) {
+                                // Pre-payout: show dashes for all plan columns
+                                const count = isRSSMode ? 1 : 3;
+                                return Array.from({ length: count }, (_, i) => (
+                                  <td key={i} style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>—</td>
+                                ));
+                              }
+                              if (row.age < pa + 3) {
+                                const count = isRSSMode ? 1 : 3;
+                                return Array.from({ length: count }, (_, i) => (
+                                  <td key={i} style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap", fontSize: 11 }}>settling…</td>
+                                ));
+                              }
+                              // Helper: render one XIRR cell without sparkbar
+                              const xirrCell = (plan, color, key) => {
+                                const xirr = xirrByAge[plan]?.[row.age];
+                                if (xirr == null) return (
+                                  <td key={key} style={{ padding: "7px 8px", textAlign: "right", whiteSpace: "nowrap" }}
+                                    title="Pre-breakeven: payouts + bequest do not yet yield a positive return on all contributions. XIRR turns positive once enough payouts accumulate.">
+                                    <span style={{ color: "var(--text-muted)" }}>—</span>
+                                    <span style={{ fontSize: 10, color: "var(--clr-amber)", verticalAlign: "super", marginLeft: 1, cursor: "help" }}>†</span>
+                                  </td>
+                                );
+                                const irrColor = xirr > 4 ? "var(--clr-green)" : xirr > 2 ? "var(--clr-amber)" : "var(--clr-red)";
+                                return (
+                                  <td key={key} style={{ padding: "7px 8px", textAlign: "right", whiteSpace: "nowrap" }}
+                                    title={`XIRR ${plan} plan at age ${row.age}: ${xirr.toFixed(2)}%`}>
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: irrColor, fontFamily: "monospace" }}>{xirr.toFixed(2)}%</span>
+                                  </td>
+                                );
+                              };
+                              if (isRSSMode) return xirrCell("rss", "var(--clr-blue)", "rss");
+                              return [
+                                xirrCell("basic",      "var(--clr-orange)", "b"),
+                                xirrCell("standard",   "var(--text-bright)", "s"),
+                                xirrCell("escalating", "var(--clr-green)",  "e"),
+                              ];
                             })()}
                           </tr>);
                         })}
