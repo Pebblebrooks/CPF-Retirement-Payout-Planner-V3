@@ -4917,7 +4917,8 @@ export default function App() {
       const pmRA = Number(inp.propMonetiseRaTopup) || 0;
       if (pmRA < 0 || pmRA > 2000000) errs.propMonetiseRaTopup = "0 – $2,000,000";
       // LBS-specific: HDB pays annuity premium into RA; total RA cannot exceed ERS
-      if (pmScheme === 'lbs' && !errs.propMonetiseRaTopup && pmRA > 440800) errs.propMonetiseRaTopup = "LBS RA top-up capped at ERS ($440,800)";
+      // D-NEW-4 fix: use RETIREMENT_SUMS_2026.ERS constant instead of hardcoded 440800 — validation stays correct when the constant is updated for future years.
+      if (pmScheme === 'lbs' && !errs.propMonetiseRaTopup && pmRA > RETIREMENT_SUMS_2026.ERS) errs.propMonetiseRaTopup = `LBS RA top-up capped at ERS ($${RETIREMENT_SUMS_2026.ERS.toLocaleString()})`;
       // SHB-specific: bonus is $30k (3-room or smaller) or $15k (2-room Flexi); soft warn if suspiciously high
       if (pmScheme === 'shb' && !errs.propMonetiseRaTopup && pmRA > 90000) errs.propMonetiseRaTopup = "SHB RA bonus cap is $30,000–$90,000 depending on flat type — verify with CPF Board";
     }
@@ -5787,17 +5788,14 @@ export default function App() {
           // saved before fields like drawSource, windfallDest, or magnitude were introduced,
           // those properties would be undefined and the engine would silently produce $0 impact.
           // Now each event is merged against a known-good default skeleton so no field is missing.
-          const LIFE_EVENT_DEFAULTS = {
-            id: "", type: "retrenchment", label: "", startAge: 35, endAge: 36,
-            magnitude: 0, enabled: true, drawSource: "oa_then_private",
-            destination: "private",  // BUG-3 fix
-            windfallDest: "private", hyperRate: 0.06, overrideSalary: 0,
-          };
+          // D-NEW-3 fix: use module-level LIFE_EVENT_DEFAULTS_MOD instead of a local copy —
+          // three identical definitions existed (module-level + 2 local). A future field addition
+          // to LIFE_EVENT_DEFAULTS_MOD would silently miss both local copies, causing schema drift.
           if (Array.isArray(safe.lifeEvents)) {
             safe.lifeEvents = safe.lifeEvents.map(ev => {
-              const base = { ...LIFE_EVENT_DEFAULTS };
+              const base = { ...LIFE_EVENT_DEFAULTS_MOD };
               if (ev && typeof ev === "object") {
-                Object.keys(LIFE_EVENT_DEFAULTS).forEach(k => {
+                Object.keys(LIFE_EVENT_DEFAULTS_MOD).forEach(k => {
                   if (ev[k] !== undefined) base[k] = ev[k];
                 });
                 // Legacy field renames — add more here as needed
@@ -5892,16 +5890,11 @@ export default function App() {
               // Step 3: lifeEvents array guarantee (same as sanitiseInputs FIX-3b)
               if (!Array.isArray(safeSpouse.lifeEvents)) safeSpouse.lifeEvents = [];
               // Step 4: life event object sanitisation (same as sanitiseInputs IMP-4)
-              const LIFE_EVENT_DEFAULTS = {
-                id: "", type: "retrenchment", label: "", startAge: 35, endAge: 36,
-                magnitude: 0, enabled: true, drawSource: "oa_then_private",
-                destination: "private",  // BUG-3 fix
-                windfallDest: "private", hyperRate: 0.06, overrideSalary: 0,
-              };
+              // D-NEW-3 fix: use module-level LIFE_EVENT_DEFAULTS_MOD (see primary import block above).
               safeSpouse.lifeEvents = safeSpouse.lifeEvents.map(ev => {
-                const base = { ...LIFE_EVENT_DEFAULTS };
+                const base = { ...LIFE_EVENT_DEFAULTS_MOD };
                 if (ev && typeof ev === "object") {
-                  Object.keys(LIFE_EVENT_DEFAULTS).forEach(k => { if (ev[k] !== undefined) base[k] = ev[k]; });
+                  Object.keys(LIFE_EVENT_DEFAULTS_MOD).forEach(k => { if (ev[k] !== undefined) base[k] = ev[k]; });
                   if (ev.amount !== undefined && ev.magnitude === undefined) base.magnitude = ev.amount;
                   if (ev.source !== undefined && ev.drawSource === undefined) base.drawSource = ev.source;
                 }
@@ -7361,9 +7354,14 @@ export default function App() {
     // against old projection rows mixed with live (180ms-ahead) input scalars.
     const alerts = []; const payoutAge = Number(debouncedInputs.payoutAge) || 65; const ca = Number(debouncedInputs.currentAge) || 35; const cy = Number(debouncedInputs.currentYear) || 2026;
     if (!projection || projection.length === 0) return alerts;
-    const projFRS = age => Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, Math.max(0, (cy + (age - ca)) - 2026)));
-    const projERS = age => Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, Math.max(0, (cy + (age - ca)) - 2026)));
-    const projBRS = age => Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, Math.max(0, (cy + (age - ca)) - 2026)));
+    // BUG-M1 fix: NX9 fixed payoutAge/currentAge/currentYear to use debouncedInputs, but
+    // retirementSumGrowth was still read from live `inputs` here. During the 180ms debounce
+    // window, projection rows reflected the old rate while projFRS/ERS/BRS used the new rate,
+    // causing milestone badges to transiently fire or disappear at wrong ages.
+    const _rsgMilestone = (Number(debouncedInputs.retirementSumGrowth) || 3) / 100;
+    const projFRS = age => Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + _rsgMilestone, Math.max(0, (cy + (age - ca)) - 2026)));
+    const projERS = age => Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + _rsgMilestone, Math.max(0, (cy + (age - ca)) - 2026)));
+    const projBRS = age => Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + _rsgMilestone, Math.max(0, (cy + (age - ca)) - 2026)));
     for (let i = 0; i < projection.length - 1; i++) { const row = projection[i]; const next = projection[i + 1]; if (row.age < 55 && row.sa < projFRS(row.age) && next.sa >= projFRS(next.age)) { alerts.push({ age: next.age, type: "success", label: "SA hits Full Retirement Sum", detail: `SA balance reaches the projected FRS of $${Math.round(projFRS(next.age) / 1000)}k at age ${next.age}.` }); break; } }
     for (let i = 0; i < projection.length - 1; i++) { const row = projection[i]; const next = projection[i + 1]; if (row.age < 55 && row.sa < projERS(row.age) && next.sa >= projERS(next.age)) { alerts.push({ age: next.age, type: "gold", label: "SA hits Enhanced Retirement Sum", detail: `SA balance reaches the projected ERS of $${Math.round(projERS(next.age) / 1000)}k at age ${next.age}. Maximum CPF LIFE payout unlocked.` }); break; } }
     for (let i = 0; i < projection.length - 1; i++) { const row = projection[i]; const next = projection[i + 1]; if (row.age < payoutAge && row.oa > 0 && next.oa === 0) { alerts.push({ age: next.age, type: "warning", label: "OA balance depleted", detail: `Ordinary Account reaches $0 at age ${next.age}. Housing outflows have fully drained OA. Consider reducing CPF housing payments.` }); break; } }
@@ -13830,9 +13828,13 @@ ${milestones.length > 0 ? `<table>
 
                 {/* UX-P2-B: Contribution gap alert — moved from buried sidebar position to top of
                     Summary panel. Uses existing gapAlert useMemo (unchanged). Dismissible per
-                    session; resets automatically if the gap changes (key on frsGap value). */}
+                    session; resets automatically if the gap changes (key on frsGap value).
+                    C-NEW-4 fix: key bucketed to nearest $1,000 — raw frsGap can oscillate by
+                    $1-$5 across projection re-runs (Math.round rounding in fvAnnuityFactor),
+                    causing the dismissed alert to spuriously re-appear. Bucketing to $1k means
+                    only a genuine gap change of >=$1,000 resets the dismissal. */}
                 {gapAlert && !gapAlertDismissed && (
-                  <div key={gapAlert.frsGap}
+                  <div key={Math.round(gapAlert.frsGap / 1000)}
                     style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
                       borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.35)" : "rgba(var(--clr-amber3-rgb),0.35)"}`,
                       background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.07)" }}>
@@ -16400,7 +16402,12 @@ ${milestones.length > 0 ? `<table>
                           </div>
                         )}
                         <button onClick={() => {
-                          const freshProj = runProjectionEngine({ ...inputs });
+                          // BUG-B1 fix: previously hardcoded runProjectionEngine, silently producing
+                          // CPF LIFE-style rows for RSS members and ignoring DWZ two-pass logic.
+                          // Now routes to the correct engine (RSS vs LIFE) and wraps with DWZ.
+                          const _isRSSSc = inputs.cpfScheme === 'rss';
+                          const _engineFnSc = _isRSSSc ? runRSSEngine : runProjectionEngine;
+                          const freshProj = runProjectionWithDWZ({ ...inputs }, _engineFnSc);
                           setScenario({ inputs: { ...inputs }, projection: freshProj, payoutProj: null });
                         }} style={{ width: "100%", padding: "8px", borderRadius: 8, fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer", background: `${color}22`, color, marginTop: "auto" }}>
                           Save Current as {slot}
