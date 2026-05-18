@@ -8533,6 +8533,19 @@ ${childrenHtml}
     ${(Number(inputs.annualPrivateSaving) || 0) > 0 ? `<div class="row-kv"><span>Private Asset Saving / yr</span><strong>${fc(inputs.annualPrivateSaving)}</strong></div>` : ''}
     ${/* G5: private asset growth rate — always show when private assets are configured */(Number(inputs.currentPrivateAssets) || 0) > 0 || (Number(inputs.annualPrivateSaving) || 0) > 0 ? `<div class="row-kv"><span>Private Asset Growth Rate</span><strong>${Number(inputs.privateAssetGrowthRate) || 0}% / yr</strong></div>` : ''}
     ${/* G5: property growth rate — show when property is included in net worth */inputs.includeProperty && (Number(inputs.propertyValue) || 0) > 0 ? `<div class="row-kv"><span>Property Value / Growth</span><strong>${fc(inputs.propertyValue)} · ${Number(inputs.propertyGrowthRate) || 0}% / yr</strong></div>` : ''}
+    ${/* Property Monetisation — one-time cash event that materially shifts private assets and RA */inputs.propMonetiseEnabled ? (() => {
+      const schemeLabels = { downgrade: 'Downgrade', lbs: 'Lease Buyback Scheme (LBS)', shb: 'Silver Housing Bonus (SHB)' };
+      const schLabel = schemeLabels[inputs.propMonetiseScheme || 'downgrade'] || (inputs.propMonetiseScheme || 'Downgrade');
+      const pmAge    = Number(inputs.propMonetiseAge) || 65;
+      const pmCash   = Number(inputs.propMonetiseCashProceeds) || 0;
+      const pmRa     = Number(inputs.propMonetiseRaTopup) || 0;
+      return `<div class="row-kv" style="background:#fff7ed;border-left:3px solid #b45309;padding:4px 8px;border-radius:3px">
+        <span style="font-weight:800;color:#92400e">Property Monetisation</span>
+        <strong style="color:#b45309">${schLabel} @ Age ${pmAge}</strong>
+      </div>
+      ${pmCash > 0 ? `<div class="row-kv"><span style="padding-left:8px">↳ Net Cash Proceeds (to Private)</span><strong style="color:#166534">${fc(pmCash)}</strong></div>` : ''}
+      ${pmRa  > 0 ? `<div class="row-kv"><span style="padding-left:8px">↳ RA Top-up (CPF portion)</span><strong style="color:#059669">${fc(pmRa)}</strong></div>` : ''}`;
+    })() : ''}
     ${(Number(inputs.retirementSumGrowth) || 3) !== 3 ? `<div class="row-kv"><span>Retirement Sum Growth</span><strong>${inputs.retirementSumGrowth}% / yr</strong></div>` : ''}
   </div>
 </div>
@@ -18210,6 +18223,8 @@ ${milestoneSnapshotHtml}
                     ["#doc-phasedsalary",Pause,            "Phased Salary"],
                     ["#doc-lifeevents",  HeartPulse,       "Life Events"],
                     ["#doc-household",   Users,            "Household"],
+                    ["#doc-rss",         Clock,            "RSS Scheme"],
+                    ["#doc-baby",        Baby,             "Baby Millionaire"],
                   ].map(([href, NavIcon, label]) => (
                     <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 6, fontSize: 14, fontWeight: 700, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-subtle)", textDecoration: "none", cursor: "pointer" }}
                       onClick={e => {
@@ -18935,6 +18950,64 @@ ${milestoneSnapshotHtml}
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>Why it shows — before payout age:</strong> XIRR requires at least one positive cashflow (a payout or bequest) to produce a meaningful result. Before your payout age, the entire cashflow series is negative contributions with no inflows yet — the IRR is mathematically undefined, so the column shows <strong>—</strong> for all pre-payout rows.</p>
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "#5eead4" }}>CPF Rate column (teal) — the benchmark to beat:</strong> The adjacent <em>CPF Rate</em> column shows the blended effective interest rate CPF actually credited to your accounts that year — total OA + SA/RA + MA interest divided by your total CPF balance. Because it includes the extra 1% bonus on the first $60k, it will typically sit between 3.8% and 4.3%, above the flat 4% SA/RA floor. This is the most relevant benchmark for XIRR: when your XIRR crosses above the CPF Rate line, CPF LIFE is returning more value than you would have earned simply leaving the money in CPF and earning interest. Unlike XIRR, CPF Rate is shown at every age from the start — because CPF accrues interest from day one regardless of whether payouts have begun.</p>
                       <p style={{ marginBottom: 0 }}><strong style={{ color: "var(--text-highlight)" }}>Display cap ±10%:</strong> To prevent extreme outliers from distorting the table, XIRR results are clamped to a ±10% display range. Any computed value outside this range is pinned at the boundary. This is a display-only cap — the underlying Newton-Raphson result is unchanged.</p>
+                    </div>
+                  </section>
+
+                  {/* ── RSS — Retirement Sum Scheme ──────────────────────────────────── */}
+                  <section id="doc-rss">
+                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "var(--clr-blue)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                      <Clock style={{ width: 18, height: 18 }} />RSS — Retirement Sum Scheme
+                    </h4>
+                    <div style={{ background: "rgba(var(--clr-blue-rgb),0.06)", border: "1px solid rgba(var(--clr-blue-rgb),0.25)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                      <strong style={{ color: "var(--clr-blue)" }}>Who this applies to:</strong> RSS (Retirement Sum Scheme) is the predecessor to CPF LIFE. It applies to Singapore citizens and PRs born <strong>before 1 January 1958</strong>. Members born in 1958 or later are automatically enrolled in CPF LIFE. If you are using the RSS Member (68) sample profile, or if your birth year predates 1958, select <em>RSS (Retirement Sum Scheme)</em> under the CPF Scheme toggle in the Profile section.
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {[
+                        ["How RSS works", "Unlike CPF LIFE (which pools longevity risk and pays for life), RSS pays a fixed monthly amount directly from your RA balance. Each month the payout is deducted from your RA. Because the balance depletes over time, RSS has a natural endpoint — typically age 80–90 depending on your RA balance and payout amount. Once the balance is zero, payouts stop."],
+                        ["Setting the monthly payout", "Your RSS monthly payout is a fixed amount set by CPF Board based on your RA balance at the time you began drawdown. Find it on your CPF statement or at my.cpf.gov.sg under 'My Retirement'. Enter this figure in the RSS Monthly Payout field. The engine applies it each year from your RSS Payout Start Age."],
+                        ["RSS Payout Start Age", "Typically 65 (statutory retirement), but you can enter your actual start age. The engine debits the annual payout from RA starting at this age. If your current age is already past this age, the depletion curve begins immediately."],
+                        ["RA Depletion Age", "The planner calculates the age at which your RA balance will reach zero given the current payout and RA growth (2%/yr for the RA portion under RSS). The RSS tab and PDF report show this as 'RA Depletion Age'. If the balance sustains past 95, the badge shows '> Age 95'."],
+                        ["Voluntary migration to CPF LIFE", "RSS members can voluntarily join CPF LIFE at any time up to age 80. Enter the Migration Age and the CPF LIFE plan (Standard/Escalating/Basic) you intend to join. The engine models RSS drawdown up to the migration age, then switches to CPF LIFE interpolated payouts from that point. Migration requires a minimum RA balance — check with CPF Board for the exact threshold at time of migration."],
+                        ["What the RSS tab shows", "The RSS tab replaces the CPF LIFE tab when RSS mode is active. It displays: RA drawdown curve chart (balance over time), Depletion Age badge, Migration scenario (if configured), monthly payout KPI, and a year-by-year table of RA balance, annual drawdown, and interest credited. The PDF report includes a dedicated RSS Drawdown Analysis section."],
+                        ["RSS vs CPF LIFE — key difference", "CPF LIFE is an annuity pool — your premium is pooled with others and you receive payouts for life regardless of longevity. RSS is a personal drawdown — you receive payouts from your own RA and bear the longevity risk yourself. If you outlive your RA balance under RSS, you will need to rely on other income sources. This is why migration to CPF LIFE before age 80 is strongly encouraged by CPF Board."],
+                        ["Sensitivity to RA balance", "Under RSS, a higher RA balance directly extends the depletion age proportionally. Topping up your RA (via RSTU or cash) before drawdown starts is the most direct lever to extend RSS sustainability. Use the Scenario Comparison tab to model the impact of a top-up vs no top-up."],
+                      ].map(([title, desc]) => (
+                        <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
+                          <div style={{ background: "rgba(var(--clr-blue-rgb),0.08)", borderBottom: "1px solid rgba(var(--clr-blue-rgb),0.2)", borderLeft: "4px solid var(--clr-blue)", padding: "9px 16px" }}>
+                            <h5 style={{ fontWeight: 700, color: "var(--clr-blue)", fontSize: 14, margin: 0 }}>{title}</h5>
+                          </div>
+                          <div style={{ padding: "11px 16px", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* ── Baby Millionaire Strategy ─────────────────────────────────────── */}
+                  <section id="doc-baby">
+                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "#ec4899", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                      <Baby style={{ width: 18, height: 18 }} />Baby Millionaire — CPF Strategy for Newborns
+                    </h4>
+                    <div style={{ background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.25)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                      <strong style={{ color: "#ec4899" }}>What is Baby Millionaire?</strong> A long-horizon CPF optimisation strategy for parents who want to maximise their child's CPF balances from birth. The core insight is that compound interest at CPF rates (2.5%–5% p.a.) over 65 years is extraordinarily powerful. A one-time cash top-up of ~$17,000 at birth, combined with annual RSTU top-ups, can project to over $1,000,000 in CPF by age 65. Load the <em>Baby Millionaire A</em> or <em>Baby Millionaire B</em> sample profiles to see both strategies in action.
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {[
+                        ["Baby Millionaire A — Full Launch", "A lump-sum VC3A top-up of ~$17,000 at birth (filling the OA + SA + MA to the CPF Annual Limit) combined with annual RSTU cash top-ups of $8,000/yr to SA throughout childhood and working life. The large initial deposit harnesses the full 65-year compounding runway. At age 55 the SA balance converts to RA, which then generates CPF LIFE payouts from age 65. Projected outcome: total CPF balance exceeding $1M by age 65 under current 2026 contribution rules."],
+                        ["Baby Millionaire B — Annual Only", "Annual RSTU cash top-ups of $8,000/yr to SA with no lump-sum at birth — a more accessible strategy for parents who cannot deploy the full ~$17,000 upfront. The compounding runway is the same (65 years) but the trajectory is more gradual. Still projects to a strong CPF outcome by retirement; compare with Profile A in the Scenario Comparison tab to quantify the lump-sum benefit."],
+                        ["How to model it", "Set the child's current age to 0 (or 1) and current year to their birth year. Set payout age to 65. Enter zero mandatory contributions (no employer for a minor). Add an annual RSTU top-up (vcSaTopup) of your chosen amount. For Strategy A, also add a one-time VC3A contribution using the One-Time toggle. Enable the Recurring/One-Time toggle on the VC3A field and set years = 1 for a birth-year lump sum only."],
+                        ["CPF rules for minors", "Children under 16 cannot make CPF top-ups directly — a parent or guardian must make cash top-ups on the child's behalf. Children cannot use CPFIS (minimum age 18), cannot make CPF nominations (minimum age 16), and cannot receive MediShield Life claims independently. The planner enforces these via age gates. For babies, only VC3A (cash to OA/SA/MA) and RSTU (cash to SA) are available."],
+                        ["Key compounding lever — SA rate", "The SA earns 4% p.a. (plus 1% bonus on the first $60,000). A child's SA has no FRS cap constraint before age 55 — the full balance accumulates. At age 55 it converts 1:1 to RA. If the RA exceeds ERS at that time, the excess can be withdrawn. The SA→RA conversion and OA→RA auto-transfer are both modelled by the engine."],
+                        ["BHS and MA top-ups", "For newborns, the MA starts at zero. The BHS cap applies from age 35 (the first year the BHS applies in practice). Annual MMSS grants from 2026 also credit the MA for eligible members — but only from age 55. For the Baby Millionaire strategy, MA contributions in childhood are modest (part of the annual CPF limit allocation) but compound significantly over 65 years."],
+                        ["Comparing the two strategies", "Load Baby Millionaire A, click Save to Slot A in the Scenario Comparison panel, then load Baby Millionaire B. The Compare tab will show the lump-sum premium: exact CPF total difference at age 65, monthly payout difference, and net worth difference at 95. This is the most informative way to quantify whether the upfront ~$17,000 is worth deploying vs annual-only contributions."],
+                        ["Caveats and limitations", "CPF rules — contribution limits, BHS, FRS, ERS, interest rates — will change over a 65-year horizon. The planner models 2026 rules projected forward with the configured Retirement Sum Growth rate. Actual outcomes will differ. This strategy is for illustrative planning purposes; consult a licensed financial adviser before making decisions about a child's CPF."],
+                      ].map(([title, desc]) => (
+                        <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
+                          <div style={{ background: "rgba(236,72,153,0.08)", borderBottom: "1px solid rgba(236,72,153,0.2)", borderLeft: "4px solid #ec4899", padding: "9px 16px" }}>
+                            <h5 style={{ fontWeight: 700, color: "#ec4899", fontSize: 14, margin: 0 }}>{title}</h5>
+                          </div>
+                          <div style={{ padding: "11px 16px", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</div>
+                        </div>
+                      ))}
                     </div>
                   </section>
 
