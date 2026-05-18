@@ -7676,7 +7676,10 @@ export default function App() {
       const projRowsData = projection.filter(r => r.age % 5 === 0 || r.age === pa || r.age === ca).map(r => {
         const ppR = ppByAgePdf.get(r.age) || {};
         const rowTotal = (r.oa || 0) + (r.sa || 0) + (r.ma || 0) + (r.ra || 0);
-        const nw = ppR[`${highlightPlan}NetWorth`] || rowTotal + (inputs.includeProperty ? r.propertyValue : 0);
+        // G6 fix: pre-payout Net Worth fallback now includes SRS balance and private assets alongside CPF + property.
+        // ppR[NetWorth] is only present for payout-phase rows (age >= pa); for accumulation ages the fallback
+        // must include all wealth components so Net Worth is not understated.
+        const nw = ppR[`${highlightPlan}NetWorth`] || (rowTotal + (inputs.includeProperty ? (r.propertyValue || 0) : 0) + (r.srsBalance || 0) + (r.privateAssets || 0));
         return `<tr style="background:${r.age === pa ? "#e8f5e9" : ""}">
           <td style="font-weight:700">${r.age}</td>
           <td>${fc(r.oa)}</td>
@@ -7786,6 +7789,7 @@ export default function App() {
 
       // Milestone Snapshots — balance callout table for user-set milestone ages (milestoneAge 1-5)
       // Mirrors the "Milestone Snapshots" section in the Summary tab UI.
+      // G2 fix: added years-from-now column and growth-from-prior-milestone annotation.
       const msAges = [
         Number(inputs.milestoneAge)  || 0,
         Number(inputs.milestoneAge2) || 0,
@@ -7795,7 +7799,12 @@ export default function App() {
       ].filter(a => a > 0 && a >= ca && a <= 95);
       const uniqueMsAges = [...new Set(msAges)].sort((a, b) => a - b);
       const milestoneSnapshotHtml = uniqueMsAges.length > 0 ? (() => {
-        const snapRows = uniqueMsAges.map(mAge => {
+        // Pre-compute CPF totals for each milestone age so we can calculate growth deltas
+        const msTotals = uniqueMsAges.map(mAge => {
+          const r = projByAgePdf.get(mAge) || {};
+          return (r.oa || 0) + (r.sa || 0) + (r.ma || 0) + (r.ra || 0) + (r.srsBalance || 0) + (r.privateAssets || 0);
+        });
+        const snapRows = uniqueMsAges.map((mAge, idx) => {
           const r = projByAgePdf.get(mAge) || {};
           const mOA   = r.oa  || 0;
           const mSA   = r.sa  || 0;
@@ -7803,10 +7812,20 @@ export default function App() {
           const mRA   = r.ra  || 0;
           const mSRS  = r.srsBalance    || 0;
           const mPriv = r.privateAssets || 0;
-          const mTotal = mOA + mSA + mMA + mRA + mSRS + mPriv;
+          const mTotal = msTotals[idx];
           const isPA = mAge === pa;
+          // Growth from prior milestone (or from current age if first milestone)
+          const prevTotal = idx === 0
+            ? (() => { const r0 = projByAgePdf.get(ca) || {}; return (r0.oa||0)+(r0.sa||0)+(r0.ma||0)+(r0.ra||0)+(r0.srsBalance||0)+(r0.privateAssets||0); })()
+            : msTotals[idx - 1];
+          const prevAge  = idx === 0 ? ca : uniqueMsAges[idx - 1];
+          const growthPct = prevTotal > 0 ? Math.round(((mTotal - prevTotal) / prevTotal) * 100) : null;
+          const growthStr = growthPct !== null
+            ? `<span style="font-size:7px;color:${growthPct >= 0 ? '#166534' : '#991b1b'};display:block;margin-top:1px">${growthPct >= 0 ? '+' : ''}${growthPct}% from age ${prevAge}</span>`
+            : '';
+          const yrsLabel = `+${mAge - ca} yr${mAge - ca !== 1 ? 's' : ''}`;
           return `<tr style="background:${isPA ? '#e8f5e9' : ''}">
-            <td style="font-weight:800;padding:5px 8px">${mAge}${isPA ? ' ◄' : ''}</td>
+            <td style="font-weight:800;padding:5px 8px">${mAge}${isPA ? ' ◄' : ''}<span style="font-size:7px;color:#64748b;font-weight:400;display:block">${yrsLabel}</span>${growthStr}</td>
             <td style="text-align:right;padding:5px 8px;color:#1d4ed8">${fc(mOA)}</td>
             <td style="text-align:right;padding:5px 8px;color:#475569">${fc(mSA + mRA)}</td>
             <td style="text-align:right;padding:5px 8px;color:#7c3aed">${fc(mMA)}</td>
@@ -7817,10 +7836,10 @@ export default function App() {
         }).join('');
         return `
 <h3 style="margin-top:12px;color:#0e7490;font-size:10px">🎯 Milestone Balance Snapshots</h3>
-<p style="font-size:7.5px;color:#64748b;margin:0 0 5px">Projected balances at your tracked milestone ages. SA and RA are combined (SA converts to RA at age 55). ◄ marks your selected payout age.</p>
+<p style="font-size:7.5px;color:#64748b;margin:0 0 5px">Projected balances at your tracked milestone ages. SA and RA are combined (SA converts to RA at age 55). ◄ marks your selected payout age. Growth % vs prior milestone or current age shown in the Age column.</p>
 <table style="font-size:8.5px">
   <thead><tr>
-    <th>Age</th>
+    <th>Age &amp; Growth</th>
     <th style="text-align:right">OA</th>
     <th style="text-align:right">SA / RA</th>
     <th style="text-align:right">MA</th>
@@ -8241,7 +8260,10 @@ ${yT2}${xT2}${paLineCmp}
     <div class="row-kv"><span>Annual Housing Outflow</span><strong style="color:#991b1b">${fc(inputs.housingOutflow)}</strong></div>
     <div class="row-kv"><span>RSTU / VC3A Top-ups</span><strong style="color:#0369a1">${fc((Number(inputs.vcSaTopup) || 0) + (Number(inputs.vc3aCash) || 0) + (Number(inputs.vcVhr) || 0))}</strong></div>
     ${(Number(inputs.vcMaCash) || 0) > 0 ? `<div class="row-kv"><span>VCMA Cash Top-up</span><strong style="color:#0369a1">${fc(inputs.vcMaCash)}</strong></div>` : ''}
-    ${(Number(inputs.annualGovGrant) || 0) > 0 ? `<div class="row-kv"><span>Gov Grant / WIS</span><strong style="color:#047857">${fc(inputs.annualGovGrant)}</strong></div>` : ''}
+    ${(Number(inputs.annualGovGrant) || 0) > 0 ? `<div class="row-kv"><span>Gov Grant (to SA/RA)</span><strong style="color:#047857">${fc(inputs.annualGovGrant)}</strong></div>` : ''}
+    ${/* G3: WIS shown separately from annualGovGrant */(Number(inputs.wisAmount) || 0) > 0 ? `<div class="row-kv"><span>WIS (Workfare)</span><strong style="color:#047857">${fc(inputs.wisAmount)}/yr</strong></div>` : ''}
+    ${/* G4: MRSS shown if configured */(Number(inputs.mrssGrant) || 0) > 0 ? `<div class="row-kv"><span>MRSS (Retirement Savings)</span><strong style="color:#047857">${fc(inputs.mrssGrant)}/yr</strong></div>` : ''}
+    ${/* G4: MMSS shown if configured */(Number(inputs.mmssGrant) || 0) > 0 ? `<div class="row-kv"><span>MMSS (MediSave Savings)</span><strong style="color:#047857">${fc(inputs.mmssGrant)}/yr</strong></div>` : ''}
     ${(Number(inputs.srsAnnualContribution) || 0) > 0 ? `<div class="row-kv"><span>SRS Contribution / yr</span><strong>${fc(inputs.srsAnnualContribution)}</strong></div>` : ''}
     ${(Number(inputs.currentPrivateAssets) || 0) > 0 ? `<div class="row-kv"><span>Private Assets (Current)</span><strong>${fc(inputs.currentPrivateAssets)}</strong></div>` : ''}
     ${(Number(inputs.oaToSaTransfer) || 0) > 0 ? `<div class="row-kv"><span>OA→SA Transfer / yr</span><strong>${fc(inputs.oaToSaTransfer)}</strong></div>` : ''}
@@ -8251,6 +8273,8 @@ ${yT2}${xT2}${paLineCmp}
     ${(Number(inputs.oaEduLoan) || 0) > 0 ? `<div class="row-kv"><span>OA Education Loan / yr</span><strong style="color:#991b1b">${fc(inputs.oaEduLoan)}</strong></div>` : ''}
     ${(Number(inputs.medicalUsage) || 0) > 0 || (Number(inputs.medishieldIP) || 0) > 0 || (Number(inputs.elderCareShield) || 0) > 0 ? `<div class="row-kv"><span>Medical (Usage / MediShield IP / CareShield)</span><strong style="color:#991b1b">${fc(inputs.medicalUsage)} / ${fc(inputs.medishieldIP)} / ${fc(inputs.elderCareShield)}</strong></div>` : ''}
     ${(Number(inputs.annualPrivateSaving) || 0) > 0 ? `<div class="row-kv"><span>Private Asset Saving / yr</span><strong>${fc(inputs.annualPrivateSaving)}</strong></div>` : ''}
+    ${/* G5: private asset growth rate — always show when private assets are configured */(Number(inputs.currentPrivateAssets) || 0) > 0 || (Number(inputs.annualPrivateSaving) || 0) > 0 ? `<div class="row-kv"><span>Private Asset Growth Rate</span><strong>${Number(inputs.privateAssetGrowthRate) || 0}% / yr</strong></div>` : ''}
+    ${/* G5: property growth rate — show when property is included in net worth */inputs.includeProperty && (Number(inputs.propertyValue) || 0) > 0 ? `<div class="row-kv"><span>Property Value / Growth</span><strong>${fc(inputs.propertyValue)} · ${Number(inputs.propertyGrowthRate) || 0}% / yr</strong></div>` : ''}
     ${(Number(inputs.retirementSumGrowth) || 3) !== 3 ? `<div class="row-kv"><span>Retirement Sum Growth</span><strong>${inputs.retirementSumGrowth}% / yr</strong></div>` : ''}
   </div>
 </div>
@@ -8272,8 +8296,43 @@ ${(() => {
     ${hasScheme ? `<div class="row-kv"><span>CPF Scheme</span><strong style="color:#b45309">Retirement Sum Scheme (RSS) — born before 1958</strong></div>` : '<div class="row-kv"><span>CPF Scheme</span><strong>CPF LIFE</strong></div>'}
     ${hasPrFields ? `<div class="row-kv"><span>PR Tenure / Rate Type</span><strong>Year ${inputs.prYear} · ${prRateLabel}</strong></div>` : ''}
     ${hasPwD ? `<div class="row-kv"><span>Person with Disabilities (PwD)</span><strong style="color:#7c3aed">Yes — MRSS below-55 bypass active</strong></div>` : ''}
-    ${hasDwz ? `<div class="row-kv"><span>Die with Zero</span><strong style="color:#b45309">Enabled — target depletion age ${inputs.dieWithZeroAge || 85}</strong></div>` : ''}
-    ${lifeEvts.length > 0 ? `<div class="row-kv"><span>Life Events (${lifeEvts.length})</span><strong>${evtSummary}</strong></div>` : ''}
+    ${/* G8: show DwZ with computed monthly draw amount, not just the flag */hasDwz ? (() => {
+      const dwzAge = Number(inputs.dieWithZeroAge) || 85;
+      const dwzFloor = Number(inputs.oaBequestFloor) || 0;
+      const dwzMonthly = Number(inputs.oaDrawMonthly) || 0;
+      return `<div class="row-kv"><span>Die with Zero</span><strong style="color:#b45309">Enabled — deplete by age ${dwzAge}${dwzFloor > 0 ? ` · bequest floor ${fc(dwzFloor)}` : ''}${dwzMonthly > 0 ? ` · ${fc(dwzMonthly)}/mo OA draw` : ' (click Apply in app to activate draw)'}</strong></div>`;
+    })() : ''}
+    ${/* G7: replace bare comma-separated text with a structured table when life events are configured */
+    lifeEvts.length > 0 ? (() => {
+      const evTypeLabels = { career_break: 'Career Break', medical_crisis: 'Medical Crisis', retrenchment: 'Retrenchment', windfall: 'Windfall / Lump Sum', early_retirement: 'Early Retirement', loved_one_transfer: 'Loved One Transfer', education_payout: 'Education Payout' };
+      const evRows = lifeEvts.map(ev => {
+        const typeLabel = evTypeLabels[ev.type] || ev.type;
+        const ageRange = Number(ev.startAge) === Number(ev.endAge) ? `Age ${ev.startAge}` : `Age ${ev.startAge}–${ev.endAge}`;
+        const mag = Number(ev.magnitude) || 0;
+        const isInflow = ['windfall', 'education_payout'].includes(ev.type);
+        const magStr = mag > 0 ? `${isInflow ? '+' : '−'}${fc(mag)}` : '—';
+        return `<tr>
+          <td style="padding:4px 6px;font-weight:700">${ev.label || typeLabel}</td>
+          <td style="padding:4px 6px;color:#64748b">${typeLabel}</td>
+          <td style="padding:4px 6px;text-align:center">${ageRange}</td>
+          <td style="padding:4px 6px;text-align:right;color:${isInflow ? '#166534' : '#991b1b'};font-weight:700">${magStr}</td>
+          <td style="padding:4px 6px;text-align:center;color:${ev.enabled !== false ? '#166534' : '#94a3b8'}">${ev.enabled !== false ? '✓ Active' : '○ Disabled'}</td>
+        </tr>`;
+      }).join('');
+      return `<div style="margin-top:6px">
+        <div style="font-size:8.5px;font-weight:800;color:#334155;margin-bottom:4px">Life Events (${lifeEvts.length} configured)</div>
+        <table style="font-size:8px;border-collapse:collapse;width:100%">
+          <thead><tr style="background:#0f172a;color:#fff">
+            <th style="padding:4px 6px;text-align:left">Label</th>
+            <th style="padding:4px 6px;text-align:left">Type</th>
+            <th style="padding:4px 6px;text-align:center">Age Range</th>
+            <th style="padding:4px 6px;text-align:right">Magnitude</th>
+            <th style="padding:4px 6px;text-align:center">Status</th>
+          </tr></thead>
+          <tbody>${evRows}</tbody>
+        </table>
+      </div>`;
+    })() : ''}
   </div>
 </div>`;
 })()}
@@ -8418,10 +8477,21 @@ ${(() => {
             return `<polygon points="${mcPts90} ${reversePts10}" fill="#7c3aed" opacity="0.10"/>
 <polyline points="${mcPts50}" fill="none" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.6"/>`;
           })();
+          // G1 fix: milestone age marker lines — teal dashed verticals matching the app's Recharts chart.
+          // Uses uniqueMsAges (already computed for milestoneSnapshotHtml) so no duplicate logic.
+          // X position is computed proportionally within the chart's [ca, 95] age range.
+          const msLinesSvg = uniqueMsAges.map(mAge => {
+            const mx = PL + Math.max(0, Math.min(1, (mAge - ca) / (95 - ca))) * CW;
+            // Stagger label Y so adjacent milestones don't overlap (cycle between PT+8 and PT+18)
+            const lblY = PT + 8 + (uniqueMsAges.indexOf(mAge) % 2) * 10;
+            return `<line x1="${mx}" y1="${PT}" x2="${mx}" y2="${baseY}" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.75"/>
+<text x="${mx + 2}" y="${lblY}" font-size="6.5" fill="#0e7490" font-weight="700" opacity="0.9">Age ${mAge}</text>`;
+          }).join('');
           const legendExtras = [
             privPts ? `<span><span style="display:inline-block;width:14px;height:2px;background:#166534;border-top:2px dashed #166534;vertical-align:middle;margin-right:3px"></span>Private Assets</span>` : '',
             monteCarloData?.rows?.length ? `<span><span style="display:inline-block;width:10px;height:10px;background:#7c3aed;opacity:0.2;vertical-align:middle;margin-right:3px;border-radius:2px"></span>MC Band (P10–P90)</span>` : '',
             activeLifeEvents.length ? `<span style="color:#ef4444">▨ Life Events</span>` : '',
+            uniqueMsAges.length > 0 ? `<span style="color:#0e7490">⎯ Milestone Ages</span>` : '',
           ].filter(Boolean).join(' &nbsp;');
           return `<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" width="100%" height="auto" style="display:block;border:1px solid #e8eef4;border-radius:6px;background:#fafafa">
 ${yTicks}
@@ -8432,6 +8502,7 @@ ${mcBand}
 <polygon points="${toPolyPts(maTopY, saTopY)}" fill="#a855f7" opacity="0.82"/>
 <polygon points="${toPolyPts(raTopY, maTopY)}" fill="#f59e0b" opacity="0.85"/>
 ${privLine}
+${msLinesSvg}
 ${paLine}
 ${ageLabels}
 <text x="${PL}" y="${baseY+25}" font-size="7" fill="#94a3b8">Age</text>
@@ -8608,7 +8679,8 @@ ${(() => {
   <tbody>${projection.filter(r => r.age % 5 === 0 || r.age === pa || r.age === ca || r.age === 55).map(r => {
     const ppR = ppByAgePdf.get(r.age) || {};
     const rowTotal = (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0);
-    const nw = ppR[`${highlightPlan}NetWorth`] || rowTotal;
+    // G6 fix: fallback for pre-payout ages now includes SRS and private assets (matching projRowsData fix above).
+    const nw = ppR[`${highlightPlan}NetWorth`] || (rowTotal + (inputs.includeProperty ? (r.propertyValue || 0) : 0) + (r.srsBalance || 0) + (r.privateAssets || 0));
     const priv = r.privateAssets || 0;
     const isPA = r.age === pa;
     const bg = isPA ? '#e8f5e9' : (r.age % 10 === 0 ? '#f8fafc' : '#fff');
