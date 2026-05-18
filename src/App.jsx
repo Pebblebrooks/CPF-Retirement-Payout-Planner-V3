@@ -18205,28 +18205,31 @@ ${milestoneSnapshotHtml}
                   {/* Anchor navigation — scrollable horizontally on mobile */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   {[
-                    ["#doc-whatsnew",    Star,             "What's New"],
-                    ["#doc-guide",       BookOpen,         "User Guide"],
-                    ["#doc-engine",      Settings,         "Projection Engine"],
-                    ["#doc-policy",      ShieldCheck,      "Policy Reference"],
-                    ["#doc-planning",    Target,           "Planning Tools"],
-                    ["#doc-whatif",      SlidersHorizontal,"What-If Explorer"],
-                    ["#doc-srs",         DollarSign,       "SRS"],
-                    ["#doc-propmon",     Home,             "Property Monetisation"],
-                    ["#doc-dwz",         Sunset,           "Die with Zero"],
-                    ["#doc-sep",         Briefcase,        "SEP Rules"],
-                    ["#doc-yield",       TrendingUp,       "Yield & XIRR"],
-                    ["#doc-montecarlo",  Activity,         "Monte Carlo"],
-                    ["#doc-minor",       Baby,             "Minor & PwD"],
-                    ["#doc-eduloan",     FileText,         "Education Loan"],
-                    ["#doc-rsgrowth",    BarChart3,        "RS Growth Rate"],
-                    ["#doc-phasedsalary",Pause,            "Phased Salary"],
-                    ["#doc-lifeevents",  HeartPulse,       "Life Events"],
-                    ["#doc-household",   Users,            "Household"],
-                    ["#doc-rss",         Clock,            "RSS Scheme"],
-                    ["#doc-baby",        Baby,             "Baby Millionaire"],
-                  ].map(([href, NavIcon, label]) => (
-                    <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 6, fontSize: 14, fontWeight: 700, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-subtle)", textDecoration: "none", cursor: "pointer" }}
+                    // [href, Icon, label, accentColour] — icon + colour must match the section <h4> header exactly
+                    ["#doc-whatsnew",    Lightbulb,        "What's New",           "#22d3ee"                ],
+                    ["#doc-guide",       LayoutDashboard,  "User Guide",           "var(--clr-blue)"        ],
+                    ["#doc-engine",      Activity,         "Projection Engine",    "var(--clr-green)"       ],
+                    ["#doc-policy",      ShieldCheck,      "Policy Reference",     "#2dd4bf"                ],
+                    ["#doc-planning",    Target,           "Planning Tools",       "var(--clr-blue)"        ],
+                    ["#doc-whatif",      SlidersHorizontal,"What-If Explorer",     "var(--clr-green)"       ],
+                    ["#doc-srs",         BookOpen,         "SRS",                  "#0ea5e9"                ],
+                    ["#doc-propmon",     Home,             "Property Monetisation","var(--clr-orange)"      ],
+                    ["#doc-dwz",         Clock,            "Die with Zero",        "#f43f5e"                ],
+                    ["#doc-sep",         Briefcase,        "SEP Rules",            "var(--clr-orange)"      ],
+                    ["#doc-yield",       Scale,            "Yield & XIRR",         "var(--clr-amber)"       ],
+                    ["#doc-montecarlo",  Activity,         "Monte Carlo",          "var(--clr-violet2)"     ],
+                    ["#doc-minor",       Users,            "Minor & PwD",          "var(--clr-green)"       ],
+                    ["#doc-eduloan",     BookOpen,         "Education Loan",       "var(--clr-indigo)"      ],
+                    ["#doc-rsgrowth",    TrendingUp,       "RS Growth Rate",       "var(--clr-green)"       ],
+                    ["#doc-phasedsalary",Briefcase,        "Phased Salary",        "var(--clr-orange)"      ],
+                    ["#doc-lifeevents",  Activity,         "Life Events",          "#ef4444"                ],
+                    ["#doc-household",   Users,            "Household",            "#8b5cf6"                ],
+                    ["#doc-rss",         Clock,            "RSS Scheme",           "var(--clr-blue)"        ],
+                    ["#doc-baby",        Baby,             "Baby Millionaire",     "#ec4899"                ],
+                  ].map(([href, NavIcon, label, accent]) => (
+                    <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 6, fontSize: 14, fontWeight: 700, background: "transparent", color: accent, border: `1px solid ${accent}44`, textDecoration: "none", cursor: "pointer", transition: "background 0.15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = `${accent}14`; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                       onClick={e => {
                         e.preventDefault();
                         const target = document.querySelector(href);
@@ -18259,7 +18262,7 @@ ${milestoneSnapshotHtml}
                           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                       }}>
-                      <NavIcon style={{ width: 14, height: 14, flexShrink: 0 }} />
+                      <NavIcon style={{ width: 14, height: 14, flexShrink: 0, color: accent }} />
                       {label}
                     </a>
                   ))}
