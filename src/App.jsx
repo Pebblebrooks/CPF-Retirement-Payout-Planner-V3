@@ -7765,8 +7765,24 @@ export default function App() {
         return `<tr><td style="padding:5px 8px;font-weight:700">${fc(h)}</td>${cells}</tr>`;
       }).join("");
 
-      // Milestone rows
-      const msRows = milestones.map(m => `<tr><td style="padding:5px 8px;font-weight:700">${m.age}</td><td style="padding:5px 8px">${m.label}</td><td style="padding:5px 8px;color:#475569">${m.detail}</td></tr>`).join("");
+      // Milestone rows — colour-coded cards matching the Summary tab's severity palette
+      const MS_COLORS = {
+        success: { bg: '#f0fdf4', border: '#86efac', left: '#16a34a', badge: '#166534', badgeBg: '#dcfce7', icon: '✅' },
+        gold:    { bg: '#fffbeb', border: '#fde68a', left: '#d97706', badge: '#92400e', badgeBg: '#fef3c7', icon: '🏆' },
+        teal:    { bg: '#f0fdfa', border: '#99f6e4', left: '#0d9488', badge: '#0f766e', badgeBg: '#ccfbf1', icon: '🏠' },
+        warning: { bg: '#fff7ed', border: '#fed7aa', left: '#ea580c', badge: '#9a3412', badgeBg: '#ffedd5', icon: '⚠️' },
+        danger:  { bg: '#fef2f2', border: '#fecaca', left: '#dc2626', badge: '#991b1b', badgeBg: '#fee2e2', icon: '🚨' },
+      };
+      const msRows = milestones.map(m => {
+        const c = MS_COLORS[m.type] || MS_COLORS.warning;
+        return `<tr style="background:${c.bg}">
+          <td style="padding:7px 8px;border-left:4px solid ${c.left};font-weight:800;font-size:9px;white-space:nowrap;vertical-align:top">
+            <span style="display:inline-block;background:${c.badgeBg};color:${c.badge};border-radius:999px;padding:2px 8px;font-size:8px;font-weight:800;margin-bottom:2px">${c.icon} Age ${m.age}</span>
+          </td>
+          <td style="padding:7px 8px;font-weight:700;font-size:9px;color:${c.badge};vertical-align:top;white-space:nowrap">${m.label}</td>
+          <td style="padding:7px 8px;font-size:8.5px;color:#334155;line-height:1.5;vertical-align:top">${m.detail}</td>
+        </tr>`;
+      }).join("");
 
       // Milestone Snapshots — balance callout table for user-set milestone ages (milestoneAge 1-5)
       // Mirrors the "Milestone Snapshots" section in the Summary tab UI.
@@ -8666,11 +8682,15 @@ ${compareHtml}
 
 <!-- ═══════════════════ MILESTONES & DISCLAIMER ══════════════════════════ -->
 <div class="section-break">
-<div class="sec-hdr sec-hdr-amber"><span class="sec-ico">⚠️</span><span class="sec-title" style="color:#92400e">Milestones</span></div>
-${milestones.length > 0 ? `<h3 style="margin-top:0;margin-bottom:4px;font-size:10px;color:#92400e">Milestone Alerts</h3><table>
-  <thead><tr><th>Age</th><th>Event</th><th>Details</th></tr></thead>
+<div class="sec-hdr sec-hdr-amber"><span class="sec-ico">⚠️</span><span class="sec-title" style="color:#92400e">Milestones &amp; Alerts</span>
+  ${milestones.length > 0 ? `<span style="margin-left:8px;background:#fee2e2;color:#991b1b;border-radius:999px;padding:2px 9px;font-size:10px;font-weight:800">${milestones.length} alert${milestones.length !== 1 ? 's' : ''}</span>` : '<span style="margin-left:8px;background:#dcfce7;color:#166534;border-radius:999px;padding:2px 9px;font-size:10px;font-weight:800">✓ None</span>'}
+</div>
+${milestones.length > 0 ? `
+<p style="font-size:8px;color:#64748b;margin:0 0 6px">Colour key: <span style="color:#16a34a;font-weight:700">■ green = target met</span> &nbsp;·&nbsp; <span style="color:#d97706;font-weight:700">■ gold = ERS/milestone</span> &nbsp;·&nbsp; <span style="color:#ea580c;font-weight:700">■ orange = warning</span> &nbsp;·&nbsp; <span style="color:#dc2626;font-weight:700">■ red = action needed</span></p>
+<table style="border-collapse:collapse;width:100%">
+  <thead><tr style="background:#0f172a;color:#fff"><th style="padding:5px 8px;font-size:8px;text-transform:uppercase;letter-spacing:0.04em">Age &amp; Severity</th><th style="padding:5px 8px;font-size:8px;text-transform:uppercase;letter-spacing:0.04em">Event</th><th style="padding:5px 8px;font-size:8px;text-transform:uppercase;letter-spacing:0.04em">Details</th></tr></thead>
   <tbody>${msRows}</tbody>
-</table>` : '<p style="color:#64748b;font-style:italic;font-size:9px">No milestone alerts detected for current inputs.</p>'}
+</table>` : '<p style="color:#64748b;font-style:italic;font-size:9px;padding:6px 0">✓ On track — no milestone alerts detected for current inputs.</p>'}
 ${milestoneSnapshotHtml}
 </div>
 
