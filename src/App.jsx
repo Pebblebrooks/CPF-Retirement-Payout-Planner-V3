@@ -7692,6 +7692,37 @@ export default function App() {
       // Previously defined at line ~6979 (after the loops), making it useless for guarding.
       const isRSSPdf = debouncedInputs.cpfScheme === 'rss';
 
+      // PDF XIRR precomputation: xirrByAge is only computed when activeTab is "table" or "summary".
+      // For PDF generation from any other tab, compute XIRR inline for the 3 plans at payout age.
+      // This mirrors the xirrByAge useMemo logic but for 3 plans × 1 age only (fast: ~3 Newton-Raphson).
+      const pdfXirrByPlan = (() => {
+        // If xirrByAge already has data for this payout age, use it (no recomputation)
+        const hasLive = ['standard','escalating','basic','rss'].some(k => xirrByAge[k]?.[pa] != null);
+        if (hasLive) return xirrByAge;
+        if (isRSSPdf) {
+          const rssPayoutStart = Number(debouncedInputs.rssPayoutStartAge) || 65;
+          const contribFlowsRss = projection.filter(r => r.injected > 0).map(r => ({ t: r.age - ca, v: -(r.injected) }));
+          const cumFlowsRss = projection.filter(r => r.age >= rssPayoutStart).map(r => ({ t: r.age - ca, v: r.rssPayoutThisYear || 0 }));
+          const idx = pa - rssPayoutStart;
+          const payoutSlice = cumFlowsRss.slice(0, Math.max(0, idx + 1));
+          const termRss = { t: pa - ca, v: ((projByAgePdf.get(pa)?.ra || 0) + (projByAgePdf.get(pa)?.oa || 0) + (projByAgePdf.get(pa)?.ma || 0)) };
+          const xRss = computeXIRR([...contribFlowsRss, ...payoutSlice, termRss]);
+          const val = xRss !== null ? Math.max(-0.50, Math.min(0.50, xRss)) * 100 : null;
+          return { rss: { [pa]: val }, standard: { [pa]: val }, escalating: { [pa]: val }, basic: { [pa]: val } };
+        }
+        // CPF LIFE path: compute one XIRR per plan at payout age
+        const contribFlowsCpf = projection.filter(r => r.injected > 0).map(r => ({ t: r.age - ca, v: -(r.injected) }));
+        const result = { standard: {}, escalating: {}, basic: {} };
+        ['standard','escalating','basic'].forEach(plan => {
+          const payoutFlows = payoutProjection.filter(r => r.age >= pa && r.age <= 95).map(r => ({ t: r.age - ca, v: r[`${plan}Monthly`] ? r[`${plan}Monthly`] * 12 : 0 }));
+          const bequestRow = payoutByAge.get(95) || {};
+          const terminalV = { t: 95 - ca, v: bequestRow[`${plan}Bequest`] || 0 };
+          const xirr = computeXIRR([...contribFlowsCpf, ...payoutFlows, terminalV]);
+          result[plan][pa] = xirr !== null ? Math.max(-0.50, Math.min(0.50, xirr)) * 100 : null;
+        });
+        return result;
+      })();
+
       // Sensitivity analysis: housing outflow rows × SA top-up columns
       const baseH = Number(inputs.housingOutflow) || 0;
       const baseSATopup = Number(inputs.vcSaTopup) || 0;
@@ -7885,9 +7916,12 @@ export default function App() {
       const ganttSvg = `<svg viewBox="0 0 ${gW} ${gH}" width="100%" height="auto" style="display:block;border:1px solid #e2e8f0;border-radius:6px;background:#fafafa;margin:8px 0">${gTicks.join('')}${gBars}</svg>`;
 
       // Full cashflow ledger rows (all ages)
+      // Fix: yearEventsIn is now included in totalIn (matches the in-app Data Table).
       const fullLedgerRows = projection.map(r => {
-        const totalIn = (r.yearMandatory || 0) + (r.yearVoluntary || 0) + (r.yearGovGrants || 0) + (r.yearOaInterest || 0) + (r.yearSaRaInterest || 0) + (r.yearMaInterest || 0);
-        const totalOut = (r.yearHousingOut || 0) + (r.yearMedOut || 0) + (r.yearOaDrawOut || 0) + (r.yearEduOut || 0) + (r.yearLovedOneOut || 0) + (r.yearCpfisOut || 0) + (r.yearEventsOut || 0) + (r.rssPayoutThisYear || 0);
+        const eventsIn  = r.yearEventsIn  || 0;
+        const eventsOut = r.yearEventsOut || 0;
+        const totalIn  = (r.yearMandatory || 0) + (r.yearVoluntary || 0) + (r.yearGovGrants || 0) + (r.yearOaInterest || 0) + (r.yearSaRaInterest || 0) + (r.yearMaInterest || 0) + eventsIn;
+        const totalOut = (r.yearHousingOut || 0) + (r.yearMedOut || 0) + (r.yearOaDrawOut || 0) + (r.yearEduOut || 0) + (r.yearLovedOneOut || 0) + (r.yearCpfisOut || 0) + eventsOut + (r.rssPayoutThisYear || 0);
         const net = totalIn - totalOut;
         const isPA = r.age === pa;
         const bg = isPA ? '#e8f5e9' : (r.age % 2 === 0 ? '#f8fafc' : '#ffffff');
@@ -7897,8 +7931,10 @@ export default function App() {
           <td style="text-align:right;color:#0369a1">${r.yearVoluntary ? fc(r.yearVoluntary) : '—'}</td>
           <td style="text-align:right;color:#047857">${r.yearGovGrants ? fc(r.yearGovGrants) : '—'}</td>
           <td style="text-align:right;color:#6d28d9">${fc((r.yearOaInterest || 0) + (r.yearSaRaInterest || 0) + (r.yearMaInterest || 0))}</td>
+          <td style="text-align:right;color:#059669;font-style:${eventsIn > 0 ? 'normal' : 'italic'}">${eventsIn > 0 ? fc(eventsIn) : '—'}</td>
           <td style="text-align:right;font-weight:700;color:#166534">${fc(totalIn)}</td>
           <td style="text-align:right;color:#991b1b">${totalOut ? fc(totalOut) : '—'}</td>
+          <td style="text-align:right;color:#b45309;font-style:${eventsOut > 0 ? 'normal' : 'italic'}">${eventsOut > 0 ? fc(eventsOut) : '—'}</td>
           <td style="text-align:right;font-weight:700;color:${net >= 0 ? '#166534' : '#991b1b'}">${net >= 0 ? '+' : ''}${fc(net)}</td>
           <td style="text-align:right;font-weight:600;color:#0369a1">${fc((r.oa || 0) + (r.sa || 0) + (r.ma || 0) + (r.ra || 0))}</td>
         </tr>`;
@@ -7908,10 +7944,12 @@ export default function App() {
       const ledgTot = projection.reduce((acc, r) => {
         acc.mandatory += (r.yearMandatory || 0); acc.voluntary += (r.yearVoluntary || 0); acc.grants += (r.yearGovGrants || 0);
         acc.interest += (r.yearOaInterest || 0) + (r.yearSaRaInterest || 0) + (r.yearMaInterest || 0);
+        acc.eventsIn  += (r.yearEventsIn  || 0);
+        acc.eventsOut += (r.yearEventsOut || 0);
         acc.out += (r.yearHousingOut || 0) + (r.yearMedOut || 0) + (r.yearOaDrawOut || 0) + (r.yearEduOut || 0) + (r.yearLovedOneOut || 0) + (r.yearCpfisOut || 0) + (r.yearEventsOut || 0) + (r.rssPayoutThisYear || 0);
         return acc;
-      }, { mandatory: 0, voluntary: 0, grants: 0, interest: 0, out: 0 });
-      const ledgTotIn = ledgTot.mandatory + ledgTot.voluntary + ledgTot.grants + ledgTot.interest;
+      }, { mandatory: 0, voluntary: 0, grants: 0, interest: 0, eventsIn: 0, eventsOut: 0, out: 0 });
+      const ledgTotIn = ledgTot.mandatory + ledgTot.voluntary + ledgTot.grants + ledgTot.interest + ledgTot.eventsIn;
 
       // SRS balance table
       const srsTableRows = hasSRSPdf ? projection.filter(r => (r.srsBalance || 0) > 0).map(r => {
@@ -7988,6 +8026,47 @@ export default function App() {
   </tbody>
 </table>
 ${keyDiffs.length > 0 ? `<h3 style="margin-top:8px">Key Input Differences</h3><table><thead><tr><th>Parameter</th><th style="text-align:right">${scenarioLabelA || 'Scenario A'}</th><th style="text-align:right">Current</th></tr></thead><tbody>${diffRows}</tbody></table>` : ''}
+${(() => {
+  // Build a side-by-side CPF Total trajectory SVG chart (Scenario A vs Current)
+  // Use every-5-year data points plus the common payout age
+  const scAProj = scenarioA.projection || [];
+  const curProj = projection;
+  const paA = Number(scenarioA.inputs?.payoutAge) || pa;
+  const startAge2 = Math.min(ca, Number(scenarioA.inputs?.currentAge) || ca);
+  const endAge2   = Math.min(95, Math.max(pa, paA));
+  const filterAges = (proj) => proj.filter(r => r.age >= startAge2 && r.age <= endAge2 && (r.age % 5 === 0 || r.age === pa || r.age === paA));
+  const rowsA2   = filterAges(scAProj);
+  const rowsCur2 = filterAges(curProj);
+  if (rowsA2.length < 2 || rowsCur2.length < 2) return '';
+  const totA2   = r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0);
+  const totCur2 = r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0);
+  const allTotals2 = [...rowsA2.map(totA2), ...rowsCur2.map(totCur2)];
+  const maxV2 = Math.max(...allTotals2) || 1;
+  const W2=680,H2=160,PL2=60,PB2=26,PT2=10,PR2=10;
+  const CW2=W2-PL2-PR2,CH2=H2-PT2-PB2;
+  const xOf2 = (age) => PL2 + Math.max(0,Math.min(1,(age-startAge2)/(endAge2-startAge2)))*CW2;
+  const yOf2 = (v)   => PT2 + CH2 - Math.round((Math.max(0,v)/maxV2)*CH2);
+  const fmt2c = v => v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':String(Math.round(v));
+  const yT2 = [0,0.25,0.5,0.75,1].map(t=>{const y=PT2+CH2-Math.round(t*CH2);return `<line x1="${PL2-4}" y1="${y}" x2="${W2-PR2}" y2="${y}" stroke="#e8eef4" stroke-width="0.5"/><text x="${PL2-6}" y="${y+3}" text-anchor="end" font-size="7" fill="#94a3b8">${fmt2c(Math.round(t*maxV2))}</text>`;}).join('');
+  const xT2 = [...new Set([...rowsA2.map(r=>r.age),...rowsCur2.map(r=>r.age)])].sort((a,b)=>a-b).map(age=>`<text x="${xOf2(age)}" y="${PT2+CH2+14}" text-anchor="middle" font-size="7" fill="#94a3b8">${age}</text>`).join('');
+  const ptsA2   = rowsA2.map(r=>`${xOf2(r.age)},${yOf2(totA2(r))}`).join(' ');
+  const ptsCur2 = rowsCur2.map(r=>`${xOf2(r.age)},${yOf2(totCur2(r))}`).join(' ');
+  const paLineCmp = `<line x1="${xOf2(pa)}" y1="${PT2}" x2="${xOf2(pa)}" y2="${PT2+CH2}" stroke="#ef4444" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.6"/>`;
+  return `<h3 style="margin-top:10px">CPF Total Trajectory — ${scenarioLabelA || 'Scenario A'} vs Current</h3>
+<div class="chart-wrap"><svg viewBox="0 0 ${W2} ${H2}" width="100%" height="auto" style="display:block;border:1px solid #e8eef4;border-radius:6px;background:#fafafa">
+${yT2}${xT2}${paLineCmp}
+<polygon points="${ptsA2} ${xOf2(rowsA2[rowsA2.length-1].age)},${PT2+CH2} ${xOf2(rowsA2[0].age)},${PT2+CH2}" fill="#3b82f6" opacity="0.08"/>
+<polygon points="${ptsCur2} ${xOf2(rowsCur2[rowsCur2.length-1].age)},${PT2+CH2} ${xOf2(rowsCur2[0].age)},${PT2+CH2}" fill="#7c3aed" opacity="0.08"/>
+<polyline points="${ptsA2}" fill="none" stroke="#2563eb" stroke-width="2" opacity="0.9"/>
+<polyline points="${ptsCur2}" fill="none" stroke="#7c3aed" stroke-width="2" opacity="0.9" stroke-dasharray="5,3"/>
+</svg>
+<div style="display:flex;gap:14px;font-size:8px;color:#64748b;margin-top:3px">
+  <span style="color:#2563eb;font-weight:700">&#9644; ${scenarioLabelA || 'Scenario A'}</span>
+  <span style="color:#7c3aed;font-weight:700">- - Current</span>
+  <span style="color:#ef4444">&#9135; Payout Age ${pa}</span>
+  <span style="color:#94a3b8">Y-axis: Total CPF balance (OA+SA/RA+MA)</span>
+</div></div>`;
+})()}
 </div>`;
       })();
 
@@ -8106,14 +8185,14 @@ ${keyDiffs.length > 0 ? `<h3 style="margin-top:8px">Key Input Differences</h3><t
 <div class="toc">
   <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:#334155;margin-bottom:6px">Report Contents</div>
   <div class="toc-row"><span>1. Input Parameters &amp; Retirement Summary</span><span style="color:#64748b">CPF balances · contributions · life plan estimates</span></div>
-  <div class="toc-row"><span>2. Charts — Accumulation &amp; Payout</span><span style="color:#64748b">Balance trajectory · CPF LIFE payout curves · net worth</span></div>
+  <div class="toc-row"><span>2. Charts — Accumulation &amp; Payout</span><span style="color:#64748b">Balance trajectory · private assets · life events · MC band · CPF LIFE payout · net worth</span></div>
   <div class="toc-row"><span>3. FRS Tracker &amp; Breakeven Analysis</span><span style="color:#64748b">BRS / FRS / ERS progress · payout age sensitivity</span></div>
   <div class="toc-row"><span>4. Retirement Strategy &amp; Income Streams</span><span style="color:#64748b">Income target · all streams · Gantt timeline</span></div>
-  <div class="toc-row"><span>5. Year-by-Year Projection</span><span style="color:#64748b">Key ages at 5-year intervals · payout age highlighted</span></div>
-  <div class="toc-row"><span>6. Cashflow Ledger</span><span style="color:#64748b">Annual inflows · outflows · net flow</span></div>
+  <div class="toc-row"><span>5. Year-by-Year Projection</span><span style="color:#64748b">Key ages at 5-year intervals · XIRR yield · private assets · payout age highlighted</span></div>
+  <div class="toc-row"><span>6. Cashflow Ledger</span><span style="color:#64748b">Annual inflows · outflows · life events in/out · net flow — matches Data Table</span></div>
   <div class="toc-row"><span>7. Sensitivity Analysis</span><span style="color:#64748b">Housing outflow × SA top-up grid</span></div>
   ${hasSRSPdf ? '<div class="toc-row"><span>8. SRS Details</span><span style="color:#64748b">Supplementary Retirement Scheme trajectory</span></div>' : ''}
-  ${scenarioA ? `<div class="toc-row"><span>${hasSRSPdf ? '9' : '8'}. Scenario Comparison</span><span style="color:#64748b">Scenario A vs current inputs</span></div>` : ''}
+  ${scenarioA ? `<div class="toc-row"><span>${hasSRSPdf ? '9' : '8'}. Scenario Comparison</span><span style="color:#64748b">Scenario A vs current — KPI diff table · CPF trajectory chart · key input changes</span></div>` : ''}
   <div class="toc-row"><span>Milestones &amp; Disclaimer</span><span style="color:#64748b">Alerts · balance snapshots · legal disclaimer</span></div>
 </div>
 
@@ -8256,17 +8335,20 @@ ${(() => {
 ${(() => {
           // Area chart with stacked polygon fills
           const chartRows = projection.filter(r => r.age % 2 === 0 || r.age === pa || r.age === ca || r.age === 55 || r.age === 95);
+          // Include private assets in Y-axis scale
+          const maxPriv = Math.max(...chartRows.map(r => r.privateAssets || 0)) || 0;
           const maxTotal = Math.max(...chartRows.map(r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0))) || 1;
+          const maxY = Math.max(maxTotal, maxPriv) || 1;
           const W = 680, H = 210, PL = 62, PB = 30, PT = 12, PR = 12;
           const CW = W - PL - PR, CH = H - PT - PB;
           const n = chartRows.length;
           const baseY = PT + CH;
           const xs = chartRows.map((_, i) => PL + (n > 1 ? (i / (n - 1)) * CW : CW / 2));
           // Stacked area top-Y for each series
-          const oaTopY = chartRows.map(r => baseY - Math.round((r.oa || 0) / maxTotal * CH));
-          const saTopY = chartRows.map((r, i) => oaTopY[i] - Math.round((r.sa || 0) / maxTotal * CH));
-          const maTopY = chartRows.map((r, i) => saTopY[i] - Math.round((r.ma || 0) / maxTotal * CH));
-          const raTopY = chartRows.map((r, i) => maTopY[i] - Math.round((r.ra || 0) / maxTotal * CH));
+          const oaTopY = chartRows.map(r => baseY - Math.round((r.oa || 0) / maxY * CH));
+          const saTopY = chartRows.map((r, i) => oaTopY[i] - Math.round((r.sa || 0) / maxY * CH));
+          const maTopY = chartRows.map((r, i) => saTopY[i] - Math.round((r.ma || 0) / maxY * CH));
+          const raTopY = chartRows.map((r, i) => maTopY[i] - Math.round((r.ra || 0) / maxY * CH));
           const toPolyPts = (topArr, botArr) => {
             const top = topArr.map((y, i) => `${xs[i]},${y}`).join(' ');
             const bot = botArr ? [...botArr].reverse().map((y, i) => `${xs[botArr.length - 1 - i]},${y}`).join(' ') : `${xs[xs.length-1]},${baseY} ${xs[0]},${baseY}`;
@@ -8275,22 +8357,65 @@ ${(() => {
           const fmt3 = v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'k' : v;
           const yTicks = [0, 0.25, 0.5, 0.75, 1].map(t => {
             const y = PT + CH - Math.round(t * CH);
-            return `<line x1="${PL-4}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#e8eef4" stroke-width="0.5"/><text x="${PL-6}" y="${y+3}" text-anchor="end" font-size="7" fill="#94a3b8">${fmt3(Math.round(t * maxTotal))}</text>`;
+            return `<line x1="${PL-4}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#e8eef4" stroke-width="0.5"/><text x="${PL-6}" y="${y+3}" text-anchor="end" font-size="7" fill="#94a3b8">${fmt3(Math.round(t * maxY))}</text>`;
           }).join('');
           // Age labels (every 5 years + payout age)
-          const ageLabels = chartRows.filter(r => r.age % 5 === 0 || r.age === pa).map((r, _) => {
+          const ageLabels = chartRows.filter(r => r.age % 5 === 0 || r.age === pa).map((r) => {
             const idx = chartRows.indexOf(r);
             const x = xs[idx];
             return `<text x="${x}" y="${baseY + 14}" text-anchor="middle" font-size="7" fill="#94a3b8">${r.age}</text>`;
           }).join('');
           const paIdx = chartRows.findIndex(r => r.age === pa);
           const paLine = paIdx >= 0 ? `<line x1="${xs[paIdx]}" y1="${PT}" x2="${xs[paIdx]}" y2="${baseY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>` : '';
+          // Private assets line
+          const privPts = chartRows.filter(r => (r.privateAssets || 0) > 0).map(r => {
+            const idx = chartRows.indexOf(r);
+            return `${xs[idx]},${baseY - Math.round((r.privateAssets || 0) / maxY * CH)}`;
+          }).join(' ');
+          const privLine = privPts ? `<polyline points="${privPts}" fill="none" stroke="#166534" stroke-width="1.8" stroke-dasharray="5,3" opacity="0.8"/>` : '';
+          // Life event bands (shaded rectangles behind the stacked areas)
+          const activeLifeEvents = (debouncedInputs.lifeEvents || []).filter(e => e.enabled !== false);
+          const lifeEventBands = activeLifeEvents.map(ev => {
+            const evColors = { career_break:'#ef4444', medical_crisis:'#dc2626', retrenchment:'#f97316', windfall:'#10b981', early_retirement:'#6366f1', loved_one_transfer:'#a855f7', education_payout:'#0ea5e9' };
+            const col = evColors[ev.type] || '#ef4444';
+            const sa_ev = Number(ev.startAge);
+            const ea_ev = Number(ev.endAge);
+            const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement' || sa_ev === ea_ev;
+            const x1_ev = PL + Math.max(0, Math.min(1, (sa_ev - ca) / (95 - ca))) * CW;
+            const x2_ev = isPoint ? x1_ev + 2 : PL + Math.max(0, Math.min(1, (ea_ev - ca) / (95 - ca))) * CW;
+            const lbl = (ev.label || ev.type).slice(0, 14);
+            return `<rect x="${x1_ev}" y="${PT}" width="${Math.max(2, x2_ev - x1_ev)}" height="${CH}" fill="${col}" opacity="0.07"/>
+<line x1="${x1_ev}" y1="${PT}" x2="${x1_ev}" y2="${baseY}" stroke="${col}" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>
+<text x="${x1_ev + 2}" y="${PT + 9}" font-size="6.5" fill="${col}" font-weight="700" opacity="0.9">${lbl}</text>`;
+          }).join('');
+          // Monte Carlo band (P10–P90 shaded, P50 dashed line)
+          const mcBand = (() => {
+            if (!monteCarloData?.rows?.length) return '';
+            const mcRows = monteCarloData.rows.filter(m => m.age >= ca && m.age <= (isRSSPdf ? 95 : pa));
+            if (mcRows.length < 2) return '';
+            const mcByAge = new Map(mcRows.map(m => [m.age, m]));
+            const mcPts90 = chartRows.filter(r => mcByAge.has(r.age)).map(r => { const idx = chartRows.indexOf(r); return `${xs[idx]},${baseY - Math.round((mcByAge.get(r.age).p90 || 0) / maxY * CH)}`; }).join(' ');
+            const mcPts10 = chartRows.filter(r => mcByAge.has(r.age)).map(r => { const idx = chartRows.indexOf(r); return `${xs[idx]},${baseY - Math.round((mcByAge.get(r.age).p10 || 0) / maxY * CH)}`; }).join(' ');
+            const mcPts50 = chartRows.filter(r => mcByAge.has(r.age)).map(r => { const idx = chartRows.indexOf(r); return `${xs[idx]},${baseY - Math.round((mcByAge.get(r.age).p50 || 0) / maxY * CH)}`; }).join(' ');
+            const bandPts = mcPts90 + ' ' + chartRows.filter(r => mcByAge.has(r.age)).map(r => { const idx = chartRows.indexOf(r); return `${xs[chartRows.filter(rr => mcByAge.has(rr.age)).indexOf(chartRows.filter(rr => mcByAge.has(rr.age))[chartRows.filter(rr => mcByAge.has(rr.age)).length - 1 - chartRows.filter(rr => mcByAge.has(rr.age)).indexOf(r)])?.age || r.age]},${ baseY - Math.round((mcByAge.get(r.age).p10 || 0) / maxY * CH)}`; }).reverse().join(' ');
+            const reversePts10 = [...chartRows.filter(r => mcByAge.has(r.age))].reverse().map(r => { const idx = chartRows.indexOf(r); return `${xs[idx]},${baseY - Math.round((mcByAge.get(r.age).p10 || 0) / maxY * CH)}`; }).join(' ');
+            return `<polygon points="${mcPts90} ${reversePts10}" fill="#7c3aed" opacity="0.10"/>
+<polyline points="${mcPts50}" fill="none" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.6"/>`;
+          })();
+          const legendExtras = [
+            privPts ? `<span><span style="display:inline-block;width:14px;height:2px;background:#166534;border-top:2px dashed #166534;vertical-align:middle;margin-right:3px"></span>Private Assets</span>` : '',
+            monteCarloData?.rows?.length ? `<span><span style="display:inline-block;width:10px;height:10px;background:#7c3aed;opacity:0.2;vertical-align:middle;margin-right:3px;border-radius:2px"></span>MC Band (P10–P90)</span>` : '',
+            activeLifeEvents.length ? `<span style="color:#ef4444">▨ Life Events</span>` : '',
+          ].filter(Boolean).join(' &nbsp;');
           return `<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" width="100%" height="auto" style="display:block;border:1px solid #e8eef4;border-radius:6px;background:#fafafa">
 ${yTicks}
+${lifeEventBands}
+${mcBand}
 <polygon points="${toPolyPts(oaTopY, null)}" fill="#3b82f6" opacity="0.82"/>
 <polygon points="${toPolyPts(saTopY, oaTopY)}" fill="#10b981" opacity="0.82"/>
 <polygon points="${toPolyPts(maTopY, saTopY)}" fill="#a855f7" opacity="0.82"/>
 <polygon points="${toPolyPts(raTopY, maTopY)}" fill="#f59e0b" opacity="0.85"/>
+${privLine}
 ${paLine}
 ${ageLabels}
 <text x="${PL}" y="${baseY+25}" font-size="7" fill="#94a3b8">Age</text>
@@ -8301,6 +8426,7 @@ ${ageLabels}
   <span><span style="display:inline-block;width:10px;height:10px;background:#a855f7;vertical-align:middle;margin-right:3px;border-radius:2px"></span>MA (MediSave)</span>
   <span><span style="display:inline-block;width:10px;height:10px;background:#f59e0b;vertical-align:middle;margin-right:3px;border-radius:2px"></span>RA (Retirement, post-55)</span>
   <span style="color:#ef4444">&#9135; Payout Age ${pa}</span>
+  ${legendExtras}
 </div></div>`;
         })()}
 
@@ -8435,15 +8561,42 @@ ${estimatedTaxSavings > 0 ? `<div class="box" style="margin-top:8px;background:#
 <div class="chapter-break">
 <div class="sec-hdr sec-hdr-green"><span class="sec-ico">📋</span><span class="sec-title" style="color:#065f46">5 &nbsp;·&nbsp; Year-by-Year Projection (Age ${ca} to 95)</span></div>
 <p style="font-size:8px;color:#64748b;margin:0 0 6px">Key ages at 5-year intervals + age 55 + payout age · green row = payout age ${pa} · all values in ${isRealDollars ? 'real (inflation-adjusted)' : 'nominal'} dollars · see Section 6 for full year-by-year cashflow</p>
+${(() => {
+  // XIRR KPI cards — mirrors the Data Table tab's XIRR summary cards
+  if (isRSSPdf) {
+    const xRss = pdfXirrByPlan['rss']?.[pa];
+    if (!xRss) return '';
+    return `<div class="kpi-grid" style="grid-template-columns:1fr;margin-bottom:8px"><div class="kpi" style="border-top:3px solid #0369a1"><div class="kpi-label">Yield IRR @ Payout Age ${pa} (RSS)</div><div class="kpi-value" style="color:#0369a1;font-size:15px">${xRss.toFixed(2)}% p.a.</div></div></div>`;
+  }
+  const plansXirr = [
+    { key: 'standard',   label: 'Standard Plan',   color: '#059669' },
+    { key: 'escalating', label: 'Escalating Plan',  color: '#1d4ed8' },
+    { key: 'basic',      label: 'Basic Plan',        color: '#b45309' },
+  ];
+  const hasXirr = plansXirr.some(p => pdfXirrByPlan[p.key]?.[pa] != null);
+  if (!hasXirr) return '';
+  return `<div class="kpi-grid" style="margin-bottom:8px">
+    ${plansXirr.map(p => {
+      const xirr = pdfXirrByPlan[p.key]?.[pa];
+      const isActive = highlightPlan === p.key;
+      return `<div class="kpi" style="border-top:3px solid ${p.color}${isActive ? ';box-shadow:0 0 0 2px '+p.color+'44' : ''}">
+        <div class="kpi-label">${p.label} Yield IRR${isActive ? ' ◄ Active' : ''}</div>
+        <div class="kpi-value" style="color:${p.color};font-size:13px">${xirr != null ? xirr.toFixed(2)+'% p.a.' : 'N/A'}</div>
+        <div style="font-size:7px;color:#64748b;margin-top:2px">@ payout age ${pa} — annualised return on all contributions</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+})()}
 <table style="font-size:8.5px">
-  <thead><tr><th>Age</th><th style="text-align:right">OA</th><th style="text-align:right">SA</th><th style="text-align:right">MA</th><th style="text-align:right">RA</th><th style="text-align:right">Total CPF</th><th style="text-align:right">Net Worth</th></tr></thead>
+  <thead><tr><th>Age</th><th style="text-align:right">OA</th><th style="text-align:right">SA</th><th style="text-align:right">MA</th><th style="text-align:right">RA</th><th style="text-align:right">Total CPF</th><th style="text-align:right">Private Assets</th><th style="text-align:right">Net Worth</th></tr></thead>
   <tbody>${projection.filter(r => r.age % 5 === 0 || r.age === pa || r.age === ca || r.age === 55).map(r => {
     const ppR = ppByAgePdf.get(r.age) || {};
     const rowTotal = (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0);
     const nw = ppR[`${highlightPlan}NetWorth`] || rowTotal;
+    const priv = r.privateAssets || 0;
     const isPA = r.age === pa;
     const bg = isPA ? '#e8f5e9' : (r.age % 10 === 0 ? '#f8fafc' : '#fff');
-    return `<tr style="background:${bg}"><td style="font-weight:${isPA?'700':'400'}">${r.age}${isPA?' ◄':''}</td><td style="text-align:right;color:#1d4ed8">${fc(r.oa)}</td><td style="text-align:right;color:#475569">${fc(r.sa||0)}</td><td style="text-align:right;color:#7c3aed">${fc(r.ma)}</td><td style="text-align:right;color:#059669">${fc(r.ra)}</td><td style="text-align:right;font-weight:700;color:#0369a1">${fc(rowTotal)}</td><td style="text-align:right;font-weight:600;color:#334155">${fc(nw)}</td></tr>`;
+    return `<tr style="background:${bg}"><td style="font-weight:${isPA?'700':'400'}">${r.age}${isPA?' ◄':''}</td><td style="text-align:right;color:#1d4ed8">${fc(r.oa)}</td><td style="text-align:right;color:#475569">${fc(r.sa||0)}</td><td style="text-align:right;color:#7c3aed">${fc(r.ma)}</td><td style="text-align:right;color:#059669">${fc(r.ra)}</td><td style="text-align:right;font-weight:700;color:#0369a1">${fc(rowTotal)}</td><td style="text-align:right;color:#166534">${priv > 0 ? fc(priv) : '—'}</td><td style="text-align:right;font-weight:600;color:#334155">${fc(nw)}</td></tr>`;
   }).join('')}</tbody>
 </table>
 </div>
@@ -8451,16 +8604,18 @@ ${estimatedTaxSavings > 0 ? `<div class="box" style="margin-top:8px;background:#
 <!-- ═══════════════════ 6. CASHFLOW LEDGER ═══════════════════════════════ -->
 <div class="chapter-break">
 <div class="sec-hdr sec-hdr-green"><span class="sec-ico">💰</span><span class="sec-title" style="color:#065f46">6 &nbsp;·&nbsp; Annual Cashflow Ledger (Age ${ca} to 95)</span></div>
-<p style="font-size:8px;color:#64748b;margin:0 0 6px">Inflows: Mandatory · Voluntary VC · Gov Grants · Interest &nbsp;|&nbsp; Outflows: Housing · Medical · OA Draw · Other &nbsp;|&nbsp; Net = Total In − Total Out</p>
-<table class="ledger-table" style="font-size:8px">
+<p style="font-size:8px;color:#64748b;margin:0 0 6px">Inflows: Mandatory · Voluntary VC · Gov Grants · Interest · Events In &nbsp;|&nbsp; Outflows: Housing · Medical · OA Draw · Other · Events Out &nbsp;|&nbsp; Net = Total In − Total Out &nbsp;|&nbsp; Matches in-app Data Table exactly</p>
+<table class="ledger-table" style="font-size:7.5px">
   <thead><tr>
     <th>Age</th>
     <th style="text-align:right">Mandatory</th>
     <th style="text-align:right">Voluntary</th>
     <th style="text-align:right">Grants</th>
     <th style="text-align:right">Interest</th>
+    <th style="text-align:right;color:#6ee7b7">Events In</th>
     <th style="text-align:right;color:#6ee7b7">Total In</th>
     <th style="text-align:right;color:#fca5a5">Total Out</th>
+    <th style="text-align:right;color:#fca5a5">Events Out</th>
     <th style="text-align:right">Net Flow</th>
     <th style="text-align:right">CPF Total</th>
   </tr></thead>
@@ -8471,8 +8626,10 @@ ${estimatedTaxSavings > 0 ? `<div class="box" style="margin-top:8px;background:#
     <td style="text-align:right">${fc(ledgTot.voluntary)}</td>
     <td style="text-align:right">${fc(ledgTot.grants)}</td>
     <td style="text-align:right">${fc(ledgTot.interest)}</td>
+    <td style="text-align:right">${ledgTot.eventsIn > 0 ? fc(ledgTot.eventsIn) : '—'}</td>
     <td style="text-align:right">${fc(ledgTotIn)}</td>
     <td style="text-align:right">${fc(ledgTot.out)}</td>
+    <td style="text-align:right">${ledgTot.eventsOut > 0 ? fc(ledgTot.eventsOut) : '—'}</td>
     <td style="text-align:right">${ledgTotIn - ledgTot.out >= 0 ? '+' : ''}${fc(ledgTotIn - ledgTot.out)}</td>
     <td></td>
   </tr></tbody>
