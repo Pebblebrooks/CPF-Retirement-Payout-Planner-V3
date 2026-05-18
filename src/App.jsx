@@ -8045,7 +8045,7 @@ export default function App() {
         };
         return `<div class="chapter-break">
 <div class="sec-hdr" style="background:#eff6ff;border-left:4px solid #3b82f6">
-  <span class="sec-ico">📊</span><span class="sec-title">${hasSRSPdf ? '9' : '8'} &nbsp;·&nbsp; Scenario Comparison — ${scenarioLabelA || 'Scenario A'} vs Current</span>
+  <span class="sec-ico">📊</span><span class="sec-title">${(isRSSPdf && hasSRSPdf) ? '10' : (isRSSPdf || hasSRSPdf) ? '9' : '8'} &nbsp;·&nbsp; Scenario Comparison — ${scenarioLabelA || 'Scenario A'} vs Current</span>
 </div>
 <table style="margin-bottom:10px">
   <thead><tr>
@@ -8223,11 +8223,12 @@ ${yT2}${xT2}${paLineCmp}
   <div class="toc-row"><span>2. Charts — Accumulation &amp; Payout</span><span style="color:#64748b">Balance trajectory · private assets · life events · MC band · CPF LIFE payout · net worth</span></div>
   <div class="toc-row"><span>3. FRS Tracker &amp; Breakeven Analysis</span><span style="color:#64748b">BRS / FRS / ERS progress · payout age sensitivity</span></div>
   <div class="toc-row"><span>4. Retirement Strategy &amp; Income Streams</span><span style="color:#64748b">Income target · all streams · Gantt timeline</span></div>
-  <div class="toc-row"><span>5. Year-by-Year Projection</span><span style="color:#64748b">Key ages at 5-year intervals · XIRR yield · private assets · payout age highlighted</span></div>
+  <div class="toc-row"><span>5. Year-by-Year Projection</span><span style="color:#64748b">Key ages at 5-year intervals · CPF Rate % · XIRR yield · private assets · payout age highlighted</span></div>
   <div class="toc-row"><span>6. Cashflow Ledger</span><span style="color:#64748b">Annual inflows · outflows · life events in/out · net flow — matches Data Table</span></div>
   <div class="toc-row"><span>7. Sensitivity Analysis</span><span style="color:#64748b">Housing outflow × SA top-up grid</span></div>
-  ${hasSRSPdf ? '<div class="toc-row"><span>8. SRS Details</span><span style="color:#64748b">Supplementary Retirement Scheme trajectory</span></div>' : ''}
-  ${scenarioA ? `<div class="toc-row"><span>${hasSRSPdf ? '9' : '8'}. Scenario Comparison</span><span style="color:#64748b">Scenario A vs current — KPI diff table · CPF trajectory chart · key input changes</span></div>` : ''}
+  ${isRSSPdf ? '<div class="toc-row"><span>8. RSS Drawdown Analysis</span><span style="color:#64748b">RA drawdown curve · depletion age · CPF LIFE migration · per-year table</span></div>' : ''}
+  ${hasSRSPdf ? `<div class="toc-row"><span>${isRSSPdf ? '9' : '8'}. SRS Details</span><span style="color:#64748b">Supplementary Retirement Scheme trajectory</span></div>` : ''}
+  ${scenarioA ? `<div class="toc-row"><span>${(isRSSPdf && hasSRSPdf) ? '10' : (isRSSPdf || hasSRSPdf) ? '9' : '8'}. Scenario Comparison</span><span style="color:#64748b">Scenario A vs current — KPI diff table · CPF trajectory chart · key input changes</span></div>` : ''}
   <div class="toc-row"><span>Milestones &amp; Disclaimer</span><span style="color:#64748b">Alerts · balance snapshots · legal disclaimer</span></div>
 </div>
 
@@ -8408,8 +8409,10 @@ ${(() => {
 <div class="chapter-break">
 <div class="sec-hdr sec-hdr-teal"><span class="sec-ico">📈</span><span class="sec-title" style="color:#0e7490">2 &nbsp;·&nbsp; CPF Balance Accumulation (Age ${ca} to 95)</span></div>
 ${(() => {
-          // Area chart with stacked polygon fills
-          const chartRows = projection.filter(r => r.age % 2 === 0 || r.age === pa || r.age === ca || r.age === 55 || r.age === 95);
+          // Area chart with stacked polygon fills.
+          // Chart resolution: every year (was every 2 years — changed so single-year lump sums and
+          // life event spikes are not silently skipped between data points in the SVG chart).
+          const chartRows = projection.filter(r => r.age >= ca && r.age <= 95);
           // Include private assets in Y-axis scale
           const maxPriv = Math.max(...chartRows.map(r => r.privateAssets || 0)) || 0;
           const maxTotal = Math.max(...chartRows.map(r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0))) || 1;
@@ -8675,18 +8678,25 @@ ${(() => {
   </div>`;
 })()}
 <table style="font-size:8.5px">
-  <thead><tr><th>Age</th><th style="text-align:right">OA</th><th style="text-align:right">SA</th><th style="text-align:right">MA</th><th style="text-align:right">RA</th><th style="text-align:right">Total CPF</th><th style="text-align:right">Private Assets</th><th style="text-align:right">Net Worth</th></tr></thead>
+  <thead><tr><th>Age</th><th style="text-align:right">OA</th><th style="text-align:right">SA</th><th style="text-align:right">MA</th><th style="text-align:right">RA</th><th style="text-align:right">Total CPF</th><th style="text-align:right">Private Assets</th><th style="text-align:right">CPF Rate %</th><th style="text-align:right">XIRR %</th><th style="text-align:right">Net Worth</th></tr></thead>
   <tbody>${projection.filter(r => r.age % 5 === 0 || r.age === pa || r.age === ca || r.age === 55).map(r => {
     const ppR = ppByAgePdf.get(r.age) || {};
     const rowTotal = (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0);
     // G6 fix: fallback for pre-payout ages now includes SRS and private assets (matching projRowsData fix above).
     const nw = ppR[`${highlightPlan}NetWorth`] || (rowTotal + (inputs.includeProperty ? (r.propertyValue || 0) : 0) + (r.srsBalance || 0) + (r.privateAssets || 0));
     const priv = r.privateAssets || 0;
+    // CPF Rate %: blended effective rate = total interest credited ÷ total CPF balance (mirrors Data Table column)
+    const totalInt = (r.yearOaInterest || 0) + (r.yearSaRaInterest || 0) + (r.yearMaInterest || 0);
+    const effRate = rowTotal > 100 ? (totalInt / rowTotal * 100).toFixed(2) + '%' : '—';
+    // XIRR %: use xirrByAge if available (populated when Data Table tab was active); only meaningful at payout age+
+    const xirrVal = r.age >= pa ? (xirrByAge[highlightPlan]?.[r.age] ?? pdfXirrByPlan[highlightPlan]?.[r.age]) : null;
+    const xirrStr = xirrVal != null ? xirrVal.toFixed(2) + '%' : r.age >= pa ? '—' : '';
     const isPA = r.age === pa;
     const bg = isPA ? '#e8f5e9' : (r.age % 10 === 0 ? '#f8fafc' : '#fff');
-    return `<tr style="background:${bg}"><td style="font-weight:${isPA?'700':'400'}">${r.age}${isPA?' ◄':''}</td><td style="text-align:right;color:#1d4ed8">${fc(r.oa)}</td><td style="text-align:right;color:#475569">${fc(r.sa||0)}</td><td style="text-align:right;color:#7c3aed">${fc(r.ma)}</td><td style="text-align:right;color:#059669">${fc(r.ra)}</td><td style="text-align:right;font-weight:700;color:#0369a1">${fc(rowTotal)}</td><td style="text-align:right;color:#166534">${priv > 0 ? fc(priv) : '—'}</td><td style="text-align:right;font-weight:600;color:#334155">${fc(nw)}</td></tr>`;
+    return `<tr style="background:${bg}"><td style="font-weight:${isPA?'700':'400'}">${r.age}${isPA?' ◄':''}</td><td style="text-align:right;color:#1d4ed8">${fc(r.oa)}</td><td style="text-align:right;color:#475569">${fc(r.sa||0)}</td><td style="text-align:right;color:#7c3aed">${fc(r.ma)}</td><td style="text-align:right;color:#059669">${fc(r.ra)}</td><td style="text-align:right;font-weight:700;color:#0369a1">${fc(rowTotal)}</td><td style="text-align:right;color:#166534">${priv > 0 ? fc(priv) : '—'}</td><td style="text-align:right;color:#0e7490">${effRate}</td><td style="text-align:right;color:${xirrVal != null ? (xirrVal >= 4 ? '#166534' : xirrVal >= 2 ? '#b45309' : '#991b1b') : '#94a3b8'}">${xirrStr || '—'}</td><td style="text-align:right;font-weight:600;color:#334155">${fc(nw)}</td></tr>`;
   }).join('')}</tbody>
 </table>
+<p style="font-size:7.5px;color:#64748b;margin:4px 0 0">CPF Rate %: blended effective rate = total interest credited ÷ total CPF balance that year. &nbsp;XIRR %: annualised return on all contributions at that age — only shown from payout age onwards where CPF LIFE payouts form part of the cashflow. Green ≥4% · amber 2–4% · red &lt;2%. &nbsp;Full per-year cashflow is in Section 6.</p>
 </div>
 
 <!-- ═══════════════════ 6. CASHFLOW LEDGER ═══════════════════════════════ -->
@@ -8736,8 +8746,84 @@ ${(() => {
 </div>
 
 <!-- ═══════════════════ 8. SRS DETAILS (if applicable) ══════════════════ -->
+${/* RSS section — only rendered when isRSSPdf (CPF Scheme = RSS). Shows RA drawdown curve, depletion age,
+   migration analysis, and per-year drawdown table. Replaces the CPF LIFE payout analysis for RSS members. */
+isRSSPdf ? (() => {
+  const rssStartAge  = Number(inputs.rssPayoutStartAge) || 65;
+  const rssMonthly   = Number(inputs.rssMonthlyPayout)  || 0;
+  const rssAnnual    = rssMonthly * 12;
+  const migAge       = Number(inputs.lifeMigrationAge)  || 0;
+  // Find depletion age from projection data (rssDepletionAge field written by engine)
+  const rssDepRow    = projection.find(r => r.rssDepletionAge != null && r.rssDepletionAge > 0);
+  const depAge       = rssDepRow?.rssDepletionAge || null;
+  // RA balance over payout years for the drawdown SVG chart
+  const rssChartRows = projection.filter(r => r.age >= rssStartAge && r.age <= 95);
+  const rssMaxRA     = Math.max(...rssChartRows.map(r => r.ra || 0)) || 1;
+  const W2=680, H2=150, PL2=55, PB2=24, PT2=10, PR2=10, CW2=W2-PL2-PR2, CH2=H2-PB2-PT2;
+  const baseY2 = H2 - PB2;
+  const rssXs   = rssChartRows.map((_, i) => PL2 + (rssChartRows.length > 1 ? (i / (rssChartRows.length - 1)) : 0.5) * CW2);
+  const rssRaPts = rssChartRows.map((r, i) => `${rssXs[i]},${baseY2 - Math.round(((r.ra || 0) / rssMaxRA) * CH2)}`).join(' ');
+  const fmt4 = v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'k' : String(Math.round(v));
+  const rssYTicks = [0, 0.5, 1].map(t => {
+    const y = PT2 + CH2 - Math.round(t * CH2);
+    return `<line x1="${PL2-4}" y1="${y}" x2="${W2-PR2}" y2="${y}" stroke="#e8eef4" stroke-width="0.5"/><text x="${PL2-6}" y="${y+3}" text-anchor="end" font-size="7" fill="#94a3b8">${fmt4(t * rssMaxRA)}</text>`;
+  }).join('');
+  const rssAgeLabels = rssChartRows.filter((r,i) => r.age % 5 === 0 || i === 0 || i === rssChartRows.length-1).map((r,_i) => {
+    const idx = rssChartRows.indexOf(r);
+    return `<text x="${rssXs[idx]}" y="${baseY2+14}" text-anchor="middle" font-size="7" fill="#94a3b8">${r.age}</text>`;
+  }).join('');
+  const depLine = depAge != null ? (() => {
+    const dIdx = rssChartRows.findIndex(r => r.age === depAge);
+    return dIdx >= 0 ? `<line x1="${rssXs[dIdx]}" y1="${PT2}" x2="${rssXs[dIdx]}" y2="${baseY2}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.8"/>
+<text x="${rssXs[dIdx]+2}" y="${PT2+9}" font-size="7" fill="#ef4444" font-weight="700">Depletes Age ${depAge}</text>` : '';
+  })() : '';
+  const migLine = migAge > 0 ? (() => {
+    const mIdx = rssChartRows.findIndex(r => r.age === migAge);
+    return mIdx >= 0 ? `<line x1="${rssXs[mIdx]}" y1="${PT2}" x2="${rssXs[mIdx]}" y2="${baseY2}" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.8"/>
+<text x="${rssXs[mIdx]+2}" y="${PT2+18}" font-size="7" fill="#a855f7" font-weight="700">Migrate Age ${migAge}</text>` : '';
+  })() : '';
+  // Per-year drawdown table (every 5 years + depletion age)
+  const rssTableRows = rssChartRows.filter(r => r.age % 5 === 0 || r.age === depAge || r.age === rssStartAge || r.age === migAge).map(r => {
+    const isDep = r.age === depAge;
+    const isMig = migAge > 0 && r.age === migAge;
+    return `<tr style="background:${isDep ? '#fef2f2' : isMig ? '#faf5ff' : ''}">
+      <td style="font-weight:${isDep||isMig?'700':'400'};padding:4px 6px">${r.age}${isDep?' 🔴 Depleted':''}${isMig?' 🟣 Migrates':''}</td>
+      <td style="text-align:right;padding:4px 6px;color:#059669;font-weight:700">${fc(r.ra || 0)}</td>
+      <td style="text-align:right;padding:4px 6px;color:#991b1b">${r.age >= rssStartAge && !isDep ? fc(rssAnnual) : '—'}</td>
+      <td style="text-align:right;padding:4px 6px;color:#0369a1">${fc((r.yearOaInterest||0)+(r.yearSaRaInterest||0)+(r.yearMaInterest||0))}</td>
+    </tr>`;
+  }).join('');
+  const sectionNum = hasSRSPdf ? '8' : '8'; // RSS is always Section 8 (SRS can't coexist with RSS)
+  return `<div class="section-break">
+<div class="sec-hdr" style="background:linear-gradient(90deg,#0e7490,#0369a1);"><span class="sec-ico">📊</span><span class="sec-title" style="color:#fff">${sectionNum} &nbsp;·&nbsp; Retirement Sum Scheme (RSS) — Drawdown Analysis</span></div>
+<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="kpi"><div class="kpi-label">RSS Monthly Payout</div><div class="kpi-value" style="color:#059669;font-size:14px">${fc(rssMonthly)}/mo</div><div style="font-size:7px;color:#64748b">From age ${rssStartAge}</div></div>
+  <div class="kpi"><div class="kpi-label">RA at Payout Start</div><div class="kpi-value" style="color:#0369a1;font-size:14px">${fc(projByAgePdf.get(rssStartAge)?.ra || 0)}</div></div>
+  <div class="kpi" style="border-color:${depAge ? '#ef4444' : '#22c55e'}"><div class="kpi-label">RA Depletion Age</div><div class="kpi-value" style="color:${depAge ? '#dc2626' : '#16a34a'};font-size:14px">${depAge ? `Age ${depAge}` : '> Age 95'}</div><div style="font-size:7px;color:#64748b">${depAge ? 'Consider migrating to CPF LIFE before age 80' : 'Balance sustains past 95'}</div></div>
+  <div class="kpi" style="border-color:${migAge > 0 ? '#a855f7' : '#e2e8f0'}"><div class="kpi-label">CPF LIFE Migration</div><div class="kpi-value" style="font-size:14px;color:${migAge > 0 ? '#7c3aed' : '#94a3b8'}">${migAge > 0 ? `Age ${migAge}` : 'Not planned'}</div><div style="font-size:7px;color:#64748b">${migAge > 0 ? `Plan: ${(inputs.lifePlanAtMigration || 'standard').charAt(0).toUpperCase()+(inputs.lifePlanAtMigration||'standard').slice(1)}` : 'Voluntary up to age 80'}</div></div>
+</div>
+<div class="chart-wrap"><svg viewBox="0 0 ${W2} ${H2}" width="100%" height="auto" style="display:block;border:1px solid #e8eef4;border-radius:6px;background:#fafafa">
+${rssYTicks}
+<polyline points="${rssRaPts}" fill="none" stroke="#059669" stroke-width="2" opacity="0.9"/>
+<polygon points="${rssChartRows.map((r,i) => `${rssXs[i]},${baseY2 - Math.round(((r.ra||0)/rssMaxRA)*CH2)}`).join(' ')} ${rssXs[rssXs.length-1]},${baseY2} ${rssXs[0]},${baseY2}" fill="#059669" opacity="0.15"/>
+${depLine}${migLine}
+${rssAgeLabels}
+<text x="${PL2}" y="${baseY2+22}" font-size="7" fill="#94a3b8">Age</text>
+</svg>
+<div style="font-size:8px;color:#64748b;margin-top:3px">
+  <span style="color:#059669;font-weight:700">⎯ RA Balance (RSS drawdown)</span>
+  ${depAge ? `&nbsp;·&nbsp;<span style="color:#ef4444">⎯ ⎯ Depletion at Age ${depAge}</span>` : ''}
+  ${migAge > 0 ? `&nbsp;·&nbsp;<span style="color:#a855f7">⎯ ⎯ CPF LIFE Migration at Age ${migAge}</span>` : ''}
+</div></div>
+<table style="font-size:8.5px;margin-top:8px">
+  <thead><tr><th>Age</th><th style="text-align:right">RA Balance</th><th style="text-align:right">Annual Drawdown</th><th style="text-align:right">Interest Credited</th></tr></thead>
+  <tbody>${rssTableRows}</tbody>
+</table>
+</div>`;
+})() : ''}
+
 ${hasSRSPdf && srsTableRows ? `<div class="section-break">
-<div class="sec-hdr sec-hdr-blue"><span class="sec-ico">🏦</span><span class="sec-title" style="color:#1e40af">8 &nbsp;·&nbsp; SRS — Supplementary Retirement Scheme</span></div>
+<div class="sec-hdr sec-hdr-blue"><span class="sec-ico">🏦</span><span class="sec-title" style="color:#1e40af">${isRSSPdf ? '9' : '8'} &nbsp;·&nbsp; SRS — Supplementary Retirement Scheme</span></div>
 <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
   <div class="kpi"><div class="kpi-label">SRS Balance @ Payout Age ${pa}</div><div class="kpi-value" style="color:#0369a1;font-size:13px">${fc(srsBalPdf2)}</div></div>
   <div class="kpi"><div class="kpi-label">Drawdown: ${srsYearsPdf2} yrs from Age ${srsStartPdf2}</div><div class="kpi-value" style="color:#0369a1;font-size:13px">${fc(srsMoPdf2)}/mo</div></div>
