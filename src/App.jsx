@@ -7737,7 +7737,55 @@ export default function App() {
       // Milestone rows
       const msRows = milestones.map(m => `<tr><td style="padding:5px 8px;font-weight:700">${m.age}</td><td style="padding:5px 8px">${m.label}</td><td style="padding:5px 8px;color:#475569">${m.detail}</td></tr>`).join("");
 
-      // Payout-age sensitivity: 6 engine runs pre-computed here (async, yielding after every call)
+      // Milestone Snapshots — balance callout table for user-set milestone ages (milestoneAge 1-5)
+      // Mirrors the "Milestone Snapshots" section in the Summary tab UI.
+      const msAges = [
+        Number(inputs.milestoneAge)  || 0,
+        Number(inputs.milestoneAge2) || 0,
+        Number(inputs.milestoneAge3) || 0,
+        Number(inputs.milestoneAge4) || 0,
+        Number(inputs.milestoneAge5) || 0,
+      ].filter(a => a > 0 && a >= ca && a <= 95);
+      const uniqueMsAges = [...new Set(msAges)].sort((a, b) => a - b);
+      const milestoneSnapshotHtml = uniqueMsAges.length > 0 ? (() => {
+        const snapRows = uniqueMsAges.map(mAge => {
+          const r = projByAgePdf.get(mAge) || {};
+          const mOA   = r.oa  || 0;
+          const mSA   = r.sa  || 0;
+          const mMA   = r.ma  || 0;
+          const mRA   = r.ra  || 0;
+          const mSRS  = r.srsBalance    || 0;
+          const mPriv = r.privateAssets || 0;
+          const mTotal = mOA + mSA + mMA + mRA + mSRS + mPriv;
+          const isPA = mAge === pa;
+          return `<tr style="background:${isPA ? '#e8f5e9' : ''}">
+            <td style="font-weight:800;padding:5px 8px">${mAge}${isPA ? ' ◄' : ''}</td>
+            <td style="text-align:right;padding:5px 8px;color:#1d4ed8">${fc(mOA)}</td>
+            <td style="text-align:right;padding:5px 8px;color:#475569">${fc(mSA + mRA)}</td>
+            <td style="text-align:right;padding:5px 8px;color:#7c3aed">${fc(mMA)}</td>
+            ${mSRS  > 0 ? `<td style="text-align:right;padding:5px 8px;color:#0369a1">${fc(mSRS)}</td>`  : '<td style="text-align:right;padding:5px 8px;color:#94a3b8">—</td>'}
+            ${mPriv > 0 ? `<td style="text-align:right;padding:5px 8px;color:#166534">${fc(mPriv)}</td>` : '<td style="text-align:right;padding:5px 8px;color:#94a3b8">—</td>'}
+            <td style="text-align:right;padding:5px 8px;font-weight:800;color:#0369a1">${fc(mTotal)}</td>
+          </tr>`;
+        }).join('');
+        return `
+<h3 style="margin-top:12px;color:#0e7490;font-size:10px">🎯 Milestone Balance Snapshots</h3>
+<p style="font-size:7.5px;color:#64748b;margin:0 0 5px">Projected balances at your tracked milestone ages. SA and RA are combined (SA converts to RA at age 55). ◄ marks your selected payout age.</p>
+<table style="font-size:8.5px">
+  <thead><tr>
+    <th>Age</th>
+    <th style="text-align:right">OA</th>
+    <th style="text-align:right">SA / RA</th>
+    <th style="text-align:right">MA</th>
+    <th style="text-align:right">SRS</th>
+    <th style="text-align:right">Private</th>
+    <th style="text-align:right">Total</th>
+  </tr></thead>
+  <tbody>${snapRows}</tbody>
+</table>`;
+      })() : '';
+
+
       // so the template literal below can simply reference payAgeSensHtml as a plain string.
       // Fix 3: skip entirely for RSS members — CPF LIFE payout interpolation has no meaning for RSS.
       const isMalePdf = inputs.isMale !== false;
@@ -7891,8 +7939,13 @@ export default function App() {
         const stdMonthlyA = Math.round(interpolateCpfLife(raA, 'std', isMalePdf));
         const stdMonthlyCur = stdMonthly;
         const monthlyDiff = stdMonthlyCur - stdMonthlyA;
-        // Net worth at 95: OA + SA + RA + MA from projection (excl. CPF LIFE payout which needs full payoutProjection)
-        const nw95A = (row95A.oa || 0) + (row95A.sa || 0) + (row95A.ma || 0) + (row95A.ra || 0);
+        // Net worth at 95: CPF balances + private assets + property + SRS — mirrors nwAt95 formula
+        // so both sides of the comparison use the same asset scope.
+        const scAInputs = scenarioA.inputs || {};
+        const nw95A = (row95A.oa || 0) + (row95A.sa || 0) + (row95A.ma || 0) + (row95A.ra || 0)
+          + (row95A.privateAssets || 0)
+          + ((scAInputs.includeProperty ? row95A.propertyValue : 0) || 0)
+          + (row95A.srsBalance || 0);
         const nw95Cur = nwAt95;
         const nw95Diff = nw95Cur - nw95A;
         const keyDiffs = Object.keys(inputs).filter(k => {
@@ -7919,7 +7972,7 @@ export default function App() {
         };
         return `<div class="chapter-break">
 <div class="sec-hdr" style="background:#eff6ff;border-left:4px solid #3b82f6">
-  <span class="sec-ico">📊</span><span class="sec-title">9 &nbsp;·&nbsp; Scenario Comparison — ${scenarioLabelA || 'Scenario A'} vs Current</span>
+  <span class="sec-ico">📊</span><span class="sec-title">${hasSRSPdf ? '9' : '8'} &nbsp;·&nbsp; Scenario Comparison — ${scenarioLabelA || 'Scenario A'} vs Current</span>
 </div>
 <table style="margin-bottom:10px">
   <thead><tr>
@@ -8056,12 +8109,12 @@ ${keyDiffs.length > 0 ? `<h3 style="margin-top:8px">Key Input Differences</h3><t
   <div class="toc-row"><span>2. Charts — Accumulation &amp; Payout</span><span style="color:#64748b">Balance trajectory · CPF LIFE payout curves · net worth</span></div>
   <div class="toc-row"><span>3. FRS Tracker &amp; Breakeven Analysis</span><span style="color:#64748b">BRS / FRS / ERS progress · payout age sensitivity</span></div>
   <div class="toc-row"><span>4. Retirement Strategy &amp; Income Streams</span><span style="color:#64748b">Income target · all streams · Gantt timeline</span></div>
-  <div class="toc-row"><span>5. Year-by-Year Projection</span><span style="color:#64748b">Full projection table · all ages ${ca}–95</span></div>
+  <div class="toc-row"><span>5. Year-by-Year Projection</span><span style="color:#64748b">Key ages at 5-year intervals · payout age highlighted</span></div>
   <div class="toc-row"><span>6. Cashflow Ledger</span><span style="color:#64748b">Annual inflows · outflows · net flow</span></div>
   <div class="toc-row"><span>7. Sensitivity Analysis</span><span style="color:#64748b">Housing outflow × SA top-up grid</span></div>
   ${hasSRSPdf ? '<div class="toc-row"><span>8. SRS Details</span><span style="color:#64748b">Supplementary Retirement Scheme trajectory</span></div>' : ''}
-  ${scenarioA ? '<div class="toc-row"><span>9. Scenario Comparison</span><span style="color:#64748b">Scenario A vs current inputs</span></div>' : ''}
-  <div class="toc-row"><span>Milestones &amp; Disclaimer</span><span style="color:#64748b">Alerts · legal disclaimer</span></div>
+  ${scenarioA ? `<div class="toc-row"><span>${hasSRSPdf ? '9' : '8'}. Scenario Comparison</span><span style="color:#64748b">Scenario A vs current inputs</span></div>` : ''}
+  <div class="toc-row"><span>Milestones &amp; Disclaimer</span><span style="color:#64748b">Alerts · balance snapshots · legal disclaimer</span></div>
 </div>
 
 <!-- ═══════════════════ 1. INPUT PARAMETERS & SUMMARY ══════════════════ -->
@@ -8381,7 +8434,7 @@ ${estimatedTaxSavings > 0 ? `<div class="box" style="margin-top:8px;background:#
 <!-- ═══════════════════ 5. YEAR-BY-YEAR PROJECTION ══════════════════════ -->
 <div class="chapter-break">
 <div class="sec-hdr sec-hdr-green"><span class="sec-ico">📋</span><span class="sec-title" style="color:#065f46">5 &nbsp;·&nbsp; Year-by-Year Projection (Age ${ca} to 95)</span></div>
-<p style="font-size:8px;color:#64748b;margin:0 0 6px">Full projection · green row = payout age ${pa} · all values in ${isRealDollars ? 'real (inflation-adjusted)' : 'nominal'} dollars</p>
+<p style="font-size:8px;color:#64748b;margin:0 0 6px">Key ages at 5-year intervals + age 55 + payout age · green row = payout age ${pa} · all values in ${isRealDollars ? 'real (inflation-adjusted)' : 'nominal'} dollars · see Section 6 for full year-by-year cashflow</p>
 <table style="font-size:8.5px">
   <thead><tr><th>Age</th><th style="text-align:right">OA</th><th style="text-align:right">SA</th><th style="text-align:right">MA</th><th style="text-align:right">RA</th><th style="text-align:right">Total CPF</th><th style="text-align:right">Net Worth</th></tr></thead>
   <tbody>${projection.filter(r => r.age % 5 === 0 || r.age === pa || r.age === ca || r.age === 55).map(r => {
@@ -8434,7 +8487,7 @@ ${estimatedTaxSavings > 0 ? `<div class="box" style="margin-top:8px;background:#
   <thead><tr><th>Housing \ SA/RA Top-up</th>${uniqueSaCols.map(s => `<th style="text-align:right">${fc(s)}</th>`).join('')}</tr></thead>
   <tbody>${sensRowsFixed}</tbody>
 </table>
-<p style="font-size:7.5px;color:#94a3b8;margin-top:4px">All other inputs held constant. Each cell is an independent projection run. Sensitivity shows impact of ±${fc(3000)}/yr housing change and ±${fc(2000)}/yr RSTU change.</p>
+<p style="font-size:7.5px;color:#94a3b8;margin-top:4px">All other inputs held constant. Each cell is an independent projection run. Rows: housing outflow ±${fc(3000)}/yr from base ${fc(baseH)}. Columns: RSTU top-up ${baseSATopup > 0 ? `±${fc(2000)}/yr from base ${fc(baseSATopup)}` : `+${fc(2000)} / +${fc(4000)} (base is $0 — no negative variation possible)`}.</p>
 </div>
 
 <!-- ═══════════════════ 8. SRS DETAILS (if applicable) ══════════════════ -->
@@ -8456,11 +8509,12 @@ ${compareHtml}
 
 <!-- ═══════════════════ MILESTONES & DISCLAIMER ══════════════════════════ -->
 <div class="section-break">
-<div class="sec-hdr sec-hdr-amber"><span class="sec-ico">⚠️</span><span class="sec-title" style="color:#92400e">Milestone Alerts</span></div>
-${milestones.length > 0 ? `<table>
+<div class="sec-hdr sec-hdr-amber"><span class="sec-ico">⚠️</span><span class="sec-title" style="color:#92400e">Milestones</span></div>
+${milestones.length > 0 ? `<h3 style="margin-top:0;margin-bottom:4px;font-size:10px;color:#92400e">Milestone Alerts</h3><table>
   <thead><tr><th>Age</th><th>Event</th><th>Details</th></tr></thead>
   <tbody>${msRows}</tbody>
 </table>` : '<p style="color:#64748b;font-style:italic;font-size:9px">No milestone alerts detected for current inputs.</p>'}
+${milestoneSnapshotHtml}
 </div>
 
 <div class="disclaimer">
