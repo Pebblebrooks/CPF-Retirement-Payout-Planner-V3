@@ -766,7 +766,7 @@ const PRESET_PROFILES = [
       // ── Primary member: Wei Ming, 38, SC male ────────────────────────────
       name: "Wei Ming", currentAge: 38, currentYear: 2026, payoutAge: 65,
       contributionStopAge: 65, housingStopAge: 55,
-      isMale: true, citizenStatus: "sc", prYear: 3, prRateType: "GG",
+      isMale: true, citizenStatus: "SC", prYear: 3, prRateType: "GG",
       isSelfEmployed: false,
       // CPF balances — typical 38yo with 15 yrs working history
       oaBalance: 98000, saBalance: 62000, maBalance: 42000,
@@ -816,7 +816,7 @@ const PRESET_PROFILES = [
       // ── Spouse: Hui Ling, 36, SC female ─────────────────────────────────
       name: "Hui Ling", currentAge: 36, currentYear: 2026, payoutAge: 65,
       contributionStopAge: 65, housingStopAge: 55,
-      isMale: false, citizenStatus: "sc", prYear: 3, prRateType: "GG",
+      isMale: false, citizenStatus: "SC", prYear: 3, prRateType: "GG",
       isSelfEmployed: false,
       // CPF balances — 36yo, slightly lower due to career break in late 20s
       oaBalance: 68000, saBalance: 44000, maBalance: 36000,
@@ -10111,6 +10111,12 @@ ${milestones.length > 0 ? `<table>
                     setActiveTab("household");
                   } else {
                     setHouseholdEnabled(false);
+                    // NEW-BUG-1 fix: reset activeTab to "summary" whenever a non-household
+                    // sample is loaded. Without this, activeTab remains "household" from the
+                    // prior household-sample load (line above sets it). Since householdEnabled
+                    // is now false, the "household" tab is absent from the nav array and the
+                    // content block for it is suppressed — leaving the panel completely blank.
+                    setActiveTab("summary");
                     setSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
                     setDebouncedSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
                     setHousingSharePct(50);
