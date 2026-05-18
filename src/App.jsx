@@ -8105,6 +8105,262 @@ ${yT2}${xT2}${paLineCmp}
 </div>`;
       })();
 
+      // ── Household PDF section ───────────────────────────────────────────────
+      // Rendered only when householdEnabled and spouse projection data exists.
+      // Section number is appended after RSS / SRS / Scenario Comparison so those
+      // existing section numbers are not touched at all.
+      const hhSectionNum = 8 + (isRSSPdf ? 1 : 0) + (hasSRSPdf ? 1 : 0) + (scenarioA ? 1 : 0);
+      const householdPdfHtml = (() => {
+        if (!householdEnabled || !spouseProjection.length || !displayHouseholdData?.length) return '';
+        const pName  = inputs.name || 'Primary';
+        const sName  = debouncedSpouseInputs.name || 'Spouse';
+        const pPA    = payoutAge65;
+        const sPA    = spousePayoutAge;
+        const pCA    = ca;
+        const sCA    = Number(debouncedSpouseInputs.currentAge) || 35;
+        const combinedPA = Math.max(pPA, sPA);
+
+        // Plan key mapping (mirrors in-app HH-5 logic)
+        const PLAN_KEY_MAP = { standard: 'Std', escalating: 'Esc', basic: 'Bas' };
+        const pPlanKey     = PLAN_KEY_MAP[primaryLifePlan]  || 'Std';
+        const sPlanKey     = PLAN_KEY_MAP[spouseLifePlan]   || 'Std';
+        const pPlanLabel   = primaryLifePlan.charAt(0).toUpperCase() + primaryLifePlan.slice(1);
+        const sPlanLabel   = spouseLifePlan.charAt(0).toUpperCase()  + spouseLifePlan.slice(1);
+
+        // KPI balances at each member's payout age using displayHouseholdByAge (already deflated)
+        const hAtCombinedPA = displayHouseholdByAge.get(combinedPA) || {};
+        const hAt95         = displayHouseholdByAge.get(95)         || {};
+        const pTotal        = (displayHouseholdByAge.get(pPA) || {}).primaryTotal || 0;
+        const sTotal        = (displayHouseholdByAge.get(sPA) || {}).spouseTotal  || 0;
+        const combinedTotal = hAtCombinedPA.combinedTotal || 0;
+
+        // Combined CPF LIFE monthly (nominal from householdByAge, then deflated via applyInflation)
+        const hhNomRow  = householdByAge.get(combinedPA) || {};
+        const pLifeNom  = hhNomRow[`pLife${pPlanKey}`] || 0;
+        const sLifeNom  = hhNomRow[`sLife${sPlanKey}`] || 0;
+        const pLifeReal = Math.round(applyInflation(pLifeNom, pPA, pCA));
+        const sLifeReal = Math.round(applyInflation(sLifeNom, sPA, sCA));
+        const pOaDraw   = Number(inputs.oaDrawdownMonthly)            || 0;
+        const sOaDraw   = Number(debouncedSpouseInputs.oaDrawdownMonthly) || 0;
+        const combinedMonthly = pLifeReal + sLifeReal + pOaDraw + sOaDraw;
+
+        // FRS helpers per member
+        const rsGrowth  = (Number(inputs.retirementSumGrowth) || 3) / 100;
+        const pFrsAtPA  = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, Math.max(0, pPA - pCA) + (cy - 2026)));
+        const sFrsAtPA  = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, Math.max(0, sPA - sCA) + (cy - 2026)));
+        const pSaRaAtPA = (spouseAccumulationByAge.get ? accumulationByAge.get(pPA)?.sa || 0 : 0);
+        const sSaRaAtPA = spouseAccumulationByAge.get?.(sPA)?.sa || 0;
+        const pFrsPct   = Math.min(100, pFrsAtPA > 0 ? Math.round((pSaRaAtPA / pFrsAtPA) * 100) : 0);
+        const sFrsPct   = Math.min(100, sFrsAtPA > 0 ? Math.round((sSaRaAtPA / sFrsAtPA) * 100) : 0);
+        const pFrsCol   = pFrsPct >= 100 ? '#166534' : pFrsPct >= 60 ? '#92400e' : '#dc2626';
+        const sFrsCol   = sFrsPct >= 100 ? '#166534' : sFrsPct >= 60 ? '#92400e' : '#dc2626';
+
+        // Member detail boxes (OA / SA-RA / MA / Total)
+        const memberBox = (name, proj, projByAge, pa_, ca_, planKey, planLabel, lifeMo, oaDraw_, frsPct_, frsCol_, gender, cs) => {
+          const atPA = projByAge?.get(pa_) || {};
+          const oa_  = atPA.oa  || 0;
+          const sa_  = atPA.sa  || 0;
+          const ma_  = atPA.ma  || 0;
+          const tot_ = oa_ + sa_ + ma_;
+          const frsAtAge = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, Math.max(0, pa_ - ca_) + (cy - 2026)));
+          const headroom_ = Math.max(0, frsAtAge - sa_);
+          return `<div class="box">
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+    <div style="width:28px;height:28px;border-radius:50%;background:rgba(139,92,246,0.1);display:flex;align-items:center;justify-content:center;font-size:13px">👤</div>
+    <div>
+      <div style="font-size:10px;font-weight:800;color:#1e3a5f">${name}</div>
+      <div style="font-size:8px;color:#64748b">${cs} · ${gender} · Age ${ca_} · Payout ${pa_} · ${planLabel} Plan</div>
+    </div>
+  </div>
+  <table style="font-size:8.5px;margin:0 0 7px">
+    <tr><td style="padding:3px 0;color:#64748b">OA</td><td style="text-align:right;font-weight:700;color:#1d4ed8">${fc(oa_)}</td></tr>
+    <tr><td style="padding:3px 0;color:#64748b">SA / RA</td><td style="text-align:right;font-weight:700;color:#475569">${fc(sa_)}</td></tr>
+    <tr><td style="padding:3px 0;color:#64748b">MA</td><td style="text-align:right;font-weight:700;color:#7c3aed">${fc(ma_)}</td></tr>
+    <tr style="border-top:1px solid #e2e8f0"><td style="padding:4px 0 2px;font-weight:800">Total CPF @ ${pa_}</td><td style="text-align:right;font-weight:800;color:#0369a1">${fc(tot_)}</td></tr>
+  </table>
+  <div style="margin-bottom:5px">
+    <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:3px">
+      <span style="color:#64748b;text-transform:uppercase;letter-spacing:0.04em">FRS progress @ ${pa_}</span>
+      <span style="font-weight:800;color:${frsCol_}">${frsPct_}%${headroom_ > 0 ? ' · gap ' + fc(headroom_) : ' ✓'}</span>
+    </div>
+    <div style="background:#e2e8f0;border-radius:3px;height:7px;overflow:hidden"><div style="width:${frsPct_}%;height:100%;background:${frsCol_};border-radius:3px"></div></div>
+  </div>
+  <div style="border-top:1px solid #e2e8f0;padding-top:5px;display:flex;flex-direction:column;gap:2px">
+    <div style="display:flex;justify-content:space-between;font-size:8.5px">
+      <span style="color:#64748b">CPF LIFE (${planLabel})</span>
+      <span style="font-weight:700;color:#059669">${lifeMo > 0 ? fc(lifeMo) + '/mo' : '—'}</span>
+    </div>
+    ${oaDraw_ > 0 ? `<div style="display:flex;justify-content:space-between;font-size:8.5px"><span style="color:#64748b">OA Drawdown</span><span style="font-weight:700;color:#1d4ed8">${fc(oaDraw_)}/mo</span></div>` : ''}
+    <div style="display:flex;justify-content:space-between;font-size:8.5px;padding-top:2px;border-top:1px dashed #e2e8f0;margin-top:1px">
+      <span style="font-weight:700;color:#334155">Total Monthly</span>
+      <span style="font-weight:800;color:#0369a1">${fc(lifeMo + oaDraw_)}/mo</span>
+    </div>
+  </div>
+</div>`;
+        };
+
+        const pGender = inputs.isMale !== false ? 'Male' : 'Female';
+        const sGender = debouncedSpouseInputs.isMale !== false ? 'Male' : 'Female';
+        const pCS     = (inputs.citizenStatus || 'SC').toUpperCase();
+        const sCS     = (debouncedSpouseInputs.citizenStatus || 'SC').toUpperCase();
+
+        // ── Combined accumulation SVG chart ─────────────────────────────────
+        const chartRows = displayHouseholdData.filter(r => r.age >= Math.min(pCA, sCA) && r.age <= 95);
+        const chartSvg = (() => {
+          if (chartRows.length < 2) return '';
+          const W = 680, H = 170, PL = 62, PB = 26, PT = 10, PR = 10;
+          const CW = W - PL - PR, CH = H - PT - PB, n = chartRows.length;
+          const maxY = Math.max(1, ...chartRows.map(r => Math.max(r.primaryTotal || 0, r.spouseTotal || 0, r.combinedTotal || 0)));
+          const xOf  = idx => PL + idx * (CW / (n - 1));
+          const yOf  = val => PT + CH - Math.round(Math.max(0, val) / maxY * CH);
+          const fmt5 = v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'k' : String(Math.round(v));
+          const yTks = [0, 0.25, 0.5, 0.75, 1].map(t => {
+            const y = PT + CH - Math.round(t * CH);
+            return `<line x1="${PL-4}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#e8eef4" stroke-width="0.5"/><text x="${PL-6}" y="${y+3}" text-anchor="end" font-size="7" fill="#94a3b8">${fmt5(Math.round(t * maxY))}</text>`;
+          }).join('');
+          const xTks = chartRows.filter((_, i) => i % Math.ceil(n / 12) === 0 || chartRows[i].age === 95).map((r, _, arr) => {
+            const i = chartRows.indexOf(r);
+            return `<text x="${xOf(i)}" y="${PT+CH+14}" text-anchor="middle" font-size="7" fill="#94a3b8">${r.age}</text>`;
+          }).join('');
+          const polyLine = (key, color, dash) => {
+            const pts = chartRows.map((r, i) => `${xOf(i)},${yOf(r[key] || 0)}`).join(' ');
+            return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" opacity="0.9"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
+          };
+          // PA marker lines for both members
+          const pPAIdx = chartRows.findIndex(r => r.age === pPA);
+          const sPAIdx = chartRows.findIndex(r => r.age === sPA);
+          const paLines = [
+            pPAIdx >= 0 ? `<line x1="${xOf(pPAIdx)}" y1="${PT}" x2="${xOf(pPAIdx)}" y2="${PT+CH}" stroke="#1d4ed8" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.6"/><text x="${xOf(pPAIdx)+2}" y="${PT+9}" font-size="6.5" fill="#1d4ed8" font-weight="700">${pName} PA</text>` : '',
+            sPAIdx >= 0 && sPA !== pPA ? `<line x1="${xOf(sPAIdx)}" y1="${PT}" x2="${xOf(sPAIdx)}" y2="${PT+CH}" stroke="#8b5cf6" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.6"/><text x="${xOf(sPAIdx)+2}" y="${PT+18}" font-size="6.5" fill="#8b5cf6" font-weight="700">${sName} PA</text>` : '',
+          ].join('');
+          return `<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" width="100%" height="auto" style="display:block;border:1px solid #e8eef4;border-radius:6px;background:#fafafa">
+${yTks}${xTks}
+${polyLine('primaryTotal',  '#1d4ed8', '')}
+${polyLine('spouseTotal',   '#8b5cf6', '')}
+${polyLine('combinedTotal', '#059669', '5,3')}
+${paLines}
+</svg>
+<div style="display:flex;gap:14px;font-size:8px;color:#64748b;margin-top:3px">
+  <span style="color:#1d4ed8;font-weight:700">&#9644; ${pName} CPF</span>
+  <span style="color:#8b5cf6;font-weight:700">&#9644; ${sName} CPF</span>
+  <span style="color:#059669;font-weight:700">- - Combined (CPF + Private)</span>
+</div></div>`;
+        })();
+
+        // ── Key Ages table ───────────────────────────────────────────────────
+        const startAge = Math.min(pCA, sCA);
+        const every5   = [];
+        for (let a = Math.ceil(startAge / 5) * 5; a < combinedPA; a += 5) every5.push(a);
+        const keyAges  = [...new Set([startAge, ...every5, 55, pPA, sPA, 65, 70, 75, 80, 85, 90, 95])].filter(a => a >= startAge && a <= 95).sort((a, b) => a - b);
+
+        const keyAgeRows = keyAges.map(age => {
+          const hRow     = displayHouseholdByAge.get(age) || {};
+          const pInPay   = age >= pPA;
+          const sInPay   = age >= sPA;
+          const hhNomR   = householdByAge.get(age) || {};
+          const pLifeM   = pInPay ? Math.round(applyInflation(hhNomR[`pLife${pPlanKey}`] || 0, pPA, pCA)) : 0;
+          const sLifeM   = sInPay ? Math.round(applyInflation(hhNomR[`sLife${sPlanKey}`] || 0, sPA, sCA)) : 0;
+          const pOaD_age = pInPay ? pOaDraw : 0;
+          const sOaD_age = sInPay ? sOaDraw : 0;
+          const combMonMo = pLifeM + sLifeM + pOaD_age + sOaD_age;
+          const isPPA = age === pPA, isSPA = age === sPA;
+          const bg = age === combinedPA ? '#e8f5e9' : (isPPA || isSPA) ? '#f0f9ff' : (age % 10 === 0 ? '#f8fafc' : '#fff');
+          const ageLabel = age + (isPPA && isSPA ? ' ◄◄' : isPPA ? ` ◄ ${pName} PA` : isSPA ? ` ◄ ${sName} PA` : '');
+          return `<tr style="background:${bg}">
+  <td style="font-weight:${isPPA||isSPA?'800':'400'};font-size:8.5px;padding:4px 7px;white-space:nowrap">${ageLabel}</td>
+  <td style="text-align:right;padding:4px 7px;color:#1d4ed8">${hRow.primaryTotal ? fc(hRow.primaryTotal) : '—'}</td>
+  <td style="text-align:right;padding:4px 7px;color:#8b5cf6">${hRow.spouseTotal  ? fc(hRow.spouseTotal)  : '—'}</td>
+  <td style="text-align:right;padding:4px 7px;font-weight:700;color:#0369a1">${hRow.combinedTotal ? fc(hRow.combinedTotal) : '—'}</td>
+  <td style="text-align:right;padding:4px 7px;font-weight:${combMonMo > 0 ? '700' : '400'};color:${combMonMo > 0 ? '#059669' : '#94a3b8'}">${combMonMo > 0 ? fc(combMonMo) + '/mo' : '—'}</td>
+</tr>`;
+        }).join('');
+
+        // ── Children milestones (if any) ────────────────────────────────────
+        const childrenHtml = householdChildren.length > 0 ? (() => {
+          const childRows = householdChildren.map(child => {
+            if (!child.name || !child.birthYear) return '';
+            const bY     = Number(child.birthYear);
+            const curY   = cy;
+            const cAge   = curY - bY;
+            const sec    = bY + 7;
+            const uni    = bY + 18;
+            const grad   = bY + 22;
+            const ind    = bY + 25;
+            return `<tr>
+  <td style="padding:4px 7px;font-weight:700">${child.name}</td>
+  <td style="text-align:center;padding:4px 7px">${bY}</td>
+  <td style="text-align:center;padding:4px 7px">${cAge >= 0 ? cAge : '—'}</td>
+  <td style="text-align:center;padding:4px 7px">${sec}</td>
+  <td style="text-align:center;padding:4px 7px">${uni}</td>
+  <td style="text-align:center;padding:4px 7px">${grad}</td>
+  <td style="text-align:center;padding:4px 7px">${ind}</td>
+</tr>`;
+          }).filter(Boolean).join('');
+          if (!childRows) return '';
+          return `<h3 style="margin-top:12px;color:#0e7490;font-size:10px">👶 Children — Key Milestone Ages</h3>
+<table style="font-size:8.5px">
+  <thead><tr>
+    <th>Name</th><th style="text-align:center">Birth Yr</th><th style="text-align:center">Current Age</th>
+    <th style="text-align:center">Sec. (7)</th><th style="text-align:center">Uni (18)</th>
+    <th style="text-align:center">Grad (22)</th><th style="text-align:center">Independent (25)</th>
+  </tr></thead>
+  <tbody>${childRows}</tbody>
+</table>`;
+        })() : '';
+
+        return `<div class="chapter-break">
+<div class="sec-hdr" style="background:#faf5ff;border-left:4px solid #8b5cf6">
+  <span class="sec-ico">👨‍👩‍👧</span><span class="sec-title" style="color:#5b21b6">${hhSectionNum} &nbsp;·&nbsp; Household — ${pName} &amp; ${sName}</span>
+</div>
+<p style="font-size:8px;color:#64748b;margin:0 0 8px">Combined view of both members' CPF projections. Each member runs an independent engine. Balances are in ${isRealDollars ? 'real (inflation-adjusted)' : 'nominal'} dollars. CPF LIFE monthly uses each member's selected plan: ${pName} = ${pPlanLabel}, ${sName} = ${sPlanLabel}.</p>
+
+<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px">
+  <div class="kpi" style="border-top:3px solid #1d4ed8">
+    <div class="kpi-label">${pName} CPF @ Age ${pPA}</div>
+    <div class="kpi-value" style="color:#1d4ed8;font-size:13px">${fc(pTotal)}</div>
+    <div style="font-size:7px;color:#64748b;margin-top:2px">${pPlanLabel} Plan · PA ${pPA}</div>
+  </div>
+  <div class="kpi" style="border-top:3px solid #8b5cf6">
+    <div class="kpi-label">${sName} CPF @ Age ${sPA}</div>
+    <div class="kpi-value" style="color:#8b5cf6;font-size:13px">${fc(sTotal)}</div>
+    <div style="font-size:7px;color:#64748b;margin-top:2px">${sPlanLabel} Plan · PA ${sPA}</div>
+  </div>
+  <div class="kpi" style="border-top:3px solid #059669">
+    <div class="kpi-label">Combined CPF @ Age ${combinedPA}</div>
+    <div class="kpi-value" style="color:#059669;font-size:13px">${fc(combinedTotal)}</div>
+    <div style="font-size:7px;color:#64748b;margin-top:2px">Later payout age as reference</div>
+  </div>
+  <div class="kpi" style="border-top:3px solid #0369a1">
+    <div class="kpi-label">Combined Monthly @ ${combinedPA}</div>
+    <div class="kpi-value" style="color:#0369a1;font-size:13px">${fc(combinedMonthly)}/mo</div>
+    <div style="font-size:7px;color:#64748b;margin-top:2px">CPF LIFE + OA draw · both members</div>
+  </div>
+</div>
+
+<div class="two-col" style="margin-bottom:10px">
+  ${memberBox(pName, projection, accumulationByAge, pPA, pCA, pPlanKey, pPlanLabel, pLifeReal, pOaDraw, pFrsPct, pFrsCol, pGender, pCS)}
+  ${memberBox(sName, spouseProjection, spouseAccumulationByAge, sPA, sCA, sPlanKey, sPlanLabel, sLifeReal, sOaDraw, sFrsPct, sFrsCol, sGender, sCS)}
+</div>
+
+<h3 style="color:#334155;font-size:10px;margin:0 0 5px">📈 Combined CPF Accumulation</h3>
+${chartSvg}
+
+<h3 style="color:#334155;font-size:10px;margin:12px 0 4px">📅 Combined Household — Key Ages</h3>
+<p style="font-size:7.5px;color:#64748b;margin:0 0 5px">CPF LIFE monthly is deflated to ${isRealDollars ? 'real dollars (inflation-adjusted from payout age)' : 'nominal dollars'}. ◄ marks each member's payout age. Combined Monthly = CPF LIFE + OA drawdown for both members post-payout.</p>
+<table style="font-size:8.5px">
+  <thead><tr>
+    <th>Age</th>
+    <th style="text-align:right;color:#93c5fd">${pName} CPF</th>
+    <th style="text-align:right;color:#c4b5fd">${sName} CPF</th>
+    <th style="text-align:right">Combined CPF</th>
+    <th style="text-align:right;color:#6ee7b7">Combined Monthly</th>
+  </tr></thead>
+  <tbody>${keyAgeRows}</tbody>
+</table>
+${childrenHtml}
+</div>`;
+      })();
+
       // Sensitivity grid with unique columns (fix duplicate $0 columns)
       const uniqueSaCols = [...new Map(saTopupCols.map(v => [v, v])).values()].filter((v, i, a) => a.indexOf(v) === i);
       const sensRowsFixed = hRows.map(h => {
@@ -8229,6 +8485,7 @@ ${yT2}${xT2}${paLineCmp}
   ${isRSSPdf ? '<div class="toc-row"><span>8. RSS Drawdown Analysis</span><span style="color:#64748b">RA drawdown curve · depletion age · CPF LIFE migration · per-year table</span></div>' : ''}
   ${hasSRSPdf ? `<div class="toc-row"><span>${isRSSPdf ? '9' : '8'}. SRS Details</span><span style="color:#64748b">Supplementary Retirement Scheme trajectory</span></div>` : ''}
   ${scenarioA ? `<div class="toc-row"><span>${(isRSSPdf && hasSRSPdf) ? '10' : (isRSSPdf || hasSRSPdf) ? '9' : '8'}. Scenario Comparison</span><span style="color:#64748b">Scenario A vs current — KPI diff table · CPF trajectory chart · key input changes</span></div>` : ''}
+  ${householdEnabled && spouseProjection.length ? `<div class="toc-row"><span>${hhSectionNum}. Household — Combined View</span><span style="color:#64748b">KPI summary · member detail · combined chart · key ages table · children milestones</span></div>` : ''}
   <div class="toc-row"><span>Milestones &amp; Disclaimer</span><span style="color:#64748b">Alerts · balance snapshots · legal disclaimer</span></div>
 </div>
 
@@ -8837,6 +9094,9 @@ ${hasSRSPdf && srsTableRows ? `<div class="section-break">
 
 <!-- ═══════════════ SCENARIO COMPARISON (if applicable) ════════════════ -->
 ${compareHtml}
+
+<!-- ═══════════════ HOUSEHOLD COMBINED VIEW (if applicable) ════════════ -->
+${householdPdfHtml}
 
 <!-- ═══════════════════ MILESTONES & DISCLAIMER ══════════════════════════ -->
 <div class="section-break">
