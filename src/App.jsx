@@ -3391,6 +3391,8 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
           <input
             type="text"
             inputMode="numeric"
+            aria-label="Duration in years (leave blank for indefinite)"
+            autoComplete="off"
             value={durVal === 0 ? "" : durVal}
             placeholder="∞"
             onChange={handleDurChange}
@@ -4045,6 +4047,7 @@ function SetupWizard({ onComplete, onSkip }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <input
         type={type} inputMode={type === "number" ? "numeric" : "text"}
+        id={field} name={field} aria-label={placeholder} autoComplete="off"
         placeholder={placeholder}
         value={w[field]}
         onChange={e => set(field, e.target.value)}
@@ -11523,12 +11526,12 @@ ${milestoneSnapshotHtml}
               {openSections.has("profile") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div><label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>Name</label>
-                    <input type="text" name="name" placeholder="e.g. John Doe" onFocus={(e) => e.target.select()} value={inputs.name} onChange={handleInputChange} aria-label="Member name" className={fieldChanged("name") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} /></div>
+                    <input type="text" name="name" placeholder="e.g. John Doe" autoComplete="name" onFocus={(e) => e.target.select()} value={inputs.name} onChange={handleInputChange} aria-label="Member name" className={fieldChanged("name") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} /></div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, alignItems: "flex-end" }}>
                     {[["currentYear", "Curr Year"], ["currentAge", "Curr Age"]].map(([n, l]) => (
                       <div key={n} style={{ minWidth: 0 }}>{/* minWidth:0 lets 1fr cells shrink below content width */}
                         <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 12, color: "var(--clr-red)" }}>⚠</span>}</label>
-                        <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} aria-invalid={!!inputErrors[n]} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                        <input type="text" inputMode="decimal" name={n} autoComplete="off" value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} aria-invalid={!!inputErrors[n]} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                         {/* Short errors (e.g. currentYear) stay inline; currentAge long errors rendered below the grid */}
                         {inputErrors[n] && n !== "currentAge" && <p className="cpf-err">⚠ {inputErrors[n]}</p>}
                       </div>
@@ -11539,7 +11542,7 @@ ${milestoneSnapshotHtml}
                         {inputs.cpfScheme === 'rss' && <span style={{ fontSize: 11, color: "var(--clr-amber3)", marginLeft: 4 }}>🔒 RSS only</span>}
                       </div>
                       <div style={{ opacity: (isForeigner || inputs.cpfScheme === 'rss') ? 0.3 : 1, pointerEvents: (isForeigner || inputs.cpfScheme === 'rss') ? "none" : "auto", position: "relative" }}>
-                        <select name="payoutAge" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" disabled={inputs.cpfScheme === 'rss'} className={fieldChanged("payoutAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none", MozAppearance: "none" }}>
+                        <select name="payoutAge" autoComplete="off" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" disabled={inputs.cpfScheme === 'rss'} className={fieldChanged("payoutAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none", MozAppearance: "none" }}>
                           {[65, 66, 67, 68, 69, 70].map(a => <option key={a} value={a} style={{ background: "var(--bg-input)", color: "var(--text-bright)" }}>{a}</option>)}
                         </select>
                       </div>
@@ -11875,6 +11878,7 @@ ${milestoneSnapshotHtml}
                                     Migrate at Age <span style={{ fontWeight: 400, textTransform: "none", color: "var(--text-muted)" }}>(must be &gt; current age, ≤ 80)</span>
                                   </label>
                                   <input type="text" inputMode="numeric" name="lifeMigrationAge"
+                                    aria-label="CPF LIFE migration age (must be greater than current age, at most 80)"
                                     value={inputs.lifeMigrationAge ?? ""}
                                     onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                                     placeholder="e.g. 72"
@@ -11976,17 +11980,20 @@ ${milestoneSnapshotHtml}
                           <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                             Name
                             <input type="text" value={spouseInputs.name} onChange={e => spH("name", e.target.value)}
+                              aria-label="Spouse name" autoComplete="off"
                               style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                           </label>
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                             <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                               Current Age
                               <input type="number" min="0" max="100" value={spouseInputs.currentAge} onChange={e => spH("currentAge", e.target.value)}
+                                aria-label="Spouse current age" autoComplete="off"
                                 style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                             </label>
                             <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                               Payout Age
                               <input type="number" min="55" max="70" value={spouseInputs.payoutAge} onChange={e => spH("payoutAge", e.target.value)}
+                                aria-label="Spouse CPF LIFE payout age" autoComplete="off"
                                 style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                             </label>
                           </div>
@@ -12026,6 +12033,7 @@ ${milestoneSnapshotHtml}
                               <label key={field} style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3, gridColumn: lbl === "MA" ? "1 / -1" : "auto" }}>
                                 {lbl} ($)
                                 <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
+                                  aria-label={`Spouse ${lbl} balance`} autoComplete="off"
                                   style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                               </label>
                             ))}
@@ -12042,12 +12050,14 @@ ${milestoneSnapshotHtml}
                               <label key={field} style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                                 {lbl}
                                 <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
+                                  aria-label={`Spouse ${lbl}`} autoComplete="off"
                                   style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                               </label>
                             ))}
                             <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3, gridColumn: "1 / -1" }}>
                               Contribution Stop Age
                               <input type="number" min="0" max="100" value={spouseInputs.contributionStopAge} onChange={e => spH("contributionStopAge", e.target.value)}
+                                aria-label="Spouse contribution stop age" autoComplete="off"
                                 style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                             </label>
                           </div>
@@ -12066,6 +12076,7 @@ ${milestoneSnapshotHtml}
                             <span style={{ color: "#8b5cf6" }}>Spouse: {100 - housingSharePct}% (${Math.round((debouncedInputs.housingOutflow || 0) * (100 - housingSharePct) / 100).toLocaleString()}/yr)</span>
                           </div>
                           <input type="range" min="0" max="100" step="5" value={housingSharePct}
+                            aria-label="Primary member housing share percentage"
                             onChange={e => setHousingSharePct(Number(e.target.value))}
                             style={{ width: "100%", accentColor: "#8b5cf6" }} />
                           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
@@ -12083,6 +12094,7 @@ ${milestoneSnapshotHtml}
                               <label key={field} style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                                 {lbl}
                                 <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
+                                  aria-label={`Spouse ${lbl}`} autoComplete="off"
                                   style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                               </label>
                             ))}
@@ -12099,6 +12111,7 @@ ${milestoneSnapshotHtml}
                               <label key={field} style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                                 {lbl}
                                 <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
+                                  aria-label={`Spouse ${lbl}`} autoComplete="off"
                                   style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                               </label>
                             ))}
@@ -13395,7 +13408,7 @@ ${milestoneSnapshotHtml}
                           Monthly Draw ($)
                           <TooltipBox id="t-oa-draw-amt" text="Monthly cash drawn from OA to supplement CPF LIFE. OA continues earning 2.5%/yr on the remaining balance. Draw stops automatically when OA hits the bequest floor. Use ⚡ Fill Gap to auto-calculate the exact amount needed to meet your retirement income target." />
                         </div>
-                        <input type="text" inputMode="decimal" name="oaDrawdownMonthly" value={inputs.oaDrawdownMonthly} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownMonthly") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownMonthly ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
+                        <input type="text" inputMode="decimal" name="oaDrawdownMonthly" aria-label="OA monthly drawdown amount" value={inputs.oaDrawdownMonthly} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownMonthly") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownMonthly ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
                         {inputErrors.oaDrawdownMonthly && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownMonthly}</p>}
                       </div>
                     </div>
@@ -13469,7 +13482,7 @@ ${milestoneSnapshotHtml}
                               OA Bequest Floor ($)
                               <TooltipBox id="t-oa-floor" text="Minimum OA balance to preserve at all times. Drawdown stops when OA reaches this amount. Set to 0 to allow full depletion. When Die with Zero is active, floor is set to $0 automatically." />
                             </div>
-                            <input type="text" inputMode="decimal" name="oaDrawdownFloor" value={getDisplayValue("oaDrawdownFloor", inputs.oaDrawdownFloor)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("oaDrawdownFloor"); e.target.select(); }} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownFloor") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownFloor ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
+                            <input type="text" inputMode="decimal" name="oaDrawdownFloor" aria-label="OA drawdown floor (minimum OA balance to preserve)" value={getDisplayValue("oaDrawdownFloor", inputs.oaDrawdownFloor)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("oaDrawdownFloor"); e.target.select(); }} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownFloor") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownFloor ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
                             {inputErrors.oaDrawdownFloor && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownFloor}</p>}
                             <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>0 = deplete fully · preserves bequest from OA</p>
                           </div>
@@ -13554,7 +13567,7 @@ ${milestoneSnapshotHtml}
                           {/* Target depletion age input */}
                           <div>
                             <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f43f5e", textTransform: "uppercase", marginBottom: 4 }}>Target Age (Deplete by)</label>
-                            <input type="text" inputMode="decimal" name="dieWithZeroAge" value={inputs.dieWithZeroAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={e => e.target.select()} className={fieldChanged("dieWithZeroAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${dwzAgeErr ? "var(--clr-red)" : "rgba(244,63,94,0.35)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                            <input type="text" inputMode="decimal" name="dieWithZeroAge" aria-label="Die With Zero target age (deplete OA by this age)" value={inputs.dieWithZeroAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={e => e.target.select()} className={fieldChanged("dieWithZeroAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${dwzAgeErr ? "var(--clr-red)" : "rgba(244,63,94,0.35)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                             {dwzAgeErr
                               ? <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {dwzAgeErr}</p>
                               : <>
@@ -13895,7 +13908,7 @@ ${milestoneSnapshotHtml}
                       <TooltipBox id="t-dp-prop" text="One-time OA deduction for property purchase downpayment. Applied once at the specified age if OA balance permits." />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      <input type="text" inputMode="decimal" name="plannedDownpaymentOA" placeholder="Amount ($)" value={inputs.plannedDownpaymentOA} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} className={fieldChanged("plannedDownpaymentOA") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                      <input type="text" inputMode="decimal" name="plannedDownpaymentOA" aria-label="Planned OA downpayment amount" placeholder="Amount ($)" value={inputs.plannedDownpaymentOA} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} className={fieldChanged("plannedDownpaymentOA") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                       <input type="text" inputMode="decimal" name="downpaymentAge" placeholder="Age" value={inputs.downpaymentAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} className={fieldChanged("downpaymentAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                     <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Amount ($) · Age of purchase</p>
@@ -14012,7 +14025,7 @@ ${milestoneSnapshotHtml}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && <TooltipBox id="t-pm-ra" text="The annuity premium HDB pays directly into your RA — this is the core LBS mechanism. The amount depends on your flat type, remaining lease, and RA balance. It cannot exceed ERS ($440,800). This directly increases your CPF LIFE monthly payout. Check the CPF Board LBS calculator for your exact figure." />}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && <TooltipBox id="t-pm-ra" text="The CPF RA bonus credited under SHB. Amount varies by flat type: typically $30,000 for 3-room or smaller, or $15,000 for 2-room Flexi. A soft warning fires if you enter more than $90,000. Confirm the exact figure with CPF Board before using this tool for financial decisions." />}
                           </div>
-                          <input type="text" inputMode="decimal" name="propMonetiseRaTopup" value={getDisplayValue("propMonetiseRaTopup", inputs.propMonetiseRaTopup)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("propMonetiseRaTopup"); e.target.select(); }} className={fieldChanged("propMonetiseRaTopup") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseRaTopup ? "var(--clr-red)" : "rgba(var(--clr-blue-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          <input type="text" inputMode="decimal" name="propMonetiseRaTopup" aria-label="Property monetisation RA top-up amount" value={getDisplayValue("propMonetiseRaTopup", inputs.propMonetiseRaTopup)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("propMonetiseRaTopup"); e.target.select(); }} className={fieldChanged("propMonetiseRaTopup") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseRaTopup ? "var(--clr-red)" : "rgba(var(--clr-blue-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.propMonetiseRaTopup && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.propMonetiseRaTopup}</p>}
                           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
                             {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Credited to RA at event age · boosts CPF LIFE payout · reduces property value in projection"}
@@ -14052,7 +14065,7 @@ ${milestoneSnapshotHtml}
                   {/* Private Assets */}
                   <div>
                     <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Current Private Assets ($)</label>
-                    <input type="text" inputMode="decimal" name="currentPrivateAssets" value={getDisplayValue("currentPrivateAssets", inputs.currentPrivateAssets)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("currentPrivateAssets"); e.target.select(); }} className={fieldChanged("currentPrivateAssets") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                    <input type="text" inputMode="decimal" name="currentPrivateAssets" aria-label="Current private assets balance" value={getDisplayValue("currentPrivateAssets", inputs.currentPrivateAssets)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("currentPrivateAssets"); e.target.select(); }} className={fieldChanged("currentPrivateAssets") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <div>
@@ -14105,14 +14118,14 @@ ${milestoneSnapshotHtml}
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         <div>
                           <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Current Balance ($)</label>
-                          <input type="text" inputMode="decimal" name="srsBalance" value={getDisplayValue("srsBalance", inputs.srsBalance)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsBalance"); e.target.select(); }}
+                          <input type="text" inputMode="decimal" name="srsBalance" aria-label="Current SRS account balance" value={getDisplayValue("srsBalance", inputs.srsBalance)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsBalance"); e.target.select(); }}
                             readOnly={isUnder18} tabIndex={isUnder18 ? -1 : undefined}
                             className={fieldChanged("srsBalance") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsBalance ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", opacity: isUnder18 ? 0.4 : 1, cursor: isUnder18 ? "not-allowed" : "text" }} />
                           {inputErrors.srsBalance && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsBalance}</p>}
                         </div>
                         <div>
                           <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Annual Contribution ($)</label>
-                          <input type="text" inputMode="decimal" name="srsAnnualContribution" value={getDisplayValue("srsAnnualContribution", inputs.srsAnnualContribution)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsAnnualContribution"); e.target.select(); }}
+                          <input type="text" inputMode="decimal" name="srsAnnualContribution" aria-label="Annual SRS contribution amount" value={getDisplayValue("srsAnnualContribution", inputs.srsAnnualContribution)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("srsAnnualContribution"); e.target.select(); }}
                             readOnly={isUnder18} tabIndex={isUnder18 ? -1 : undefined}
                             className={fieldChanged("srsAnnualContribution") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsAnnualContribution ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", opacity: isUnder18 ? 0.4 : 1, cursor: isUnder18 ? "not-allowed" : "text" }} />
                           {inputErrors.srsAnnualContribution && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsAnnualContribution}</p>}
@@ -14142,7 +14155,7 @@ ${milestoneSnapshotHtml}
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         <div>
                           <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Contrib Stop Age</label>
-                          <input type="text" inputMode="decimal" name="srsContribStopAge" value={inputs.srsContribStopAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("srsContribStopAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsContribStopAge ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          <input type="text" inputMode="decimal" name="srsContribStopAge" aria-label="SRS contribution stop age" value={inputs.srsContribStopAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("srsContribStopAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsContribStopAge ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.srsContribStopAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsContribStopAge}</p>}
                         </div>
                         <div>
@@ -14165,7 +14178,7 @@ ${milestoneSnapshotHtml}
                             Drawdown Years
                             <TooltipBox id="t-srs-yrs" text="Number of years over which the SRS balance is drawn down evenly. Max 10 years — IRAS requires full withdrawal within 10 years of first withdrawal." />
                           </div>
-                          <input type="text" inputMode="decimal" name="srsDrawdownYears" value={inputs.srsDrawdownYears} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("srsDrawdownYears") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsDrawdownYears ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          <input type="text" inputMode="decimal" name="srsDrawdownYears" aria-label="Number of years to draw down SRS" value={inputs.srsDrawdownYears} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("srsDrawdownYears") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsDrawdownYears ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.srsDrawdownYears && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsDrawdownYears}</p>}
                         </div>
                       </div>
@@ -14318,7 +14331,8 @@ ${milestoneSnapshotHtml}
                           {/* Label */}
                           <div style={{ marginBottom: 8 }}>
                             <label className="cpf-label">Label</label>
-                            <input type="text" value={leFormState.label || ""} onChange={e => setLeFormState(p => ({ ...p, label: e.target.value }))}
+                            <input type="text" name="leLabel" aria-label="Life event label" autoComplete="off"
+                              value={leFormState.label || ""} onChange={e => setLeFormState(p => ({ ...p, label: e.target.value }))}
                               style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                           </div>
 
@@ -14326,13 +14340,15 @@ ${milestoneSnapshotHtml}
                           <div style={{ display: "grid", gridTemplateColumns: isPoint ? "1fr 1fr" : "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
                             <div>
                               <label className="cpf-label">Start Age</label>
-                              <input type="text" inputMode="decimal" value={leFormState.startAge ?? ""} onChange={e => setLeFormState(p => ({ ...p, startAge: e.target.value === "" ? "" : Number(e.target.value) }))}
+                              <input type="text" inputMode="decimal" name="leStartAge" aria-label="Life event start age" autoComplete="off"
+                                value={leFormState.startAge ?? ""} onChange={e => setLeFormState(p => ({ ...p, startAge: e.target.value === "" ? "" : Number(e.target.value) }))}
                                 style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                             </div>
                             {!isPoint && (
                               <div>
                                 <label className="cpf-label">End Age</label>
-                                <input type="text" inputMode="decimal" value={leFormState.endAge ?? ""} onChange={e => setLeFormState(p => ({ ...p, endAge: e.target.value === "" ? "" : Number(e.target.value) }))}
+                                <input type="text" inputMode="decimal" name="leEndAge" aria-label="Life event end age" autoComplete="off"
+                                  value={leFormState.endAge ?? ""} onChange={e => setLeFormState(p => ({ ...p, endAge: e.target.value === "" ? "" : Number(e.target.value) }))}
                                   style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                               </div>
                             )}
@@ -14341,6 +14357,9 @@ ${milestoneSnapshotHtml}
                                 {leFormState.type === 'hyperinflation' ? "Rate (%)" : leFormState.type === 'windfall' ? "Amount ($)" : "$/yr"}
                               </label>
                               <input type="text" inputMode="decimal"
+                                name="leMagnitude"
+                                aria-label="Life event magnitude"
+                                autoComplete="off"
                                 value={
                                   leMagFocused || leFormState.type === 'hyperinflation'
                                     ? (leFormState.magnitude ?? "")
@@ -15912,6 +15931,7 @@ ${milestoneSnapshotHtml}
                                     </div>
                                   </div>
                                   <input type="range" min={min} max={max} step={step} value={val}
+                                    aria-label={label}
                                     onChange={e => set(Number(e.target.value))}
                                     style={{ width: "100%", accentColor: "var(--clr-green)" }} />
                                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-subtle)", marginTop: 2 }}>
@@ -15927,6 +15947,7 @@ ${milestoneSnapshotHtml}
                           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", flexWrap: "wrap" }}>
                             <span style={{ fontSize: 13, color: "var(--text-muted)", flexShrink: 0 }}>Override SA/RA top-up (exact amount):</span>
                             <input type="number" min={0} max={37740} step={100}
+                              aria-label="Override SA/RA top-up amount (max $37,740)" autoComplete="off"
                               value={whatIfSaTopup !== null ? whatIfSaTopup : (Number(debouncedInputs.vcSaTopup) || 0)}
                               onChange={e => setWhatIfSaTopup(Math.max(0, Math.min(37740, Number(e.target.value) || 0)))}
                               style={{ width: 120, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontFamily: "monospace" }} />
@@ -16998,7 +17019,7 @@ ${milestoneSnapshotHtml}
                         </span>
                         <span style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>{basicPremiumPct}%</span>
                       </div>
-                      <input type="range" min={10} max={20} step={1} value={basicPremiumPct} onChange={e => setBasicPremiumPct(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-amber3)", margin: "2px 0" }} />
+                      <input type="range" min={10} max={20} step={1} value={basicPremiumPct} aria-label="CPF LIFE Basic Plan premium percentage" onChange={e => setBasicPremiumPct(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-amber3)", margin: "2px 0" }} />
                       <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>CPF policy: 10% at age 65, +2% per year of deferral (12% at 66 → 20% at 70). Auto-set from your payout age. Drag to explore — resets on next payout age change.</p>
                     </div>
                   </div>
@@ -17165,6 +17186,7 @@ ${milestoneSnapshotHtml}
                           {scenario && <button onClick={() => { setScenario(null); setLabel(""); }} style={{ fontSize: 12, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>}
                         </div>
                         <input type="text" value={label} onChange={e => setLabel(e.target.value)}
+                          aria-label={`Scenario ${slot} label`} autoComplete="off"
                           placeholder={`Label (e.g. Retire at ${slot === "A" ? 65 : 70})`}
                           style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
                         {scenario ? (
@@ -17763,11 +17785,13 @@ ${milestoneSnapshotHtml}
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontSize: 18 }}>👶</span>
                               <input type="text" value={child.name}
+                                aria-label="Child's name" autoComplete="off"
                                 onChange={e => setHouseholdChildren(prev => prev.map(c => c.id === child.id ? { ...c, name: e.target.value } : c))}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontWeight: 700, outline: "none" }} />
                               <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
                                 Born
                                 <input type="number" min="2000" max={currentYear} value={child.birthYear}
+                                  aria-label="Child's birth year" autoComplete="off"
                                   onChange={e => setHouseholdChildren(prev => prev.map(c => c.id === child.id ? { ...c, birthYear: Number(e.target.value) } : c))}
                                   style={{ width: 70, padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                               </label>
