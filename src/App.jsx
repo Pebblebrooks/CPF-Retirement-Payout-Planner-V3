@@ -14519,7 +14519,7 @@ ${milestoneSnapshotHtml}
                   />
                 ))}
               </div>{/* /kpi-strip */}
-              </div>{/* /kpi-strip-wrap */}
+              {/* /kpi-strip-wrap */}</div>
             )}
           </div>
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
