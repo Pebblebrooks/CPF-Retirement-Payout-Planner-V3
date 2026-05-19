@@ -113,6 +113,35 @@ const STYLES = {
 const MMSS_PILOT_START_YEAR = 2026;
 const MMSS_PILOT_END_YEAR   = 2030;
 
+// ── UX-5: TAB_CONFIG — single source of truth for all tab arrays ──────────────
+// Previously the tab list was hardcoded in 4 separate places (desktop strip,
+// mobile hamburger portal, keyboard shortcut ref array × 2). Any tab add/remove
+// required 4 edits and could silently diverge. All tab consumers now reference
+// this constant and filter dynamically using the isForeigner / cpfScheme / householdEnabled flags.
+// Format: [id, label, Icon, accentColor]
+const TAB_CONFIG = [
+  ["welcome",      "Welcome",    Lightbulb,   "#64748b"],
+  ["summary",      "Summary",    PieChart,    "var(--clr-emerald)"],
+  ["strategy",     "Strategy",   Target,      "#f43f5e"],
+  ["accumulation", "Growth",     BarChart3,   "var(--clr-blue2)"],
+  ["rss",          "RSS",        Clock,       "var(--clr-blue)"],   // shown only when cpfScheme === 'rss'
+  ["life",         "LIFE",       ShieldCheck, "var(--clr-purple)"], // hidden for foreigners + rss mode
+  ["compare",      "Compare",    Split,       "var(--clr-amber3)"],
+  ["household",    "Household",  Users,       "#8b5cf6"],           // shown only when householdEnabled
+  ["table",        "Table",      TableIcon,   "var(--clr-slate)"],  // UX-11: renamed from "Data Table" to "Table"
+  ["notes",        "Docs",       BookOpen,    "var(--clr-blue)"],
+];
+// Helper: filter TAB_CONFIG to only the tabs visible in a given context.
+// Used by the desktop strip, hamburger dropdown, and keyboard shortcut handler.
+const getVisibleTabs = (cpfScheme, isForeigner, householdEnabled) =>
+  TAB_CONFIG.filter(([id]) => {
+    if (id === "rss")       return cpfScheme === "rss";
+    if (id === "life")      return cpfScheme !== "rss" && !isForeigner;
+    if (id === "household") return !!householdEnabled;
+    return true;
+  });
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ── Rev #D2: Life Event type registry ──────────────────────────────────────────
 // Each entry: { label, color, icon, description, isPoint }
 // isPoint = true  → startAge === endAge (one-off); no End Age field in UI
@@ -3830,9 +3859,7 @@ function SidebarSectionHeader({ id, label, icon, color, activeBg, badge, isOpen,
           </span>
           {badge}
         </div>
-        <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 700 }}>
-          {isOpen ? "▲" : "▼"}
-        </span>
+        <ChevronDown className={`sidebar-chevron${isOpen ? " open" : ""}`} style={{ width: 15, height: 15 }} />
       </div>
       {/* UX-P1: Collapsed hint — one-line summary of section contents shown only when closed.
           Lets users quickly find a field without expanding every section. Rendered inside the
@@ -3914,9 +3941,7 @@ function SidebarSection({
           </span>
           {badge}
         </div>
-        <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 700 }}>
-          {isOpen ? "▲" : "▼"}
-        </span>
+        <ChevronDown className={`sidebar-chevron${isOpen ? " open" : ""}`} style={{ width: 15, height: 15 }} />
       </div>
 
       {/* ── Body ── */}
@@ -4396,7 +4421,10 @@ export default function App() {
   // Welcome Modal, Share Modal & Toast State
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeStep, setWelcomeStep] = useState(0);
-  const [toastMessage, setToastMessage] = useState(null);
+  // UX-9: Toast queue — replaces single toastMessage. Each entry: { id, msg }.
+  // showToast() pushes to the queue; each toast auto-removes after 3.5s.
+  // Multiple rapid actions (Auto-Calc → Apply Top-Up) each show their message sequentially.
+  const [toastQueue, setToastQueue] = useState([]);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   // In-app export modals (sandbox-safe alternatives to download/print)
@@ -4415,8 +4443,13 @@ export default function App() {
   // ── Debounced inputs for expensive computations ──────────────────────────
   // UI inputs update immediately; heavy projections use the debounced copy
   const [debouncedInputs, setDebouncedInputs] = useState({ ...DEFAULT_INPUTS });
+  // UX-2: isRecalculating — true during the 180ms debounce window between a live input change
+  // and the projection engine recomputing. Drives a subtle pulsing indicator so users know
+  // the displayed figures are about to update. Resets to false the moment debounce fires.
+  const [isRecalculating, setIsRecalculating] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedInputs(inputs), 180);
+    setIsRecalculating(true);
+    const t = setTimeout(() => { setDebouncedInputs(inputs); setIsRecalculating(false); }, 180);
     return () => clearTimeout(t);
   }, [inputs]);
 
@@ -4945,8 +4978,9 @@ export default function App() {
   };
 
   const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    const id = Date.now() + Math.random();
+    setToastQueue(q => [...q, { id, msg }]);
+    setTimeout(() => setToastQueue(q => q.filter(t => t.id !== id)), 3500);
   };
 
   // P3-T12: Wizard handlers
@@ -5159,12 +5193,12 @@ export default function App() {
         handleResetRef.current?.();
       } else if (e.ctrlKey && e.key === ']') {
         e.preventDefault();
-        const tabs = ["summary", "strategy", "accumulation", ...(cpfSchemeRef.current === 'rss' ? ["rss"] : isForeignerRef.current ? [] : ["life"]), "compare", ...(householdEnabledRef.current ? ["household"] : []), "table", "notes"];
+        const tabs = getVisibleTabs(cpfSchemeRef.current, isForeignerRef.current, householdEnabledRef.current).map(([id]) => id);
         const idx = tabs.indexOf(activeTabRef.current);
         setActiveTab(tabs[(idx + 1) % tabs.length]);
       } else if (e.ctrlKey && e.key === '[') {
         e.preventDefault();
-        const tabs = ["summary", "strategy", "accumulation", ...(cpfSchemeRef.current === 'rss' ? ["rss"] : isForeignerRef.current ? [] : ["life"]), "compare", ...(householdEnabledRef.current ? ["household"] : []), "table", "notes"];
+        const tabs = getVisibleTabs(cpfSchemeRef.current, isForeignerRef.current, householdEnabledRef.current).map(([id]) => id);
         const idx = tabs.indexOf(activeTabRef.current);
         setActiveTab(tabs[(idx - 1 + tabs.length) % tabs.length]);
       }
@@ -5835,7 +5869,7 @@ export default function App() {
           ? p.inputs
           : (p && typeof p === 'object' && !Array.isArray(p) ? p : null);
         if (!rawInputs) {
-          alert("Invalid profile file — no inputs found. Make sure you are loading a CPF Planner Pro JSON export.");
+          setConfirmModal({ title: "Invalid Profile File", message: "No inputs found in this file. Make sure you are loading a CPF Planner Pro JSON export.", onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
           return; // target.value already cleared before the read
         }
         // BUG-1 fix: use module-level buildSafeInputs instead of local sanitiseInputs —
@@ -6006,7 +6040,7 @@ export default function App() {
           showToast("✓ Profile inputs imported (legacy format)");
         }
       } catch (err) {
-        alert(`Could not read profile file.\n\nMake sure you are loading a CPF Planner Pro JSON export (.json). If the file was saved with an older version of the app, try the Share Code import instead.\n\nTechnical detail: ${err.message}`);
+        setConfirmModal({ title: "Could Not Read Profile", message: `Make sure you are loading a CPF Planner Pro JSON export (.json). If the file was saved with an older version of the app, try the Share Code import instead.\n\nTechnical detail: ${err.message}`, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
       }
     };
     reader.readAsText(file);
@@ -6055,7 +6089,7 @@ export default function App() {
         setShowShareModal(true);
       }
     } catch (e) {
-      alert("Could not generate share link: " + e.message);
+      setConfirmModal({ title: "Share Link Failed", message: "Could not generate share link: " + e.message, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
     }
   };
   handleShareLinkInitRef.current = handleShareLinkInit; // keep ref current for keyboard shortcut handler
@@ -6084,7 +6118,7 @@ export default function App() {
       showToast("Link Copied to Clipboard!");
       setShowShareModal(false);
     } catch (err) {
-      alert("Failed to copy automatically. Please manually copy the link from the text box.");
+      setConfirmModal({ title: "Copy Failed", message: "Automatic copy failed. Please manually select all text in the link box and copy it.", onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
     }
     document.body.removeChild(el);
   };
@@ -9133,7 +9167,7 @@ ${milestoneSnapshotHtml}
 
       // Always open in-app modal first so user can pick orientation and preview before printing
       setExportModal({ type: "pdf", content: html });
-    } catch (e) { alert("Report failed: " + e.message); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
+    } catch (e) { setConfirmModal({ title: "Report Failed", message: "Could not generate the PDF report: " + e.message, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" }); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
   };
   return (
     <TooltipContext.Provider value={{ show: showTooltipId, set: setShowTooltipId, isDark }}>
@@ -9366,6 +9400,18 @@ ${milestoneSnapshotHtml}
           appearance: none;
           background: var(--bg-input);
           color: var(--text-bright);
+          /* UX-4: custom chevron arrow — replaces the stripped native arrow */
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 10px center;
+          padding-right: 30px;
+        }
+        .theme-light select {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%232e4560' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+        }
+        select:disabled {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+          opacity: 0.5;
         }
         select option {
           background: var(--bg-input);
@@ -9950,6 +9996,24 @@ ${milestoneSnapshotHtml}
           }
         }
 
+        /* UX-6: KPI strip overflow fade — right-edge gradient mask so users can see
+           the strip is scrollable when cards overflow on narrow screens.
+           The wrapper is position:relative so the pseudo-element anchors correctly. */
+        .cpf-tabs-kpi-header { position: relative; }
+        .kpi-strip-wrap {
+          position: relative;
+          overflow: hidden;
+        }
+        .kpi-strip-wrap::after {
+          content: "";
+          position: absolute;
+          top: 0; right: 0; bottom: 0;
+          width: 36px;
+          background: linear-gradient(to right, transparent, var(--bg-muted));
+          pointer-events: none;
+          z-index: 2;
+        }
+
         /* FHD kpi-strip: cap at 974px and centre so it stays edge-aligned
            with the two hero cards below it. */
         .cpf-layout[data-mode="fhd"] .kpi-strip {
@@ -10130,6 +10194,18 @@ ${milestoneSnapshotHtml}
         /* Keyboard accessibility for sidebar sections */
         .sidebar-section-header:focus { outline: 2px solid #34d399; outline-offset: -2px; border-radius: 8px; }
         .sidebar-section-header:focus:not(:focus-visible) { outline: none; }
+        /* UX-7: Accordion chevron — smooth 180° rotation on open/close */
+        .sidebar-chevron {
+          transition: transform 0.2s ease;
+          flex-shrink: 0;
+          color: var(--text-muted);
+        }
+        .sidebar-chevron.open { transform: rotate(180deg); }
+        /* UX-7: <details> summary — hide native disclosure triangle; we render our own ▼ Show text */
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        details[open] > summary .details-chevron-label::before { content: "▲ Hide"; }
+        details:not([open]) > summary .details-chevron-label::before { content: "▼ Show"; }
 
         /* ── Option A: Utility classes — replace high-frequency inline style objects ──
            All values use CSS custom properties so dark/light themes apply automatically. */
@@ -10487,12 +10563,14 @@ ${milestoneSnapshotHtml}
         }
       `}</style>
 
-      {/* TOAST NOTIFICATION */}
-      {toastMessage && (
-        <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 99999, background: "var(--clr-emerald)", color: "#ffffff", padding: "12px 24px", borderRadius: 12, fontWeight: 800, boxShadow: "0 10px 25px rgba(var(--clr-emerald-rgb),0.3)", display: "flex", alignItems: "center", gap: 8, animation: "slideDown 0.3s ease-out" }}>
-          <CheckCircle2 style={{ width: 18, height: 18 }} /> {toastMessage}
-        </div>
-      )}
+      {/* TOAST NOTIFICATION QUEUE — UX-9: multiple toasts stack vertically */}
+      <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 99999, display: "flex", flexDirection: "column", gap: 8, alignItems: "center", pointerEvents: "none" }}>
+        {toastQueue.map(({ id, msg }) => (
+          <div key={id} style={{ background: "var(--clr-emerald)", color: "#ffffff", padding: "12px 24px", borderRadius: 12, fontWeight: 800, boxShadow: "0 10px 25px rgba(var(--clr-emerald-rgb),0.3)", display: "flex", alignItems: "center", gap: 8, animation: "slideDown 0.3s ease-out", whiteSpace: "nowrap" }}>
+            <CheckCircle2 style={{ width: 18, height: 18, flexShrink: 0 }} /> {msg}
+          </div>
+        ))}
+      </div>
 
       {/* IN-APP CONFIRM DIALOG — replaces window.confirm (blocked in sandbox) */}
       {confirmModal && (
@@ -10622,7 +10700,7 @@ ${milestoneSnapshotHtml}
                     showToast(scenariosRestored
                       ? "✓ Profile restored — Compare scenarios loaded (projections recalculated)"
                       : "✓ Profile restored — all settings loaded");
-                  } catch (e) { alert("Invalid code — please check and try again."); }
+                  } catch (e) { setConfirmModal({ title: "Invalid Code", message: "Could not load this share code. Please check the code and try again.", onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" }); }
                 }} style={{ padding: "10px 18px", borderRadius: 10, background: "var(--clr-blue2)", color: "#fff", fontWeight: 800, border: "none", cursor: "pointer", fontSize: 14, whiteSpace: "nowrap" }}>Load</button>
               </div>
             </div>
@@ -11238,7 +11316,7 @@ ${milestoneSnapshotHtml}
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0, display: "flex", alignItems: "stretch" }}>
           {/* Scrollable tab buttons */}
           <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", flex: "1 1 auto", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-            {[["welcome","Welcome",Lightbulb,"#64748b"],["summary","Summary",PieChart,"var(--clr-emerald)"],["strategy","Strategy",Target,"#f43f5e"],["accumulation","Growth",BarChart3,"var(--clr-blue2)"],...(debouncedInputs.cpfScheme==='rss'?[["rss","RSS",Clock,"var(--clr-blue)"]]:([["life","LIFE",ShieldCheck,"var(--clr-purple)"]])),["compare","Compare",Split,"var(--clr-amber3)"],...(householdEnabled?[["household","Household",Users,"#8b5cf6"]]:[]),["table","Data Table",TableIcon,"var(--clr-slate)"],["notes","Docs",BookOpen,"var(--clr-blue)"]].map(([id,label,Icon,accent]) => {
+            {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
               const isLifeLocked = id === "life" && isForeigner;
               return (
                 <button key={id} role="tab" aria-selected={activeTab === id} aria-controls={`panel-${id}`}
@@ -11274,7 +11352,7 @@ ${milestoneSnapshotHtml}
             </button>
             {showTabsMenu && createPortal(
               <div data-tasmenu="1" style={{ position: "fixed", top: tabsMenuPos.top, right: tabsMenuPos.right, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 12, boxShadow: "var(--shadow-panel)", zIndex: 500, minWidth: 180, padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
-                {[["welcome","Welcome",Lightbulb,"#64748b"],["summary","Summary",PieChart,"var(--clr-emerald)"],["strategy","Strategy",Target,"#f43f5e"],["accumulation","Growth",BarChart3,"var(--clr-blue2)"],...(debouncedInputs.cpfScheme==='rss'?[["rss","RSS",Clock,"var(--clr-blue)"]]:([["life","LIFE",ShieldCheck,"var(--clr-purple)"]])),["compare","Compare",Split,"var(--clr-amber3)"],...(householdEnabled?[["household","Household",Users,"#8b5cf6"]]:[]),["table","Data Table",TableIcon,"var(--clr-slate)"],["notes","Docs",BookOpen,"var(--clr-blue)"]].map(([id,label,Icon,accent]) => {
+                {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
                   const isLifeLocked = id === "life" && isForeigner;
                   return (
                     <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); }}
@@ -11300,7 +11378,7 @@ ${milestoneSnapshotHtml}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <SlidersHorizontal style={{ width: 14, height: 14, color: "var(--clr-emerald)" }} />
               <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Input Parameters</span>
-              <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 700 }}>{sidebarOpen ? "▲" : "▼"}</span>
+              <ChevronDown className={`sidebar-chevron${sidebarOpen ? " open" : ""}`} style={{ width: 14, height: 14 }} />
             </div>
             {sidebarOpen && (
               <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
@@ -11390,7 +11468,7 @@ ${milestoneSnapshotHtml}
                         background: anyOpen ? solid : "rgba(100,116,139,0.05)",
                         transition: "all 0.15s ease" }}>
                       <span style={{ fontSize: 13, fontWeight: 900, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65, flexShrink: 0, transition: "all 0.15s", lineHeight: 1 }}>
-                        {anyOpen ? "▲" : "▼"}
+                        <ChevronDown className={`sidebar-chevron${anyOpen ? " open" : ""}`} style={{ width: 12, height: 12 }} />
                       </span>
                     </button>
                   );
@@ -11407,7 +11485,7 @@ ${milestoneSnapshotHtml}
                       }}>
                       <Settings style={{ width: 10, height: 10, flexShrink: 0 }} />
                       <span>Adv</span>
-                      <span style={{ fontSize: 10, lineHeight: 1 }}>{showAdvanced ? "▲" : "▼"}</span>
+                      <ChevronDown className={`sidebar-chevron${showAdvanced ? " open" : ""}`} style={{ width: 10, height: 10 }} />
                     </button>
                   );
                   return (
@@ -11424,8 +11502,8 @@ ${milestoneSnapshotHtml}
                       border: `1px solid ${anyOpen ? bdr : "rgba(100,116,139,0.2)"}`,
                       background: anyOpen ? solid : "rgba(100,116,139,0.05)",
                       transition: "all 0.15s ease" }}>
-                    <span style={{ fontSize: 13, fontWeight: 900, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65, flexShrink: 0, transition: "all 0.15s", lineHeight: 1 }}>
-                      {anyOpen ? "▲" : "▼"}
+                    <span style={{ fontSize: 13, fontWeight: 900, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65, flexShrink: 0, transition: "all 0.15s", lineHeight: 1, display: "flex", alignItems: "center" }}>
+                      <ChevronDown className={`sidebar-chevron${anyOpen ? " open" : ""}`} style={{ width: 12, height: 12 }} />
                     </span>
                   </button>
                 );
@@ -13062,7 +13140,10 @@ ${milestoneSnapshotHtml}
                         {/* W3: Eligibility criteria toggle */}
                         <button onClick={() => setShowEligibility(v => !v)}
                           style={{ marginTop: 5, fontSize: 11, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
-                          {showEligibility ? "▲ Hide eligibility criteria" : "▼ WIS eligibility criteria"}
+                          <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                            <ChevronDown className={`sidebar-chevron${showEligibility ? " open" : ""}`} style={{ width: 11, height: 11 }} />
+                            {showEligibility ? "Hide eligibility criteria" : "WIS eligibility criteria"}
+                          </span>
                         </button>
                         {showEligibility && (
                           <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 7, background: "rgba(var(--clr-green-rgb),0.05)", border: "1px solid rgba(var(--clr-green-rgb),0.2)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
@@ -14310,7 +14391,7 @@ ${milestoneSnapshotHtml}
 
                           {/* Save / Cancel */}
                           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                            <button onClick={saveEvent} style={{ flex: 1, padding: "7px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", background: "#ef4444", color: "#fff", cursor: "pointer" }}>Save Event</button>
+                            <button onClick={saveEvent} style={{ flex: 1, padding: "7px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", background: "var(--clr-green)", color: "#fff", cursor: "pointer" }}>Save Event</button>
                             <button onClick={() => { setLeEditingId(null); setLeFormState({}); }} style={{ padding: "7px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px solid var(--border-strong)", background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}>Cancel</button>
                           </div>
                         </div>
@@ -14343,8 +14424,16 @@ ${milestoneSnapshotHtml}
         <section className="cpf-main-wrap" style={{ minWidth: 0, boxSizing: "border-box", width: "100%" }}>
           {/* KPI Strip wrapper — sticky in desktop grid; flows normally on tablet/mobile */}
           <div className="cpf-tabs-kpi-header" style={{ display: "flex", flexDirection: "column", gap: 0, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderTop: "none", zIndex: 28, boxShadow: "var(--shadow-panel)" }}>
+            {/* UX-2: Recalculating indicator — 2px animated top-bar visible during the 180ms debounce window */}
+            <div style={{
+              height: 2, width: isRecalculating ? "100%" : "0%",
+              background: "linear-gradient(90deg, var(--clr-emerald), var(--clr-blue2))",
+              transition: isRecalculating ? "none" : "width 0.3s ease",
+              borderRadius: "0 2px 0 0",
+            }} />
             {/* Persistent KPI strip — hidden on Summary tab (Zone 1 already shows these metrics) */}
             {activeTab !== "welcome" && activeTab !== "notes" && activeTab !== "summary" && (
+              <div className="kpi-strip-wrap">
               <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "1fr", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
                 {(() => {
                   const pa = payoutAge65; // CQ-2 fix: use debounced value to match displayProjection/displayAccumulation
@@ -14429,7 +14518,8 @@ ${milestoneSnapshotHtml}
                     isEarly={i > 0 && i < 4}
                   />
                 ))}
-              </div>
+              </div>{/* /kpi-strip */}
+              </div>{/* /kpi-strip-wrap */}
             )}
           </div>
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
@@ -14617,7 +14707,7 @@ ${milestoneSnapshotHtml}
                 <details style={{ borderRadius: 14, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
                   <summary style={{ padding: "10px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                     <p style={{ fontWeight: 700, color: "var(--text-highlight)", margin: 0, fontSize: 14 }}>📋 Summary Tab — What You're Looking At</p>
-                    <span style={{ fontSize: 13, color: "var(--text-muted)" }}>▼ Show</span>
+                    <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)" }} />
                   </summary>
                   <div style={{ padding: "0 18px 14px", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8 }}>
@@ -16813,7 +16903,7 @@ ${milestoneSnapshotHtml}
                   <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
                     <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                       <p style={{ fontWeight: 700, color: "var(--text-highlight)", margin: 0, fontSize: 14 }}>📊 LIFE Tab — How to Read This Tab</p>
-                      <span style={{ fontSize: 13, color: "var(--text-muted)" }}>▼ Show</span>
+                      <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)" }} />
                     </summary>
                     <div style={{ padding: "0 16px 12px", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8, marginBottom: 8 }}>
@@ -19126,7 +19216,7 @@ ${milestoneSnapshotHtml}
                     <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                       <Target style={{ width: 13, height: 13, color: "#f43f5e", flexShrink: 0 }} />
                       <span style={{ fontWeight: 700, color: "var(--text-highlight)", fontSize: 14 }}>How to use the Strategy tab</span>
-                      <span style={{ fontSize: 13, color: "var(--text-muted)", marginLeft: "auto" }}>▼ Show</span>
+                      <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)", marginLeft: "auto" }} />
                     </summary>
                     <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
                       {[
