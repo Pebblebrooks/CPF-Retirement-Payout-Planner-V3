@@ -16258,7 +16258,7 @@ ${milestoneSnapshotHtml}
                     </div>
                   </>);
                 })()}
-                <div style={{ height: 380 }}>
+                <div style={{ height: 380, minHeight: 380 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <AreaChart data={(() => {
                       // S1 fix: for RSS members, payoutAge65 (= 65) < currentAge (= 68), so the old
@@ -16981,7 +16981,7 @@ ${milestoneSnapshotHtml}
                     </button>
                   ))}
                 </div>
-                <div style={{ height: 350 }}>
+                <div style={{ height: 350, minHeight: 350 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <LineChart data={displayProjection.filter(d => d.age >= payoutAge65)}> {/* BUG-51 fix: use debounced payoutAge65 */}
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
@@ -17230,7 +17230,7 @@ ${milestoneSnapshotHtml}
                       <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8, lineHeight: 1.6 }}>
                         <strong style={{ color: "var(--text-bright)" }}>Y-axis: Cumulative Total Yield ($)</strong> — all CPF LIFE payouts received plus remaining bequest value at each age, under the <strong style={{ color: "var(--clr-green)" }}>{highlightPlan}</strong> plan. Higher = more total financial value returned from CPF over your lifetime.
                       </p>
-                      <div style={{ height: 320 }}>
+                      <div style={{ height: 320, minHeight: 320 }}>
                         <ResponsiveContainer width="99%" height="100%">
                           <AreaChart data={comparisonData}>
                             <defs>
@@ -19390,7 +19390,7 @@ ${milestoneSnapshotHtml}
                       <BarChart2 style={{ width: 15, height: 15, color: "#f43f5e" }} />
                       <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>Combined Monthly Income Stack (Age {pa}–95)</h4>
                     </div>
-                    <div style={{ height: 320 }}>
+                    <div style={{ height: 320, minHeight: 320 }}>
                       <ResponsiveContainer width="99%" height="100%">
                         <AreaChart data={strategyChartData} margin={{ top: 10, right: 14, left: 10, bottom: 0 }}>
                           <defs>
