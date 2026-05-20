@@ -120,7 +120,6 @@ const MMSS_PILOT_END_YEAR   = 2030;
 // this constant and filter dynamically using the isForeigner / cpfScheme / householdEnabled flags.
 // Format: [id, label, Icon, accentColor]
 const TAB_CONFIG = [
-  ["guide",        "Docs",       BookOpen,    "var(--clr-blue)"],  // merged Welcome (Quick Start) + Docs (Reference)
   ["summary",      "Summary",    PieChart,    "var(--clr-emerald)"],
   ["strategy",     "Strategy",   Target,      "#f43f5e"],
   ["accumulation", "Growth",     BarChart3,   "var(--clr-blue2)"],
@@ -129,6 +128,7 @@ const TAB_CONFIG = [
   ["compare",      "Compare",    Split,       "var(--clr-amber3)"],
   ["household",    "Household",  Users,       "#8b5cf6"],           // shown only when householdEnabled
   ["table",        "Table",      TableIcon,   "var(--clr-slate)"],  // UX-11: renamed from "Data Table" to "Table"
+  ["guide",        "Docs",       BookOpen,    "var(--clr-blue)"],   // merged Welcome (Quick Start) + Docs (Reference) — always last
   // "notes" tab removed — merged into "guide" tab (Quick Start + Reference sub-views)
 ];
 // Helper: filter TAB_CONFIG to only the tabs visible in a given context.
@@ -14659,9 +14659,8 @@ ${milestoneSnapshotHtml}
           </div>
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
           <div className="cpf-tab-content">
-            {/* ── WELCOME TAB ── */}
-            {/* ── GUIDE TAB (merged Welcome + Docs) ── */}
-            {activeTab === "guide" && (
+            {/* ── GUIDE TAB — Quick Start view ── */}
+            {activeTab === "guide" && guideView === 'quickstart' && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)" }}>
@@ -14760,7 +14759,6 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
                 )} {/* end quickstart view */}
-                {/* Reference view is rendered below in the same guide tab — see activeTab==="guide" && guideView==="reference" block */}
               </div>
             )}
             {/* ── SUMMARY TAB ── */}
