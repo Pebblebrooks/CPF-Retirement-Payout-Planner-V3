@@ -3312,7 +3312,9 @@ export const TooltipBox = ({ id, text }) => {
             : { position: "absolute", top: "100%",   left: caretPx, transform: "translateX(-50%)", borderWidth: 6, borderStyle: "solid", borderColor: `${tipBg} transparent transparent transparent` };
 
           return (
-            <span style={{ position: "fixed", zIndex: 999999, top: tipTop, left: tipLeft, transform: tipTransform, width: TIP_W, padding: "10px 12px", background: tipBg, backdropFilter: "blur(4px)", color: tipText, fontSize: 13, borderRadius: 8, boxShadow: tipShadow, border: `1px solid ${tipBorder}`, lineHeight: 1.5, display: "block", height: "auto", overflow: "visible", whiteSpace: "normal", pointerEvents: "none", textAlign: "left" }}>
+            <span style={{ position: "fixed", zIndex: 999999, top: tipTop, left: tipLeft, transform: tipTransform, width: TIP_W, padding: "10px 12px", background: tipBg, backdropFilter: "blur(4px)", color: tipText, fontSize: 13, borderRadius: 8, boxShadow: tipShadow, border: `1px solid ${tipBorder}`, lineHeight: 1.5, display: "block", height: "auto", overflow: "visible", whiteSpace: "normal", pointerEvents: "none", textAlign: "left",
+              /* UX-17: direction-aware fade-in */
+              animation: showBelow ? "cpf-tooltip-in-below 0.13s ease forwards" : "cpf-tooltip-in 0.13s ease forwards" }}>
               {text}
               <span style={caretStyle} />
             </span>
@@ -4257,6 +4259,53 @@ function SetupWizard({ onComplete, onSkip }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── FieldResetBtn (UX-10) ─────────────────────────────────────────────────────
+// Renders a small ↺ reset button that appears on hover when a field differs from
+// its DEFAULT_INPUTS value. Shows the default value in a native title tooltip.
+// Usage: wrap the field label row in a div with className="cpf-field-row", then
+// place <FieldResetBtn name="fieldName" inputs={inputs} setInputs={setInputs} />
+// inside that div.
+//
+// The button is positioned absolutely at the far right of the row so it never
+// shifts text layout. CSS .cpf-field-row:hover .field-reset-btn { opacity:1 }
+// reveals it only on pointer-hover to avoid visual clutter.
+const FieldResetBtn = ({ name, inputs, setInputs }) => {
+  const defaultVal = DEFAULT_INPUTS[name];
+  const currentVal = inputs[name];
+  const changed = String(currentVal) !== String(defaultVal);
+  if (!changed) return null;
+
+  const displayDefault = typeof defaultVal === 'number'
+    ? defaultVal.toLocaleString()
+    : String(defaultVal ?? '—');
+
+  return (
+    <button
+      type="button"
+      className="field-reset-btn"
+      title={`Default: ${displayDefault} — click to restore`}
+      onClick={(e) => {
+        e.stopPropagation();
+        setInputs(p => ({ ...p, [name]: defaultVal }));
+      }}
+      style={{
+        marginLeft: 'auto',
+        padding: '1px 5px', fontSize: 11, fontWeight: 800, lineHeight: 1.4,
+        background: 'rgba(var(--clr-amber-rgb),0.14)',
+        color: 'var(--clr-amber)',
+        border: '1px solid rgba(var(--clr-amber-rgb),0.35)',
+        borderRadius: 4, cursor: 'pointer',
+        opacity: 0,
+        transition: 'opacity 0.15s ease',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+      }}
+    >↺</button>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
@@ -4349,6 +4398,12 @@ export default function App() {
     catch { return true; }
   });
   const [gapAlertDismissed, setGapAlertDismissed] = useState(false);
+  // UX-14: Intro <details> panels open automatically on first visit (before wizard completion).
+  // Each panel is user-controllable after that — setIntroDetailsOpen propagates the toggle.
+  const [introDetailsOpen, setIntroDetailsOpen] = useState(() => {
+    try { return !localStorage.getItem('cpf_planner_setup_done'); }
+    catch { return false; }
+  });
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [showReportMenu, setShowReportMenu] = useState(false);
@@ -5188,10 +5243,13 @@ export default function App() {
   // through stable refs so the handler always uses current state/functions.
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
-      if (e.ctrlKey && e.key.toLowerCase() === 's') {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
+        // UX-12: was Ctrl+S — conflicted with browser "Save Page". Changed to Ctrl+Shift+S.
         e.preventDefault();
         handleShareLinkInitRef.current?.();
-      } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'r') {
+      } else if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'r') {
+        // UX-12: was Ctrl+Shift+R — Chrome fires hard-refresh before the app handler.
+        // Changed to Ctrl+Alt+R which has no conflicting browser binding.
         e.preventDefault();
         handleResetRef.current?.();
       } else if (e.ctrlKey && e.key === ']') {
@@ -9784,6 +9842,15 @@ ${milestoneSnapshotHtml}
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.45; }
         }
+        /* UX-17: tooltip portal fade-in — applied inline on the portal span */
+        @keyframes cpf-tooltip-in {
+          from { opacity: 0; transform: translateY(-6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes cpf-tooltip-in-below {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
         
         /* ─── BASE LAYOUT (desktop default) ─────────────────────────── */
         .cpf-layout {
@@ -10158,6 +10225,9 @@ ${milestoneSnapshotHtml}
         .cpf-gear-mobile-share { display: contents; }
         /* .cpf-gear-nomreal — Nom/Real inside gear; shown on mobile only */
         .cpf-gear-nomreal { display: none; }
+        /* UX-13: cpf-bar-nomreal — Nom/Real pill inside cpf-input-params-bar; hidden on desktop
+           (cpf-nav-nomreal handles desktop). Shown on tablet/mobile via @media blocks below. */
+        .cpf-bar-nomreal { display: none; }
 
         /* Tablet sticky bottom action bar — hidden by default, shown via @media 769–1024px */
         .tablet-action-bar {
@@ -10262,6 +10332,15 @@ ${milestoneSnapshotHtml}
           box-shadow: inset 3px 0 0 rgba(6, 95, 70, 0.75) !important;
         }
 
+        /* UX-10: per-field reset button — wraps a label row; reveals ↺ on hover */
+        .cpf-field-row {
+          position: relative;
+        }
+        .cpf-field-row:hover .field-reset-btn,
+        .cpf-field-row:focus-within .field-reset-btn {
+          opacity: 1 !important;
+        }
+
         /* Panel card — bg-panel + border-subtle + rounded corners */
         .cpf-card {
           background: var(--bg-panel);
@@ -10306,10 +10385,14 @@ ${milestoneSnapshotHtml}
         .cpf-row   { display: flex; align-items: center; gap: 8px; }
         .cpf-row-sb { display: flex; align-items: center; justify-content: space-between; }
         /* ── End Option A utility classes ── */
-        /* FreqToggle responsive — larger touch targets on narrow screens */
+        /* FreqToggle responsive — UX-8: larger touch targets + wrap duration on narrow screens */
         @media (max-width: 768px) {
-          .freq-toggle-wrap { margin-left: 0 !important; display: flex !important; }
-          .freq-toggle-wrap button { padding: 4px 10px !important; font-size: 13px !important; min-height: 30px; }
+          .freq-toggle-wrap { margin-left: 0 !important; display: flex !important; flex-wrap: wrap; gap: 4px; }
+          .freq-toggle-wrap button { padding: 5px 11px !important; font-size: 13px !important; min-height: 38px; }
+        }
+        @media (max-width: 420px) {
+          /* On very narrow screens the duration "for N yrs" control wraps to its own row */
+          .freq-toggle-wrap { flex-direction: column; align-items: flex-start; }
         }
 
         /* ─── WELCOME MODAL — global base (all viewports) ───────────── */
@@ -10374,6 +10457,8 @@ ${milestoneSnapshotHtml}
           .cpf-nav-tm-only { display: flex !important; }
           /* On tablet the Share/Report btns are inline — hide their duplicate in gear */
           .cpf-gear-mobile-share { display: none !important; }
+          /* UX-13: show Nom/Real pill in the input-params-bar on tablet */
+          .cpf-bar-nomreal { display: flex !important; }
           .desktop-only { display: none !important; }
           .rg-6, .rg-5 { grid-template-columns: repeat(3,1fr) !important; }
           .rg-4, .rg-3, .rg-2, .life-plans-grid { grid-template-columns: 1fr 1fr !important; }
@@ -10434,6 +10519,8 @@ ${milestoneSnapshotHtml}
           .cpf-nav-tm-only { display: flex !important; }
           /* Show Nom/Real inside gear dropdown on mobile */
           .cpf-gear-nomreal { display: block !important; }
+          /* UX-13: also show Nom/Real pill in the input-params-bar on mobile */
+          .cpf-bar-nomreal { display: flex !important; }
           /* Show Share/Report/etc in the gear dropdown on mobile */
           .cpf-gear-mobile-share { display: contents !important; }
           /* Show hamburger tab picker on mobile */
@@ -11383,20 +11470,29 @@ ${milestoneSnapshotHtml}
               <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Input Parameters</span>
               <ChevronDown className={`sidebar-chevron${sidebarOpen ? " open" : ""}`} style={{ width: 14, height: 14 }} />
             </div>
-            {sidebarOpen && (
-              <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
-                <button onClick={expandAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                  <ChevronDown style={{ width: 10, height: 10 }} />All
-                </button>
-                <button onClick={collapseAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                  <ChevronUp style={{ width: 10, height: 10 }} />None
-                </button>
-                <button onClick={() => setShowAdvanced(v => !v)} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)", color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)", border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                  <Settings style={{ width: 10, height: 10 }} />{showAdvanced ? "Adv ▲" : "⚙ Adv"}
-                </button>
+            {/* UX-13: Nom/Real toggle — visible here on tablet/mobile; hidden on desktop (cpf-nav-nomreal handles desktop).
+                Placed outside the onClick parent so tapping the toggle doesn't also collapse the sidebar. */}
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+              {/* Nom/Real pill — CSS class cpf-bar-nomreal hides this on desktop (≥1025px) */}
+              <div className="cpf-bar-nomreal" style={{ display: "flex", background: "var(--bg-panel)", padding: 2, borderRadius: 7, border: "1px solid var(--border-strong)", gap: 1 }}>
+                <button onClick={() => setIsRealDollars(false)} style={{ padding: "3px 10px", borderRadius: 5, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nom</button>
+                <button onClick={() => setIsRealDollars(true)}  style={{ padding: "3px 10px", borderRadius: 5, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background:  isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color:  isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real</button>
               </div>
-            )}
+            </div>
           </div>
+          {sidebarOpen && (
+            <div style={{ display: "flex", gap: 4, paddingBottom: 8 }} onClick={e => e.stopPropagation()}>
+              <button onClick={expandAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                <ChevronDown style={{ width: 10, height: 10 }} />All
+              </button>
+              <button onClick={collapseAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                <ChevronUp style={{ width: 10, height: 10 }} />None
+              </button>
+              <button onClick={() => setShowAdvanced(v => !v)} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)", color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)", border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                <Settings style={{ width: 10, height: 10 }} />{showAdvanced ? "Adv ▲" : "⚙ Adv"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -11537,12 +11633,15 @@ ${milestoneSnapshotHtml}
                       </div>
                     ))}
                     <div>
-                      <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputs.cpfScheme === 'rss' ? "var(--text-muted)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>
-                        Payout At {isForeigner && <span style={{ fontSize: 11, color: "var(--clr-amber3)", marginLeft: 4 }}>🔒 CPF LIFE N/A</span>}
-                        {inputs.cpfScheme === 'rss' && <span style={{ fontSize: 11, color: "var(--clr-amber3)", marginLeft: 4 }}>🔒 RSS only</span>}
+                      <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: inputs.cpfScheme === 'rss' ? "var(--text-muted)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>
+                        <span>Payout At {isForeigner && <span style={{ fontSize: 11, color: "var(--clr-amber3)", marginLeft: 4 }}>🔒 CPF LIFE N/A</span>}
+                        {inputs.cpfScheme === 'rss' && <span style={{ fontSize: 11, color: "var(--clr-amber3)", marginLeft: 4 }}>🔒 RSS only</span>}</span>
+                        <FieldResetBtn name="payoutAge" inputs={inputs} setInputs={setInputs} />
                       </div>
                       <div style={{ opacity: (isForeigner || inputs.cpfScheme === 'rss') ? 0.3 : 1, pointerEvents: (isForeigner || inputs.cpfScheme === 'rss') ? "none" : "auto", position: "relative" }}>
-                        <select name="payoutAge" autoComplete="off" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" disabled={inputs.cpfScheme === 'rss'} className={fieldChanged("payoutAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none", MozAppearance: "none" }}>
+                        <select name="payoutAge" autoComplete="off" value={inputs.payoutAge} onChange={handleInputChange} aria-label="CPF LIFE payout start age" disabled={inputs.cpfScheme === 'rss'} className={fieldChanged("payoutAge") ? "cpf-fc" : undefined} title="Choose the age at which you want CPF LIFE payouts to begin (65–70)" style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none", MozAppearance: "none" }}>
+                          {/* UX-16: disabled placeholder so iOS native picker shows hint text */}
+                          <option value="" disabled style={{ color: "var(--text-muted)" }}>Payout start age…</option>
                           {[65, 66, 67, 68, 69, 70].map(a => <option key={a} value={a} style={{ background: "var(--bg-input)", color: "var(--text-bright)" }}>{a}</option>)}
                         </select>
                       </div>
@@ -12159,10 +12258,13 @@ ${milestoneSnapshotHtml}
                 collapsedHint="Ordinary (OA) · Special / Retirement (SA/RA) · MediSave (MA) · Progress trackers toward FRS, ERS and BHS" />
               {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {/* Balance inputs */}
+                  {/* Balance inputs — UX-10: each label row is cpf-field-row; ↺ appears on hover when changed */}
                   {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
                     <div key={n}>
-                      <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
+                      <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>
+                        <span>{l}</span>
+                        <FieldResetBtn name={n} inputs={inputs} setInputs={setInputs} />
+                      </div>
                       <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l + ' balance'} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                   ))}
@@ -12744,9 +12846,10 @@ ${milestoneSnapshotHtml}
 
                   {/* VC3A — single cash lump-sum + read-only breakdown */}
                   <div>
-                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
-                      VC3A – Cash Lump Sum <FreqToggle freqKey="vc3aFreq" durKey="vc3aDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-vc3a" text="Voluntary Contribution to 3 Accounts — cash only. Auto-split across OA/SA/MA using your age-band allocation rates. Counts toward the $37,740 Annual Limit. No tax relief for employees." />
+                    <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
+                      <span>VC3A – Cash Lump Sum <FreqToggle freqKey="vc3aFreq" durKey="vc3aDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-vc3a" text="Voluntary Contribution to 3 Accounts — cash only. Auto-split across OA/SA/MA using your age-band allocation rates. Counts toward the $37,740 Annual Limit. No tax relief for employees." /></span>
+                      <FieldResetBtn name="vc3aCash" inputs={inputs} setInputs={setInputs} />
                     </div>
                     <input type="text" inputMode="decimal" name="vc3aCash" value={getDisplayValue("vc3aCash", inputs.vc3aCash)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                       aria-label="VC3A annual cash contribution" onFocus={() => setFocusedField("vc3aCash")} className={fieldChanged("vc3aCash") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${isVcOverLimit ? "#f97316" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -12857,9 +12960,10 @@ ${milestoneSnapshotHtml}
                     })()}
                   </div>
                   <div ref={rstuRef}>
-                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
-                      RSTU – {is55Plus ? "RA" : "SA"} Cash Top-up <FreqToggle freqKey="vcSaFreq" durKey="vcSaDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-rstu" text={`Retirement Sum Topping-Up Scheme — cash top-up to your ${is55Plus ? "RA" : "SA"} directly (not split across accounts). Eligible for up to $8,000/yr tax relief (own account) + $8,000 for loved ones. Capped at FRS (SA) or ERS (RA). NOT counted in Annual Limit.`} />
+                    <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
+                      <span>RSTU – {is55Plus ? "RA" : "SA"} Cash Top-up <FreqToggle freqKey="vcSaFreq" durKey="vcSaDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-rstu" text={`Retirement Sum Topping-Up Scheme — cash top-up to your ${is55Plus ? "RA" : "SA"} directly (not split across accounts). Eligible for up to $8,000/yr tax relief (own account) + $8,000 for loved ones. Capped at FRS (SA) or ERS (RA). NOT counted in Annual Limit.`} /></span>
+                      <FieldResetBtn name="vcSaTopup" inputs={inputs} setInputs={setInputs} />
                     </div>
                     <input type="text" inputMode="decimal" name="vcSaTopup" value={getDisplayValue("vcSaTopup", inputs.vcSaTopup)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                       aria-label="RSTU annual cash top-up" onFocus={() => setFocusedField("vcSaTopup")} className={fieldChanged("vcSaTopup") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.vcSaTopup ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -13404,9 +13508,10 @@ ${milestoneSnapshotHtml}
                         <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>0 = disabled · ≥ payout age</p>
                       </div>
                       <div>
-                        <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
-                          Monthly Draw ($)
-                          <TooltipBox id="t-oa-draw-amt" text="Monthly cash drawn from OA to supplement CPF LIFE. OA continues earning 2.5%/yr on the remaining balance. Draw stops automatically when OA hits the bequest floor. Use ⚡ Fill Gap to auto-calculate the exact amount needed to meet your retirement income target." />
+                        <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase", marginBottom: 4 }}>
+                          <span>Monthly Draw ($)
+                          <TooltipBox id="t-oa-draw-amt" text="Monthly cash drawn from OA to supplement CPF LIFE. OA continues earning 2.5%/yr on the remaining balance. Draw stops automatically when OA hits the bequest floor. Use ⚡ Fill Gap to auto-calculate the exact amount needed to meet your retirement income target." /></span>
+                          <FieldResetBtn name="oaDrawdownMonthly" inputs={inputs} setInputs={setInputs} />
                         </div>
                         <input type="text" inputMode="decimal" name="oaDrawdownMonthly" aria-label="OA monthly drawdown amount" value={inputs.oaDrawdownMonthly} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownMonthly") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownMonthly ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
                         {inputErrors.oaDrawdownMonthly && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownMonthly}</p>}
@@ -13893,9 +13998,10 @@ ${milestoneSnapshotHtml}
 
                   {/* Housing loan — locked for foreigners (no OA account) */}
                   {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
-                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                      Housing Loan — OA Outflow ($/yr) <FreqToggle freqKey="housingFreq" durKey="housingDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-housing-prop" text="Annual OA deduction for mortgage repayment. Stops at Housing Stop Age. Tracked for CPF refund on property sale." />
+                    <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
+                      <span>Housing Loan — OA Outflow ($/yr) <FreqToggle freqKey="housingFreq" durKey="housingDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-housing-prop" text="Annual OA deduction for mortgage repayment. Stops at Housing Stop Age. Tracked for CPF refund on property sale." /></span>
+                      <FieldResetBtn name="housingOutflow" inputs={inputs} setInputs={setInputs} />
                     </div>
                     <input type="text" inputMode="decimal" name="housingOutflow" value={getDisplayValue("housingOutflow", inputs.housingOutflow)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual housing loan outflow" onFocus={() => setFocusedField("housingOutflow")} className={fieldChanged("housingOutflow") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.housingOutflow ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     {inputErrors.housingOutflow && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.housingOutflow}</p>}
@@ -14722,8 +14828,8 @@ ${milestoneSnapshotHtml}
                   </div>
                 )}
 
-                {/* Summary tab intro — collapsible via native <details> (no hooks) */}
-                <details style={{ borderRadius: 14, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
+                {/* Summary tab intro — UX-14: auto-opens on first visit via introDetailsOpen state */}
+                <details open={introDetailsOpen} onToggle={e => setIntroDetailsOpen(e.currentTarget.open)} style={{ borderRadius: 14, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
                   <summary style={{ padding: "10px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                     <p style={{ fontWeight: 700, color: "var(--text-highlight)", margin: 0, fontSize: 14 }}>📋 Summary Tab — What You're Looking At</p>
                     <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)" }} />
@@ -15246,7 +15352,7 @@ ${milestoneSnapshotHtml}
                         {!isForeigner && (
                           <div style={{ paddingTop: 12, borderTop: "0.5px solid var(--border-subtle)" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                              <span className="cpf-label">
                                 {isAlreadyPast55_z2 ? `RA vs FRS (age ${ca_z2})` : "RA vs FRS target at 55"}
                               </span>
                               <span style={{ fontSize: 12, fontWeight: 700, color: frsStatusColor_z2, padding: "2px 8px", borderRadius: 20, background: `${frsStatusColor_z2}18` }}>{frsStatusLabel_z2}</span>
@@ -16676,7 +16782,7 @@ ${milestoneSnapshotHtml}
                     ["Est. Depletion Age", depletionAge != null ? `Age ${depletionAge}` : rssMonthlyAmt > 0 ? ">95" : "Set payout", depletionAge != null && depletionAge < 85 ? "var(--clr-red)" : "var(--clr-green)", "Age when RA balance hits $0"],
                   ].map(([label, val, col, tip]) => (
                     <div key={label} title={tip} style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "12px 14px", border: "1px solid var(--border-subtle)", cursor: "help" }}>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", margin: "0 0 4px" }}>{label}</p>
+                      <p className="cpf-label" style={{ margin: "0 0 4px" }}>{label}</p>
                       <p style={{ fontSize: 15, fontWeight: 900, color: col, fontFamily: "monospace", margin: 0 }}>{val}</p>
                     </div>
                   ))}
@@ -16786,7 +16892,7 @@ ${milestoneSnapshotHtml}
                               ["Payout difference", postMigrMonthly > 0 && rssMonthlyAmt > 0 ? `${postMigrMonthly > rssMonthlyAmt ? "+" : ""}${formatCurrency(postMigrMonthly - rssMonthlyAmt)}/mo` : "—", postMigrMonthly >= rssMonthlyAmt ? "var(--clr-green)" : "var(--clr-red)"],
                             ].map(([label, val, col]) => (
                               <div key={label} style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)" }}>
-                                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", margin: "0 0 4px" }}>{label}</p>
+                                <p className="cpf-label" style={{ margin: "0 0 4px" }}>{label}</p>
                                 <p style={{ fontSize: 14, fontWeight: 900, color: col, fontFamily: "monospace", margin: 0 }}>{val}</p>
                               </div>
                             ))}
@@ -16920,8 +17026,8 @@ ${milestoneSnapshotHtml}
                   </div>
                 ) : (
                   <>
-                  {/* LIFE tab intro — collapsible via native <details> (no hooks) */}
-                  <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
+                  {/* LIFE tab intro — UX-14: auto-opens on first visit */}
+                  <details open={introDetailsOpen} onToggle={e => setIntroDetailsOpen(e.currentTarget.open)} style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
                     <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                       <p style={{ fontWeight: 700, color: "var(--text-highlight)", margin: 0, fontSize: 14 }}>📊 LIFE Tab — How to Read This Tab</p>
                       <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)" }} />
@@ -17127,7 +17233,7 @@ ${milestoneSnapshotHtml}
                           const isRef = age === refAge;
                           return (
                             <div key={age} style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "10px 12px", border: `1px solid ${isRef ? "rgba(var(--clr-violet-rgb),0.4)" : "var(--border-subtle)"}`, opacity: isPayout ? 1 : 0.45 }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 5 }}>Age {age}{isRef ? " ◀" : ""}</div>
+                              <div className="cpf-label" style={{ marginBottom: 5 }}>Age {age}{isRef ? " ◀" : ""}</div>
                               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--clr-violet)", marginBottom: 3 }}>{formatCurrency(total)}</div>
                               <div style={{ fontSize: 11, color: "var(--text-subtle)", lineHeight: 1.5 }}>
                                 <div>CPF: {formatCurrency(bequest+oa+ma)}</div>
@@ -17191,7 +17297,7 @@ ${milestoneSnapshotHtml}
                           style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel-muted)", border: `1px solid ${border}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
                         {scenario ? (
                           <div style={{ flex: 1, marginBottom: 12 }}>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Changed inputs vs default</p>
+                            <p className="cpf-label" style={{ marginBottom: 8 }}>Changed inputs vs default</p>
                             <div style={{ maxHeight: 160, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
                               {Object.keys(DEFAULT_INPUTS).filter(k => (String(scenario.inputs[k]) !== String(DEFAULT_INPUTS[k]) || k === 'payoutAge' || k === 'currentAge') && k !== 'name').map(k => {
                                 const rawVal = scenario.inputs[k];
@@ -18430,7 +18536,7 @@ ${milestoneSnapshotHtml}
                       ["3", "Add Voluntary Top-Ups & CPF Transfers", "var(--clr-purple)", "rgba(var(--clr-purple-rgb),0.08)", "rgba(var(--clr-purple-rgb),0.2)", "Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the first projection year. RSTU tops up SA (pre-55) or RA (post-55). CPF Transfers support For Self (internal move with FRS/ERS cap) and For Loved One (OA outflow only). CPFIS: OA above $20k and SA above $40k are investible separately with their own frequency toggles."],
                       ["4", "Compare CPF LIFE Plans", "var(--clr-amber)", "rgba(var(--clr-amber3-rgb),0.08)", "rgba(var(--clr-amber3-rgb),0.2)", "Open the LIFE Comparison tab to evaluate Standard, Escalating, and Basic plans. Vertical lines explicitly mark age intersections for total yield and payouts. Toggle between Bequest and Cumulative Payout views."],
                       ["5", "Explore What-If & Compare Scenarios", "var(--clr-orange)", "rgba(249,115,22,0.08)", "rgba(249,115,22,0.2)", "The What-If Explorer is in the Summary tab (scroll down past the milestone alerts). Drag sliders to instantly see how changes to payout age, SA/RA top-up, housing outflow, salary, contribution stop age, OA drawdown, SRS, or private growth affect your total balance — no saved inputs are touched. The Compare tab is dedicated to Scenario A vs B diffs: save your current inputs as Scenario A, adjust any parameters, then save as Scenario B for a colour-coded side-by-side diff of every metric that changes."],
-                      ["6", "Share & Export", "#f43f5e", "rgba(244,63,94,0.08)", "rgba(244,63,94,0.2)", "Use Share to encode your entire profile into a URL. Download a PDF report or CSV. On desktop, all primary actions (Share, Report, Display settings) are direct buttons in the navbar — no gear icon. On tablet/mobile, the ⚙ gear gives access to everything including Share and Report. Keyboard shortcuts: Ctrl+S (Share), Ctrl+Shift+R (Reset), Ctrl+]/[ (switch tabs). To relaunch the Setup Wizard at any time, open the Display▾ menu (desktop) or ⚙ Settings (mobile/tablet) and click Setup Wizard."],
+                      ["6", "Share & Export", "#f43f5e", "rgba(244,63,94,0.08)", "rgba(244,63,94,0.2)", "Use Share to encode your entire profile into a URL. Download a PDF report or CSV. On desktop, all primary actions (Share, Report, Display settings) are direct buttons in the navbar — no gear icon. On tablet/mobile, the ⚙ gear gives access to everything including Share and Report. Keyboard shortcuts: Ctrl+Shift+S (Share), Ctrl+Alt+R (Reset), Ctrl+]/[ (switch tabs). To relaunch the Setup Wizard at any time, open the Display▾ menu (desktop) or ⚙ Settings (mobile/tablet) and click Setup Wizard."],
                       ["7", "Load a Sample Profile", "#0ea5e9", "rgba(14,165,233,0.08)", "rgba(14,165,233,0.2)", "Click Samples in the header (desktop) or ☰ hamburger menu (mobile) to choose from 11 pre-built scenarios: Blank Slate, Typical Employee (35), Late Starter (50), Self-Employed (40), High Earner (40), Near Retirement (54), Post-55 RA Builder (57), RSS Member (68), Household — Tan Family (38 & 36), Baby Millionaire A (Full Launch), and Baby Millionaire B (Annual Only). Loading a sample overwrites current inputs — export your profile first."],
                       ["8", "Annual Cashflow Ledger", "#2dd4bf", "rgba(45,212,191,0.08)", "rgba(45,212,191,0.2)", "In the Data Table tab, switch to the Cashflow Ledger sub-tab for a complete year-by-year breakdown of every flow: mandatory contributions, voluntary top-ups, gov grants/WIS, OA/SA-RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with a column totals row at the bottom. Download as CSV."],
                     ].map(([num, title, color, bg, border, text]) => (
@@ -19235,8 +19341,8 @@ ${milestoneSnapshotHtml}
               return (
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 24 }}>
 
-                  {/* ── Strategy tab intro — collapsible 3-step guide ── */}
-                  <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
+                  {/* ── Strategy tab intro — UX-14: auto-opens on first visit ── */}
+                  <details open={introDetailsOpen} onToggle={e => setIntroDetailsOpen(e.currentTarget.open)} style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
                     <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                       <Target style={{ width: 13, height: 13, color: "#f43f5e", flexShrink: 0 }} />
                       <span style={{ fontWeight: 700, color: "var(--text-highlight)", fontSize: 14 }}>How to use the Strategy tab</span>
