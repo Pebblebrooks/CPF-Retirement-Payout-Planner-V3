@@ -120,7 +120,7 @@ const MMSS_PILOT_END_YEAR   = 2030;
 // this constant and filter dynamically using the isForeigner / cpfScheme / householdEnabled flags.
 // Format: [id, label, Icon, accentColor]
 const TAB_CONFIG = [
-  ["guide",        "Guide",      BookOpen,    "var(--clr-blue)"],  // merged Welcome + Docs
+  ["guide",        "Docs",       BookOpen,    "var(--clr-blue)"],  // merged Welcome (Quick Start) + Docs (Reference)
   ["summary",      "Summary",    PieChart,    "var(--clr-emerald)"],
   ["strategy",     "Strategy",   Target,      "#f43f5e"],
   ["accumulation", "Growth",     BarChart3,   "var(--clr-blue2)"],
@@ -4398,9 +4398,13 @@ export default function App() {
     catch { return true; }
   });
   const [gapAlertDismissed, setGapAlertDismissed] = useState(false);
-  // guideView: sub-tab within the merged Guide tab. 'quickstart' shows Welcome cards;
-  // 'reference' shows the full Docs reference manual with sticky anchor nav.
-  const [guideView, setGuideView] = useState('quickstart');
+  // guideView: sub-tab within the merged Docs tab. 'quickstart' shows Welcome onboarding cards;
+  // 'reference' shows the full reference manual with sticky anchor nav.
+  // Defaults to 'reference' for returning users (setup done) and 'quickstart' for first-timers.
+  const [guideView, setGuideView] = useState(() => {
+    try { return localStorage.getItem('cpf_planner_setup_done') ? 'reference' : 'quickstart'; }
+    catch { return 'reference'; }
+  });
   // UX-14: Intro <details> panels open automatically on first visit (before wizard completion).
   // Each panel is user-controllable after that — setIntroDetailsOpen propagates the toggle.
   const [introDetailsOpen, setIntroDetailsOpen] = useState(() => {
@@ -9845,14 +9849,15 @@ ${milestoneSnapshotHtml}
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.45; }
         }
-        /* UX-17: tooltip portal fade-in — applied inline on the portal span */
+        /* UX-17: tooltip portal fade-in — opacity only; no transform to avoid
+           overriding the inline tipTransform positioning (translateX(-50%) etc.) */
         @keyframes cpf-tooltip-in {
-          from { opacity: 0; transform: translateY(-6px); }
-          to   { opacity: 1; transform: translateY(0); }
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
         @keyframes cpf-tooltip-in-below {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0); }
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
         
         /* ─── BASE LAYOUT (desktop default) ─────────────────────────── */
@@ -14661,7 +14666,7 @@ ${milestoneSnapshotHtml}
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)" }}>
                   <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                    <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Guide
+                    <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
                   </h3>
                   <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
                     <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'quickstart' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'quickstart' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
@@ -18451,7 +18456,7 @@ ${milestoneSnapshotHtml}
                 {/* Sub-tab toggle — mirrored from Quick Start block so user can switch back */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)" }}>
                   <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                    <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Guide
+                    <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
                   </h3>
                   <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
                     <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all 0.15s" }}>
