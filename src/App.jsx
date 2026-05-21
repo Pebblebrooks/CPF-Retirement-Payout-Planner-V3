@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, createContext, useContext } from "react";
+  import React, { useState, useMemo, useEffect, useRef, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -4446,7 +4446,7 @@ function ReadinessTab({
         {/* Gauge card */}
         <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
           <p style={{ ...labelStyle, marginBottom: 8 }}>Retirement Readiness</p>
-          <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible", maxWidth: "100%" }}>
+          <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible", maxWidth: "100%", height: "auto" }}>
             {/* Track */}
             <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
             {/* Fill */}
