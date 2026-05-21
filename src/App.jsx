@@ -4408,9 +4408,10 @@ function ReadinessTab({
   // Gauge arc path (semi-circle: left = 0%, right = 100%)
   const gaugeArc = (pct) => {
     // Semi-circle gauge: arc sweeps from left (180deg) through the TOP to right (0deg).
-    // SVG y-axis points down, so sweep-flag=0 (counterclockwise) goes UPWARD — correct.
+    // SVG y-axis points down. sweep=1 (clockwise in screen coords) draws the arc UPWARD
+    // through the top of the circle — correct for a speedometer gauge.
+    // sweep=0 (counterclockwise) would go DOWNWARD through y≈162, outside the 100px viewBox.
     // Arc span is always <=180deg (max at pct=100), so large-arc-flag is always 0.
-    // The original sweep-flag=1 (clockwise) went DOWNWARD through y=162, outside the viewBox.
     const cx = 110, cy2 = 90, r = 72;
     const clampedPct = Math.min(1, Math.max(0, pct / 100));
     if (clampedPct <= 0) return '';
@@ -4421,8 +4422,10 @@ function ReadinessTab({
     const y1 = cy2 + r * Math.sin(startAngle);
     const x2 = cx + r * Math.cos(endAngle);
     const y2 = cy2 + r * Math.sin(endAngle);
-    // large=0: arc span <=180deg for all valid pct. sweep=0: counterclockwise = upward.
-    return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 0 0 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+    // large=0: arc span <=180deg for all valid pct. sweep=1: clockwise in SVG = upward (top semi-circle).
+    // NOTE: SVG y-axis points DOWN, so sweep=1 (CW in screen coords) draws the arc UPWARD through
+    // the top of the circle. sweep=0 would go DOWNWARD through y≈162, outside the 100px viewBox.
+    return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
   };
 
   const cardStyle = {
@@ -10849,6 +10852,7 @@ ${milestoneSnapshotHtml}
              margin edge (28px above the border). Override margin-top to 0 so "top" = exact pixel
              from viewport top. Tablet has no fixed header so top:0 = stick right at viewport top. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
+          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
         }
 
         /* ─── MOBILE  ≤ 768 px ───────────────────────────────────────── */
@@ -10940,6 +10944,7 @@ ${milestoneSnapshotHtml}
           .wi-sliders-grid { grid-template-columns: 1fr !important; }
           /* Docs tab: same margin-top:0 fix as tablet. No fixed header at 641–768px so top:0 is correct. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
+          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
         }
 
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
@@ -10966,6 +10971,8 @@ ${milestoneSnapshotHtml}
              bar edge-to-edge inside the 28px-padded parent are preserved. top:48px is then exact. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 48px !important; padding: 14px 14px 10px !important; }
           #docs-sticky-nav h3 { font-size: 16px !important; }
+          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 48px !important; padding: 14px 14px 10px !important; }
+          #qs-sticky-banner  h3 { font-size: 16px !important; }
         }
 
         /* ─── SMALL PHONE HEADER  ≤ 640 px ─────────────────────────── */
@@ -10987,6 +10994,7 @@ ${milestoneSnapshotHtml}
           .desktop-only { display: none !important; }
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
           #docs-sticky-nav { top: 48px !important; }
+          #qs-sticky-banner  { top: 48px !important; }
         }
         @media (min-width: 641px) {
           .cpf-mobile-top-spacer { display: none !important; }
@@ -15041,17 +15049,46 @@ ${milestoneSnapshotHtml}
             {activeTab === "guide" && guideView === 'quickstart' && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)" }}>
-                  <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                    <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
-                  </h3>
-                  <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
-                    <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'quickstart' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'quickstart' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
-                      🚀 Quick Start
-                    </button>
-                    <button onClick={() => setGuideView('reference')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'reference' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'reference' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
-                      📖 Reference
-                    </button>
+                {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
+                <div id="qs-sticky-banner" style={{ position: "sticky", top: -28, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
+                  {/* Title row + QS/Reference toggle */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
+                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
+                    </h3>
+                    <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
+                      <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'quickstart' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'quickstart' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
+                        🚀 Quick Start
+                      </button>
+                      <button onClick={() => setGuideView('reference')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'reference' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'reference' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
+                        📖 Reference
+                      </button>
+                    </div>
+                  </div>
+                  {/* ── 4 section quick-access buttons ── */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {[
+                      { id: "qs-page-1", label: "📋 Welcome",       accent: "var(--clr-emerald)" },
+                      { id: "qs-page-2", label: "👤 Profile Setup",  accent: "var(--clr-blue2)"  },
+                      { id: "qs-page-3", label: "📊 Dashboard",      accent: "var(--clr-purple)" },
+                      { id: "qs-page-4", label: "⚡ Advanced",       accent: "var(--clr-amber)"  },
+                    ].map(({ id, label, accent }) => (
+                      <button key={id} onClick={() => {
+                        const target = document.getElementById(id);
+                        const bar    = document.getElementById('qs-sticky-banner');
+                        const scrollEl = target?.closest('.cpf-tab-content');
+                        if (bar && target) {
+                          const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
+                          const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
+                          if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
+                          else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+                      }} style={{ padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: `1px solid ${accent}44`, background: `${accent}14`, color: accent, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                        onMouseEnter={e => { e.currentTarget.style.background = `${accent}28`; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = `${accent}14`; }}>
+                        {label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -15059,7 +15096,7 @@ ${milestoneSnapshotHtml}
                 {guideView === 'quickstart' && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {/* Page 1 */}
-                  <div style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(16,185,129,0.12)" }}>
+                  <div id="qs-page-1" style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(16,185,129,0.12)" }}>
                     <div className="welcome-banner-green" style={{ background: "linear-gradient(145deg, #022c22 0%, #065f46 45%, #10b981 80%, #6ee7b7 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
                       <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><Calculator style={{ width: 20, height: 20, color: "#ecfdf5" }} /></div>
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#ecfdf5", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Welcome to CPF Planner Pro</h4><p style={{ fontSize: 13, color: "rgba(236,253,245,0.8)", margin: 0 }}>Your end-to-end Singapore retirement simulation engine</p></div>
@@ -15080,7 +15117,7 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                   {/* Page 2 */}
-                  <div style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(59,130,246,0.12)" }}>
+                  <div id="qs-page-2" style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(59,130,246,0.12)" }}>
                     <div className="welcome-banner-blue" style={{ background: "linear-gradient(145deg, #0c1a3a 0%, #1e40af 45%, #3b82f6 80%, #93c5fd 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
                       <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><User style={{ width: 20, height: 20, color: "#eff6ff" }} /></div>
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#eff6ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Setting Up Your Profile</h4><p style={{ fontSize: 13, color: "rgba(239,246,255,0.8)", margin: 0 }}>Step 1 — The Input Engine (left panel)</p></div>
@@ -15095,7 +15132,7 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                   {/* Page 3 */}
-                  <div style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(139,92,246,0.12)" }}>
+                  <div id="qs-page-3" style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(139,92,246,0.12)" }}>
                     <div className="welcome-banner-purple" style={{ background: "linear-gradient(145deg, #1e0338 0%, #6b21a8 45%, #a855f7 80%, #d8b4fe 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
                       <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><LayoutDashboard style={{ width: 20, height: 20, color: "#faf5ff" }} /></div>
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#faf5ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Exploring the Dashboard</h4><p style={{ fontSize: 13, color: "rgba(250,245,255,0.8)", margin: 0 }}>Step 2 — The right panel tabs</p></div>
@@ -15113,7 +15150,7 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                   {/* Page 4 */}
-                  <div style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(245,158,11,0.12)" }}>
+                  <div id="qs-page-4" style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(245,158,11,0.12)" }}>
                     <div style={{ background: "linear-gradient(145deg, #431407 0%, #b45309 45%, #f59e0b 80%, #fde68a 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
                       <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><Lightbulb style={{ width: 20, height: 20, color: "#fffbeb" }} /></div>
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#fffbeb", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Advanced Features & Disclaimer</h4><p style={{ fontSize: 13, color: "rgba(255,251,235,0.8)", margin: 0 }}>Step 3 — Power tools and legal notice</p></div>
@@ -15134,6 +15171,21 @@ ${milestoneSnapshotHtml}
                         <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER}</p>
                       </div>
                     </div>
+                  </div>
+                  {/* ── Back to Top — sticky bottom, appears once user has scrolled ── */}
+                  <div style={{ position: "sticky", bottom: 20, display: "flex", justifyContent: "flex-end", pointerEvents: "none", marginTop: 4 }}>
+                    <button
+                      onClick={() => {
+                        const scrollEl = document.querySelector('.cpf-tab-content');
+                        const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
+                        if (isScrollable) { scrollEl.scrollTo({ top: 0, behavior: 'smooth' }); }
+                        else              { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                      }}
+                      style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-panel)", backdropFilter: "blur(8px)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transition: "all 0.15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "var(--text-bright)"; e.currentTarget.style.borderColor = "var(--clr-blue)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)";  e.currentTarget.style.borderColor = "var(--border-strong)"; }}>
+                      ↑ Back to Top
+                    </button>
                   </div>
                 </div>
                 )} {/* end quickstart view */}
