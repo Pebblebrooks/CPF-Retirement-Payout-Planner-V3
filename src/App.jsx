@@ -4407,19 +4407,22 @@ function ReadinessTab({
 
   // Gauge arc path (semi-circle: left = 0%, right = 100%)
   const gaugeArc = (pct) => {
+    // Semi-circle gauge: arc sweeps from left (180deg) through the TOP to right (0deg).
+    // SVG y-axis points down, so sweep-flag=0 (counterclockwise) goes UPWARD — correct.
+    // Arc span is always <=180deg (max at pct=100), so large-arc-flag is always 0.
+    // The original sweep-flag=1 (clockwise) went DOWNWARD through y=162, outside the viewBox.
     const cx = 110, cy2 = 90, r = 72;
     const clampedPct = Math.min(1, Math.max(0, pct / 100));
-    const startAngle = Math.PI;                          // 180° = left
-    const endAngle   = Math.PI + clampedPct * Math.PI;  // rotates clockwise to right
+    if (clampedPct <= 0) return '';
+    // endAngle = PI*(1 - clampedPct): at 100% -> 0 (right); at 0% -> PI (left, same as start)
+    const startAngle = Math.PI;
+    const endAngle   = Math.PI * (1 - clampedPct);
     const x1 = cx + r * Math.cos(startAngle);
     const y1 = cy2 + r * Math.sin(startAngle);
     const x2 = cx + r * Math.cos(endAngle);
     const y2 = cy2 + r * Math.sin(endAngle);
-    const large = clampedPct > 0.5 ? 1 : 0;
-    if (clampedPct >= 0.999) {
-      return `M ${cx - r} ${cy2} A ${r} ${r} 0 1 1 ${cx - r + 0.001} ${cy2}`;
-    }
-    return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+    // large=0: arc span <=180deg for all valid pct. sweep=0: counterclockwise = upward.
+    return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 0 0 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
   };
 
   const cardStyle = {
@@ -5726,11 +5729,15 @@ export default function App() {
   }
   const totalMandatory = isSelfEmployed ? sepMandatoryMA_ui : ((Number(inputs.empOaCont) || 0) + (Number(inputs.empSaCont) || 0) + (Number(inputs.empMaCont) || 0));
   const maxAllowableVC = Math.max(0, ANNUAL_LIMIT - totalMandatory);
-  // VC3A lump-sum + VHR counted toward Annual Limit; RSTU is separate (no Annual Limit)
-  // VHR (Housing Refund) is NOT subject to the Annual Limit — it refunds CPF used for housing
-  // Only VC3A counts toward the Annual Limit
-  const totalVC = (Number(inputs.vc3aCash) || 0);
-  const isVcOverLimit = totalVC > maxAllowableVC;
+  // Annual Limit ($37,740) applies to mandatory + VC3A only.
+  // RSTU (vcSaTopup) cash top-ups go directly to SA/RA and are exempt from the Annual Limit
+  // per CPF Board policy (they have their own $8k tax-relief cap and FRS/ERS ceiling).
+  // For badge display we include RSTU in totalVC so users see visual feedback when changing
+  // RSTU — the badge tooltip clarifies that only VC3A counts toward the Annual Limit cap.
+  const vc3aOnly = (Number(inputs.vc3aCash) || 0);
+  const rstuOnly = (Number(inputs.vcSaTopup) || 0);
+  const totalVC = vc3aOnly + rstuOnly;                // badge numerator (display only)
+  const isVcOverLimit = vc3aOnly > maxAllowableVC;    // over-limit check: VC3A only, not RSTU
 
   // ── Section completion indicators — derived from inputs against DEFAULT_INPUTS defaults.
   // A section is "active" (green dot) when the user has entered at least one non-default value.
@@ -13167,12 +13174,15 @@ ${milestoneSnapshotHtml}
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit ? "#f97316" : isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
               <SidebarSectionHeader id="topups" label="Inflows ($/yr)" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => toggleSection("topups")} collapsedHint="VC3A · RSTU · VCMA cash top-up to MA · MRSS · MMSS · Gov Grants · WIS" badge={(() => {
-                const vc3aVal = Number(inputs.vc3aCash) || 0;
-                const usedPct = maxAllowableVC > 0 ? Math.min(1, vc3aVal / maxAllowableVC) : (vc3aVal > 0 ? 1 : 0);
+                // Fix 3: badge now reflects VC3A + RSTU combined so it updates when either field changes.
+                // Policy: only VC3A counts toward the $37,740 Annual Limit; RSTU is exempt.
+                // usedPct uses totalVC (vc3aOnly + rstuOnly) for display; isVcOverLimit checks vc3aOnly only.
+                const usedPct = maxAllowableVC > 0 ? Math.min(1, totalVC / maxAllowableVC) : (totalVC > 0 ? 1 : 0);
                 const barColor = isVcOverLimit ? "#f97316" : usedPct >= 0.75 ? "var(--clr-amber)" : "var(--clr-green)";
+                const tooltipText = `VC3A ($${vc3aOnly.toLocaleString()}) + RSTU ($${rstuOnly.toLocaleString()}) = $${totalVC.toLocaleString()} of $${maxAllowableVC.toLocaleString()} available. Note: only VC3A counts toward the $37,740 CPF Annual Limit — RSTU cash top-ups are exempt and have their own $8,000/yr tax-relief cap.`;
                 return (
-                  <span style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-                    {/* Mini progress bar for Annual Limit — always visible even when section is collapsed */}
+                  <span title={tooltipText} style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                    {/* Mini progress bar — tracks VC3A+RSTU vs Annual Limit room; updates on either field change */}
                     <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-subtle)", lineHeight: 1 }}>Limit</span>
                       <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
@@ -18819,22 +18829,23 @@ ${milestoneSnapshotHtml}
                 sole child of the tab content div. */}
             {activeTab === "guide" && guideView === 'reference' && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
-                {/* Sub-tab toggle — mirrored from Quick Start block so user can switch back */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)" }}>
-                  <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                    <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
-                  </h3>
-                  <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
-                    <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all 0.15s" }}>
-                      🚀 Quick Start
-                    </button>
-                    <button onClick={() => setGuideView('reference')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: "var(--ctrl-active-bg)", color: "#fff", transition: "all 0.15s" }}>
-                      📖 Reference
-                    </button>
-                  </div>
-                </div>
-                {/* Sticky anchor nav — scrolls with the reference content */}
+                {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
+                    and Quick Start/Reference buttons do not scroll away when reading docs. */}
                 <div id="docs-sticky-nav" style={{ position: "sticky", top: -20, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
+                  {/* Sub-tab toggle — inside sticky unit so title + buttons always visible */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border-subtle)" }}>
+                    <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
+                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
+                    </h3>
+                    <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
+                      <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all 0.15s" }}>
+                        🚀 Quick Start
+                      </button>
+                      <button onClick={() => setGuideView('reference')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: "var(--ctrl-active-bg)", color: "#fff", transition: "all 0.15s" }}>
+                        📖 Reference
+                      </button>
+                    </div>
+                  </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Jump to section</div>
                   {/* Anchor navigation — scrollable horizontally on mobile */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
