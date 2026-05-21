@@ -4314,7 +4314,7 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 // App.jsx handlers. Zero engine changes, zero new state in App.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 function ReadinessTab({
-  inputs, displayAccumulation, accumulationByAge, lifePlans, milestones,
+  inputs, displayAccumulation, accumulationByAge, projectionByAge, lifePlans, milestones,
   highlightPlan, setHighlightPlan, payoutAge65, isDark, setActiveTab,
   setSidebarOpen, basicPremiumPct, isRealDollars, applyInflation,
 }) {
@@ -4329,7 +4329,7 @@ function ReadinessTab({
 
   // ── Readiness score ──────────────────────────────────────────────────────
   const { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color: scoreColor, label: scoreLabel } = useMemo(() => {
-    const raAtPA    = accumulationByAge.get(pa)?.ra || 0;
+    const raAtPA    = projectionByAge.get(pa)?.ra || 0;   // Always nominal — matches projFRS/projBRS/projERS
     const projFRS   = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
     const frsRatio  = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
 
@@ -4345,7 +4345,7 @@ function ReadinessTab({
     const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
     const label = score >= 75 ? "On Track" : score >= 50 ? "Needs Attention" : "At Risk";
     return { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color, label };
-  }, [accumulationByAge, pa, rsGrowth, yearsFromNow, lifePlans, highlightPlan, isMale, basicPremiumPct, target]);
+  }, [projectionByAge, pa, rsGrowth, yearsFromNow, lifePlans, highlightPlan, isMale, basicPremiumPct, target]);
 
   // ── Derived metrics ──────────────────────────────────────────────────────
   const payoutData    = accumulationByAge.get(pa) || {};
@@ -15037,6 +15037,7 @@ ${milestoneSnapshotHtml}
                 inputs={inputs}
                 displayAccumulation={displayAccumulation}
                 accumulationByAge={accumulationByAge}
+                projectionByAge={projectionByAge}
                 lifePlans={lifePlans}
                 milestones={milestones}
                 highlightPlan={highlightPlan}
