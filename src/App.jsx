@@ -11797,7 +11797,7 @@ ${milestoneSnapshotHtml}
               const isLifeLocked = id === "life" && isForeigner;
               return (
                 <button key={id} role="tab" aria-selected={activeTab === id} aria-controls={`panel-${id}`}
-                  onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); }}
+                  onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 768) setSidebarOpen(false); }}
                   title={isLifeLocked ? "CPF LIFE — not available to foreigners" : undefined}
                   style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: "transparent", color: activeTab === id ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: activeTab === id ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLifeLocked ? 0.45 : 1 }}>
                   <Icon style={{ width: 14, height: 14 }} />{label}{isLifeLocked && <span style={{ fontSize: 11, marginLeft: 2 }}>🔒</span>}
@@ -11832,7 +11832,7 @@ ${milestoneSnapshotHtml}
                 {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
                   const isLifeLocked = id === "life" && isForeigner;
                   return (
-                    <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); }}
+                    <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 768) setSidebarOpen(false); }}
                       style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: activeTab === id ? 800 : 600, border: "none", background: activeTab === id ? `${accent}18` : "transparent", color: isLifeLocked ? "rgba(160,160,160,0.4)" : activeTab === id ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: isLifeLocked ? 0.5 : 1 }}>
                       <Icon style={{ width: 13, height: 13 }} />{label}{isLifeLocked && " 🔒"}
                     </button>
@@ -15085,7 +15085,7 @@ ${milestoneSnapshotHtml}
                         else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
                     }}
-                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
+                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 12, fontWeight: 600, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
                     <option value="">↓ Jump to section…</option>
                     <option value="qs-page-1">📋 Welcome</option>
                     <option value="qs-page-2">👤 Profile Setup</option>
@@ -15495,13 +15495,13 @@ ${milestoneSnapshotHtml}
                               style={{ padding: "3px 12px", borderRadius: 18, fontSize: 13, fontWeight: !isRealDollars ? 600 : 400, cursor: "pointer", border: "none", transition: "all 0.15s",
                                 background: !isRealDollars ? "rgba(var(--clr-blue2-rgb),0.18)" : "transparent",
                                 color: !isRealDollars ? "var(--clr-blue)" : "var(--text-muted)" }}>
-                              Nominal $
+                              Nom $
                             </button>
                             <button onClick={() => setIsRealDollars(true)}
                               style={{ padding: "3px 12px", borderRadius: 18, fontSize: 13, fontWeight: isRealDollars ? 600 : 400, cursor: "pointer", border: "none", transition: "all 0.15s",
                                 background: isRealDollars ? "rgba(var(--clr-blue2-rgb),0.18)" : "transparent",
                                 color: isRealDollars ? "var(--clr-blue)" : "var(--text-muted)" }}>
-                              Real $ (today's money)
+                              Real $
                             </button>
                           </div>
                         </div>
@@ -18952,7 +18952,7 @@ ${milestoneSnapshotHtml}
                         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       }
                     }}
-                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
+                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 12, fontWeight: 600, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
                     <option value="">↓ Jump to section…</option>
                     <option value="#doc-whatsnew">💡 What's New</option>
                     <option value="#doc-guide">🗂 User Guide</option>
