@@ -120,6 +120,7 @@ const MMSS_PILOT_END_YEAR   = 2030;
 // this constant and filter dynamically using the isForeigner / cpfScheme / householdEnabled flags.
 // Format: [id, label, Icon, accentColor]
 const TAB_CONFIG = [
+  ["readiness",    "Readiness",  Activity,    "var(--clr-emerald)"],  // Phase 1: Retirement Readiness dashboard
   ["summary",      "Summary",    PieChart,    "var(--clr-emerald)"],
   ["strategy",     "Strategy",   Target,      "#f43f5e"],
   ["accumulation", "Growth",     BarChart3,   "var(--clr-blue2)"],
@@ -135,6 +136,7 @@ const TAB_CONFIG = [
 // Used by the desktop strip, hamburger dropdown, and keyboard shortcut handler.
 const getVisibleTabs = (cpfScheme, isForeigner, householdEnabled) =>
   TAB_CONFIG.filter(([id]) => {
+    if (id === "readiness") return !isForeigner;          // Phase 1: CPF-only dashboard; foreigners have no CPF
     if (id === "rss")       return cpfScheme === "rss";
     if (id === "life")      return cpfScheme !== "rss" && !isForeigner;
     if (id === "household") return !!householdEnabled;
@@ -4306,6 +4308,338 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ReadinessTab — Phase 1+2 implementation
+// Pure display component: reads computed data via props, writes back via existing
+// App.jsx handlers. Zero engine changes, zero new state in App.jsx.
+// ─────────────────────────────────────────────────────────────────────────────
+function ReadinessTab({
+  inputs, displayAccumulation, accumulationByAge, lifePlans, milestones,
+  highlightPlan, setHighlightPlan, payoutAge65, isDark, setActiveTab,
+  setSidebarOpen, basicPremiumPct, isRealDollars, applyInflation,
+}) {
+  const pa          = payoutAge65;
+  const ca          = Number(inputs.currentAge) || 35;
+  const cy          = Number(inputs.currentYear) || 2026;
+  const isMale      = inputs.isMale !== false;
+  const target      = Number(inputs.targetMonthlyIncome) || 0;
+  const rsGrowth    = (Number(inputs.retirementSumGrowth) || 3) / 100;
+  const yearsToPA   = Math.max(0, pa - ca);
+  const yearsFromNow = Math.max(0, (cy + yearsToPA) - 2026);
+
+  // ── Readiness score ──────────────────────────────────────────────────────
+  const { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color: scoreColor, label: scoreLabel } = useMemo(() => {
+    const raAtPA    = accumulationByAge.get(pa)?.ra || 0;
+    const projFRS   = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const frsRatio  = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
+
+    const activePlanObj = lifePlans?.[highlightPlan || "standard"];
+    const rawPayout = activePlanObj ? (isMale ? activePlanObj.startM : activePlanObj.startF) : 0;
+    const stdMonthly = (highlightPlan === "basic" && rawPayout > 0)
+      ? rawPayout * (1 - basicPremiumPct / 100) / 0.90
+      : rawPayout;
+
+    const incomeRatio = target > 0 ? Math.min(1, stdMonthly / target) : frsRatio;
+    const score = Math.round((frsRatio * 0.5 + incomeRatio * 0.5) * 100);
+
+    const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
+    const label = score >= 75 ? "On Track" : score >= 50 ? "Needs Attention" : "At Risk";
+    return { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color, label };
+  }, [accumulationByAge, pa, rsGrowth, yearsFromNow, lifePlans, highlightPlan, isMale, basicPremiumPct, target]);
+
+  // ── Derived metrics ──────────────────────────────────────────────────────
+  const payoutData    = accumulationByAge.get(pa) || {};
+  const totalCPF      = (payoutData.oa || 0) + (payoutData.sa || 0) + (payoutData.ma || 0) + (payoutData.ra || 0);
+  const currentOA     = Number(inputs.oaBalance) || 0;
+  const currentSA     = Number(inputs.saBalance) || 0;
+  const currentMA     = Number(inputs.maBalance) || 0;
+  const currentTotal  = currentOA + currentSA + currentMA;
+  const projBRS       = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
+  const projERS       = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + rsGrowth, yearsFromNow));
+  const frsBarPct     = projFRS > 0 ? Math.min(100, Math.round((raAtPA / projFRS) * 100)) : 0;
+  const brsBarPct     = projBRS > 0 ? Math.min(100, Math.round((raAtPA / projBRS) * 100)) : 0;
+  const ersBarPct     = projERS > 0 ? Math.min(100, Math.round((raAtPA / projERS) * 100)) : 0;
+
+  // Income coverage for the hero tile
+  const displayPayout = isRealDollars ? applyInflation(stdMonthly, pa) : stdMonthly;
+  const coveragePct   = target > 0 ? Math.min(999, Math.round((displayPayout / target) * 100)) : null;
+
+  // Scenario strip payouts
+  const scenarioPlan = (key) => {
+    const obj = lifePlans?.[key];
+    if (!obj) return 0;
+    const raw = isMale ? obj.startM : obj.startF;
+    return key === "basic" ? raw * (1 - basicPremiumPct / 100) / 0.90 : raw;
+  };
+  const stdPay = scenarioPlan("standard");
+  const escPay = scenarioPlan("escalating");
+  const basPay = scenarioPlan("basic");
+
+  // Donut geometry (OA / SA+RA / MA)
+  const donutParts = useMemo(() => {
+    if (currentTotal === 0) return [];
+    const slices = [
+      { key: "oa",   label: "OA",    value: currentOA,            color: "var(--clr-blue2)" },
+      { key: "sara", label: "SA/RA", value: currentSA,            color: "var(--clr-emerald)" },
+      { key: "ma",   label: "MA",    value: currentMA,            color: "var(--clr-purple)" },
+    ];
+    const total = slices.reduce((s, p) => s + p.value, 0);
+    if (total === 0) return [];
+    let cumulAngle = -90;
+    return slices.map(s => {
+      const pct = s.value / total;
+      const deg = pct * 360;
+      const startA = cumulAngle;
+      cumulAngle += deg;
+      const r = 48;
+      const toRad = d => (d * Math.PI) / 180;
+      const x1 = 60 + r * Math.cos(toRad(startA));
+      const y1 = 60 + r * Math.sin(toRad(startA));
+      const x2 = 60 + r * Math.cos(toRad(startA + deg));
+      const y2 = 60 + r * Math.sin(toRad(startA + deg));
+      const large = deg > 180 ? 1 : 0;
+      const d = deg >= 359.9
+        ? `M ${60 + r} 60 A ${r} ${r} 0 1 1 ${60 + r - 0.001} 60`
+        : `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+      return { ...s, d, pct };
+    });
+  }, [currentOA, currentSA, currentMA, currentTotal]);
+
+  // Gauge arc path (semi-circle: left = 0%, right = 100%)
+  const gaugeArc = (pct) => {
+    const cx = 110, cy2 = 90, r = 72;
+    const clampedPct = Math.min(1, Math.max(0, pct / 100));
+    const startAngle = Math.PI;                          // 180° = left
+    const endAngle   = Math.PI + clampedPct * Math.PI;  // rotates clockwise to right
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy2 + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy2 + r * Math.sin(endAngle);
+    const large = clampedPct > 0.5 ? 1 : 0;
+    if (clampedPct >= 0.999) {
+      return `M ${cx - r} ${cy2} A ${r} ${r} 0 1 1 ${cx - r + 0.001} ${cy2}`;
+    }
+    return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+  };
+
+  const cardStyle = {
+    background: "var(--bg-panel)",
+    border: "1px solid var(--border-subtle)",
+    borderRadius: 16,
+    padding: "18px 20px",
+  };
+  const labelStyle = { fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 };
+  const bigNumStyle = { fontSize: 26, fontWeight: 700, color: "var(--text-bright)", letterSpacing: "-0.02em", lineHeight: 1.1 };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* ── ROW 1: Gauge + 3-col KPI hero ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
+
+        {/* Gauge card */}
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+          <p style={{ ...labelStyle, marginBottom: 8 }}>Retirement Readiness</p>
+          <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible" }}>
+            {/* Track */}
+            <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
+            {/* Fill */}
+            <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+            {/* Score */}
+            <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
+            <text x="110" y="94" textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--text-muted)", letterSpacing: "0.05em" }}>/ 100 · {scoreLabel}</text>
+          </svg>
+          {/* Sub-scores */}
+          <div style={{ width: "100%", marginTop: 4, display: "flex", flexDirection: "column", gap: 6 }}>
+            {[
+              { label: "FRS Coverage", pct: Math.round(frsRatio * 100), tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}` },
+              { label: "Income Coverage", pct: target > 0 ? Math.round(incomeRatio * 100) : null, tip: target > 0 ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target` : "Set a Target Monthly Income in the sidebar to enable" },
+            ].map(({ label, pct, tip }) => (
+              <div key={label} title={tip}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: pct == null ? "var(--text-subtle)" : pct >= 75 ? "var(--clr-green)" : pct >= 50 ? "var(--clr-amber)" : "var(--clr-red)" }}>
+                    {pct == null ? "—" : `${pct}%`}
+                  </span>
+                </div>
+                <div style={{ height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: pct == null ? "var(--border-subtle)" : pct >= 75 ? "var(--clr-green)" : pct >= 50 ? "var(--clr-amber)" : "var(--clr-red)", transition: "width 0.5s ease" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 3-col KPI hero */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+          {[
+            {
+              label: `Total CPF at ${pa}`,
+              sublabel: isRealDollars ? "today's dollars" : "nominal",
+              value: formatCurrency(totalCPF),
+              color: "var(--clr-blue)",
+              tip: `OA + SA/RA + MA at payout age ${pa}`,
+            },
+            {
+              label: `${highlightPlan === "basic" ? "Basic" : highlightPlan === "escalating" ? "Escalating" : "Standard"} plan payout`,
+              sublabel: "monthly CPF LIFE",
+              value: displayPayout > 0 ? `${formatCurrency(Math.round(displayPayout))}/mo` : "—",
+              color: "var(--clr-green)",
+              tip: `${highlightPlan} plan monthly payout${isRealDollars ? " in today's dollars" : ""}`,
+            },
+            {
+              label: "Income coverage",
+              sublabel: target > 0 ? `vs ${formatCurrency(target)}/mo target` : "set target in sidebar",
+              value: coveragePct != null ? `${coveragePct}%` : "—",
+              color: coveragePct == null ? "var(--text-muted)" : coveragePct >= 100 ? "var(--clr-green)" : coveragePct >= 70 ? "var(--clr-amber)" : "var(--clr-red)",
+              tip: target > 0 ? `CPF LIFE payout covers ${coveragePct}% of your ${formatCurrency(target)}/mo target` : "Enter Target Monthly Income in the Decumulation section",
+            },
+          ].map(({ label, sublabel, value, color, tip }) => (
+            <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <p style={labelStyle}>{label}</p>
+              <p style={{ ...bigNumStyle, color }}>{value}</p>
+              {sublabel && <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>{sublabel}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── ROW 2: Scenario strip + Retirement sums bars ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+
+        {/* Scenario strip */}
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <p style={labelStyle}>CPF LIFE plan comparison</p>
+            <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>click to select</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[
+              { key: "standard",   label: "Standard",   payout: stdPay, desc: "Balanced payout, moderate bequest" },
+              { key: "escalating", label: "Escalating", payout: escPay, desc: "Lower start, rises 2%/yr" },
+              { key: "basic",      label: "Basic",      payout: basPay, desc: "Highest bequest, lowest payout" },
+            ].map(({ key, label, payout, desc }) => {
+              const active = (highlightPlan || "standard") === key;
+              return (
+                <button key={key} onClick={() => setHighlightPlan(key)} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "10px 14px", borderRadius: 10, cursor: "pointer", textAlign: "left",
+                  background: active ? `rgba(var(--clr-emerald-rgb),0.1)` : "var(--bg-input)",
+                  border: active ? `1.5px solid var(--clr-green)` : "1.5px solid transparent",
+                  transition: "all 0.15s",
+                }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: active ? "var(--clr-green)" : "var(--text-main)" }}>{label}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-subtle)", marginLeft: 8 }}>{desc}</span>
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: active ? "var(--clr-green)" : "var(--text-highlight)", whiteSpace: "nowrap" }}>
+                    {payout > 0 ? `${formatCurrency(Math.round(payout))}/mo` : "—"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Retirement sums progress bars */}
+        <div style={cardStyle}>
+          <p style={{ ...labelStyle, marginBottom: 14 }}>RA vs retirement sums at age {pa}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {[
+              { label: "BRS", pct: brsBarPct, target: projBRS, desc: "Basic Retirement Sum" },
+              { label: "FRS", pct: frsBarPct, target: projFRS, desc: "Full Retirement Sum" },
+              { label: "ERS", pct: ersBarPct, target: projERS, desc: "Enhanced Retirement Sum" },
+            ].map(({ label, pct, target: t, desc }) => {
+              const barColor = pct >= 100 ? "var(--clr-green)" : pct >= 60 ? "var(--clr-amber)" : "var(--clr-red)";
+              return (
+                <div key={label} title={`${desc}: ${formatCurrency(t)} — RA at ${pa}: ${formatCurrency(raAtPA)}`}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label} <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>({formatCurrency(t)})</span></span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: barColor }}>{pct}%</span>
+                  </div>
+                  <div style={{ height: 8, borderRadius: 6, background: "var(--border-subtle)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, borderRadius: 6, background: barColor, transition: "width 0.5s ease" }} />
+                  </div>
+                </div>
+              );
+            })}
+            <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 2 }}>
+              Projected RA at {pa}: <strong style={{ color: "var(--text-main)" }}>{formatCurrency(raAtPA)}</strong>
+              {` · `}FRS growth: {(Number(inputs.retirementSumGrowth) || 3)}%/yr
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── ROW 3: Allocation donut + Milestones ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16 }}>
+
+        {/* Allocation donut */}
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <p style={{ ...labelStyle, marginBottom: 10 }}>Current allocation</p>
+          {currentTotal > 0 ? (
+            <>
+              <svg width="120" height="120" viewBox="0 0 120 120">
+                {donutParts.map((s) => (
+                  <path key={s.key} d={s.d} fill="none" stroke={s.color} strokeWidth="14" strokeLinecap="butt" />
+                ))}
+                <circle cx="60" cy="60" r="34" fill="var(--bg-panel)" />
+                <text x="60" y="57" textAnchor="middle" style={{ fontSize: 11, fontWeight: 700, fill: "var(--text-muted)" }}>Total</text>
+                <text x="60" y="70" textAnchor="middle" style={{ fontSize: 11, fontWeight: 700, fill: "var(--text-bright)" }}>{formatCurrency(currentTotal)}</text>
+              </svg>
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
+                {donutParts.map((s) => (
+                  <div key={s.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{s.label}</span>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-main)" }}>{Math.round(s.pct * 100)}%</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p style={{ fontSize: 12, color: "var(--text-subtle)", textAlign: "center", marginTop: 20 }}>Enter CPF balances in the sidebar to see allocation</p>
+          )}
+        </div>
+
+        {/* Milestone alerts */}
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <p style={labelStyle}>Milestone alerts ({milestones.length})</p>
+            <button onClick={() => { setActiveTab("summary"); setSidebarOpen(true); }}
+              style={{ fontSize: 11, color: "var(--clr-blue)", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>
+              Full sidebar →
+            </button>
+          </div>
+          {milestones.length === 0 ? (
+            <p style={{ fontSize: 13, color: "var(--text-subtle)" }}>No milestone alerts — projection looks healthy.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 220, overflowY: "auto" }}>
+              {milestones.map((m, i) => {
+                const typeColors = { success: "var(--clr-green)", gold: "var(--clr-amber)", warning: "var(--clr-amber)", danger: "var(--clr-red)", teal: "var(--clr-cyan)", info: "var(--clr-blue)" };
+                const c = typeColors[m.type] || "var(--clr-blue)";
+                return (
+                  <div key={i} style={{ display: "flex", gap: 10, padding: "8px 10px", borderRadius: 8, background: "var(--bg-input)", borderLeft: `3px solid ${c}` }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: c, minWidth: 34, flexShrink: 0 }}>Age {m.age}</span>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>{m.label}</p>
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "2px 0 0", lineHeight: 1.4 }}>{m.detail}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
@@ -4524,6 +4858,21 @@ export default function App() {
     const t = setTimeout(() => setDebouncedSpouseInputs(spouseInputs), 180);
     return () => clearTimeout(t);
   }, [spouseInputs, householdEnabled]);
+
+  // Phase 1 — Readiness tab: auto-collapse sidebar on entry, restore on exit.
+  // Uses a ref to remember the pre-readiness open state so toggling the sidebar
+  // manually on other tabs (hide/show) is still respected after leaving Readiness.
+  const sidebarWasOpenRef = useRef(true);
+  useEffect(() => {
+    if (activeTab === "readiness") {
+      sidebarWasOpenRef.current = sidebarOpen; // remember current state
+      setSidebarOpen(false);                   // collapse for max dashboard width
+    } else if (sidebarWasOpenRef.current) {
+      setSidebarOpen(true);                    // restore if it was open before
+    }
+    // sidebarOpen intentionally omitted from deps — we only want to fire on tab transitions
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Advanced Settings gate — auto-expand if imported/shared profile has advanced data
   useEffect(() => {
@@ -14567,7 +14916,7 @@ ${milestoneSnapshotHtml}
               borderRadius: "0 2px 0 0",
             }} />
             {/* Persistent KPI strip — hidden on Summary tab (Zone 1 already shows these metrics) */}
-            {activeTab !== "guide" && activeTab !== "summary" && (
+            {activeTab !== "guide" && activeTab !== "summary" && activeTab !== "readiness" && (
               <div className="kpi-strip-wrap">
               <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "1fr", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
                 {(() => {
@@ -14659,6 +15008,25 @@ ${milestoneSnapshotHtml}
           </div>
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
           <div className="cpf-tab-content">
+            {/* ── READINESS TAB ── */}
+            {activeTab === "readiness" && (
+              <ReadinessTab
+                inputs={inputs}
+                displayAccumulation={displayAccumulation}
+                accumulationByAge={accumulationByAge}
+                lifePlans={lifePlans}
+                milestones={milestones}
+                highlightPlan={highlightPlan}
+                setHighlightPlan={setHighlightPlan}
+                payoutAge65={payoutAge65}
+                isDark={isDark}
+                setActiveTab={setActiveTab}
+                setSidebarOpen={setSidebarOpen}
+                basicPremiumPct={basicPremiumPct}
+                isRealDollars={isRealDollars}
+                applyInflation={applyInflation}
+              />
+            )}
             {/* ── GUIDE TAB — Quick Start view ── */}
             {activeTab === "guide" && guideView === 'quickstart' && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
