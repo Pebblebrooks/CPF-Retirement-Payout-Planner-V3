@@ -4441,12 +4441,12 @@ function ReadinessTab({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* ── ROW 1: Gauge + 3-col KPI hero ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
+      <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
 
         {/* Gauge card */}
         <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
           <p style={{ ...labelStyle, marginBottom: 8 }}>Retirement Readiness</p>
-          <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible" }}>
+          <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible", maxWidth: "100%" }}>
             {/* Track */}
             <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
             {/* Fill */}
@@ -4477,7 +4477,7 @@ function ReadinessTab({
         </div>
 
         {/* 3-col KPI hero */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        <div className="rd-kpi-hero" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           {[
             {
               label: `Total CPF at ${pa}`,
@@ -4511,7 +4511,7 @@ function ReadinessTab({
       </div>
 
       {/* ── ROW 2: Scenario strip + Retirement sums bars ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="rd-row2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
 
         {/* Scenario strip */}
         <div style={cardStyle}>
@@ -4578,7 +4578,7 @@ function ReadinessTab({
       </div>
 
       {/* ── ROW 3: Allocation donut + Milestones ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16 }}>
+      <div className="rd-row3" style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16 }}>
 
         {/* Allocation donut */}
         <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -10817,6 +10817,8 @@ ${milestoneSnapshotHtml}
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Row 3 sticky: Input Parameters bar sits just below tab strip (~92px) */
           .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; }
+          /* Hide input-params-bar when Guide/Docs tab is active — avoids overlapping the docs sticky banner */
+          .cpf-input-params-bar[data-tab="guide"] { display: none !important; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Responsive nav: hide desktop-only Display btn, show ⚙ gear */
@@ -10846,6 +10848,11 @@ ${milestoneSnapshotHtml}
           .z2-z3-grid { grid-template-columns: 1fr 1fr !important; }
           .z4-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
+          /* Readiness tab responsive — tablet */
+          .rd-row1 { grid-template-columns: 1fr !important; }
+          .rd-kpi-hero { grid-template-columns: 1fr 1fr 1fr !important; }
+          .rd-row2 { grid-template-columns: 1fr !important; }
+          .rd-row3 { grid-template-columns: 1fr !important; }
           /* Tablet sticky bottom action bar — always shown on tablet, hidden elsewhere */
           .tablet-action-bar { display: flex !important; }
           /* Docs tab sticky nav: inline style has marginTop:-28 so sticky "top" is relative to the
@@ -10876,6 +10883,8 @@ ${milestoneSnapshotHtml}
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
           /* Row 3 sticky: Input Parameters bar */
           .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; }
+          /* Hide input-params-bar when Guide/Docs tab is active on mobile */
+          .cpf-input-params-bar[data-tab="guide"] { display: none !important; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Hide desktop+tablet-only nav buttons; show gear */
@@ -10942,6 +10951,11 @@ ${milestoneSnapshotHtml}
           .compare-slots-grid { grid-template-columns: 1fr !important; }
           .wi-summary-grid { grid-template-columns: 1fr !important; }
           .wi-sliders-grid { grid-template-columns: 1fr !important; }
+          /* Readiness tab — stack all rows vertically on mobile */
+          .rd-row1 { grid-template-columns: 1fr !important; }
+          .rd-kpi-hero { grid-template-columns: 1fr 1fr !important; }
+          .rd-row2 { grid-template-columns: 1fr !important; }
+          .rd-row3 { grid-template-columns: 1fr !important; }
           /* Docs tab: same margin-top:0 fix as tablet. No fixed header at 641–768px so top:0 is correct. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
           #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
@@ -10983,6 +10997,7 @@ ${milestoneSnapshotHtml}
           .cpf-mobile-top-spacer { display: block !important; height: 48px; flex-shrink: 0; }
           /* Pin Input Parameters bar below fixed header + tab strip */
           .cpf-input-params-bar { position: fixed !important; top: 92px !important; left: 0 !important; right: 0 !important; }
+          .cpf-input-params-bar[data-tab="guide"] { display: none !important; }
           /* Push sidebar sections below the fixed params bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Shrink logo on tiny screens */
@@ -11835,7 +11850,7 @@ ${milestoneSnapshotHtml}
       {/* ── Input Parameters sticky bar — tablet + mobile only; sits just below tab strip ──
           Extracted from the sidebar so it stays visible at top:92px even when scrolled
           into the main content area. Hidden on desktop (sidebar always visible). */}
-      <div className="cpf-input-params-bar" style={{ display: "none" }}>
+      <div className="cpf-input-params-bar" data-tab={activeTab} style={{ display: "none" }}>
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0 }}>
           <div onClick={() => setSidebarOpen(v => !v)}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", cursor: "pointer", userSelect: "none" }}>
@@ -11844,29 +11859,19 @@ ${milestoneSnapshotHtml}
               <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Input Parameters</span>
               <ChevronDown className={`sidebar-chevron${sidebarOpen ? " open" : ""}`} style={{ width: 14, height: 14 }} />
             </div>
-            {/* UX-13: Nom/Real toggle — visible here on tablet/mobile; hidden on desktop (cpf-nav-nomreal handles desktop).
-                Placed outside the onClick parent so tapping the toggle doesn't also collapse the sidebar. */}
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-              {/* Nom/Real pill — CSS class cpf-bar-nomreal hides this on desktop (≥1025px) */}
-              <div className="cpf-bar-nomreal" style={{ display: "flex", background: "var(--bg-panel)", padding: 2, borderRadius: 7, border: "1px solid var(--border-strong)", gap: 1 }}>
-                <button onClick={() => setIsRealDollars(false)} style={{ padding: "3px 10px", borderRadius: 5, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nom</button>
-                <button onClick={() => setIsRealDollars(true)}  style={{ padding: "3px 10px", borderRadius: 5, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background:  isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color:  isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real</button>
-              </div>
+            {/* 3 action buttons — always visible, same row as label */}
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+              <button onClick={expandAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
+                <ChevronDown style={{ width: 10, height: 10 }} />📂 Expand
+              </button>
+              <button onClick={collapseAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
+                <ChevronUp style={{ width: 10, height: 10 }} />📁 Collapse
+              </button>
+              <button onClick={() => setShowAdvanced(v => !v)} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)", color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)", border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
+                ⚙️ Advanced{showAdvanced ? " ▲" : ""}
+              </button>
             </div>
           </div>
-          {sidebarOpen && (
-            <div style={{ display: "flex", gap: 4, paddingBottom: 8 }} onClick={e => e.stopPropagation()}>
-              <button onClick={expandAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                <ChevronDown style={{ width: 10, height: 10 }} />All
-              </button>
-              <button onClick={collapseAllSections} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                <ChevronUp style={{ width: 10, height: 10 }} />None
-              </button>
-              <button onClick={() => setShowAdvanced(v => !v)} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)", color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)", border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                <Settings style={{ width: 10, height: 10 }} />{showAdvanced ? "Adv ▲" : "⚙ Adv"}
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -15068,10 +15073,11 @@ ${milestoneSnapshotHtml}
                   {/* ── 4 section quick-access buttons ── */}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {[
-                      { id: "qs-page-1", label: "📋 Welcome",       accent: "var(--clr-emerald)" },
-                      { id: "qs-page-2", label: "👤 Profile Setup",  accent: "var(--clr-blue2)"  },
-                      { id: "qs-page-3", label: "📊 Dashboard",      accent: "var(--clr-purple)" },
-                      { id: "qs-page-4", label: "⚡ Advanced",       accent: "var(--clr-amber)"  },
+                      { id: "qs-page-1",    label: "📋 Welcome",       accent: "var(--clr-emerald)" },
+                      { id: "qs-page-2",    label: "👤 Profile Setup",  accent: "var(--clr-blue2)"  },
+                      { id: "qs-page-3",    label: "📊 Dashboard",      accent: "var(--clr-purple)" },
+                      { id: "qs-page-4",    label: "⚡ Advanced",       accent: "var(--clr-amber)"  },
+                      { id: "qs-disclaimer",label: "📜 Disclaimer",     accent: "var(--clr-red)"    },
                     ].map(({ id, label, accent }) => (
                       <button key={id} onClick={() => {
                         const target = document.getElementById(id);
@@ -15167,7 +15173,7 @@ ${milestoneSnapshotHtml}
                           </div>
                         ))}
                       </div>
-                      <div style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "12px" }}>
+                      <div id="qs-disclaimer" style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "12px" }}>
                         <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER}</p>
                       </div>
                     </div>
