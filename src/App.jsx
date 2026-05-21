@@ -4314,7 +4314,7 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 // App.jsx handlers. Zero engine changes, zero new state in App.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 function ReadinessTab({
-  inputs, displayAccumulation, accumulationByAge, projectionByAge, lifePlans, milestones,
+  inputs, displayAccumulation, accumulationByAge, lifePlans, milestones,
   highlightPlan, setHighlightPlan, payoutAge65, isDark, setActiveTab,
   setSidebarOpen, basicPremiumPct, isRealDollars, applyInflation,
 }) {
@@ -4329,7 +4329,7 @@ function ReadinessTab({
 
   // ── Readiness score ──────────────────────────────────────────────────────
   const { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color: scoreColor, label: scoreLabel } = useMemo(() => {
-    const raAtPA    = projectionByAge.get(pa)?.ra || 0;   // Always nominal — matches projFRS/projBRS/projERS
+    const raAtPA    = accumulationByAge.get(pa)?.ra || 0;
     const projFRS   = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
     const frsRatio  = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
 
@@ -4345,7 +4345,7 @@ function ReadinessTab({
     const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
     const label = score >= 75 ? "On Track" : score >= 50 ? "Needs Attention" : "At Risk";
     return { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color, label };
-  }, [projectionByAge, pa, rsGrowth, yearsFromNow, lifePlans, highlightPlan, isMale, basicPremiumPct, target]);
+  }, [accumulationByAge, pa, rsGrowth, yearsFromNow, lifePlans, highlightPlan, isMale, basicPremiumPct, target]);
 
   // ── Derived metrics ──────────────────────────────────────────────────────
   const payoutData    = accumulationByAge.get(pa) || {};
@@ -11010,9 +11010,15 @@ ${milestoneSnapshotHtml}
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
           #docs-sticky-nav { top: 48px !important; }
           #qs-sticky-banner  { top: 48px !important; }
+          /* Mobile docs nav: show compact <select> dropdown, hide pill buttons */
+          .docs-nav-select { display: block !important; }
+          .docs-nav-pills  { display: none  !important; }
         }
         @media (min-width: 641px) {
           .cpf-mobile-top-spacer { display: none !important; }
+          /* Desktop/tablet docs nav: hide <select>, show pill buttons */
+          .docs-nav-select { display: none  !important; }
+          .docs-nav-pills  { display: flex  !important; }
         }
 
         /* ─── GLOBAL OVERFLOW GUARD (Fixed for Recharts) ───────────── */
@@ -11856,7 +11862,7 @@ ${milestoneSnapshotHtml}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", cursor: "pointer", userSelect: "none" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <SlidersHorizontal style={{ width: 14, height: 14, color: "var(--clr-emerald)" }} />
-              <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Input Parameters</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Inputs</span>
               <ChevronDown className={`sidebar-chevron${sidebarOpen ? " open" : ""}`} style={{ width: 14, height: 14 }} />
             </div>
             {/* 3 action buttons — always visible, same row as label */}
@@ -11868,7 +11874,7 @@ ${milestoneSnapshotHtml}
                 <ChevronUp style={{ width: 10, height: 10 }} />📁 Collapse
               </button>
               <button onClick={() => setShowAdvanced(v => !v)} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)", color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)", border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
-                ⚙️ Advanced{showAdvanced ? " ▲" : ""}
+                ⚙️ Adv{showAdvanced ? " ▲" : ""}
               </button>
             </div>
           </div>
@@ -15037,7 +15043,6 @@ ${milestoneSnapshotHtml}
                 inputs={inputs}
                 displayAccumulation={displayAccumulation}
                 accumulationByAge={accumulationByAge}
-                projectionByAge={projectionByAge}
                 lifePlans={lifePlans}
                 milestones={milestones}
                 highlightPlan={highlightPlan}
@@ -15072,7 +15077,32 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                   {/* ── 4 section quick-access buttons ── */}
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {/* Mobile (≤640px): native <select> picker — collapses 5 buttons to 1 row */}
+                  <select className="docs-nav-select" defaultValue=""
+                    onChange={e => {
+                      const id = e.target.value;
+                      if (!id) return;
+                      e.target.value = "";
+                      const target = document.getElementById(id);
+                      const bar    = document.getElementById('qs-sticky-banner');
+                      const scrollEl = target?.closest('.cpf-tab-content');
+                      if (bar && target) {
+                        const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
+                        const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
+                        if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
+                      } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+                    }}
+                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
+                    <option value="">↓ Jump to section…</option>
+                    <option value="qs-page-1">📋 Welcome</option>
+                    <option value="qs-page-2">👤 Profile Setup</option>
+                    <option value="qs-page-3">📊 Dashboard</option>
+                    <option value="qs-page-4">⚡ Advanced</option>
+                    <option value="qs-disclaimer">📜 Disclaimer</option>
+                  </select>
+                  {/* Desktop/tablet (≥641px): pill buttons */}
+                  <div className="docs-nav-pills" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {[
                       { id: "qs-page-1",    label: "📋 Welcome",       accent: "var(--clr-emerald)" },
                       { id: "qs-page-2",    label: "👤 Profile Setup",  accent: "var(--clr-blue2)"  },
@@ -18906,8 +18936,55 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Jump to section</div>
-                  {/* Anchor navigation — scrollable horizontally on mobile */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                  {/* Mobile (≤640px): native <select> picker — collapses 20 anchor buttons to 1 compact row.
+                      resets to placeholder after selection so the label always reads "Jump to section…" */}
+                  <select className="docs-nav-select" defaultValue=""
+                    onChange={e => {
+                      const href = e.target.value;
+                      if (!href) return;
+                      e.target.value = "";
+                      const target = document.querySelector(href);
+                      if (!target) return;
+                      const stickyBar = document.getElementById('docs-sticky-nav');
+                      const scrollEl = target.closest('.cpf-tab-content');
+                      if (stickyBar) {
+                        const delta = target.getBoundingClientRect().top
+                                    - stickyBar.getBoundingClientRect().bottom
+                                    - 8;
+                        const isScrollable = scrollEl &&
+                          getComputedStyle(scrollEl).overflowY !== 'visible' &&
+                          getComputedStyle(scrollEl).overflowY !== 'clip';
+                        if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
+                      } else {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }}
+                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
+                    <option value="">↓ Jump to section…</option>
+                    <option value="#doc-whatsnew">💡 What's New</option>
+                    <option value="#doc-guide">🗂 User Guide</option>
+                    <option value="#doc-engine">📈 Projection Engine</option>
+                    <option value="#doc-policy">🛡 Policy Reference</option>
+                    <option value="#doc-planning">🎯 Planning Tools</option>
+                    <option value="#doc-whatif">⚙️ What-If Explorer</option>
+                    <option value="#doc-srs">📖 SRS</option>
+                    <option value="#doc-propmon">🏠 Property Monetisation</option>
+                    <option value="#doc-dwz">🕐 Die with Zero</option>
+                    <option value="#doc-sep">💼 SEP Rules</option>
+                    <option value="#doc-yield">⚖️ Yield &amp; XIRR</option>
+                    <option value="#doc-montecarlo">📊 Monte Carlo</option>
+                    <option value="#doc-minor">👥 Minor &amp; PwD</option>
+                    <option value="#doc-eduloan">📚 Education Loan</option>
+                    <option value="#doc-rsgrowth">📈 RS Growth Rate</option>
+                    <option value="#doc-phasedsalary">💼 Phased Salary</option>
+                    <option value="#doc-lifeevents">⚡ Life Events</option>
+                    <option value="#doc-household">👨‍👩‍👧 Household</option>
+                    <option value="#doc-rss">🕐 RSS Scheme</option>
+                    <option value="#doc-baby">👶 Baby Millionaire</option>
+                  </select>
+                  {/* Desktop/tablet (≥641px): pill buttons — same scroll logic as select above */}
+                  <div className="docs-nav-pills" style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   {[
                     // [href, Icon, label, accentColour] — icon + colour must match the section <h4> header exactly
                     ["#doc-whatsnew",    Lightbulb,        "What's New",           "#22d3ee"                ],
