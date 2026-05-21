@@ -10817,8 +10817,6 @@ ${milestoneSnapshotHtml}
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Row 3 sticky: Input Parameters bar sits just below tab strip (~92px) */
           .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; }
-          /* Hide input-params-bar when Guide/Docs tab is active — avoids overlapping the docs sticky banner */
-          .cpf-input-params-bar[data-tab="guide"] { display: none !important; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Responsive nav: hide desktop-only Display btn, show ⚙ gear */
@@ -10883,8 +10881,6 @@ ${milestoneSnapshotHtml}
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
           /* Row 3 sticky: Input Parameters bar */
           .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; }
-          /* Hide input-params-bar when Guide/Docs tab is active on mobile */
-          .cpf-input-params-bar[data-tab="guide"] { display: none !important; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Hide desktop+tablet-only nav buttons; show gear */
@@ -10900,8 +10896,7 @@ ${milestoneSnapshotHtml}
           .cpf-bar-nomreal { display: flex !important; }
           /* Show Share/Report/etc in the gear dropdown on mobile */
           .cpf-gear-mobile-share { display: contents !important; }
-          /* Show hamburger tab picker on mobile */
-          .cpf-tabs-hamburger { display: flex !important; }
+          /* cpf-tabs-hamburger intentionally not shown — tab strip is horizontally scrollable */
           .cpf-tabs-kpi-header { position: static; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
@@ -10980,12 +10975,10 @@ ${milestoneSnapshotHtml}
           .z1-hero { padding: 12px 10px !important; border-radius: 14px !important; }
           .z4-plans-grid { grid-template-columns: 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr !important; }
-          /* Docs tab sticky nav on small phones — fixed header is 48px tall so offset by that.
-             Use margin-top:0 only (not margin:0) so the -28px left/right margins that make the
-             bar edge-to-edge inside the 28px-padded parent are preserved. top:48px is then exact. */
-          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 48px !important; padding: 14px 14px 10px !important; }
+          /* Docs tab sticky nav on small phones — full mobile stack: 48px fixed header + 44px tab strip + 44px input-params-bar = 136px. */
+          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; padding: 14px 14px 10px !important; }
           #docs-sticky-nav h3 { font-size: 16px !important; }
-          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 48px !important; padding: 14px 14px 10px !important; }
+          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; padding: 14px 14px 10px !important; }
           #qs-sticky-banner  h3 { font-size: 16px !important; }
         }
 
@@ -10997,7 +10990,6 @@ ${milestoneSnapshotHtml}
           .cpf-mobile-top-spacer { display: block !important; height: 48px; flex-shrink: 0; }
           /* Pin Input Parameters bar below fixed header + tab strip */
           .cpf-input-params-bar { position: fixed !important; top: 92px !important; left: 0 !important; right: 0 !important; }
-          .cpf-input-params-bar[data-tab="guide"] { display: none !important; }
           /* Push sidebar sections below the fixed params bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Shrink logo on tiny screens */
@@ -11008,8 +11000,8 @@ ${milestoneSnapshotHtml}
           .cpf-tabs-kpi-header { position: static; }
           .desktop-only { display: none !important; }
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
-          #docs-sticky-nav { top: 48px !important; }
-          #qs-sticky-banner  { top: 48px !important; }
+          #docs-sticky-nav { top: 136px !important; }
+          #qs-sticky-banner  { top: 136px !important; }
           /* Mobile docs nav: show compact <select> dropdown, hide pill buttons */
           .docs-nav-select { display: block !important; }
           .docs-nav-pills  { display: none  !important; }
@@ -15216,7 +15208,7 @@ ${milestoneSnapshotHtml}
                         const scrollEl = document.querySelector('.cpf-tab-content');
                         const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
                         if (isScrollable) { scrollEl.scrollTo({ top: 0, behavior: 'smooth' }); }
-                        else              { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                        else              { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                       }}
                       style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-panel)", backdropFilter: "blur(8px)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transition: "all 0.15s" }}
                       onMouseEnter={e => { e.currentTarget.style.color = "var(--text-bright)"; e.currentTarget.style.borderColor = "var(--clr-blue)"; }}
@@ -19803,7 +19795,7 @@ ${milestoneSnapshotHtml}
                     onClick={() => {
                       const nav = document.getElementById("docs-sticky-nav");
                       const scroller = nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content");
-                      if (scroller) { scroller.scrollTop = 0; } else { window.scrollTo({ top: 0, behavior: "smooth" }); }
+                      if (scroller && getComputedStyle(scroller).overflowY !== 'visible') { scroller.scrollTo({ top: 0, behavior: 'smooth' }); } else { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                     }}
                     style={{ pointerEvents: "all", display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 700, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
                     <ChevronUp style={{ width: 13, height: 13 }} />Back to top
