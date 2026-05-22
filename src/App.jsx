@@ -4407,24 +4407,27 @@ function ReadinessTab({
 
   // Gauge arc path (semi-circle: left = 0%, right = 100%)
   const gaugeArc = (pct) => {
-    // Semi-circle gauge: arc sweeps from left (180deg) through the TOP to right (0deg).
-    // SVG y-axis points down. sweep=1 (clockwise in screen coords) draws the arc UPWARD
-    // through the top of the circle — correct for a speedometer gauge.
-    // sweep=0 (counterclockwise) would go DOWNWARD through y≈162, outside the 100px viewBox.
-    // Arc span is always <=180deg (max at pct=100), so large-arc-flag is always 0.
+    // Upper speedometer gauge: arc sweeps clockwise from LEFT(180°) through TOP(270°) to RIGHT(360°).
+    // SVG y-axis points DOWN, so clockwise on screen = INCREASING angle.
+    // Angle map: 0°=right(182,90)  90°=BOTTOM(110,162)  180°=left(38,90)  270°=TOP(110,18)
+    //
+    // Correct parametrisation for pct% of the upper arc:
+    //   startAngle = π (left, fixed)
+    //   endAngle   = π + π*pct  → at 50%: 3π/2 = TOP(110,18); at 100%: 2π = right(182,90)
+    //
+    // WRONG formula (old): endAngle = π*(1-pct) → at 50% gives 90° = BOTTOM(110,162), not TOP.
+    // That contradiction (sweep=1 wants 261° arc but large-arc=0 wants 99° arc) made SVG pick a
+    // different circle centre entirely, producing the garbled arc in the screenshot.
     const cx = 110, cy2 = 90, r = 72;
     const clampedPct = Math.min(1, Math.max(0, pct / 100));
     if (clampedPct <= 0) return '';
-    // endAngle = PI*(1 - clampedPct): at 100% -> 0 (right); at 0% -> PI (left, same as start)
     const startAngle = Math.PI;
-    const endAngle   = Math.PI * (1 - clampedPct);
+    const endAngle   = Math.PI + Math.PI * clampedPct; // ← FIXED (was: Math.PI * (1 - clampedPct))
     const x1 = cx + r * Math.cos(startAngle);
     const y1 = cy2 + r * Math.sin(startAngle);
     const x2 = cx + r * Math.cos(endAngle);
     const y2 = cy2 + r * Math.sin(endAngle);
-    // large=0: arc span <=180deg for all valid pct. sweep=1: clockwise in SVG = upward (top semi-circle).
-    // NOTE: SVG y-axis points DOWN, so sweep=1 (CW in screen coords) draws the arc UPWARD through
-    // the top of the circle. sweep=0 would go DOWNWARD through y≈162, outside the 100px viewBox.
+    // Arc span = π*clampedPct ≤ π (180°) → large-arc-flag always 0. sweep=1 = clockwise = upper arc.
     return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
   };
 
