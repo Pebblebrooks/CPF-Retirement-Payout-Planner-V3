@@ -10811,6 +10811,8 @@ ${milestoneSnapshotHtml}
           /* KPI-only strip inside cpf-main-wrap — no longer needs its own sticky */
           .cpf-tabs-kpi-header { position: static; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
+          /* Fix 1: when inputs sidebar is open on tablet, hide tab content so only inputs show */
+          .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           /* Logo alignment: match header left/right padding to sidebar-inner (14px) */
           .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
@@ -10900,6 +10902,8 @@ ${milestoneSnapshotHtml}
           .cpf-tabs-kpi-header { position: static; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
+          /* Fix 1: when inputs sidebar is open on mobile, hide tab content so only inputs show */
+          .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
           .rg-5, .rg-4, .rg-3, .rg-2 { grid-template-columns: 1fr 1fr !important; }
@@ -10954,6 +10958,15 @@ ${milestoneSnapshotHtml}
           /* Docs tab: same margin-top:0 fix as tablet. No fixed header at 641–768px so top:0 is correct. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
           #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
+        }
+
+        /* ── Nom/Real responsive label helpers ─────────────────────────── */
+        /* Desktop (≥1025px): show full label; mobile + tablet (≤1024px): show short form */
+        .nom-real-mobile  { display: none; }
+        .nom-real-desktop { display: inline; }
+        @media (max-width: 1024px) {
+          .nom-real-desktop { display: none !important; }
+          .nom-real-mobile  { display: inline !important; }
         }
 
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
@@ -11595,8 +11608,8 @@ ${milestoneSnapshotHtml}
 
             {/* 2. Nom($) / Real($) toggle — desktop + tablet only; hidden on mobile (inside gear) */}
             <div className="cpf-nav-nomreal" style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1, flexShrink: 0 }}>
-              <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nom($)</button>
-              <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real($)</button>
+              <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nom ($)</button>
+              <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real ($)</button>
             </div>
 
             {/* 3. Samples — desktop only (promoted before Share for discoverability) */}
@@ -11717,8 +11730,8 @@ ${milestoneSnapshotHtml}
                   <div className="cpf-gear-nomreal" style={{ padding: "6px 8px 4px" }}>
                     <div className="cpf-nav-dd-hdr" style={{ paddingLeft: 2 }}>Display Mode</div>
                     <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1 }}>
-                      <button onClick={() => setIsRealDollars(false)} style={{ flex: 1, padding: "6px 0", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", textAlign: "center" }}>Nom($)</button>
-                      <button onClick={() => setIsRealDollars(true)} style={{ flex: 1, padding: "6px 0", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", textAlign: "center" }}>Real($)</button>
+                      <button onClick={() => setIsRealDollars(false)} style={{ flex: 1, padding: "6px 0", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", textAlign: "center" }}>Nom ($)</button>
+                      <button onClick={() => setIsRealDollars(true)} style={{ flex: 1, padding: "6px 0", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", textAlign: "center" }}>Real ($)</button>
                     </div>
                   </div>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
@@ -11876,6 +11889,7 @@ ${milestoneSnapshotHtml}
       <div
         className="cpf-layout"
         data-mode={desktopMode}
+        data-sidebar-open={sidebarOpen ? "true" : "false"}
         style={{
           maxWidth: desktopMode === 'fhd' ? '100%' : desktopMode === 'hd' ? '1440px' : '100%',
           flex: '1 1 0',
@@ -15085,13 +15099,13 @@ ${milestoneSnapshotHtml}
                         else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
                     }}
-                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 12, fontWeight: 600, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
-                    <option value="">↓ Jump to section…</option>
-                    <option value="qs-page-1">📋 Welcome</option>
-                    <option value="qs-page-2">👤 Profile Setup</option>
-                    <option value="qs-page-3">📊 Dashboard</option>
-                    <option value="qs-page-4">⚡ Advanced</option>
-                    <option value="qs-disclaimer">📜 Disclaimer</option>
+                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 13, fontWeight: 600, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
+                    <option value="" style={{ fontSize: 13 }}>↓ Jump to section…</option>
+                    <option value="qs-page-1" style={{ fontSize: 13 }}>📋 Welcome</option>
+                    <option value="qs-page-2" style={{ fontSize: 13 }}>👤 Profile Setup</option>
+                    <option value="qs-page-3" style={{ fontSize: 13 }}>📊 Dashboard</option>
+                    <option value="qs-page-4" style={{ fontSize: 13 }}>⚡ Advanced</option>
+                    <option value="qs-disclaimer" style={{ fontSize: 13 }}>📜 Disclaimer</option>
                   </select>
                   {/* Desktop/tablet (≥641px): pill buttons */}
                   <div className="docs-nav-pills" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -15495,13 +15509,13 @@ ${milestoneSnapshotHtml}
                               style={{ padding: "3px 12px", borderRadius: 18, fontSize: 13, fontWeight: !isRealDollars ? 600 : 400, cursor: "pointer", border: "none", transition: "all 0.15s",
                                 background: !isRealDollars ? "rgba(var(--clr-blue2-rgb),0.18)" : "transparent",
                                 color: !isRealDollars ? "var(--clr-blue)" : "var(--text-muted)" }}>
-                              Nom $
+                              <span className="nom-real-desktop">Nom $</span><span className="nom-real-mobile">Nom ($)</span>
                             </button>
                             <button onClick={() => setIsRealDollars(true)}
                               style={{ padding: "3px 12px", borderRadius: 18, fontSize: 13, fontWeight: isRealDollars ? 600 : 400, cursor: "pointer", border: "none", transition: "all 0.15s",
                                 background: isRealDollars ? "rgba(var(--clr-blue2-rgb),0.18)" : "transparent",
                                 color: isRealDollars ? "var(--clr-blue)" : "var(--text-muted)" }}>
-                              Real $
+                              <span className="nom-real-desktop">Real $</span><span className="nom-real-mobile">Real ($)</span>
                             </button>
                           </div>
                         </div>
@@ -18952,28 +18966,28 @@ ${milestoneSnapshotHtml}
                         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       }
                     }}
-                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 12, fontWeight: 600, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
-                    <option value="">↓ Jump to section…</option>
-                    <option value="#doc-whatsnew">💡 What's New</option>
-                    <option value="#doc-guide">🗂 User Guide</option>
-                    <option value="#doc-engine">📈 Projection Engine</option>
-                    <option value="#doc-policy">🛡 Policy Reference</option>
-                    <option value="#doc-planning">🎯 Planning Tools</option>
-                    <option value="#doc-whatif">⚙️ What-If Explorer</option>
-                    <option value="#doc-srs">📖 SRS</option>
-                    <option value="#doc-propmon">🏠 Property Monetisation</option>
-                    <option value="#doc-dwz">🕐 Die with Zero</option>
-                    <option value="#doc-sep">💼 SEP Rules</option>
-                    <option value="#doc-yield">⚖️ Yield &amp; XIRR</option>
-                    <option value="#doc-montecarlo">📊 Monte Carlo</option>
-                    <option value="#doc-minor">👥 Minor &amp; PwD</option>
-                    <option value="#doc-eduloan">📚 Education Loan</option>
-                    <option value="#doc-rsgrowth">📈 RS Growth Rate</option>
-                    <option value="#doc-phasedsalary">💼 Phased Salary</option>
-                    <option value="#doc-lifeevents">⚡ Life Events</option>
-                    <option value="#doc-household">👨‍👩‍👧 Household</option>
-                    <option value="#doc-rss">🕐 RSS Scheme</option>
-                    <option value="#doc-baby">👶 Baby Millionaire</option>
+                    style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 13, fontWeight: 600, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
+                    <option value="" style={{ fontSize: 13 }}>↓ Jump to section…</option>
+                    <option value="#doc-whatsnew" style={{ fontSize: 13 }}>💡 What's New</option>
+                    <option value="#doc-guide" style={{ fontSize: 13 }}>🗂 User Guide</option>
+                    <option value="#doc-engine" style={{ fontSize: 13 }}>📈 Projection Engine</option>
+                    <option value="#doc-policy" style={{ fontSize: 13 }}>🛡 Policy Reference</option>
+                    <option value="#doc-planning" style={{ fontSize: 13 }}>🎯 Planning Tools</option>
+                    <option value="#doc-whatif" style={{ fontSize: 13 }}>⚙️ What-If Explorer</option>
+                    <option value="#doc-srs" style={{ fontSize: 13 }}>📖 SRS</option>
+                    <option value="#doc-propmon" style={{ fontSize: 13 }}>🏠 Property Monetisation</option>
+                    <option value="#doc-dwz" style={{ fontSize: 13 }}>🕐 Die with Zero</option>
+                    <option value="#doc-sep" style={{ fontSize: 13 }}>💼 SEP Rules</option>
+                    <option value="#doc-yield" style={{ fontSize: 13 }}>⚖️ Yield &amp; XIRR</option>
+                    <option value="#doc-montecarlo" style={{ fontSize: 13 }}>📊 Monte Carlo</option>
+                    <option value="#doc-minor" style={{ fontSize: 13 }}>👥 Minor &amp; PwD</option>
+                    <option value="#doc-eduloan" style={{ fontSize: 13 }}>📚 Education Loan</option>
+                    <option value="#doc-rsgrowth" style={{ fontSize: 13 }}>📈 RS Growth Rate</option>
+                    <option value="#doc-phasedsalary" style={{ fontSize: 13 }}>💼 Phased Salary</option>
+                    <option value="#doc-lifeevents" style={{ fontSize: 13 }}>⚡ Life Events</option>
+                    <option value="#doc-household" style={{ fontSize: 13 }}>👨‍👩‍👧 Household</option>
+                    <option value="#doc-rss" style={{ fontSize: 13 }}>🕐 RSS Scheme</option>
+                    <option value="#doc-baby" style={{ fontSize: 13 }}>👶 Baby Millionaire</option>
                   </select>
                   {/* Desktop/tablet (≥641px): pill buttons — same scroll logic as select above */}
                   <div className="docs-nav-pills" style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
