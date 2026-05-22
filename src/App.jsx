@@ -16044,7 +16044,12 @@ ${milestoneSnapshotHtml}
                           { key: "basic", label: "Basic Plan", desc: "Fixed payout + possible bequest", pros: ["Bequest if unused at 90"], cons: ["Slightly lower payout", "Pool phase ends at 90"] },
                         ].map(({ key, label, desc, pros, cons }) => {
                           const plan = lifePlans?.[key];
-                          const payout = plan ? (inputs.isMale !== false ? plan.startM : plan.startF) : 0;
+                          const payoutRaw = plan ? (inputs.isMale !== false ? plan.startM : plan.startF) : 0;
+                          // Bug 2 fix: apply basicPremiumPct deduction for Basic plan (same formula as
+                          // all other payout sites). Raw startM/startF for Basic is pre-deduction.
+                          const payout = (key === 'basic' && payoutRaw > 0)
+                            ? payoutRaw * (1 - basicPremiumPct / 100) / 0.90
+                            : payoutRaw;
                           const isActive = highlightPlan === key;
                           return (
                             <div key={key} onClick={() => setHighlightPlan(key)} style={{ position: "relative", background: "var(--bg-muted)", border: isActive ? "2px solid rgba(var(--clr-blue2-rgb),0.6)" : "0.5px solid var(--border-strong)", borderRadius: 14, padding: "18px 16px", cursor: "pointer", paddingTop: isActive ? 26 : 18, transition: "border-color 0.15s" }}>
@@ -16111,7 +16116,11 @@ ${milestoneSnapshotHtml}
                   const target = Number(inputs.targetMonthlyIncome) || 0;
                   if (target > 0) {
                     // ── CPF LIFE payout for the highlighted plan (inflation-adjusted when Real $ mode is on) ──
-                    const planPayout = lifePlans[highlightPlan]?.[inputs.isMale !== false ? 'startM' : 'startF'] || 0;
+                    const planPayoutRaw = lifePlans[highlightPlan]?.[inputs.isMale !== false ? 'startM' : 'startF'] || 0;
+                    // Bug 3 fix: apply basicPremiumPct deduction for Basic plan
+                    const planPayout = (highlightPlan === 'basic' && planPayoutRaw > 0)
+                      ? planPayoutRaw * (1 - basicPremiumPct / 100) / 0.90
+                      : planPayoutRaw;
                     const realPlanPayout = applyInflation(planPayout, inputs.payoutAge);
 
                     // ── OA Drawdown contribution (only counted if draw starts at or before payout age) ──
@@ -16286,15 +16295,26 @@ ${milestoneSnapshotHtml}
                           ? (Math.pow(finalCPF6 / totalPutIn6, 1 / years6) - 1) * 100
                           : null;
                         const activePlanZ6 = lifePlans?.[highlightPlan];
-                        const activePayoutZ6 = activePlanZ6
+                        const activePayoutRawZ6 = activePlanZ6
                           ? (inputs.isMale !== false ? activePlanZ6.startM : activePlanZ6.startF)
                           : 0;
+                        // Bug 1+4 fix: apply basicPremiumPct deduction for Basic plan (same formula as
+                        // all other payout sites — raw startM/startF is pre-deduction for Basic).
+                        const activePayoutZ6 = (highlightPlan === 'basic' && activePayoutRawZ6 > 0)
+                          ? activePayoutRawZ6 * (1 - basicPremiumPct / 100) / 0.90
+                          : activePayoutRawZ6;
+                        // Bug 1 fix: apply Nom/Real adjustment for coverageRatio6 so it matches
+                        // Readiness tab coveragePct. irrRatio6 (vs salary) stays nominal — salary
+                        // is a current-dollar figure so no deflation needed there.
+                        const activePayoutDisplayZ6 = isRealDollars
+                          ? applyInflation(activePayoutZ6, summaryRefAge)
+                          : activePayoutZ6;
                         const monthlyGross6 = Number(inputs.salaryGross) || 0;
                         const irrRatio6 = monthlyGross6 > 0 && activePayoutZ6 > 0
                           ? (activePayoutZ6 / monthlyGross6) * 100 : null;
                         const target6 = Number(inputs.targetMonthlyIncome) || 0;
-                        const coverageRatio6 = target6 > 0 && activePayoutZ6 > 0
-                          ? (activePayoutZ6 / target6) * 100 : null;
+                        const coverageRatio6 = target6 > 0 && activePayoutDisplayZ6 > 0
+                          ? (activePayoutDisplayZ6 / target6) * 100 : null;
                         const isLifeForRatios6 = !isRSSMode && !isForeigner;
                         const xirrStd6  = isLifeForRatios6 ? (xirrByAge['standard']?.[summaryRefAge]   ?? null) : null;
                         const xirrEsc6  = isLifeForRatios6 ? (xirrByAge['escalating']?.[summaryRefAge] ?? null) : null;
