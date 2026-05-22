@@ -11608,8 +11608,8 @@ ${milestoneSnapshotHtml}
 
             {/* 2. Nom($) / Real($) toggle — desktop + tablet only; hidden on mobile (inside gear) */}
             <div className="cpf-nav-nomreal" style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1, flexShrink: 0 }}>
-              <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nominal ($)</button>
-              <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real ($) Today's Money</button>
+              <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nom ($)</button>
+              <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real ($)</button>
             </div>
 
             {/* 3. Samples — desktop only (promoted before Share for discoverability) */}
