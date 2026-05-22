@@ -4314,7 +4314,7 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 // App.jsx handlers. Zero engine changes, zero new state in App.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 function ReadinessTab({
-  inputs, displayAccumulation, accumulationByAge, lifePlans, milestones,
+  inputs, displayAccumulation, accumulationByAge, nominalAccumulationByAge, lifePlans, milestones,
   highlightPlan, setHighlightPlan, payoutAge65, isDark, setActiveTab,
   setSidebarOpen, basicPremiumPct, isRealDollars, applyInflation,
 }) {
@@ -4328,10 +4328,15 @@ function ReadinessTab({
   const yearsFromNow = Math.max(0, (cy + yearsToPA) - 2026);
 
   // ── Readiness score ──────────────────────────────────────────────────────
+  // IMPORTANT: raAtPA_nominal MUST come from nominalAccumulationByAge (raw engine output,
+  // always nominal future dollars), NOT from accumulationByAge (which is deflated when
+  // isRealDollars=true). The score compares RA against FRS — both are nominal future values.
+  // Mixing real RA with nominal FRS would produce a spuriously low ratio (e.g. 55% vs 100%).
   const { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color: scoreColor, label: scoreLabel } = useMemo(() => {
-    const raAtPA    = accumulationByAge.get(pa)?.ra || 0;
-    const projFRS   = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
-    const frsRatio  = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
+    const nomMap   = nominalAccumulationByAge || accumulationByAge; // fallback for safety
+    const raAtPA   = nomMap.get(pa)?.ra || 0;  // always nominal
+    const projFRS  = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const frsRatio = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
 
     const activePlanObj = lifePlans?.[highlightPlan || "standard"];
     const rawPayout = activePlanObj ? (isMale ? activePlanObj.startM : activePlanObj.startF) : 0;
@@ -4345,10 +4350,10 @@ function ReadinessTab({
     const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
     const label = score >= 75 ? "On Track" : score >= 50 ? "Needs Attention" : "At Risk";
     return { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color, label };
-  }, [accumulationByAge, pa, rsGrowth, yearsFromNow, lifePlans, highlightPlan, isMale, basicPremiumPct, target]);
+  }, [nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow, lifePlans, highlightPlan, isMale, basicPremiumPct, target]);
 
   // ── Derived metrics ──────────────────────────────────────────────────────
-  const payoutData    = accumulationByAge.get(pa) || {};
+  const payoutData    = accumulationByAge.get(pa) || {};           // display values — respects Nom/Real toggle
   const totalCPF      = (payoutData.oa || 0) + (payoutData.sa || 0) + (payoutData.ma || 0) + (payoutData.ra || 0);
   const currentOA     = Number(inputs.oaBalance) || 0;
   const currentSA     = Number(inputs.saBalance) || 0;
@@ -4356,6 +4361,7 @@ function ReadinessTab({
   const currentTotal  = currentOA + currentSA + currentMA;
   const projBRS       = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
   const projERS       = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + rsGrowth, yearsFromNow));
+  // Bar percentages compare nominal RA vs nominal retirement sums — always use raAtPA (nominal from score block)
   const frsBarPct     = projFRS > 0 ? Math.min(100, Math.round((raAtPA / projFRS) * 100)) : 0;
   const brsBarPct     = projBRS > 0 ? Math.min(100, Math.round((raAtPA / projBRS) * 100)) : 0;
   const ersBarPct     = projERS > 0 ? Math.min(100, Math.round((raAtPA / projERS) * 100)) : 0;
@@ -15052,6 +15058,7 @@ ${milestoneSnapshotHtml}
                 inputs={inputs}
                 displayAccumulation={displayAccumulation}
                 accumulationByAge={accumulationByAge}
+                nominalAccumulationByAge={projectionByAge}
                 lifePlans={lifePlans}
                 milestones={milestones}
                 highlightPlan={highlightPlan}
