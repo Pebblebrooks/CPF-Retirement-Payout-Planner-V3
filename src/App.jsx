@@ -4656,12 +4656,12 @@ export default function App() {
   // on the next line is never in the Temporal Dead Zone.
   const handleShareLinkInitRef = useRef(null);
   const handleResetRef = useRef(null);
-  const activeTabRef = useRef("summary");
+  const activeTabRef = useRef("readiness");
   const isForeignerRef      = useRef(false);        // stable ref so keyboard nav can read current citizenship
   const cpfSchemeRef        = useRef('cpf_life');   // stable ref so keyboard nav can read current scheme
   const householdEnabledRef = useRef(false);        // stable ref so keyboard nav can read current household state
 
-  const [activeTab, setActiveTab] = useState("summary");
+  const [activeTab, setActiveTab] = useState("readiness");
   activeTabRef.current = activeTab; // keep ref current for keyboard shortcut handler
   const [highlightPlan, setHighlightPlan] = useState("standard");
   // HH-5: Independent CPF LIFE plan selector per member (replaces shared householdPlan).
@@ -5408,7 +5408,7 @@ export default function App() {
     setInputs(prev => ({ ...prev, ...mergedInputs }));
     try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
     setShowWizard(false);
-    setActiveTab('summary');
+    setActiveTab('readiness');
     showToast('✓ Setup complete — your profile is ready');
   };
 
@@ -6045,7 +6045,7 @@ export default function App() {
         setWhatIfOaDrawdown(null);
         setWhatIfSrsContrib(null);
         setWhatIfPrivGrowth(null);
-        setActiveTab("summary");
+        setActiveTab("readiness");
         showToast("All inputs, scenarios, and What-If data reset to defaults.");
       }
     });
@@ -11608,8 +11608,8 @@ ${milestoneSnapshotHtml}
 
             {/* 2. Nom($) / Real($) toggle — desktop + tablet only; hidden on mobile (inside gear) */}
             <div className="cpf-nav-nomreal" style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 1, flexShrink: 0 }}>
-              <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nom ($)</button>
-              <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real ($)</button>
+              <button onClick={() => setIsRealDollars(false)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: !isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: !isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Nominal ($)</button>
+              <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real ($) Today's Money</button>
             </div>
 
             {/* 3. Samples — desktop only (promoted before Share for discoverability) */}
@@ -15509,13 +15509,13 @@ ${milestoneSnapshotHtml}
                               style={{ padding: "3px 12px", borderRadius: 18, fontSize: 13, fontWeight: !isRealDollars ? 600 : 400, cursor: "pointer", border: "none", transition: "all 0.15s",
                                 background: !isRealDollars ? "rgba(var(--clr-blue2-rgb),0.18)" : "transparent",
                                 color: !isRealDollars ? "var(--clr-blue)" : "var(--text-muted)" }}>
-                              <span className="nom-real-desktop">Nom $</span><span className="nom-real-mobile">Nom ($)</span>
+                              <span className="nom-real-desktop">Nominal ($)</span><span className="nom-real-mobile">Nom ($)</span>
                             </button>
                             <button onClick={() => setIsRealDollars(true)}
                               style={{ padding: "3px 12px", borderRadius: 18, fontSize: 13, fontWeight: isRealDollars ? 600 : 400, cursor: "pointer", border: "none", transition: "all 0.15s",
                                 background: isRealDollars ? "rgba(var(--clr-blue2-rgb),0.18)" : "transparent",
                                 color: isRealDollars ? "var(--clr-blue)" : "var(--text-muted)" }}>
-                              <span className="nom-real-desktop">Real $</span><span className="nom-real-mobile">Real ($)</span>
+                              <span className="nom-real-desktop">Real ($) Today's Money</span><span className="nom-real-mobile">Real ($)</span>
                             </button>
                           </div>
                         </div>
