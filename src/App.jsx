@@ -14039,7 +14039,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="transfers" label="CPF Transfers ($/yr)" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One" />
+              <SidebarSectionHeader id="transfers" label="CPF Transfers ($/yr)" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One · RA → OA at payout age" />
               {openSections.has("transfers") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* OA → MA */}
@@ -14176,6 +14176,115 @@ ${milestoneSnapshotHtml}
                       );
                     })()}
                   </div>
+
+                  {/* RA → OA Transfer at Payout Age — read-only info card */}
+                  {/* Suppressed for pure RSS members: the transfer is handled inside runRSSEngine */}
+                  {!_isRSSForTransfer && (
+                    <div style={{ background: "rgba(var(--clr-blue2-rgb),0.06)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
+
+                      {/* Card header */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                        <ArrowRightLeft style={{ width: 13, height: 13, color: "var(--clr-blue2)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue2)", textTransform: "uppercase" }}>
+                          RA → OA Transfer at Age {payoutAge65}
+                        </span>
+                        <TooltipBox id="t-ra-oa-info" text="At payout age, CPF transfers a birth-year-gated portion of your eligible RA savings to OA. Eligible base = RA at payout age minus cumulative cash top-ups (RSTU), OA→RA CPF transfers, and government grants. Born 1958+: 20% of eligible base − $5,000 (floor $0). Born 1957: 10% of eligible base. Born 1956 or earlier: not eligible. The transferred amount moves freely to OA. CPF LIFE payouts are based on RA after this transfer." />
+                      </div>
+
+                      {/* Birth-year eligibility badge */}
+                      {(() => {
+                        const badge = _birthYear >= 1958
+                          ? { label: `Born ${_birthYear} (1958+) · 20% of eligible RA − $5,000`, color: "var(--clr-green)", bg: "rgba(var(--clr-emerald-rgb),0.12)", border: "rgba(var(--clr-emerald-rgb),0.35)" }
+                          : _birthYear === 1957
+                          ? { label: `Born 1957 · 10% of eligible RA (no $5,000 deduction)`, color: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.1)", border: "rgba(var(--clr-amber-rgb),0.3)" }
+                          : { label: `Born ${_birthYear} (1956 or earlier) · Not eligible for RA→OA transfer`, color: "var(--text-muted)", bg: "var(--bg-muted)", border: "var(--border-subtle)" };
+                        return (
+                          <div style={{ display: "inline-flex", alignItems: "center", background: badge.bg, border: `1px solid ${badge.border}`, borderRadius: 6, padding: "3px 9px", marginBottom: 10, fontSize: 12, fontWeight: 700, color: badge.color }}>
+                            {badge.label}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Section A — Transfer computation breakdown */}
+                      {_raTransferPct > 0 ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ color: "var(--text-muted)" }}>Projected RA at age {payoutAge65}</span>
+                            <span style={{ color: "var(--text-highlight)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(raAtPayout)}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ color: "var(--text-muted)" }}>Less: cash top-ups / transfers / grants</span>
+                            <span style={{ color: "var(--clr-red)", fontFamily: "monospace" }}>− {formatCurrency(cumulativeCashTopUps)}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border-subtle)", paddingTop: 5 }}>
+                            <span style={{ color: "var(--text-muted)" }}>
+                              Eligible base ({Math.round(_raTransferPct * 100)}%{_birthYear >= 1958 ? " then − $5,000" : ""} applied)
+                            </span>
+                            <span style={{ color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(raTransferBase)}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(var(--clr-blue2-rgb),0.1)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", borderRadius: 6, padding: "5px 8px", marginTop: 2 }}>
+                            <span style={{ color: "var(--clr-blue2)", fontWeight: 700 }}>↑ Transfer to OA (freely withdrawable)</span>
+                            <span style={{ color: "var(--clr-blue2)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(raOaTransfer)}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ color: "var(--text-muted)" }}>RA entering CPF LIFE pool</span>
+                            <span style={{ color: "var(--clr-emerald)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(raAfterTransfer)}</span>
+                          </div>
+                          <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "3px 0 0", lineHeight: 1.5 }}>
+                            Auto-applied by engine at payout age. CPF LIFE monthly payouts are based on the RA entering the pool ({formatCurrency(raAfterTransfer)}), not the full pre-transfer RA.
+                          </p>
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 6px" }}>
+                          Members born 1956 or earlier are not eligible for the RA→OA transfer. Full RA enters the CPF LIFE pool.
+                        </p>
+                      )}
+
+                      {/* Section B — OA withdrawal rights sub-card */}
+                      {(() => {
+                        const _rsGrowthPct = (Number(debouncedInputs.retirementSumGrowth) || 3) / 100;
+                        const _baseYearPA  = Number(debouncedInputs.currentYear) || 2026;
+                        const _baseAgePA   = Number(debouncedInputs.currentAge) || 35;
+                        const _payoutYear  = _baseYearPA + (payoutAge65 - _baseAgePA);
+                        const _frsAtPA     = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + _rsGrowthPct, Math.max(0, _payoutYear - 2026)));
+                        const _frsOnTrack  = raAtPayout >= _frsAtPA;
+                        const _oaAtPA      = projectionByAge.get(payoutAge65)?.oa || 0;
+                        // Birth-year OA withdrawal cap when FRS is NOT set aside (per CPF Board infographic cpf.gov.sg/A55)
+                        const _oaCapPct    = _birthYear >= 1958 ? null
+                          : _birthYear === 1957 ? 10
+                          : _birthYear === 1956 ? 20
+                          : _birthYear === 1955 ? 30
+                          : _birthYear === 1954 ? 40
+                          : 50; // 1953 or earlier
+                        const _oaCapAmt    = _oaCapPct != null ? Math.round(_oaAtPA * _oaCapPct / 100) : 5000;
+                        return (
+                          <div style={{ background: _frsOnTrack ? "rgba(var(--clr-emerald-rgb),0.06)" : "rgba(var(--clr-amber-rgb),0.07)", border: `1px solid ${_frsOnTrack ? "rgba(var(--clr-emerald-rgb),0.3)" : "rgba(var(--clr-amber-rgb),0.35)"}`, borderRadius: 8, padding: "8px 11px", marginTop: 10 }}>
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: 5 }}>
+                              {_frsOnTrack
+                                ? <CheckCircle2 style={{ width: 11, height: 11, color: "var(--clr-emerald)", flexShrink: 0, marginTop: 1 }} />
+                                : <AlertTriangle style={{ width: 11, height: 11, color: "var(--clr-amber)", flexShrink: 0, marginTop: 1 }} />}
+                              <div>
+                                <p style={{ fontSize: 12, fontWeight: 700, color: _frsOnTrack ? "var(--clr-emerald)" : "var(--clr-amber)", margin: "0 0 2px" }}>
+                                  {_frsOnTrack
+                                    ? `FRS on track at age ${payoutAge65} — full OA withdrawal access`
+                                    : `FRS not yet met at age ${payoutAge65} — OA withdrawal restricted`}
+                                </p>
+                                <p style={{ fontSize: 12, color: _frsOnTrack ? "var(--text-muted)" : "#fdba74", margin: 0, lineHeight: 1.5 }}>
+                                  {_frsOnTrack
+                                    ? `Projected RA ${formatCurrency(raAtPayout)} ≥ FRS ${formatCurrency(_frsAtPA)} — you can withdraw any amount from OA at payout age.`
+                                    : _birthYear >= 1958
+                                      ? `Born 1958+: OA withdrawal capped at $5,000 until FRS is set aside (projected RA ${formatCurrency(raAtPayout)} vs FRS ${formatCurrency(_frsAtPA)}).`
+                                      : `Born ${_birthYear}: OA withdrawal capped at ${_oaCapPct}% of OA (≈ ${formatCurrency(_oaCapAmt)} on projected OA ${formatCurrency(_oaAtPA)}) until FRS is set aside.`}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                    </div>
+                  )}
+
                 </div>
               </div>}
             </div>{/* /transfers inner */}
@@ -19611,7 +19720,7 @@ ${milestoneSnapshotHtml}
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>RA-to-OA Transfer at Payout Age:</strong> At payout age, CPF transfers a birth-year-gated amount from RA to OA. <strong>Eligible base</strong> = RA at payout − cumulative cash top-ups (RSTU), OA→RA CPF transfers, and government grants. Interest earned on SA/RA is <em>not</em> excluded. <strong>Transfer by birth year:</strong> Born 1958 or after → 20% of eligible base − $5,000 (floor $0); Born 1957 → 10% of eligible base; Born 1956 or earlier → not eligible ($0). <strong>CPF LIFE payouts are calculated on RA after this transfer</strong> — the transferred sum moves to OA (freely accessible), reducing the RA pool and correspondingly lowering monthly payouts. The Summary tab shows all components.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>RA-to-OA Transfer at Payout Age:</strong> At payout age, CPF transfers a birth-year-gated amount from RA to OA. <strong>Eligible base</strong> = RA at payout − cumulative cash top-ups (RSTU), OA→RA CPF transfers, and government grants. Interest earned on SA/RA is <em>not</em> excluded. <strong>Transfer by birth year:</strong> Born 1958 or after → 20% of eligible base − $5,000 (floor $0); Born 1957 → 10% of eligible base; Born 1956 or earlier → not eligible ($0). <strong>CPF LIFE payouts are calculated on RA after this transfer</strong> — the transferred sum moves to OA (freely accessible), reducing the RA pool and correspondingly lowering monthly payouts. The Summary tab shows all components. See the <strong>CPF Transfers panel</strong> for a live projected breakdown of your RA→OA transfer, eligible base, and OA withdrawal rights at payout age.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-purple)", marginTop: 6, flexShrink: 0 }} />
