@@ -12454,7 +12454,7 @@ ${milestoneSnapshotHtml}
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase" }}>PR Tenure</span>
-                            <TooltipBox id="t-prYear" text="PR Year 1: 9% total contributions (5% employee + 4% employer). Year 2: intermediate rates. Year 3+: full SC/PR rates (37% total ≤55). Select the year that applies to your current PR status." />
+                            <TooltipBox id="t-prYear" text="PR Year 1: 9% total (≤60) / 8.5% (61+) — 5% employee + graduated employer. Year 2: 24% total (≤55) stepping down to 18.5% (56–60), 11% (61–65), 8.5% (65+). Year 3+: full SC/PR rates (37% total ≤55). G/G = both graduated (default, no application needed); F/G = full employer 17% + graduated employee (requires joint CPF application). Select the year that applies to your current PR status." />
                           </div>
                           <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 7, gap: 2 }}>
                             {[[1,"Yr 1"],[2,"Yr 2"],[3,"Yr 3+"]].map(([val,label]) => (
@@ -12494,7 +12494,7 @@ ${milestoneSnapshotHtml}
                                     ? "⚠ F/G Year 1: Employer pays full 17%, employee pays 5%. Total 22% (≤55). Requires joint CPF application."
                                     : "⚠ F/G Year 2: Employer pays full rates, employee pays graduated rates. Requires joint CPF application."
                                   : (inputs.prYear || 3) === 1
-                                    ? "⚠ G/G Year 1: Both pay graduated rates — 9% total (≤55). Default arrangement, no application needed."
+                                    ? "⚠ G/G Year 1: Both pay graduated rates — 9% total (≤60), 8.5% (61+). Default arrangement, no application needed."
                                     : "⚠ G/G Year 2: Both pay graduated rates — 24% total (≤55). Default arrangement, no application needed."}
                               </p>
                             </div>
@@ -13813,7 +13813,7 @@ ${milestoneSnapshotHtml}
                   <div>
                     <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
                       VCMA – Cash Top-up to MA <FreqToggle freqKey="vcMaFreq" durKey="vcMaDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-vcmacash" text="Voluntary Cash MediSave Top-up (VCMA) — direct annual cash deposit to your own MA. Credited each year, capped at the Basic Healthcare Sum (BHS, $79,000 in 2026). Not subject to the $37,740 Annual Limit. If you are eligible for MMSS (SC, age 55–70, MA below ½ BHS, income ≤ $4,000/mo), the government automatically matches your VCMA dollar-for-dollar up to $1,000/yr — the engine computes and credits the match automatically. No separate entry needed." />
+                      <TooltipBox id="t-vcmacash" text="Voluntary Cash MediSave Top-up (VCMA) — direct annual cash deposit to your own MA. Credited each year, capped at the Basic Healthcare Sum (BHS, $79,000 in 2026). Not subject to the $37,740 Annual Limit. If you are eligible for MMSS (SC, age 55–70, MA below ½ BHS, income ≤ $4,000/mo), the government automatically matches your VCMA dollar-for-dollar up to $1,000/yr — the engine computes and credits the match automatically. No separate entry needed. Note: the property Annual Value (≤ $21,000) and single-property eligibility conditions are not modelled — the engine assumes these conditions are met." />
                     </div>
                     {(() => {
                       const bhsNowMa = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, Math.max(0, (Number(inputs.currentYear) || 2026) - 2026)));
@@ -13894,6 +13894,7 @@ ${milestoneSnapshotHtml}
                     return (
                       <div style={{ marginTop: -6, marginBottom: 2, padding: "7px 10px", borderRadius: 8, background: "rgba(var(--clr-green-rgb),0.07)", border: "1px solid rgba(var(--clr-green-rgb),0.3)", fontSize: 12, color: "var(--clr-green)" }}>
                         ✓ <strong>MMSS match:</strong> <strong style={{ fontFamily: "monospace", fontSize: 12 }}>{formatCurrency(_mmssMatch)}/yr</strong> auto-credited to MA · engine auto-stops when MA reaches {formatCurrency(_halfBhs)} · SC only · pilot ends 2030
+                        <div style={{ marginTop: 4, fontSize: 11, color: "var(--text-subtle)", fontWeight: 400 }}>ⓘ Property AV ≤ $21,000 and single-property conditions assumed met — not modelled.</div>
                       </div>
                     );
                   })()}
@@ -19634,7 +19635,7 @@ ${milestoneSnapshotHtml}
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-emerald)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>MMSS — Matched MediSave Scheme (1 Jan 2026 – 31 Dec 2030):</strong> A five-year pilot where the government matches voluntary cash MA top-ups dollar-for-dollar up to <strong>$1,000/year</strong>. Eligibility (assessed as at 31 Dec each year): Singapore Citizens aged 55–70, MA balance below half of BHS (~$39,500 in 2026), average monthly income ≤ $4,000, own no more than one property with AV ≤ $21,000. Pilot runs from 1 January 2026 to 31 December 2030 — the engine enforces both the 2026 start and 2030 end bounds. Matching grant is credited to MA at the <strong>beginning of the following year</strong> (e.g. top-ups made in 2026 are credited in January 2027). The engine models this one-year carry correctly. Cash top-ups attracting MMSS match are <strong>not eligible</strong> for income tax relief.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>MMSS — Matched MediSave Scheme (1 Jan 2026 – 31 Dec 2030):</strong> A five-year pilot where the government matches voluntary cash MA top-ups dollar-for-dollar up to <strong>$1,000/year</strong>. Eligibility (assessed as at 31 Dec each year): Singapore Citizens aged 55–70, MA balance below half of BHS (~$39,500 in 2026), average monthly income ≤ $4,000, own no more than one property with AV ≤ $21,000 (these two property conditions are assumed met — not modelled by the engine). Pilot runs from 1 January 2026 to 31 December 2030 — the engine enforces both the 2026 start and 2030 end bounds. Matching grant is credited to MA at the <strong>beginning of the following year</strong> (e.g. top-ups made in 2026 are credited in January 2027). The engine models this one-year carry correctly. Cash top-ups attracting MMSS match are <strong>not eligible</strong> for income tax relief.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
