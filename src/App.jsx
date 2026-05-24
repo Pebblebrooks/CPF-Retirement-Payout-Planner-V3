@@ -617,6 +617,12 @@ const DEFAULT_INPUTS = {
   // projection year's interest to the fraction remaining until the next birthday.
   // Default 6 (June) approximates the prior mid-year convention for legacy profiles.
   birthMonth: 6,
+  // D4 Phase 3: birth year (4-digit, e.g. 1991). When set (> 0), currentAge is
+  // auto-derived as (currentYear - birthYear) and the Age field becomes read-only.
+  // Eliminates the currentAge / birthMonth inconsistency (Bug 7) and provides an
+  // exact birth year for the CPF LIFE RA→OA transfer gate (1957/1958 boundary).
+  // 0 = not set (manual age-entry mode, backward-compatible with legacy profiles).
+  birthYear: 0,
   // Rev #5: Annual growth rate assumed for CPF retirement sums (FRS/BHS/BRS/ERS) projections.
   // CPF Board has historically raised these at ~3%/yr. Range: 0–10%; warn outside 0–6%.
   // Affects every projected FRS/BHS/BRS/ERS threshold in the engine and UI milestones.
@@ -1114,7 +1120,7 @@ const INPUT_LABELS = {
   dieWithZeroEnabled: "Die with Zero", dieWithZeroAge: "Die with Zero Age",
   vcMaCash: "Cash Top-up to MA", oaToMaForLovedOne: "OA→MA For Loved One", oaToSaForLovedOne: "OA→SA/RA For Loved One",
   prYear: "PR Tenure Year", citizenStatus: "Citizenship Status", isPwD: "Person with Disabilities (PwD)",
-  retirementSumGrowth: "Retirement Sum Growth (%/yr)", birthMonth: "Birth Month",
+  retirementSumGrowth: "Retirement Sum Growth (%/yr)", birthMonth: "Birth Month", birthYear: "Birth Year",
   mcVariancePct: "Monte Carlo Variance (%)",
   lifeEvents: "Life Events",
   // RSS field labels
@@ -1941,7 +1947,7 @@ function runRSSEngine(inputs, {
         // Step 1: Apply birth-year-gated RA-to-OA transfer on the eligible base.
         // Eligible base excludes only cash top-ups, OA→RA transfers, and gov grants — NOT interest.
         // Born 1958+: 20% of eligible base − $5,000; Born 1957: 10%; Born ≤1956: not eligible.
-        const migBirthYear      = baseYear - startAge; // approximate; D4 birth-month will refine
+        const migBirthYear      = (Number(inputs.birthYear) > 0) ? Number(inputs.birthYear) : (baseYear - startAge); // exact when birthYear set; else approximate (±1yr)
         const migRaTransferBase = Math.max(0, ra - cumRaCashTopUps);
         const migTransferPct    = migBirthYear >= 1958 ? 0.20 : migBirthYear === 1957 ? 0.10 : 0;
         const migRaTransferRaw  = Math.round(migRaTransferBase * migTransferPct);
@@ -4042,7 +4048,7 @@ function SetupWizard({ onComplete, onSkip }) {
   const TOTAL_STEPS       = 3;
   const [w, setW]         = useState({
     // Step 1 — Profile
-    name: "", currentAge: "", payoutAge: "", citizenStatus: "SC", gender: "male",
+    name: "", currentAge: "", payoutAge: "", citizenStatus: "SC", gender: "male", birthMonth: 6, birthYear: 0,
     // Step 2 — CPF Balances
     oaBalance: "", saBalance: "", maBalance: "",
     // Step 3 — Income & Goals
@@ -4055,10 +4061,12 @@ function SetupWizard({ onComplete, onSkip }) {
   const validate = () => {
     const e = {};
     if (step === 1) {
-      const age = Number(w.currentAge);
+      // Age validation: if birthYear is set, derive age; otherwise require manual entry
+      const derivedAge = w.birthYear > 0 ? ((new Date().getFullYear()) - w.birthYear) : Number(w.currentAge);
       const pa  = Number(w.payoutAge);
-      if (!w.currentAge || isNaN(age) || age < 16 || age > 99) e.currentAge = "Enter a valid age (16–99)";
-      if (!w.payoutAge  || isNaN(pa)  || pa <= age)             e.payoutAge  = "Must be greater than current age";
+      if (w.birthYear <= 0 && (!w.currentAge || isNaN(Number(w.currentAge)) || Number(w.currentAge) < 16 || Number(w.currentAge) > 99)) e.currentAge = "Enter a valid age (16–99)";
+      if (w.birthYear > 0 && (derivedAge < 0 || derivedAge > 99)) e.birthYear = "Birth year gives an invalid age";
+      if (!w.payoutAge  || isNaN(pa)  || pa <= derivedAge) e.payoutAge = "Must be greater than current age";
     }
     if (step === 2) {
       if (w.oaBalance !== "" && isNaN(Number(w.oaBalance))) e.oaBalance = "Numbers only";
@@ -4078,7 +4086,9 @@ function SetupWizard({ onComplete, onSkip }) {
   const finish = () => {
     const merged = {
       ...(w.name          && { name:             w.name }),
-      ...(w.currentAge    && { currentAge:        w.currentAge }),
+      ...(w.birthYear > 0 ? { birthYear: w.birthYear, birthMonth: w.birthMonth, currentAge: (new Date().getFullYear()) - w.birthYear }
+                          : (w.currentAge && { currentAge: w.currentAge })),
+      ...(w.birthYear <= 0 && w.birthMonth && { birthMonth: w.birthMonth }),
       ...(w.payoutAge     && { payoutAge:         w.payoutAge }),
       citizenStatus:         w.citizenStatus,
       gender:                w.gender,
@@ -4133,12 +4143,39 @@ function SetupWizard({ onComplete, onSkip }) {
           {inp("name",       "Your name (optional)")}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
-              <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Current age</label>
-              {inp("currentAge", "e.g. 35", "number")}
+              <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Current age {w.birthYear > 0 && <span style={{ fontSize: 12, color: "#22d3ee" }}>(auto)</span>}</label>
+              {w.birthYear > 0 ? (
+                <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 10, padding: "10px 14px", fontSize: 14, color: "var(--text-muted)" }}>
+                  {new Date().getFullYear() - w.birthYear}
+                </div>
+              ) : inp("currentAge", "e.g. 35", "number")}
             </div>
             <div>
               <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>CPF payout age</label>
               {inp("payoutAge", "e.g. 65", "number")}
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Birth month</label>
+              <select value={w.birthMonth} onChange={e => set("birthMonth", Number(e.target.value))}
+                style={{ background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 10, padding: "10px 14px", fontSize: 14, color: "var(--text-bright)", outline: "none", width: "100%", appearance: "none", WebkitAppearance: "none" }}>
+                {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m,i) => (
+                  <option key={i+1} value={i+1}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Birth year <span style={{ fontSize: 12, color: "var(--clr-amber3)" }}>(auto-derives age)</span></label>
+              <select value={w.birthYear} onChange={e => set("birthYear", Number(e.target.value))}
+                style={{ background: "var(--bg-input)", border: `1px solid ${w.birthYear > 0 ? "rgba(34,211,238,0.5)" : "var(--border-strong)"}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, color: w.birthYear > 0 ? "var(--text-bright)" : "var(--text-muted)", outline: "none", width: "100%", appearance: "none", WebkitAppearance: "none" }}>
+                <option value={0}>— manual age entry —</option>
+                {Array.from({ length: 100 }, (_, i) => {
+                  const yr = new Date().getFullYear() - i;
+                  return <option key={yr} value={yr}>{yr}</option>;
+                })}
+              </select>
+              {errors.birthYear && <span style={{ fontSize: 13, color: "#ef4444" }}>{errors.birthYear}</span>}
             </div>
           </div>
           <div>
@@ -5801,7 +5838,7 @@ export default function App() {
   // A section is "active" (green dot) when the user has entered at least one non-default value.
   // Uses inputs (not debouncedInputs) so dots update immediately as the user types.
   const sectionStatus = {
-    profile:      inputs.name !== "" || inputs.citizenStatus !== "SC" || inputs.prYear !== 3 || inputs.isPwD || inputs.isSelfEmployed,
+    profile:      inputs.name !== "" || inputs.citizenStatus !== "SC" || inputs.prYear !== 3 || inputs.isPwD || inputs.isSelfEmployed || (Number(inputs.birthYear) || 0) > 0,
     cpfBalances:  (Number(inputs.oaBalance)||0) !== 50000 || (Number(inputs.saBalance)||0) !== 40000 || (Number(inputs.maBalance)||0) !== 30000,
     contribs:     (Number(inputs.empOaCont)||0) !== 12000 || (Number(inputs.empSaCont)||0) !== 4000 || (Number(inputs.empMaCont)||0) !== 4000 || (Number(inputs.salaryGross)||0) !== 6000,
     topups:       (Number(inputs.vc3aCash)||0) > 0 || (Number(inputs.vcSaTopup)||0) > 0 || (Number(inputs.vcMaCash)||0) > 0 || (Number(inputs.vcVhr)||0) > 0 || (Number(inputs.mrssGrant)||0) > 0 || (Number(inputs.mmssGrant)||0) > 0 || (Number(inputs.wisAmount)||0) > 0,
@@ -5874,6 +5911,23 @@ export default function App() {
   useEffect(() => {
     validateInputs(inputs);
   }, [inputs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // D4 Phase 3: auto-derive currentAge from birthYear + currentYear.
+  // Fires whenever birthYear, birthMonth, or currentYear changes.
+  // Only updates currentAge when birthYear is set (> 0); leaves manual entry untouched.
+  // Also auto-updates when currentYear changes (future-scenario modelling):
+  //   e.g. birthYear=1991, currentYear changes 2026→2030 → age updates 35→39. Correct.
+  // Derivation uses integer year-difference (CPF's own age convention):
+  //   age = currentYear - birthYear  (birthday-month adjustment is handled separately
+  //   by birthMonth driving firstYearFraction in the engine — not the age integer).
+  useEffect(() => {
+    const by = Number(inputs.birthYear) || 0;
+    if (by <= 0) return; // manual mode — no override
+    const cy = Number(inputs.currentYear) || 2026;
+    const derivedAge = cy - by;
+    if (derivedAge === Number(inputs.currentAge)) return; // already in sync — skip re-render
+    setInputs(prev => ({ ...prev, currentAge: derivedAge }));
+  }, [inputs.birthYear, inputs.currentYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // BUG-11 fix: cache the focusable-element list outside the keydown handler so it is
   // built once per mount rather than on every Enter keypress (was an O(n) DOM scan
@@ -6947,7 +7001,7 @@ export default function App() {
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
-      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD, birthMonth, // D4 Phase2
+      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD, birthMonth, birthYear, // D4 Phase2/3
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq, // mrssFreq removed — mirrors vcSaFreq by CPF policy
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
       vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, govGrantMaDur, wisDur, // mrssDur removed — no separate MRSS duration control
@@ -6978,7 +7032,7 @@ export default function App() {
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
-      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD, birthMonth, // D4 Phase2
+      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD, birthMonth, birthYear, // D4 Phase2/3
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq,
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
       vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, govGrantMaDur, wisDur,
@@ -7165,8 +7219,13 @@ export default function App() {
   const _isRSSForTransfer = debouncedInputs.cpfScheme === 'rss';
   const payoutRow65 = _isRSSForTransfer ? null : projectionByAge.get(payoutAge65);
   const cumulativeCashTopUps = payoutRow65?.cumRaCashTopUps ?? 0;
-  // Birth year approximation: currentYear − currentAge (±1 yr; D4 birth-month will refine).
-  const _birthYear = (Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35);
+  // Birth year: exact when birthYear field is set (D4 Phase 3); else approximate ±1yr.
+  // Used for the CPF LIFE RA→OA transfer gate (1957/1958 boundary). The approximation
+  // is off by 1 year for members whose birthday hasn't passed in the simulation year,
+  // which silently applies the wrong transfer % for ~1957/1958 boundary members.
+  const _birthYear = (Number(debouncedInputs.birthYear) > 0)
+    ? Number(debouncedInputs.birthYear)
+    : ((Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35));
   const raTransferBase = _isRSSForTransfer ? 0 : Math.max(0, raAtPayout - cumulativeCashTopUps);
   const _raTransferPct    = _birthYear >= 1958 ? 0.20 : _birthYear === 1957 ? 0.10 : 0;
   const _raOaTransferRaw  = Math.round(raTransferBase * _raTransferPct);
@@ -7196,7 +7255,9 @@ export default function App() {
     // raw projection RA was used here, overstating the monthly payout by ~$500–800.
     const sRaAtPA = spouseProjectionByAge.get(spousePa)?.ra || 0;
     // Spouse: mirror the component-scope OA-transfer logic inline.
-    const sBirthYear    = (Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35);
+    const sBirthYear    = (Number(debouncedSpouseInputs.birthYear) > 0)
+      ? Number(debouncedSpouseInputs.birthYear)
+      : ((Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35));
     const sCumTopUps    = spouseProjectionByAge.get(spousePa)?.cumRaCashTopUps ?? 0;
     const sTransferBase = Math.max(0, sRaAtPA - sCumTopUps);
     const sTransferPct  = sBirthYear >= 1958 ? 0.20 : sBirthYear === 1957 ? 0.10 : 0;
@@ -12143,8 +12204,27 @@ ${milestoneSnapshotHtml}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, alignItems: "flex-end" }}>
                     {[["currentYear", "Curr Year"], ["currentAge", "Curr Age"]].map(([n, l]) => (
                       <div key={n} style={{ minWidth: 0 }}>{/* minWidth:0 lets 1fr cells shrink below content width */}
-                        <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 12, color: "var(--clr-red)" }}>⚠</span>}</label>
-                        <input type="text" inputMode="decimal" name={n} autoComplete="off" value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} aria-invalid={!!inputErrors[n]} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                        <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 12, color: "var(--clr-red)" }}>⚠</span>}
+                          {/* Lock icon shown on Age field when birthYear is driving it */}
+                          {n === "currentAge" && (Number(inputs.birthYear) || 0) > 0 && (
+                            <span title="Age is auto-derived from Birth Year — clear Birth Year to edit manually" style={{ marginLeft: 5, fontSize: 11, color: "var(--text-muted)", fontWeight: 400, textTransform: "none" }}>🔒 auto</span>
+                          )}
+                        </label>
+                        <input type="text" inputMode="decimal" name={n} autoComplete="off"
+                          value={getDisplayValue(n, inputs[n])}
+                          onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                          onFocus={() => setFocusedField(n)}
+                          aria-label={l} aria-invalid={!!inputErrors[n]}
+                          readOnly={n === "currentAge" && (Number(inputs.birthYear) || 0) > 0}
+                          className={fieldChanged(n) ? "cpf-fc" : undefined}
+                          style={{
+                            width: "100%", padding: "8px 12px",
+                            background: (n === "currentAge" && (Number(inputs.birthYear) || 0) > 0) ? "var(--bg-muted)" : "var(--bg-input)",
+                            border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`,
+                            borderRadius: 8, color: (n === "currentAge" && (Number(inputs.birthYear) || 0) > 0) ? "var(--text-muted)" : "var(--text-bright)",
+                            fontSize: 14, outline: "none", boxSizing: "border-box",
+                            cursor: (n === "currentAge" && (Number(inputs.birthYear) || 0) > 0) ? "default" : undefined,
+                          }} />
                         {/* Short errors (e.g. currentYear) stay inline; currentAge long errors rendered below the grid */}
                         {inputErrors[n] && n !== "currentAge" && <p className="cpf-err">⚠ {inputErrors[n]}</p>}
                       </div>
@@ -12167,18 +12247,59 @@ ${milestoneSnapshotHtml}
                       )}
                     </div>
                   </div>
-                  {/* D4 Phase 2: Birth Month — used by engine to prorate first-year interest */}
+                  {/* D4 Phase 2/3: Birth Month + Birth Year — combined card */}
                   <div style={{ padding: "8px 12px", borderRadius: 10, background: "var(--bg-muted)", border: "1px solid rgba(34,211,238,0.2)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee", textTransform: "uppercase" }}>Birth Month</span>
-                      <TooltipBox id="t-birthmonth" text="Your birth month lets the engine prorate the first projection year's interest to the months remaining until your next birthday. Default (Jun) approximates the prior mid-year convention. Enter your actual birth month for better accuracy — especially important if your payout age is near." />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee", textTransform: "uppercase" }}>Birth Month &amp; Year</span>
+                      <TooltipBox id="t-birthmonth" text="Birth Month lets the engine prorate the first projection year's interest to the months remaining until your next birthday. Birth Year (optional) auto-derives your age from the simulation year — eliminating manual inconsistency — and provides an exact birth year for the CPF LIFE RA→OA transfer calculation (critical for members born 1957–1958). Select '— manual —' in Birth Year to return to manual age entry." />
                     </div>
-                    <select name="birthMonth" value={inputs.birthMonth || 6} onChange={handleInputChange} aria-label="Birth month" className={fieldChanged("birthMonth") ? "cpf-fc" : undefined}
-                      style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none" }}>
-                      {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m,i) => (
-                        <option key={i+1} value={i+1} style={{ background: "var(--bg-input)", color: "var(--text-bright)" }}>{m}</option>
-                      ))}
-                    </select>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "flex-end" }}>
+                      {/* Birth Month */}
+                      <div>
+                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Month</span>
+                        <select name="birthMonth" value={inputs.birthMonth || 6} onChange={handleInputChange}
+                          aria-label="Birth month" className={fieldChanged("birthMonth") ? "cpf-fc" : undefined}
+                          style={{ width: "100%", padding: "8px 10px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none" }}>
+                          {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m,i) => (
+                            <option key={i+1} value={i+1} style={{ background: "var(--bg-input)", color: "var(--text-bright)" }}>{m}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* Birth Year */}
+                      <div>
+                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Year <span style={{ color: "var(--clr-amber3)", fontSize: 10 }}>(auto-derives age)</span></span>
+                        <select name="birthYear" value={inputs.birthYear || 0} onChange={handleInputChange}
+                          aria-label="Birth year" className={fieldChanged("birthYear") ? "cpf-fc" : undefined}
+                          style={{ width: "100%", padding: "8px 10px", background: "var(--bg-input)", border: `1px solid ${(Number(inputs.birthYear)||0) > 0 ? "rgba(34,211,238,0.5)" : "var(--border-strong)"}`, borderRadius: 8, color: (Number(inputs.birthYear)||0) > 0 ? "var(--text-bright)" : "var(--text-muted)", fontSize: 14, outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none" }}>
+                          <option value={0} style={{ background: "var(--bg-input)", color: "var(--text-muted)" }}>— manual —</option>
+                          {Array.from({ length: 100 }, (_, i) => {
+                            const yr = new Date().getFullYear() - i;
+                            return <option key={yr} value={yr} style={{ background: "var(--bg-input)", color: "var(--text-bright)" }}>{yr}</option>;
+                          })}
+                        </select>
+                      </div>
+                      {/* Clear button — only shown when birthYear is set */}
+                      <div style={{ paddingBottom: 1 }}>
+                        {(Number(inputs.birthYear) || 0) > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setInputs(p => ({ ...p, birthYear: 0 }))}
+                            title="Clear birth year — return to manual age entry"
+                            aria-label="Clear birth year"
+                            style={{ padding: "7px 10px", borderRadius: 8, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "var(--clr-red)", fontSize: 13, cursor: "pointer", lineHeight: 1, whiteSpace: "nowrap" }}>
+                            ✕ Clear
+                          </button>
+                        ) : (
+                          <div style={{ width: 62 }} />
+                        )}
+                      </div>
+                    </div>
+                    {/* Derived-age confirmation line */}
+                    {(Number(inputs.birthYear) || 0) > 0 && (
+                      <p style={{ margin: "6px 0 0", fontSize: 12, color: "#22d3ee", lineHeight: 1.4 }}>
+                        ✓ Age auto-set to <strong>{(Number(inputs.currentYear) || 2026) - Number(inputs.birthYear)}</strong> · Born {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(Number(inputs.birthMonth)||6)-1]} {inputs.birthYear}
+                      </p>
+                    )}
                   </div>
                   {/* Q2: Milestone Ages — 3 slots, compact side-by-side */}
                   <div style={{ padding: "10px 12px", borderRadius: 10, background: "var(--bg-muted)", border: `1px solid ${inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3 || inputErrors.milestoneAge4 || inputErrors.milestoneAge5 ? "var(--clr-red)" : "rgba(34,211,238,0.25)"}` }}>
@@ -12614,10 +12735,15 @@ ${milestoneSnapshotHtml}
                           </label>
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                             <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
-                              Current Age
-                              <input type="number" min="0" max="100" value={spouseInputs.currentAge} onChange={e => spH("currentAge", e.target.value)}
+                              {(Number(spouseInputs.birthYear)||0) > 0 ? (
+                                <span>Age <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>🔒 auto</span></span>
+                              ) : "Current Age"}
+                              <input type="number" min="0" max="100"
+                                value={spouseInputs.currentAge}
+                                onChange={e => spH("currentAge", e.target.value)}
+                                readOnly={(Number(spouseInputs.birthYear)||0) > 0}
                                 aria-label="Spouse current age" autoComplete="off"
-                                style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
+                                style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: (Number(spouseInputs.birthYear)||0) > 0 ? "var(--bg-muted)" : "var(--bg-input)", color: (Number(spouseInputs.birthYear)||0) > 0 ? "var(--text-muted)" : "var(--text-bright)", fontSize: 14, outline: "none" }} />
                             </label>
                             <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                               Payout Age
@@ -12626,6 +12752,41 @@ ${milestoneSnapshotHtml}
                                 style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                             </label>
                           </div>
+                          {/* Spouse Birth Month + Birth Year */}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                            <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
+                              Birth Month
+                              <select value={spouseInputs.birthMonth || 6} onChange={e => spH("birthMonth", Number(e.target.value))}
+                                aria-label="Spouse birth month"
+                                style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none", appearance: "none", WebkitAppearance: "none" }}>
+                                {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m,i) => (
+                                  <option key={i+1} value={i+1}>{m}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
+                              Birth Year <span style={{ fontSize: 10, color: "var(--clr-amber3)" }}>(auto-derives age)</span>
+                              <select value={spouseInputs.birthYear || 0} onChange={e => {
+                                  const by = Number(e.target.value);
+                                  const cy = Number(spouseInputs.currentYear) || 2026;
+                                  if (by > 0) { spH("birthYear", by); spH("currentAge", cy - by); }
+                                  else { spH("birthYear", 0); }
+                                }}
+                                aria-label="Spouse birth year"
+                                style={{ padding: "5px 8px", borderRadius: 7, border: `1px solid ${(Number(spouseInputs.birthYear)||0) > 0 ? "rgba(34,211,238,0.5)" : "var(--border-subtle)"}`, background: "var(--bg-input)", color: (Number(spouseInputs.birthYear)||0) > 0 ? "var(--text-bright)" : "var(--text-muted)", fontSize: 14, outline: "none", appearance: "none", WebkitAppearance: "none" }}>
+                                <option value={0}>— manual —</option>
+                                {Array.from({ length: 100 }, (_, i) => {
+                                  const yr = new Date().getFullYear() - i;
+                                  return <option key={yr} value={yr}>{yr}</option>;
+                                })}
+                              </select>
+                            </label>
+                          </div>
+                          {(Number(spouseInputs.birthYear)||0) > 0 && (
+                            <p style={{ fontSize: 12, color: "#a78bfa", margin: "0 0 2px", lineHeight: 1.4 }}>
+                              ✓ Age auto-set to <strong>{(Number(spouseInputs.currentYear)||2026) - Number(spouseInputs.birthYear)}</strong> · Born {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(Number(spouseInputs.birthMonth)||6)-1]} {spouseInputs.birthYear}
+                            </p>
+                          )}
                           {/* Gender */}
                           <div style={{ display: "flex", gap: 6 }}>
                             {[["Male", true], ["Female", false]].map(([lbl, val]) => (
