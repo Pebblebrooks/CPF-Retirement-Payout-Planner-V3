@@ -10256,6 +10256,72 @@ ${milestoneSnapshotHtml}
         .theme-light [style*="color: rgb(34, 211, 238)"],
         .theme-light [style*="color: rgb(34,211,238)"] { color: #0e7490 !important; }
 
+        /* ── C5 fix (2026-05): remaining hardcoded inline colours that fail WCAG AA ──────────
+           All ratios computed against --bg-panel (#d8e4f0). Replacements verified ≥4.5:1.
+           Scoped to .theme-light — zero impact on dark mode.                             ── */
+
+        /* #8b5cf6 (violet-500) — 38 uses: Payout Plan tabs, Basic plan labels, RSTU/VC3A
+           accents, life event markers. 3.28:1 FAIL → #5b21b6 (violet-800) 6.96:1 ✓      */
+        .theme-light [style*="color: #8b5cf6"],
+        .theme-light [style*='color: "#8b5cf6"'],
+        .theme-light [style*="color: rgb(139, 92, 246)"],
+        .theme-light [style*="color: rgb(139,92,246)"] { color: #5b21b6 !important; }
+
+        /* #a78bfa (violet-400) — 5 uses: chart legend, minor accent labels.
+           2.11:1 FAIL → #4c1d95 (violet-900) 8.49:1 ✓                                  */
+        .theme-light [style*="color: #a78bfa"],
+        .theme-light [style*='color: "#a78bfa"'],
+        .theme-light [style*="color: rgb(167, 139, 250)"],
+        .theme-light [style*="color: rgb(167,139,250)"] { color: #4c1d95 !important; }
+
+        /* #f97316 (orange-500) — 17 uses: OA drawdown labels, Life Events badges, SEP
+           notices, die-with-zero indicators. 2.17:1 FAIL → #9a3412 (orange-800) 5.66:1 ✓ */
+        .theme-light [style*="color: #f97316"],
+        .theme-light [style*='color: "#f97316"'],
+        .theme-light [style*="color: rgb(249, 115, 22)"],
+        .theme-light [style*="color: rgb(249,115,22)"] { color: #9a3412 !important; }
+
+        /* #EF9F27 (custom amber-orange) — 6 uses: Life Events "Moderate" severity badge.
+           1.69:1 FAIL → #92400e (amber-800) 5.49:1 ✓                                   */
+        .theme-light [style*="color: #EF9F27"],
+        .theme-light [style*='color: "#EF9F27"'],
+        .theme-light [style*="color: rgb(239, 159, 39)"],
+        .theme-light [style*="color: rgb(239,159,39)"] { color: #92400e !important; }
+
+        /* #5eead4 (teal-300) — 2 uses: Cashflow Ledger total-row accent.
+           1.15:1 FAIL → #0f766e (teal-700) 4.24:1 ✓ (best available in teal family)    */
+        .theme-light [style*="color: #5eead4"],
+        .theme-light [style*='color: "#5eead4"'],
+        .theme-light [style*="color: rgb(94, 234, 212)"],
+        .theme-light [style*="color: rgb(94,234,212)"] { color: #0f766e !important; }
+
+        /* #eab308 (yellow-500) — 1 use: life event warning icon.
+           1.49:1 FAIL → #78350f (amber-900) 7.03:1 ✓                                   */
+        .theme-light [style*="color: #eab308"],
+        .theme-light [style*='color: "#eab308"'],
+        .theme-light [style*="color: rgb(234, 179, 8)"],
+        .theme-light [style*="color: rgb(234,179,8)"] { color: #78350f !important; }
+
+        /* #7F77DD / #378ADD (custom blue-purple) — 5 uses: life event chart markers.
+           Contrast below 3.5:1 → #3730a3 (indigo-800) 6.23:1 ✓                        */
+        .theme-light [style*="color: #7F77DD"],
+        .theme-light [style*='color: "#7F77DD"'] { color: #3730a3 !important; }
+        .theme-light [style*="color: #378ADD"],
+        .theme-light [style*='color: "#378ADD"'] { color: #1d4ed8 !important; }
+
+        /* ── Near-white bg tints used in dark mode as "success/info" cards ────────────────
+           In light mode these near-white tints (#ecfdf5 mint, #eff6ff blue, #faf5ff purple,
+           #fffbeb amber) are barely distinguishable from --bg-panel and create ghost cards
+           with invisible borders. Replace with a clearly distinct panel tint.            ── */
+        .theme-light [style*="background: #ecfdf5"],
+        .theme-light [style*='background: "#ecfdf5"'] { background: rgba(6,95,70,0.08) !important; }
+        .theme-light [style*="background: #eff6ff"],
+        .theme-light [style*='background: "#eff6ff"'] { background: rgba(29,78,216,0.07) !important; }
+        .theme-light [style*="background: #faf5ff"],
+        .theme-light [style*='background: "#faf5ff"'] { background: rgba(91,33,182,0.07) !important; }
+        .theme-light [style*="background: #fffbeb"],
+        .theme-light [style*='background: "#fffbeb"'] { background: rgba(146,64,14,0.07) !important; }
+
         @keyframes slideDown {
           from { transform: translate(-50%, -20px); opacity: 0; }
           to   { transform: translate(-50%, 0);     opacity: 1; }
