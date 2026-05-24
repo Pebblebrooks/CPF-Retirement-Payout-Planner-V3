@@ -283,6 +283,21 @@ const CPF_LIFE_TABLE_M = [
   { ra: 650100, std: 3440, esc: 2750, bas: 3160 }, // ERS: RA@55=$440.8k → RA@65=$650.1k
 ];
 const FEMALE_PAYOUT_MULTIPLIER = 0.93;
+// ── CPF LIFE Deferral Bonus Multipliers ──────────────────────────────────────
+// Source: CPF Board Estimator (2026 cohort) — YOB 1971 (RA $65–90k) and YOB 1963
+// (RA $560–690k) at payout ages 65–70 across Standard, Escalating, Basic plans.
+// Each value = (CPF Estimator actual payout at deferred age) / (interpolateCpfLife
+// output using the age-65 table alone). This corrects the actuarial premium from a
+// shorter payout horizon — a gain ABOVE the RA growth already captured by using
+// the projected RA at the deferred payout age as the interpolation key.
+// Index 0 = age 65 (no deferral → 1.0×); index 5 = age 70.
+// Max residual after applying: ±19/mo on high-RA profiles, ±3/mo on low-RA profiles
+// — within CPF Board rounding conventions. Calibrated May 2026.
+const CPF_LIFE_DEFERRAL_MULT = {
+  std: [1.0000, 1.0137, 1.0403, 1.0525, 1.0763, 1.0996],
+  esc: [1.0000, 1.0250, 1.0495, 1.0716, 1.0929, 1.1145],
+  bas: [1.0000, 1.0161, 1.0322, 1.0486, 1.0750, 1.0886],
+};
 // Phase 1B trigger age: age when RA_Retained drops below $60K and payout slope begins.
 // Source: CPF LIFE Basic Plan documentation (2026 cohort estimates).
 // Members with larger RA stay in Phase 1A longer before Phase 1B slope begins.
@@ -359,7 +374,11 @@ const solveEffectiveRate = (pmt, pv, n) => {
 // Linear interpolation between two known CPF Estimator data points.
 // For RA above ERS: extrapolate using the slope of the last two points.
 // For RA below minimum: scale proportionally from the first data point.
-const interpolateCpfLife = (raBalance, plan, isMale) => {
+// pAge (optional, default 65): payout start age. When > 65, applies CPF_LIFE_DEFERRAL_MULT
+// so deferred payouts (ages 66–70) match CPF Board Estimator values instead of the
+// age-65 extrapolation that systematically understates by $4–$381/mo at deferred ages.
+// Values outside [65, 70] clamp to 1.0× (no empirical data beyond estimator coverage).
+const interpolateCpfLife = (raBalance, plan, isMale, pAge = 65) => {
   const tbl = CPF_LIFE_TABLE_M;
   let monthly;
   if (raBalance <= 0) return 0;
@@ -378,7 +397,10 @@ const interpolateCpfLife = (raBalance, plan, isMale) => {
     }
     monthly = lo[plan] + (raBalance - lo.ra) * ((hi[plan] - lo[plan]) / (hi.ra - lo.ra));
   }
-  return Math.max(0, monthly * (isMale ? 1 : FEMALE_PAYOUT_MULTIPLIER));
+  // Apply actuarial deferral bonus for payout ages 66–70 (clamped; no bonus outside 65–70).
+  const deferralYr = Math.min(5, Math.max(0, (pAge || 65) - 65));
+  const deferralMult = (CPF_LIFE_DEFERRAL_MULT[plan] ?? CPF_LIFE_DEFERRAL_MULT.std)[deferralYr];
+  return Math.max(0, monthly * deferralMult * (isMale ? 1 : FEMALE_PAYOUT_MULTIPLIER));
 };
 
 // Shared Basic Plan parameter setup — used by payoutProjection and sensitivityData.
@@ -445,12 +467,12 @@ const computeBasicPlanYearPayout = (age, phase1bTrigger, phase1aAnnual, phase2An
 // CPF LIFE payout is set on the full RA; the 20% OA transfer is a separate liquidity benefit
 // and does not reduce the payout basis. Bequest pools also use full RA as the premium base.
 const computeSensitivityRow = (pAge, raAtPayout, isMale) => {
-  const stdStart = interpolateCpfLife(raAtPayout, 'std', isMale);
-  const escStart = interpolateCpfLife(raAtPayout, 'esc', isMale);
+  const stdStart = interpolateCpfLife(raAtPayout, 'std', isMale, pAge);
+  const escStart = interpolateCpfLife(raAtPayout, 'esc', isMale, pAge);
 
   // Age-appropriate premium: 10% at 65, +2%/yr, capped at 20% (age 70).
   const agePct = Math.min(20, Math.max(10, 10 + (pAge - 65) * 2));
-  const basStartScaled = interpolateCpfLife(raAtPayout, 'bas', isMale) * (1 - agePct / 100) / 0.90;
+  const basStartScaled = interpolateCpfLife(raAtPayout, 'bas', isMale, pAge) * (1 - agePct / 100) / 0.90;
 
   const { premium: basicPremS, pv: basicPVS,
           phase1aAnnual: basicP1aAnnual, phase2Annual: basicP2Annual,
@@ -507,7 +529,7 @@ const computeSensitivityRow = (pAge, raAtPayout, isMale) => {
     pAge,
     stdMonthly: Math.round(stdStart),
     escMonthly: Math.round(escStart),
-    basMonthly: Math.round(interpolateCpfLife(raAtPayout, 'bas', isMale)), // display raw lookup-table monthly
+    basMonthly: Math.round(interpolateCpfLife(raAtPayout, 'bas', isMale, pAge)), // display raw lookup-table monthly
     escVsStd, stdVsBasic, escVsBasic
   };
 };
@@ -1956,7 +1978,7 @@ function runRSSEngine(inputs, {
         ra -= migRaOaTransfer;
         // Step 2: Compute CPF LIFE payout for the chosen plan from remaining RA at current age.
         // interpolateCpfLife supports 'std', 'esc', and 'bas' — lifePlanKey selects the correct table.
-        postMigrationMonthly = Math.round(interpolateCpfLife(ra, lifePlanKey, isMaleRSS));
+        postMigrationMonthly = Math.round(interpolateCpfLife(ra, lifePlanKey, isMaleRSS, age));
         // Step 3: Initialise Basic Plan state — only needed when lifePlanKey === 'bas'.
         // Gated to avoid wasteful computation for Standard and Escalating migrations.
         if (lifePlanKey === 'bas') {
@@ -6217,6 +6239,20 @@ export default function App() {
     setRssActionPending(null); // clear the flag
   }, [rssActionPending]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── RSS auto-prompt when birth year ≤ 1957 ───────────────────────────────────
+  // CPF policy: members born before 1 January 1958 are on the Retirement Sum Scheme
+  // (RSS), not CPF LIFE. When the user sets birthYear to ≤ 1957 while still on CPF
+  // LIFE, automatically surface the RSS switch modal so they can choose to switch
+  // (Keep Existing / Reset Fields) or Cancel and remain on CPF LIFE for what-if
+  // modelling. Fires only when birthYear changes and only when cpfScheme !== 'rss'.
+  // Guard: birthYear > 0 (0 = manual age mode — no birth year set, do not prompt).
+  useEffect(() => {
+    const by = Number(inputs.birthYear) || 0;
+    if (by <= 0) return;                       // manual age mode — no auto-prompt
+    if (inputs.cpfScheme === 'rss') return;    // already RSS — no-op
+    if (by <= 1957) handleSwitchToRSS();       // born before 1958 → prompt RSS switch
+  }, [inputs.birthYear]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Sandbox-safe file download — tries Blob URL, always falls back to copy modal ──
   const triggerDownload = (content, filename, mimeType) => {
     const isCSV = mimeType.includes("csv");
@@ -7270,12 +7306,12 @@ export default function App() {
     // ── Fix 2: compute all three plan payouts per member ─────────────────────────
     // D4-Bug2: CPF LIFE payout is based on the full RA at payout age (before the OA transfer).
     // Primary: raAtPayout (component-scope, full pre-transfer RA). Spouse: sRaAtPA (same logic).
-    const pLifeStdAtPA = Math.round(interpolateCpfLife(raAtPayout, 'std', pIsMale));
-    const pLifeEscAtPA = Math.round(interpolateCpfLife(raAtPayout, 'esc', pIsMale));
-    const pLifeBasAtPA = Math.round(interpolateCpfLife(raAtPayout, 'bas', pIsMale) * (1 - basicPremiumPct / 100) / 0.90);
-    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'std', sIsMale));
-    const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'esc', sIsMale));
-    const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'bas', sIsMale) * (1 - sBasPct / 100) / 0.90);
+    const pLifeStdAtPA = Math.round(interpolateCpfLife(raAtPayout, 'std', pIsMale, pa));
+    const pLifeEscAtPA = Math.round(interpolateCpfLife(raAtPayout, 'esc', pIsMale, pa));
+    const pLifeBasAtPA = Math.round(interpolateCpfLife(raAtPayout, 'bas', pIsMale, pa) * (1 - basicPremiumPct / 100) / 0.90);
+    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'std', sIsMale, pa));
+    const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'esc', sIsMale, pa));
+    const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'bas', sIsMale, pa) * (1 - sBasPct / 100) / 0.90);
     const rows = [];
     for (let age = startAge; age <= 95; age++) {
       const pRow = projectionByAge.get(age) || {};
@@ -7368,20 +7404,20 @@ export default function App() {
     // The 7% deferral is a marketing approximation for Standard Plan only;
     // the correct approach is to read the actual RA from the projection at each
     // payout age and interpolate — the gain emerges naturally from RA growth + shorter N.
-    const startM = interpolateCpfLife(raBase, 'std', true);
-    const startF = interpolateCpfLife(raBase, 'std', false);
+    const startM = interpolateCpfLife(raBase, 'std', true, pAge);
+    const startF = interpolateCpfLife(raBase, 'std', false, pAge);
     const startActive = male ? startM : startF;
 
     // ── Escalating Plan: same interpolation; ~80% of Standard (confirmed across all RA) ──
-    const escStartM = interpolateCpfLife(raBase, 'esc', true);
-    const escStartF = interpolateCpfLife(raBase, 'esc', false);
+    const escStartM = interpolateCpfLife(raBase, 'esc', true, pAge);
+    const escStartF = interpolateCpfLife(raBase, 'esc', false, pAge);
     const escStartActive = male ? escStartM : escStartF;
 
     // ── Basic Plan: interpolation for display; PMT used internally for RA depletion ──
     // Payout ≈ 92% of Standard (confirmed 91.8-92.6% in CPF Estimator data).
     // Monthly PMT formula: r=4%/12, n=300 months (extra interest extends 240→300 months).
-    const basStartM = interpolateCpfLife(raBase, 'bas', true);
-    const basStartF = interpolateCpfLife(raBase, 'bas', false);
+    const basStartM = interpolateCpfLife(raBase, 'bas', true, pAge);
+    const basStartF = interpolateCpfLife(raBase, 'bas', false, pAge);
     const basStartActive = male ? basStartM : basStartF;
 
     return {
@@ -7389,7 +7425,7 @@ export default function App() {
       escalating: { name: "Escalating", start: escStartActive,  startM: escStartM, startF: escStartF },
       basic:      { name: "Basic",      start: basStartActive,  startM: basStartM, startF: basStartF }
     };
-  }, [raAfterTransfer, debouncedInputs.payoutAge, debouncedInputs.isMale]); // R6 fix: basicPremiumPct removed — lifePlans never reads it; only payoutProjection does
+  }, [raAtPayout, debouncedInputs.payoutAge, debouncedInputs.isMale]); // N1 fix: was raAfterTransfer — body reads raAtPayout (raBase); dep must match
 
   const payoutProjection = useMemo(() => {
     let data = [];
@@ -7815,7 +7851,7 @@ export default function App() {
       const oaFromTransfer  = _scBirthYear >= 1958 ? Math.max(0, _scTransferRaw - 5000) : _scTransferRaw;
       const raForLife       = raAtPa - oaFromTransfer;
       // Approximate monthly payout using CPF Estimator lookup (male baseline) on corrected RA
-      const monthlyEst = interpolateCpfLife(raForLife, 'std', scenario.inputs?.isMale !== false);
+      const monthlyEst = interpolateCpfLife(raForLife, 'std', scenario.inputs?.isMale !== false, pa);
       // Cumulative payout since payout age
       const yearsInPayout = Math.max(0, age - pa);
       const cumPayout = age >= pa ? monthlyEst * 12 * yearsInPayout : 0;
@@ -7913,16 +7949,12 @@ export default function App() {
       const raRow = projectionByAge.get(pAge);
       if (!raRow) return { pAge, stdMonthly: 0, escMonthly: 0, basMonthly: 0, escVsStd: null, stdVsBasic: null, escVsBasic: null };
       const raVal = raRow.ra || 0;
-      // Apply the corrected transfer formula: exclude only cash top-ups (not interest).
-      // Birth-year gating and $5,000 deduction mirror the main raOaTransfer block.
-      const _sensBirthYear      = (Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35);
-      const raTransferBaseSens  = Math.max(0, raVal - (raRow.cumRaCashTopUps || 0));
-      const _sensTransferPct    = _sensBirthYear >= 1958 ? 0.20 : _sensBirthYear === 1957 ? 0.10 : 0;
-      const _sensRawTransfer    = Math.round(raTransferBaseSens * _sensTransferPct);
-      const raOaTransferSens    = _sensBirthYear >= 1958 ? Math.max(0, _sensRawTransfer - 5000) : _sensRawTransfer;
       // D4-Bug2: pass full raVal (pre-transfer) to computeSensitivityRow.
       // The OA transfer is a separate liquidity benefit; CPF LIFE payout uses the full RA premium.
-      return computeSensitivityRow(pAge, raVal, isMaleSens); // premium computed internally per pAge
+      // N2 fix: removed dead raOaTransferSens / _sensRawTransfer / _sensTransferPct /
+      // raTransferBaseSens / _sensBirthYear variables — all were computed but never consumed
+      // (computeSensitivityRow always received raVal regardless). pAge now passed for deferral bonus.
+      return computeSensitivityRow(pAge, raVal, isMaleSens); // deferral mult applied inside via pAge
     });
   }, [projection, projectionByAge, debouncedInputs.isMale,
       debouncedInputs.cpfScheme, debouncedInputs.rssMonthlyPayout,
@@ -8452,9 +8484,9 @@ export default function App() {
         const testOaTransferRaw = Math.round(testTransferBase * (_birthYear >= 1958 ? 0.20 : _birthYear === 1957 ? 0.10 : 0));
         const testOaTransfer = _birthYear >= 1958 ? Math.max(0, testOaTransferRaw - 5000) : testOaTransferRaw;
         const ra = Math.max(0, raRaw - testOaTransfer);
-        const stdM = Math.round(interpolateCpfLife(ra, 'std', isMalePdf));
-        const escM = Math.round(interpolateCpfLife(ra, 'esc', isMalePdf));
-        const basM = Math.round(interpolateCpfLife(ra, 'bas', isMalePdf));
+        const stdM = Math.round(interpolateCpfLife(ra, 'std', isMalePdf, testPA));
+        const escM = Math.round(interpolateCpfLife(ra, 'esc', isMalePdf, testPA));
+        const basM = Math.round(interpolateCpfLife(ra, 'bas', isMalePdf, testPA));
         const isCurrent = testPA === pa;
         payAgeSensRows += `<tr style="background:${isCurrent ? "#dcfce7" : ""}"><td style="font-weight:${isCurrent ? "900" : "400"};color:${isCurrent ? "#166534" : ""}">${testPA}${isCurrent ? " ◄" : ""}</td><td style="text-align:right">${fc(stdM)}/mo</td><td style="text-align:right;color:#059669">${fc(escM)}/mo</td><td style="text-align:right;color:#b45309">${fc(basM)}/mo</td></tr>`;
         await new Promise(r => setTimeout(r, 0)); // Q3 fix: yield after every call (was every 2)
@@ -8591,7 +8623,7 @@ export default function App() {
         const diff = totalCpf - totalA;
         // Estimated standard monthly for Scenario A (use RA directly as approximation)
         const raA = paRowA.ra || 0;
-        const stdMonthlyA = Math.round(interpolateCpfLife(raA, 'std', isMalePdf));
+        const stdMonthlyA = Math.round(interpolateCpfLife(raA, 'std', isMalePdf, pa));
         const stdMonthlyCur = stdMonthly;
         const monthlyDiff = stdMonthlyCur - stdMonthlyA;
         // Net worth at 95: CPF balances + private assets + property + SRS — mirrors nwAt95 formula
