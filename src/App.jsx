@@ -4303,8 +4303,8 @@ function SetupWizard({ onComplete, onSkip }) {
               </select>
             </div>
             <div>
-              <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Birth year <span style={{ fontSize: 12, color: "var(--clr-amber3)" }}>(auto-derives age)</span></label>
-              <select value={w.birthYear} onChange={e => set("birthYear", Number(e.target.value))}
+              <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Birth year</label>
+              <select value={w.birthYear || (Number(w.currentAge) > 0 ? (new Date().getFullYear() - Number(w.currentAge)) : 0)} onChange={e => set("birthYear", Number(e.target.value))}
                 style={{ background: "var(--bg-input)", border: `1px solid ${w.birthYear > 0 ? "rgba(34,211,238,0.5)" : "var(--border-strong)"}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, color: w.birthYear > 0 ? "var(--text-bright)" : "var(--text-muted)", outline: "none", width: "100%", appearance: "none", WebkitAppearance: "none" }}>
                 <option value={0}>— manual age entry —</option>
                 {Array.from({ length: 100 }, (_, i) => {
@@ -12428,8 +12428,8 @@ ${milestoneSnapshotHtml}
                       </div>
                       {/* Birth Year */}
                       <div>
-                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Year <span style={{ color: "var(--clr-amber3)", fontSize: 10 }}>(auto-derives age)</span></span>
-                        <select name="birthYear" value={inputs.birthYear || 0} onChange={handleInputChange}
+                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Year</span>
+                        <select name="birthYear" value={inputs.birthYear || ((Number(inputs.currentYear)||2026) - (Number(inputs.currentAge)||35))} onChange={handleInputChange}
                           aria-label="Birth year" className={fieldChanged("birthYear") ? "cpf-fc" : undefined}
                           style={{ width: "100%", padding: "8px 10px", background: "var(--bg-input)", border: `1px solid ${(Number(inputs.birthYear)||0) > 0 ? "rgba(34,211,238,0.5)" : "var(--border-strong)"}`, borderRadius: 8, color: (Number(inputs.birthYear)||0) > 0 ? "var(--text-bright)" : "var(--text-muted)", fontSize: 14, outline: "none", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none" }}>
                           <option value={0} style={{ background: "var(--bg-input)", color: "var(--text-muted)" }}>— manual —</option>
@@ -12926,8 +12926,8 @@ ${milestoneSnapshotHtml}
                               </select>
                             </label>
                             <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
-                              Birth Year <span style={{ fontSize: 10, color: "var(--clr-amber3)" }}>(auto-derives age)</span>
-                              <select value={spouseInputs.birthYear || 0} onChange={e => {
+                              Birth Year
+                              <select value={spouseInputs.birthYear || ((Number(spouseInputs.currentYear)||2026) - (Number(spouseInputs.currentAge)||30))} onChange={e => {
                                   const by = Number(e.target.value);
                                   const cy = Number(spouseInputs.currentYear) || 2026;
                                   if (by > 0) { spH("birthYear", by); spH("currentAge", cy - by); }
