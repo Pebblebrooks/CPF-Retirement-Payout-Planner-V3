@@ -621,7 +621,7 @@ const DEFAULT_INPUTS = {
   vc3aDur: 0, vcSaDur: 0, vcMaDur: 0, vcVhrDur: 0,
   govGrantDur: 0, govGrantMaDur: 0, wisDur: 0,
   cpfisOaDur: 0, cpfisSaDur: 0, housingDur: 0,
-  oaToMaDur: 0, oaToSaDur: 0, oaEduLoanDur: 0,
+  oaToMaDur: 0, oaToSaDur: 0, oaEduLoanDur: 0, oaWithdrawalDur: 0,
   // PR tenure year — 1, 2, or 3+ (3 = full rates). Only shown/relevant when citizenStatus === 'PR'.
   prYear: 3,
   // PR rate type — 'GG' (Graduated Employer + Graduated Employee, default) or
@@ -1163,7 +1163,7 @@ const INPUT_LABELS = {
   wisDur: "WIS Duration (yrs)", // mrssDur removed — MRSS frequency mirrors RSTU by CPF policy
   cpfisOaDur: "CPFIS OA Duration (yrs)", cpfisSaDur: "CPFIS SA Duration (yrs)",
   housingDur: "Housing Duration (yrs)", oaToMaDur: "OA-MA Duration (yrs)",
-  oaToSaDur: "OA-SA Duration (yrs)", oaEduLoanDur: "OA Edu Loan Duration (yrs)",
+  oaToSaDur: "OA-SA Duration (yrs)", oaEduLoanDur: "OA Edu Loan Duration (yrs)", oaWithdrawalDur: "OA Withdrawal Duration (yrs)",
 };
 
 // Alias used by the Compare tab — same labels, one source of truth
@@ -1360,6 +1360,7 @@ function runRSSEngine(inputs, {
   const oaToMaDur   = Number(inputs.oaToMaDur)   || 0;
   const oaToSaDur   = Number(inputs.oaToSaDur)   || 0;
   const oaEduLoanDur = Number(inputs.oaEduLoanDur) || 0;
+  const oaWithdrawalDur = Number(inputs.oaWithdrawalDur) || 0;
   const vcMaCash = Number(inputs.vcMaCash) || 0;
   const rsGrowth = (Number(inputs.retirementSumGrowth) || 3) / 100;
   const _csNorm = (inputs.citizenStatus || 'SC').toUpperCase(); // Bug 2 fix: normalise case so 'sc'/'SC'/'Sc' all match
@@ -1548,7 +1549,7 @@ function runRSSEngine(inputs, {
     // OA withdrawal at 55
     if (oaWithdrawalAt55 > 0) {
       if (oaWithdrawalFreq === 'annual') {
-        if (age >= 55) { const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor)); oa -= actualW55; yearOaDrawOut += actualW55; totalOutSpent += actualW55; }
+        if (age >= 55 && (oaWithdrawalDur === 0 || yearIdx < oaWithdrawalDur)) { const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor)); oa -= actualW55; yearOaDrawOut += actualW55; totalOutSpent += actualW55; }
       } else {
         if (age === 55 && !withdrawalApplied) { const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor)); oa -= actualW55; yearOaDrawOut += actualW55; totalOutSpent += actualW55; withdrawalApplied = true; }
       }
@@ -2202,7 +2203,7 @@ function runProjectionEngine(inputs, {
   const oaToMaDur    = Number(inputs.oaToMaDur)    || 0;
   const oaToSaDur    = Number(inputs.oaToSaDur)    || 0;
   const oaEduLoanDur = Number(inputs.oaEduLoanDur) || 0;
-  // Direct cash top-up to MA (any age, capped at BHS, not Annual Limit)
+  const oaWithdrawalDur = Number(inputs.oaWithdrawalDur) || 0;
   const vcMaCash = Number(inputs.vcMaCash) || 0;
   // MRSS and MMSS are now auto-derived inside the projection loop:
   //   MRSS = min(vcSaTopup * effVcSaFreq, 2000, lifetimeCapRemaining) when eligible
@@ -2524,7 +2525,7 @@ function runProjectionEngine(inputs, {
       // withdrawal appears in the cashflow ledger OA-draw column, and (c) increment totalOutSpent
       // so cumulativeOutflow is correct. Previously OA simply shrank silently with no ledger trace.
       if (oaWithdrawalFreq === 'annual') {
-        if (age >= 55) {
+        if (age >= 55 && (oaWithdrawalDur === 0 || yearIdx < oaWithdrawalDur)) {
           const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor));
           oa            -= actualW55;
           yearOaDrawOut += actualW55;
@@ -7068,7 +7069,7 @@ export default function App() {
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq, // mrssFreq removed — mirrors vcSaFreq by CPF policy
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
       vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, govGrantMaDur, wisDur, // mrssDur removed — no separate MRSS duration control
-      cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur,
+      cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur, oaWithdrawalDur,
       dieWithZeroEnabled, dieWithZeroAge,
       retirementSumGrowth, // Rev #5: changing this rate changes all FRS/BHS/BRS/ERS projections
       salaryPhaseAge, salaryGrowthRate2, // Rev #22 (careerBreakStartAge/EndAge removed — use Life Events career_break)
@@ -7099,7 +7100,7 @@ export default function App() {
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq,
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
       vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, govGrantMaDur, wisDur,
-      cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur,
+      cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur, oaWithdrawalDur,
       dieWithZeroEnabled, dieWithZeroAge,
       retirementSumGrowth, // Rev #5
       salaryPhaseAge, salaryGrowthRate2, // Rev #22
@@ -7304,7 +7305,7 @@ export default function App() {
   // For RSS with migration: transfer age = lifeMigrationAge; source row = projectionByAge.get(migAge).
   // For RSS without migration (lifeMigrationAge === 0): no transfer ever → card is hidden.
   const _rssMigAge      = _isRSSForTransfer ? (Number(debouncedInputs.lifeMigrationAge) || 0) : 0;
-  const _showTransferCard = _isRSSForTransfer ? _rssMigAge > 0 : true;
+  const _showTransferCard = true; // always show; for RSS with no migration, card shows a setup prompt
   const _cardTransferAge  = _isRSSForTransfer ? _rssMigAge : payoutAge65;
   const _rssTransferRow   = (_isRSSForTransfer && _rssMigAge > 0) ? projectionByAge.get(_rssMigAge) : null;
   // Unified RA and cash-top-up figures at the transfer age
@@ -14226,7 +14227,7 @@ ${milestoneSnapshotHtml}
                   </div>
 
                   {/* RA → OA Transfer at Payout / Migration Age — info card with toggle */}
-                  {/* Hidden for pure RSS members with no migration (no transfer ever fires) */}
+                  {/* For RSS with no migration: shows a setup prompt instead of the toggle */}
                   {_showTransferCard && (
                     <div style={{ background: "rgba(var(--clr-blue2-rgb),0.06)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
 
@@ -14234,11 +14235,22 @@ ${milestoneSnapshotHtml}
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
                         <ArrowRightLeft style={{ width: 13, height: 13, color: "var(--clr-blue2)", flexShrink: 0 }} />
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue2)", textTransform: "uppercase", flex: 1 }}>
-                          RA → OA Transfer at Age {_cardTransferAge}
-                          {_isRSSForTransfer && <span style={{ fontWeight: 400, fontSize: 11, color: "var(--text-muted)", marginLeft: 5 }}>(CPF LIFE migration age)</span>}
+                          {_isRSSForTransfer && _rssMigAge === 0
+                            ? "RA → OA Transfer (at CPF LIFE Migration)"
+                            : `RA → OA Transfer at Age ${_cardTransferAge}`}
+                          {_isRSSForTransfer && _rssMigAge > 0 && <span style={{ fontWeight: 400, fontSize: 11, color: "var(--text-muted)", marginLeft: 5 }}>(CPF LIFE migration age)</span>}
                         </span>
                         <TooltipBox id="t-ra-oa-info" text="CPF Board policy: at payout age (non-RSS) or migration age (RSS), a birth-year-gated portion of eligible RA is transferred to OA as a freely-withdrawable lump sum. Eligible base = RA at that age minus cumulative cash top-ups (RSTU), OA→RA CPF transfers, and government grants. Born 1958+: 20% − $5,000. Born 1957: 10%. Born 1956 or earlier: not eligible. Toggle ON to model this in the projection (CPF LIFE payouts will be based on the reduced RA)." />
                       </div>
+
+                      {/* RSS with no migration: show setup prompt, hide toggle + breakdown */}
+                      {_isRSSForTransfer && _rssMigAge === 0 ? (
+                        <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "9px 12px" }}>
+                          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
+                            <strong style={{ color: "var(--text-main)" }}>Migration age not set.</strong> The RA→OA transfer fires when you migrate from RSS to CPF LIFE. Set a <em>"Migrate to CPF LIFE Age"</em> in the RSS panel above to unlock the transfer toggle and see a live breakdown.
+                          </p>
+                        </div>
+                      ) : (<>
 
                       {/* Apply toggle */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "7px 10px", marginBottom: 10 }}>
@@ -14355,6 +14367,8 @@ ${milestoneSnapshotHtml}
                           </div>
                         );
                       })()}
+
+                    </>) /* end RSS-has-migration / non-RSS full card */}
 
                     </div>
                   )}
@@ -14817,7 +14831,7 @@ ${milestoneSnapshotHtml}
                     {/* OA Lump Sum Withdrawal (from age 55) */}
                     <div>
                       <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 4 }}>
-                        OA Lump Sum Withdrawal (from age 55) <FreqToggle freqKey="oaWithdrawalFreq" inputs={inputs} setInputs={setInputs} />
+                        OA Lump Sum Withdrawal (from age 55) <FreqToggle freqKey="oaWithdrawalFreq" durKey="oaWithdrawalDur" inputs={inputs} setInputs={setInputs} />
                         <TooltipBox id="t-oawithdraw" text="From age 55, after SA closes, you may withdraw OA savings above the BRS ($110,200). Withdrawn from OA permanently. For Property Pledge withdrawals use the Pledge RA Withdrawal fields in the Property & Timelines panel." />
                       </div>
                       <input type="text" inputMode="decimal" name="oaWithdrawalAt55" value={getDisplayValue("oaWithdrawalAt55", inputs.oaWithdrawalAt55)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="OA lump sum withdrawal from age 55" onFocus={() => setFocusedField("oaWithdrawalAt55")} className={fieldChanged("oaWithdrawalAt55") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(var(--clr-orange-rgb),0.04)", border: "1px solid rgba(var(--clr-orange-rgb),0.2)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
