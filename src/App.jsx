@@ -14229,7 +14229,7 @@ ${milestoneSnapshotHtml}
                   {/* RA → OA Transfer at Payout / Migration Age — info card with toggle */}
                   {/* For RSS with no migration: shows a setup prompt instead of the toggle */}
                   {_showTransferCard && (
-                    <div style={{ background: "rgba(var(--clr-blue2-rgb),0.06)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
+                    <div style={{ background: "rgba(var(--clr-blue2-rgb),0.06)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", borderRadius: 0, padding: "12px 16px", marginTop: 4, marginLeft: -16, marginRight: -16 }}>
 
                       {/* Card header + toggle */}
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
