@@ -16036,6 +16036,15 @@ ${milestoneSnapshotHtml}
                     : activePayout;
                   const planLabel = { standard: "Standard", escalating: "Escalating", basic: "Basic" }[activePlan] || "Standard";
                   const alertCount = milestones.length;
+                  // Fix 3: RSS migration tile variables — computed here so JSX stays clean (no IIFEs in ternaries)
+                  const _rss3MigAge   = isRSSMode ? (Number(inputs.lifeMigrationAge) || 0) : 0;
+                  const _rss3HasMig   = _rss3MigAge > 0;
+                  const _rss3MigRow   = _rss3HasMig ? (projectionByAge.get(_rss3MigAge) || {}) : {};
+                  const _rss3Monthly  = Number(inputs.rssMonthlyPayout) || 0;
+                  const _rss3MigMo    = (_rss3HasMig && _rss3MigRow.migrationActivated)
+                    ? Math.round((_rss3MigRow.rssPayoutThisYear || 0) / 12) : 0;
+                  const _rss3PlanName = { standard: "Standard", escalating: "Escalating", basic: "Basic" }[inputs.lifePlanAtMigration || "standard"] || "Standard";
+                  const _rss3Start    = inputs.rssPayoutStartAge || 65;
                   return (
                     <div className="z1-hero" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: "18px 24px" }}>
                       {/* ── Empty-state guidance banner — shown when total CPF is $0 (blank profile) ── */}
@@ -16099,48 +16108,34 @@ ${milestoneSnapshotHtml}
                             </p>
                             <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "6px 0 0", whiteSpace: "nowrap" }}>{planLabel} plan · CPF LIFE</p>
                           </div>
-                        ) : isRSSMode ? (() => {
-                          // Fix 3: migration-aware middle tile
-                          // Derive the CPF LIFE monthly payout at migration from projection data.
-                          const _migAge = Number(inputs.lifeMigrationAge) || 0;
-                          const _hasMig = _migAge > 0;
-                          // rssPayoutThisYear at migrationAge holds the CPF LIFE annual payout (engine reuses field).
-                          const _migRow = _hasMig ? (projectionByAge.get(_migAge) || {}) : {};
-                          const _migMonthly = _hasMig && _migRow.migrationActivated
-                            ? Math.round((_migRow.rssPayoutThisYear || 0) / 12)
-                            : 0;
-                          const _rssMonthly = Number(inputs.rssMonthlyPayout) || 0;
-                          const _planName = { standard: "Standard", escalating: "Escalating", basic: "Basic" }[inputs.lifePlanAtMigration || "standard"] || "Standard";
-                          return (
-                          <div style={{ background: _hasMig ? "rgba(var(--clr-purple-rgb),0.06)" : "rgba(var(--clr-blue2-rgb),0.05)", border: `0.5px solid ${_hasMig ? "rgba(var(--clr-purple-rgb),0.25)" : "rgba(var(--clr-blue2-rgb),0.18)"}`, borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                        ) : isRSSMode ? (
+                          <div style={{ background: _rss3HasMig ? "rgba(var(--clr-purple-rgb),0.06)" : "rgba(var(--clr-blue2-rgb),0.05)", border: `0.5px solid ${_rss3HasMig ? "rgba(var(--clr-purple-rgb),0.25)" : "rgba(var(--clr-blue2-rgb),0.18)"}`, borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                             <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                              {_hasMig ? "RSS → CPF LIFE" : "RSS monthly payout"}
+                              {_rss3HasMig ? "RSS → CPF LIFE" : "RSS monthly payout"}
                             </p>
-                            {_hasMig ? (
+                            {_rss3HasMig ? (
                               <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
                                 <span style={{ fontSize: "clamp(18px,2.8vw,24px)", fontWeight: 700, color: "var(--clr-blue)", fontFamily: "monospace", lineHeight: 1.05, letterSpacing: "-0.03em" }}>
-                                  {_rssMonthly > 0 ? formatCurrency(_rssMonthly) : "—"}
+                                  {_rss3Monthly > 0 ? formatCurrency(_rss3Monthly) : "—"}
                                 </span>
                                 <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 400 }}>/mo RSS</span>
                                 <span style={{ fontSize: 16, color: "var(--clr-purple)", fontWeight: 700 }}>→</span>
                                 <span style={{ fontSize: "clamp(18px,2.8vw,24px)", fontWeight: 700, color: "var(--clr-purple)", fontFamily: "monospace", lineHeight: 1.05, letterSpacing: "-0.03em" }}>
-                                  {_migMonthly > 0 ? formatCurrency(_migMonthly) : "—"}
+                                  {_rss3MigMo > 0 ? formatCurrency(_rss3MigMo) : "—"}
                                 </span>
                                 <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 400 }}>/mo LIFE</span>
                               </div>
                             ) : (
                               <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.03em", fontFamily: "monospace" }}>
-                                {_rssMonthly > 0 ? <>{formatCurrency(_rssMonthly)}<span style={{ fontSize: 14, fontWeight: 400, color: "var(--text-muted)", marginLeft: 3 }}>/mo</span></> : "Not set"}
+                                {_rss3Monthly > 0 ? <>{formatCurrency(_rss3Monthly)}<span style={{ fontSize: 14, fontWeight: 400, color: "var(--text-muted)", marginLeft: 3 }}>/mo</span></> : "Not set"}
                               </p>
                             )}
                             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.4 }}>
-                              {_hasMig
-                                ? <>RSS until age {_migAge}, then <span style={{ color: "var(--clr-purple)", fontWeight: 600 }}>{_planName} plan</span> for life</>
+                              {_rss3HasMig
+                                ? <>RSS until age {_rss3MigAge}, then <span style={{ color: "var(--clr-purple)", fontWeight: 600 }}>{_rss3PlanName} plan</span> for life</>
                                 : "Fixed RSS drawdown from RA"}
                             </p>
                           </div>
-                          );
-                        })()
                         ) : (
                           <div style={{ background: "rgba(var(--clr-amber-rgb),0.05)", border: "0.5px solid rgba(var(--clr-amber-rgb),0.18)", borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                             <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>SRS drawdown</p>
@@ -16152,34 +16147,26 @@ ${milestoneSnapshotHtml}
                         )}
 
                         {/* ── Col 3 ── Payout age (migration-aware) ── */}
-                        {(() => {
-                          const _migAge3 = isRSSMode ? (Number(inputs.lifeMigrationAge) || 0) : 0;
-                          const _hasMig3 = _migAge3 > 0;
-                          const _rssStart = inputs.rssPayoutStartAge || 65;
-                          const _planName3 = { standard: "Standard", escalating: "Escalating", basic: "Basic" }[inputs.lifePlanAtMigration || "standard"] || "Standard";
-                          return (
-                            <div style={{ background: "rgba(var(--clr-blue2-rgb),0.04)", border: "0.5px solid rgba(var(--clr-blue2-rgb),0.15)", borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
-                              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Payout age</p>
-                              {isRSSMode && _hasMig3 ? (
-                                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                                  <span style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.02em" }}>{_rssStart}</span>
-                                  <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 400, marginRight: 2 }}>(RSS)</span>
-                                  <span style={{ fontSize: 18, color: "var(--clr-purple)", fontWeight: 700 }}>→</span>
-                                  <span style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, color: "var(--clr-purple)", lineHeight: 1.05, letterSpacing: "-0.02em", marginLeft: 2 }}>{_migAge3}</span>
-                                </div>
-                              ) : (
-                                <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
-                                  {isRSSMode ? _rssStart : inputs.payoutAge}
-                                </p>
-                              )}
-                              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.4 }}>
-                                {isRSSMode && _hasMig3
-                                  ? <>RSS → <span style={{ color: "var(--clr-purple)" }}>CPF LIFE ({_planName3})</span></>
-                                  : isRSSMode ? "RSS scheme" : `CPF LIFE · ${planLabel} plan`}
-                              </p>
+                        <div style={{ background: "rgba(var(--clr-blue2-rgb),0.04)", border: "0.5px solid rgba(var(--clr-blue2-rgb),0.15)", borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+                          <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Payout age</p>
+                          {isRSSMode && _rss3HasMig ? (
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                              <span style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.02em" }}>{_rss3Start}</span>
+                              <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 400, marginRight: 2 }}>(RSS)</span>
+                              <span style={{ fontSize: 18, color: "var(--clr-purple)", fontWeight: 700 }}>→</span>
+                              <span style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, color: "var(--clr-purple)", lineHeight: 1.05, letterSpacing: "-0.02em", marginLeft: 2 }}>{_rss3MigAge}</span>
                             </div>
-                          );
-                        })()}
+                          ) : (
+                            <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
+                              {isRSSMode ? _rss3Start : inputs.payoutAge}
+                            </p>
+                          )}
+                          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.4 }}>
+                            {isRSSMode && _rss3HasMig
+                              ? <>RSS → <span style={{ color: "var(--clr-purple)" }}>CPF LIFE ({_rss3PlanName})</span></>
+                              : isRSSMode ? "RSS scheme" : `CPF LIFE · ${planLabel} plan`}
+                          </p>
+                        </div>
                       </div>
 
                       {/* ── Footer row — each cell aligns to its tile above via the same repeat(3,1fr) + gap:10 grid ── */}
