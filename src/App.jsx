@@ -3442,80 +3442,116 @@ export const TooltipBox = ({ id, text }) => {
 //              Only shown when freq is 'annual' and durKey is provided.
 //   type     — pass "one-time" to render a static ONE-TIME badge (no toggle)
 //   inputs, setInputs — passed from App
+// ── FreqToggle — compact combined dropdown (frequency + duration in one <select>) ──
+// Replaces the two-button pill + separate duration number input.
+// Props are identical to the old component; no call sites need changing.
+//
+// Encoded option values:
+//   "one-time"   → freqKey = 'one-time', durKey = 0
+//   "annual:0"   → freqKey = 'annual',   durKey = 0  (∞, indefinite)
+//   "annual:N"   → freqKey = 'annual',   durKey = N  (N years)
+//
+// If durKey is omitted, only "One-Time" and "Recurring (∞)" are shown.
+// If the current durVal is not in the preset list, a custom option is injected
+// so the select always reflects the actual stored value faithfully.
+
+const FREQ_DUR_PRESETS = [1, 2, 3, 5, 10, 15, 20, 25, 30];
+
 const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
+  // Static ONE-TIME badge for fields that are always one-time (type prop)
   if (type === "one-time") {
     return (
-      <span style={{ marginLeft: 6, padding: "1px 5px", borderRadius: 3, fontSize: 13, fontWeight: 800,
+      <span style={{ marginLeft: 6, padding: "1px 5px", borderRadius: 3, fontSize: 11, fontWeight: 800,
         letterSpacing: "0.04em", verticalAlign: "middle",
         background: "rgba(var(--clr-amber-rgb),0.15)", color: "var(--clr-amber)",
         border: "1px solid rgba(var(--clr-amber-rgb),0.3)" }}>ONE-TIME</span>
     );
   }
-  const current = (inputs && inputs[freqKey]) || "annual";
+
+  const current  = (inputs && inputs[freqKey]) || "annual";
   const isAnnual = current === "annual";
-  const durVal = durKey ? (Number((inputs && inputs[durKey]) || 0)) : 0;
-  // UX-P1 Task 4: bumped from 10px → 11px to meet minimum readability floor across all viewports
-  const btnBase = { fontSize: 13, fontWeight: 800, padding: "3px 9px", border: "none", cursor: "pointer", letterSpacing: "0.04em", lineHeight: 1.6 };
-  const makeHandler = (val) => (e) => {
+  const durVal   = durKey ? (Number((inputs && inputs[durKey]) || 0)) : 0;
+
+  // Derive the selected <option> value string from current state
+  const selectedVal = isAnnual ? `annual:${durVal}` : "one-time";
+
+  // Build option list
+  const options = [
+    { value: "one-time",  label: "One-Time" },
+    { value: "annual:0",  label: "Recurring (∞)" },
+  ];
+  if (durKey) {
+    // Inject custom value first if not already in presets
+    const needsCustom = isAnnual && durVal > 0 && !FREQ_DUR_PRESETS.includes(durVal);
+    if (needsCustom) {
+      options.push({ value: `annual:${durVal}`, label: `${durVal} yr${durVal !== 1 ? "s" : ""}` });
+    }
+    FREQ_DUR_PRESETS.forEach(n => {
+      options.push({ value: `annual:${n}`, label: `${n} yr${n !== 1 ? "s" : ""}` });
+    });
+  }
+
+  const handleChange = (e) => {
     e.stopPropagation();
-    if (setInputs) setInputs(p => ({ ...p, [freqKey]: val }));
+    const val = e.target.value;
+    if (!setInputs) return;
+    if (val === "one-time") {
+      setInputs(p => ({ ...p, [freqKey]: "one-time", ...(durKey ? { [durKey]: 0 } : {}) }));
+    } else {
+      // "annual:N"
+      const parts = val.split(":");
+      const n = parseInt(parts[1], 10) || 0;
+      setInputs(p => ({ ...p, [freqKey]: "annual", ...(durKey ? { [durKey]: n } : {}) }));
+    }
   };
-  const handleDurChange = (e) => {
-    e.stopPropagation();
-    const raw = e.target.value.replace(/[^0-9]/g, "");
-    const v = raw === "" ? 0 : Math.min(99, Math.max(0, parseInt(raw, 10)));
-    if (setInputs) setInputs(p => ({ ...p, [durKey]: v }));
-  };
+
+  // Colour: amber border for one-time, emerald for recurring
+  const borderColor = isAnnual
+    ? "rgba(var(--clr-emerald-rgb),0.45)"
+    : "rgba(var(--clr-amber-rgb),0.45)";
+  const textColor = isAnnual ? "var(--clr-green)" : "var(--clr-amber)";
+
   return (
-    <span className="freq-toggle-wrap" onClick={e => e.stopPropagation()}
-      style={{ display: "inline-flex", alignItems: "center", marginLeft: 6, verticalAlign: "middle", flexShrink: 0, gap: 0 }}>
-      {/* Freq toggle pill */}
-      <span style={{ display: "inline-flex", borderRadius: 3, overflow: "hidden", border: `1px solid ${isAnnual ? "rgba(var(--clr-emerald-rgb),0.35)" : "rgba(var(--clr-amber-rgb),0.35)"}` }}>
-        <button
-          type="button"
-          onClick={makeHandler("annual")}
-          style={{ ...btnBase, background: isAnnual ? "rgba(var(--clr-emerald-rgb),0.25)" : "transparent", color: isAnnual ? "var(--clr-green)" : "var(--text-subtle)" }}>
-          Recurring
-        </button>
-        <button
-          type="button"
-          onClick={makeHandler("one-time")}
-          style={{ ...btnBase, background: !isAnnual ? "rgba(var(--clr-amber-rgb),0.25)" : "transparent", color: !isAnnual ? "var(--clr-amber)" : "var(--text-subtle)", borderLeft: "1px solid var(--border-subtle)" }}>
-          One-Time
-        </button>
-      </span>
-      {/* Duration input — only shown for Recurring + durKey provided */}
-      {isAnnual && durKey && (
-        <span style={{ display: "inline-flex", alignItems: "center", marginLeft: 4,
-          background: durVal > 0 ? "rgba(14,165,233,0.12)" : "rgba(100,116,139,0.06)",
-          border: `1px solid ${durVal > 0 ? "rgba(14,165,233,0.40)" : "rgba(100,116,139,0.20)"}`,
-          borderRadius: 3, padding: "0 6px 0 6px", height: 28, transition: "all 0.15s" }}
-          title={durVal === 0
-            ? "Indefinite — this recurring contribution continues every year for the full projection (∞). Enter a number to limit to N years from your current age."
-            : `Active for ${durVal} year${durVal !== 1 ? "s" : ""} from your current age, then stops.`}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: durVal > 0 ? "var(--clr-sky)" : "var(--text-subtle)", letterSpacing: "0.03em", marginRight: 2, transition: "color 0.15s" }}>for</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            aria-label="Duration in years (leave blank for indefinite)"
-            autoComplete="off"
-            value={durVal === 0 ? "" : durVal}
-            placeholder="∞"
-            onChange={handleDurChange}
-            onClick={e => e.stopPropagation()}
-            onFocus={e => { e.stopPropagation(); e.target.select(); }}
-            style={{
-              width: 30, fontSize: 13, fontWeight: 800, fontFamily: "monospace",
-              background: "transparent", border: "none", outline: "none",
-              color: durVal > 0 ? "var(--clr-sky)" : "var(--text-subtle)",
-              textAlign: "center", padding: 0, lineHeight: 1
-            }}
-          />
-          <span style={{ fontSize: 13, fontWeight: 700, color: durVal > 0 ? "var(--clr-sky)" : "var(--text-subtle)", letterSpacing: "0.03em", transition: "color 0.15s" }}>
-            {durVal === 0 ? "yrs" : (durVal !== 1 ? "yrs" : "yr")}
-          </span>
-        </span>
-      )}
+    <span
+      className="freq-toggle-wrap"
+      onClick={e => e.stopPropagation()}
+      style={{ display: "inline-flex", alignItems: "center", marginLeft: 6, verticalAlign: "middle", flexShrink: 0 }}
+    >
+      <select
+        value={selectedVal}
+        onChange={handleChange}
+        onClick={e => e.stopPropagation()}
+        title={isAnnual
+          ? (durVal === 0
+              ? "Recurring indefinitely for the full projection (∞). Select a year option to limit duration."
+              : `Recurring for ${durVal} year${durVal !== 1 ? "s" : ""} from your current age, then stops.`)
+          : "Applied once in the first projection year."}
+        style={{
+          height: 24,
+          fontSize: 11,
+          fontWeight: 700,
+          padding: "0 18px 0 6px",
+          border: `1px solid ${borderColor}`,
+          borderRadius: 4,
+          background: isAnnual ? "rgba(var(--clr-emerald-rgb),0.10)" : "rgba(var(--clr-amber-rgb),0.10)",
+          color: textColor,
+          cursor: "pointer",
+          outline: "none",
+          appearance: "none",
+          WebkitAppearance: "none",
+          // Custom caret using inline SVG background
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7280'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "right 5px center",
+          letterSpacing: "0.02em",
+          lineHeight: 1,
+          minWidth: 0,
+        }}
+      >
+        {options.map(o => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
     </span>
   );
 };
@@ -10108,9 +10144,8 @@ ${milestoneSnapshotHtml}
         /* ── Sidebar field labels ── */
         .theme-light .sidebar-field-label { color: #2e4560 !important; font-weight: 600 !important; }
 
-        /* ── FreqToggle badges ── */
-        .theme-light .freq-recurring-active { color: #065f46 !important; background: rgba(6,95,70,0.14) !important; }
-        .theme-light .freq-onetime-active   { color: #92400e !important; background: rgba(146,64,14,0.14) !important; }
+        /* ── FreqToggle compact dropdown (light mode) ── */
+        .theme-light .freq-toggle-wrap select { color: #1e3a5f !important; }
 
         /* Auto-Calc button: in dark mode clr-lime=#a3e635 (bright) + #14532d text = readable.
            In light mode clr-lime=#166534 (dark green) + #14532d text = near-invisible.
@@ -11020,14 +11055,10 @@ ${milestoneSnapshotHtml}
         .cpf-row   { display: flex; align-items: center; gap: 8px; }
         .cpf-row-sb { display: flex; align-items: center; justify-content: space-between; }
         /* ── End Option A utility classes ── */
-        /* FreqToggle responsive — UX-8: larger touch targets + wrap duration on narrow screens */
+        /* FreqToggle compact dropdown — responsive touch targets */
         @media (max-width: 768px) {
-          .freq-toggle-wrap { margin-left: 0 !important; display: flex !important; flex-wrap: wrap; gap: 4px; }
-          .freq-toggle-wrap button { padding: 5px 11px !important; font-size: 13px !important; min-height: 38px; }
-        }
-        @media (max-width: 420px) {
-          /* On very narrow screens the duration "for N yrs" control wraps to its own row */
-          .freq-toggle-wrap { flex-direction: column; align-items: flex-start; }
+          .freq-toggle-wrap { margin-left: 0 !important; }
+          .freq-toggle-wrap select { height: 32px !important; font-size: 12px !important; min-width: 100px; }
         }
 
         /* ─── WELCOME MODAL — global base (all viewports) ───────────── */
