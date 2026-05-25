@@ -6030,6 +6030,16 @@ export default function App() {
     // Pure updater — no side effects inside setState. Validation is handled by the
     // dedicated useEffect below which always receives the fully committed inputs state,
     // eliminating the stale-closure risk of the previous Promise.resolve microtask.
+    // Bug 2 fix: when user edits currentAge while birthYear is active, reverse-derive
+    // birthYear so both fields stay in sync. The existing useEffect guard prevents loops.
+    if (name === 'currentAge' && (Number(inputs.birthYear) || 0) > 0) {
+      const bm = Number(inputs.birthMonth) || 6;
+      const cm = new Date().getMonth() + 1;
+      const newBirthYear = (Number(inputs.currentYear) || 2026) - coerced + (cm < bm ? 1 : 0);
+      setInputs(prev => ({ ...prev, currentAge: coerced, birthYear: newBirthYear }));
+      setFocusedField(null);
+      return;
+    }
     setInputs(prev => ({ ...prev, [name]: coerced }));
     // Always clear focusedField on blur so the committed field immediately renders in
     // currency format.  Event order is guaranteed: blur(A) fires before focus(B), so
@@ -6057,14 +6067,20 @@ export default function App() {
   // Derivation uses integer year-difference (CPF's own age convention):
   //   age = currentYear - birthYear  (birthday-month adjustment is handled separately
   //   by birthMonth driving firstYearFraction in the engine — not the age integer).
+  // Bug 1 fix: subtract 1 when today's month is before birth month—birthday hasn't
+  // occurred yet this year. Mirrors the engine's firstYearFraction month-awareness.
+  //   Born Oct (bm=10), today May (cm=5) → cm < bm → age = cy − by − 1. ✓
+  //   Born Mar (bm=3),  today May (cm=5) → cm ≥ bm → age = cy − by.     ✓
   useEffect(() => {
     const by = Number(inputs.birthYear) || 0;
     if (by <= 0) return; // manual mode — no override
-    const cy = Number(inputs.currentYear) || 2026;
-    const derivedAge = cy - by;
+    const cy  = Number(inputs.currentYear) || 2026;
+    const bm  = Number(inputs.birthMonth)  || 6;   // 1–12; default Jun
+    const cm  = new Date().getMonth() + 1;          // real calendar month, consistent with engine
+    const derivedAge = cy - by - (cm < bm ? 1 : 0);
     if (derivedAge === Number(inputs.currentAge)) return; // already in sync — skip re-render
     setInputs(prev => ({ ...prev, currentAge: derivedAge }));
-  }, [inputs.birthYear, inputs.currentYear]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [inputs.birthYear, inputs.birthMonth, inputs.currentYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // BUG-11 fix: cache the focusable-element list outside the keydown handler so it is
   // built once per mount rather than on every Enter keypress (was an O(n) DOM scan
@@ -12368,7 +12384,7 @@ ${milestoneSnapshotHtml}
                         <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>{l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 12, color: "var(--clr-red)" }}>⚠</span>}
                           {/* Lock icon shown on Age field when birthYear is driving it */}
                           {n === "currentAge" && (Number(inputs.birthYear) || 0) > 0 && (
-                            <span title="Age is auto-derived from Birth Year — clear Birth Year to edit manually" style={{ marginLeft: 5, fontSize: 11, color: "var(--text-muted)", fontWeight: 400, textTransform: "none" }}>🔒 auto</span>
+                            <span title="Age and Birth Year are linked — editing either updates the other" style={{ marginLeft: 5, fontSize: 11, color: "var(--text-muted)", fontWeight: 400, textTransform: "none" }}>⇄ sync</span>
                           )}
                         </label>
                         <input type="text" inputMode="decimal" name={n} autoComplete="off"
@@ -12376,15 +12392,15 @@ ${milestoneSnapshotHtml}
                           onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                           onFocus={() => setFocusedField(n)}
                           aria-label={l} aria-invalid={!!inputErrors[n]}
-                          readOnly={n === "currentAge" && (Number(inputs.birthYear) || 0) > 0}
+                          readOnly={false} {/* Bug 2 fix: age is bidirectional — editing it reverse-derives birthYear */}
                           className={fieldChanged(n) ? "cpf-fc" : undefined}
                           style={{
                             width: "100%", padding: "8px 12px",
-                            background: (n === "currentAge" && (Number(inputs.birthYear) || 0) > 0) ? "var(--bg-muted)" : "var(--bg-input)",
+                            background: "var(--bg-input)",
                             border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`,
-                            borderRadius: 8, color: (n === "currentAge" && (Number(inputs.birthYear) || 0) > 0) ? "var(--text-muted)" : "var(--text-bright)",
+                            borderRadius: 8, color: "var(--text-bright)",
                             fontSize: 14, outline: "none", boxSizing: "border-box",
-                            cursor: (n === "currentAge" && (Number(inputs.birthYear) || 0) > 0) ? "default" : undefined,
+                            cursor: undefined,
                           }} />
                         {/* Short errors (e.g. currentYear) stay inline; currentAge long errors rendered below the grid */}
                         {inputErrors[n] && n !== "currentAge" && <p className="cpf-err">⚠ {inputErrors[n]}</p>}
@@ -12897,7 +12913,7 @@ ${milestoneSnapshotHtml}
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                             <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                               {(Number(spouseInputs.birthYear)||0) > 0 ? (
-                                <span>Age <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>🔒 auto</span></span>
+                                <span>Age <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>⇄ sync</span></span>
                               ) : "Current Age"}
                               <input type="number" min="0" max="100"
                                 value={spouseInputs.currentAge}
@@ -16083,14 +16099,48 @@ ${milestoneSnapshotHtml}
                             </p>
                             <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "6px 0 0", whiteSpace: "nowrap" }}>{planLabel} plan · CPF LIFE</p>
                           </div>
-                        ) : isRSSMode ? (
-                          <div style={{ background: "rgba(var(--clr-blue2-rgb),0.05)", border: "0.5px solid rgba(var(--clr-blue2-rgb),0.18)", borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>RSS monthly payout</p>
-                            <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.03em", fontFamily: "monospace" }}>
-                              {Number(inputs.rssMonthlyPayout) > 0 ? <>{formatCurrency(Number(inputs.rssMonthlyPayout))}<span style={{ fontSize: 14, fontWeight: 400, color: "var(--text-muted)", marginLeft: 3 }}>/mo</span></> : "Not set"}
+                        ) : isRSSMode ? (() => {
+                          // Fix 3: migration-aware middle tile
+                          // Derive the CPF LIFE monthly payout at migration from projection data.
+                          const _migAge = Number(inputs.lifeMigrationAge) || 0;
+                          const _hasMig = _migAge > 0;
+                          // rssPayoutThisYear at migrationAge holds the CPF LIFE annual payout (engine reuses field).
+                          const _migRow = _hasMig ? (projectionByAge.get(_migAge) || {}) : {};
+                          const _migMonthly = _hasMig && _migRow.migrationActivated
+                            ? Math.round((_migRow.rssPayoutThisYear || 0) / 12)
+                            : 0;
+                          const _rssMonthly = Number(inputs.rssMonthlyPayout) || 0;
+                          const _planName = { standard: "Standard", escalating: "Escalating", basic: "Basic" }[inputs.lifePlanAtMigration || "standard"] || "Standard";
+                          return (
+                          <div style={{ background: _hasMig ? "rgba(var(--clr-purple-rgb),0.06)" : "rgba(var(--clr-blue2-rgb),0.05)", border: `0.5px solid ${_hasMig ? "rgba(var(--clr-purple-rgb),0.25)" : "rgba(var(--clr-blue2-rgb),0.18)"}`, borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                              {_hasMig ? "RSS → CPF LIFE" : "RSS monthly payout"}
                             </p>
-                            <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "6px 0 0" }}>Fixed RSS drawdown from RA</p>
+                            {_hasMig ? (
+                              <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: "clamp(18px,2.8vw,24px)", fontWeight: 700, color: "var(--clr-blue)", fontFamily: "monospace", lineHeight: 1.05, letterSpacing: "-0.03em" }}>
+                                  {_rssMonthly > 0 ? formatCurrency(_rssMonthly) : "—"}
+                                </span>
+                                <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 400 }}>/mo RSS</span>
+                                <span style={{ fontSize: 16, color: "var(--clr-purple)", fontWeight: 700 }}>→</span>
+                                <span style={{ fontSize: "clamp(18px,2.8vw,24px)", fontWeight: 700, color: "var(--clr-purple)", fontFamily: "monospace", lineHeight: 1.05, letterSpacing: "-0.03em" }}>
+                                  {_migMonthly > 0 ? formatCurrency(_migMonthly) : "—"}
+                                </span>
+                                <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 400 }}>/mo LIFE</span>
+                              </div>
+                            ) : (
+                              <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.03em", fontFamily: "monospace" }}>
+                                {_rssMonthly > 0 ? <>{formatCurrency(_rssMonthly)}<span style={{ fontSize: 14, fontWeight: 400, color: "var(--text-muted)", marginLeft: 3 }}>/mo</span></> : "Not set"}
+                              </p>
+                            )}
+                            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.4 }}>
+                              {_hasMig
+                                ? <>RSS until age {_migAge}, then <span style={{ color: "var(--clr-purple)", fontWeight: 600 }}>{_planName} plan</span> for life</>
+                                : "Fixed RSS drawdown from RA"}
+                            </p>
                           </div>
+                          );
+                        })()
                         ) : (
                           <div style={{ background: "rgba(var(--clr-amber-rgb),0.05)", border: "0.5px solid rgba(var(--clr-amber-rgb),0.18)", borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                             <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase" }}>SRS drawdown</p>
@@ -16101,14 +16151,35 @@ ${milestoneSnapshotHtml}
                           </div>
                         )}
 
-                        {/* ── Col 3 — Payout age ── */}
-                        <div style={{ background: "rgba(var(--clr-blue2-rgb),0.04)", border: "0.5px solid rgba(var(--clr-blue2-rgb),0.15)", borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
-                          <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Payout age</p>
-                          <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
-                            {isRSSMode ? (inputs.rssPayoutStartAge || 65) : inputs.payoutAge}
-                          </p>
-                          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "6px 0 0", whiteSpace: "nowrap" }}>{isRSSMode ? "RSS scheme" : `CPF LIFE · ${planLabel} plan`}</p>
-                        </div>
+                        {/* ── Col 3 ── Payout age (migration-aware) ── */}
+                        {(() => {
+                          const _migAge3 = isRSSMode ? (Number(inputs.lifeMigrationAge) || 0) : 0;
+                          const _hasMig3 = _migAge3 > 0;
+                          const _rssStart = inputs.rssPayoutStartAge || 65;
+                          const _planName3 = { standard: "Standard", escalating: "Escalating", basic: "Basic" }[inputs.lifePlanAtMigration || "standard"] || "Standard";
+                          return (
+                            <div style={{ background: "rgba(var(--clr-blue2-rgb),0.04)", border: "0.5px solid rgba(var(--clr-blue2-rgb),0.15)", borderRadius: 10, padding: "16px 18px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+                              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 5px", letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Payout age</p>
+                              {isRSSMode && _hasMig3 ? (
+                                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                                  <span style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.02em" }}>{_rssStart}</span>
+                                  <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 400, marginRight: 2 }}>(RSS)</span>
+                                  <span style={{ fontSize: 18, color: "var(--clr-purple)", fontWeight: 700 }}>→</span>
+                                  <span style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, color: "var(--clr-purple)", lineHeight: 1.05, letterSpacing: "-0.02em", marginLeft: 2 }}>{_migAge3}</span>
+                                </div>
+                              ) : (
+                                <p style={{ fontSize: "clamp(22px,3.5vw,30px)", fontWeight: 700, margin: 0, color: "var(--clr-blue)", lineHeight: 1.05, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
+                                  {isRSSMode ? _rssStart : inputs.payoutAge}
+                                </p>
+                              )}
+                              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.4 }}>
+                                {isRSSMode && _hasMig3
+                                  ? <>RSS → <span style={{ color: "var(--clr-purple)" }}>CPF LIFE ({_planName3})</span></>
+                                  : isRSSMode ? "RSS scheme" : `CPF LIFE · ${planLabel} plan`}
+                              </p>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* ── Footer row — each cell aligns to its tile above via the same repeat(3,1fr) + gap:10 grid ── */}
