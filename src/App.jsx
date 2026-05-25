@@ -136,7 +136,7 @@ const TAB_CONFIG = [
 // Used by the desktop strip, hamburger dropdown, and keyboard shortcut handler.
 const getVisibleTabs = (cpfScheme, isForeigner, householdEnabled) =>
   TAB_CONFIG.filter(([id]) => {
-    if (id === "readiness") return !isForeigner;          // Phase 1: CPF-only dashboard; foreigners have no CPF
+    if (id === "readiness") return !isForeigner && cpfScheme !== "rss"; // CPF LIFE-centric; not applicable in RSS mode
     if (id === "rss")       return cpfScheme === "rss";
     if (id === "life")      return cpfScheme !== "rss" && !isForeigner;
     if (id === "household") return !!householdEnabled;
@@ -3448,16 +3448,21 @@ export const TooltipBox = ({ id, text }) => {
 //
 // Encoded option values:
 //   "one-time"   → freqKey = 'one-time', durKey = 0
-//   "annual:0"   → freqKey = 'annual',   durKey = 0  (∞, indefinite)
-//   "annual:N"   → freqKey = 'annual',   durKey = N  (N years)
+//   "annual:0"   → freqKey = 'annual',   durKey = 0  (runs every year to age 95)
+//   "annual:N"   → freqKey = 'annual',   durKey = N  (N years from current age)
+//   "custom"     → activates inline number input; commits as "annual:N" on blur/Enter
 //
-// If durKey is omitted, only "One-Time" and "Recurring (∞)" are shown.
-// If the current durVal is not in the preset list, a custom option is injected
+// If durKey is omitted, only "One-Time" and "Annually (to 95)" are shown.
+// If the current durVal is not in the preset list, it is shown as a dynamic option
 // so the select always reflects the actual stored value faithfully.
 
 const FREQ_DUR_PRESETS = [1, 2, 3, 5, 10, 15, 20, 25, 30];
 
 const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
+  const [customMode, setCustomMode] = React.useState(false);
+  const [customRaw,  setCustomRaw]  = React.useState("");
+  const customInputRef = React.useRef(null);
+
   // Static ONE-TIME badge for fields that are always one-time (type prop)
   if (type === "one-time") {
     return (
@@ -3477,81 +3482,127 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
 
   // Build option list
   const options = [
-    { value: "one-time",  label: "One-Time" },
-    { value: "annual:0",  label: "Recurring (∞)" },
+    { value: "one-time", label: "One-Time" },
+    { value: "annual:0", label: "Annually (to 95)" },
   ];
   if (durKey) {
-    // Inject custom value first if not already in presets
-    const needsCustom = isAnnual && durVal > 0 && !FREQ_DUR_PRESETS.includes(durVal);
-    if (needsCustom) {
+    // Inject persisted custom value if not already a preset (e.g. loaded from saved profile)
+    const needsCustomInjection = isAnnual && durVal > 0 && !FREQ_DUR_PRESETS.includes(durVal);
+    if (needsCustomInjection) {
       options.push({ value: `annual:${durVal}`, label: `${durVal} yr${durVal !== 1 ? "s" : ""}` });
     }
     FREQ_DUR_PRESETS.forEach(n => {
       options.push({ value: `annual:${n}`, label: `${n} yr${n !== 1 ? "s" : ""}` });
     });
+    options.push({ value: "custom", label: "Custom…" });
   }
+
+  const commitCustom = (raw) => {
+    const n = Math.min(99, Math.max(1, parseInt(raw, 10) || 1));
+    if (setInputs) setInputs(p => ({ ...p, [freqKey]: "annual", [durKey]: n }));
+    setCustomMode(false);
+    setCustomRaw("");
+  };
 
   const handleChange = (e) => {
     e.stopPropagation();
     const val = e.target.value;
     if (!setInputs) return;
+    if (val === "custom") {
+      // Enter custom mode — pre-fill with current durVal if non-zero
+      setCustomRaw(durVal > 0 ? String(durVal) : "");
+      setCustomMode(true);
+      // Auto-focus the input on next tick
+      setTimeout(() => customInputRef.current && customInputRef.current.focus(), 0);
+      return;
+    }
     if (val === "one-time") {
       setInputs(p => ({ ...p, [freqKey]: "one-time", ...(durKey ? { [durKey]: 0 } : {}) }));
     } else {
-      // "annual:N"
-      const parts = val.split(":");
-      const n = parseInt(parts[1], 10) || 0;
+      const n = parseInt(val.split(":")[1], 10) || 0;
       setInputs(p => ({ ...p, [freqKey]: "annual", ...(durKey ? { [durKey]: n } : {}) }));
     }
   };
 
-  // Colour: amber border for one-time, emerald for recurring
+  // Colour: emerald for annual, amber for one-time
   const borderColor = isAnnual
     ? "rgba(var(--clr-emerald-rgb),0.45)"
     : "rgba(var(--clr-amber-rgb),0.45)";
+  const bgColor   = isAnnual ? "rgba(var(--clr-emerald-rgb),0.10)" : "rgba(var(--clr-amber-rgb),0.10)";
   const textColor = isAnnual ? "var(--clr-green)" : "var(--clr-amber)";
+
+  const selectStyle = {
+    height: 24, fontSize: 11, fontWeight: 700,
+    padding: "0 18px 0 6px",
+    border: `1px solid ${borderColor}`,
+    borderRadius: 4,
+    background: bgColor,
+    color: textColor,
+    cursor: "pointer",
+    outline: "none",
+    appearance: "none",
+    WebkitAppearance: "none",
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7280'/%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 5px center",
+    letterSpacing: "0.02em",
+    lineHeight: 1,
+    minWidth: 0,
+  };
 
   return (
     <span
       className="freq-toggle-wrap"
       onClick={e => e.stopPropagation()}
-      style={{ display: "inline-flex", alignItems: "center", marginLeft: 6, verticalAlign: "middle", flexShrink: 0 }}
+      style={{ display: "inline-flex", alignItems: "center", marginLeft: 6, verticalAlign: "middle", flexShrink: 0, gap: 4 }}
     >
       <select
-        value={selectedVal}
+        value={customMode ? "custom" : selectedVal}
         onChange={handleChange}
         onClick={e => e.stopPropagation()}
         title={isAnnual
           ? (durVal === 0
-              ? "Recurring indefinitely for the full projection (∞). Select a year option to limit duration."
-              : `Recurring for ${durVal} year${durVal !== 1 ? "s" : ""} from your current age, then stops.`)
+              ? "Applied every year until age 95 (end of projection)."
+              : `Applied every year for ${durVal} yr${durVal !== 1 ? "s" : ""} from your current age, then stops.`)
           : "Applied once in the first projection year."}
-        style={{
-          height: 24,
-          fontSize: 11,
-          fontWeight: 700,
-          padding: "0 18px 0 6px",
-          border: `1px solid ${borderColor}`,
-          borderRadius: 4,
-          background: isAnnual ? "rgba(var(--clr-emerald-rgb),0.10)" : "rgba(var(--clr-amber-rgb),0.10)",
-          color: textColor,
-          cursor: "pointer",
-          outline: "none",
-          appearance: "none",
-          WebkitAppearance: "none",
-          // Custom caret using inline SVG background
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7280'/%3E%3C/svg%3E")`,
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "right 5px center",
-          letterSpacing: "0.02em",
-          lineHeight: 1,
-          minWidth: 0,
-        }}
+        style={selectStyle}
       >
         {options.map(o => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
+
+      {/* Inline custom-years input — appears only when "Custom…" is selected */}
+      {customMode && (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+          <input
+            ref={customInputRef}
+            type="number"
+            min={1} max={99}
+            value={customRaw}
+            placeholder="yrs"
+            onChange={e => setCustomRaw(e.target.value.replace(/[^0-9]/g, ""))}
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => {
+              e.stopPropagation();
+              if (e.key === "Enter")  commitCustom(customRaw);
+              if (e.key === "Escape") { setCustomMode(false); setCustomRaw(""); }
+            }}
+            onBlur={() => commitCustom(customRaw)}
+            style={{
+              width: 38, height: 24, fontSize: 11, fontWeight: 700,
+              padding: "0 4px", textAlign: "center",
+              border: "1px solid rgba(var(--clr-sky-rgb),0.50)",
+              borderRadius: 4,
+              background: "rgba(var(--clr-sky-rgb),0.10)",
+              color: "var(--clr-sky)",
+              outline: "none",
+              MozAppearance: "textfield",
+            }}
+          />
+          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--clr-sky)", letterSpacing: "0.03em" }}>yrs</span>
+        </span>
+      )}
     </span>
   );
 };
@@ -6269,8 +6320,7 @@ export default function App() {
       // R6 fix: if the user was on the LIFE tab when switching to RSS, redirect to the RSS tab.
       // The LIFE tab is removed from the tab bar for RSS members; leaving activeTab on "life"
       // causes a blank panel until the user manually clicks another tab.
-      setActiveTab(at => at === 'life' ? 'rss' : at);
-      showToast(`✓ Switched to RSS — all existing fields kept.${ageClampNote}`);
+      setActiveTab(at => (at === 'life' || at === 'readiness') ? 'rss' : at);
     } else if (rssActionPending === 'reset') {
       setInputs(p => ({
         ...p,
@@ -6296,8 +6346,7 @@ export default function App() {
         // ── Payout age (CPF LIFE only) ───────────────────────────────────
         payoutAge: 65,
       }));
-      // R6 fix: redirect away from LIFE tab (same reason as 'keep' branch above).
-      setActiveTab(at => at === 'life' ? 'rss' : at);
+      setActiveTab(at => (at === 'life' || at === 'readiness') ? 'rss' : at);
       showToast(`✓ Switched to RSS — contribution & top-up fields reset.${ageClampNote}`);
     }
     setRssActionPending(null); // clear the flag
@@ -16081,7 +16130,8 @@ ${milestoneSnapshotHtml}
                             </button>
                           </div>
                         </div>
-                        {/* Col 2 — Plan selector, aligned under monthly payout tile */}
+                        {/* Col 2 — Plan selector, hidden in RSS mode (CPF LIFE-specific); empty div preserves 3-column grid alignment */}
+                        {!isRSSMode ? (
                         <div style={{ display: "flex", alignItems: "center" }}>
                           <div style={{ display: "flex", background: "var(--bg-muted)", border: "0.5px solid var(--border-strong)", borderRadius: 20, padding: 2, gap: 2 }}>
                             {[["standard","Standard"],["escalating","Escalating"],["basic","Basic"]].map(([p, label]) => (
@@ -16094,6 +16144,7 @@ ${milestoneSnapshotHtml}
                             ))}
                           </div>
                         </div>
+                        ) : <div />}
                         {/* Col 3 — alert badge, left-aligned to the payout age tile above */}
                         <div style={{ display: "flex", justifyContent: "flex-start" }}>
                           {alertCount > 0 ? (
