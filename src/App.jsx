@@ -645,6 +645,10 @@ const DEFAULT_INPUTS = {
   // exact birth year for the CPF LIFE RA→OA transfer gate (1957/1958 boundary).
   // 0 = not set (manual age-entry mode, backward-compatible with legacy profiles).
   birthYear: 0,
+  // applyRaOaTransfer: toggle whether the birth-year-gated RA→OA transfer fires in the engine
+  // at payout age (non-RSS) or migration age (RSS). Default OFF preserves existing projections.
+  // When ON: OA balance boosted, RA reduced, CPF LIFE payouts recalculated on post-transfer RA.
+  applyRaOaTransfer: false,
   // Rev #5: Annual growth rate assumed for CPF retirement sums (FRS/BHS/BRS/ERS) projections.
   // CPF Board has historically raised these at ~3%/yr. Range: 0–10%; warn outside 0–6%.
   // Affects every projected FRS/BHS/BRS/ERS threshold in the engine and UI milestones.
@@ -1149,6 +1153,7 @@ const INPUT_LABELS = {
   cpfScheme: "CPF Scheme", rssPayoutStartAge: "RSS Payout Start Age",
   rssMonthlyPayout: "RSS Monthly Payout ($)", lifeMigrationAge: "Migrate to CPF LIFE Age",
   lifePlanAtMigration: "CPF LIFE Plan at Migration",
+  applyRaOaTransfer: "Apply RA→OA Transfer at Payout/Migration Age",
   milestoneAge: "Milestone Age 1", milestoneAge2: "Milestone Age 2", milestoneAge3: "Milestone Age 3", milestoneAge4: "Milestone Age 4", milestoneAge5: "Milestone Age 5",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
@@ -1969,13 +1974,17 @@ function runRSSEngine(inputs, {
         // Step 1: Apply birth-year-gated RA-to-OA transfer on the eligible base.
         // Eligible base excludes only cash top-ups, OA→RA transfers, and gov grants — NOT interest.
         // Born 1958+: 20% of eligible base − $5,000; Born 1957: 10%; Born ≤1956: not eligible.
+        // applyRaOaTransfer toggle: OFF (default) skips the transfer so projections stay unchanged;
+        // ON applies the policy-accurate transfer, reducing RA and boosting OA at migration age.
         const migBirthYear      = (Number(inputs.birthYear) > 0) ? Number(inputs.birthYear) : (baseYear - startAge); // exact when birthYear set; else approximate (±1yr)
         const migRaTransferBase = Math.max(0, ra - cumRaCashTopUps);
         const migTransferPct    = migBirthYear >= 1958 ? 0.20 : migBirthYear === 1957 ? 0.10 : 0;
         const migRaTransferRaw  = Math.round(migRaTransferBase * migTransferPct);
         const migRaOaTransfer   = migBirthYear >= 1958 ? Math.max(0, migRaTransferRaw - 5000) : migRaTransferRaw;
-        oa += migRaOaTransfer;
-        ra -= migRaOaTransfer;
+        if (inputs.applyRaOaTransfer && migRaOaTransfer > 0) {
+          oa += migRaOaTransfer;
+          ra -= migRaOaTransfer;
+        }
         // Step 2: Compute CPF LIFE payout for the chosen plan from remaining RA at current age.
         // interpolateCpfLife supports 'std', 'esc', and 'bas' — lifePlanKey selects the correct table.
         postMigrationMonthly = Math.round(interpolateCpfLife(ra, lifePlanKey, isMaleRSS, age));
@@ -2309,6 +2318,10 @@ function runProjectionEngine(inputs, {
   const pledgeWithdrawalAmount = (usePropertyPledge && Number(inputs.pledgeWithdrawalAmount)) ? Number(inputs.pledgeWithdrawalAmount) : 0;
   const pledgeWithdrawalAge = Math.max(55, Number(inputs.pledgeWithdrawalAge) || 55);
   let pledgeWithdrawalApplied = startAge >= pledgeWithdrawalAge;
+  // RA→OA transfer at payout age (non-RSS): fires once at age === pa when applyRaOaTransfer is ON.
+  // Pre-set to true when member is already past payout age so the block never double-fires.
+  const _pePayoutAge = Number(inputs.payoutAge) || 65;
+  let raOaXferApplied = startAge >= _pePayoutAge;
 
   // OA Drawdown: post-payout-age supplementary cash drawn from OA
   // Supplements CPF LIFE shortfall; stops when OA hits oaDrawdownFloor.
@@ -2526,6 +2539,20 @@ function runProjectionEngine(inputs, {
           withdrawalApplied = true;
         }
       }
+    }
+
+    // RA→OA transfer at payout age (non-RSS CPF LIFE members only).
+    // Fires exactly once at age === payoutAge when applyRaOaTransfer toggle is ON.
+    // Mirrors the RSS engine's migRaOaTransfer logic (runRSSEngine lines ~1969–1978).
+    // OA boosted, RA reduced — downstream rows reflect the changed balances automatically.
+    if (inputs.applyRaOaTransfer && !raOaXferApplied && age === _pePayoutAge) {
+      const _xferBy   = (Number(inputs.birthYear) > 0) ? Number(inputs.birthYear) : (baseYear - startAge);
+      const _xferBase = Math.max(0, ra - cumRaCashTopUps);
+      const _xferPct  = _xferBy >= 1958 ? 0.20 : _xferBy === 1957 ? 0.10 : 0;
+      const _xferRaw  = Math.round(_xferBase * _xferPct);
+      const _xferAmt  = _xferBy >= 1958 ? Math.max(0, _xferRaw - 5000) : _xferRaw;
+      if (_xferAmt > 0) { oa += _xferAmt; ra -= _xferAmt; }
+      raOaXferApplied = true;
     }
 
     // Pledge RA withdrawal: member applies to withdraw pledged RA funds (above BRS) as cash at pledgeWithdrawalAge
@@ -7046,7 +7073,7 @@ export default function App() {
       retirementSumGrowth, // Rev #5: changing this rate changes all FRS/BHS/BRS/ERS projections
       salaryPhaseAge, salaryGrowthRate2, // Rev #22 (careerBreakStartAge/EndAge removed — use Life Events career_break)
       lifeEvents, // Rev #D2
-      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, // RSS fields
+      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer, // RSS fields + transfer toggle
     } = debouncedInputs;
     return JSON.stringify({
       currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
@@ -7077,7 +7104,7 @@ export default function App() {
       retirementSumGrowth, // Rev #5
       salaryPhaseAge, salaryGrowthRate2, // Rev #22
       lifeEvents, // Rev #D2
-      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, // RSS fields
+      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer, // RSS fields + transfer toggle
     });
   }, [debouncedInputs]);
   const projection = useMemo(() => {
@@ -7272,6 +7299,23 @@ export default function App() {
   const raAfterTransfer = raAtPayout - raOaTransfer;
   // ── end of payoutAge65 / raAfterTransfer block ────────────────────────────
 
+  // ── Unified RA→OA transfer card display vars (RSS + non-RSS) ─────────────
+  // For non-RSS: transfer age = payoutAge65; source row = payoutRow65 (already computed above).
+  // For RSS with migration: transfer age = lifeMigrationAge; source row = projectionByAge.get(migAge).
+  // For RSS without migration (lifeMigrationAge === 0): no transfer ever → card is hidden.
+  const _rssMigAge      = _isRSSForTransfer ? (Number(debouncedInputs.lifeMigrationAge) || 0) : 0;
+  const _showTransferCard = _isRSSForTransfer ? _rssMigAge > 0 : true;
+  const _cardTransferAge  = _isRSSForTransfer ? _rssMigAge : payoutAge65;
+  const _rssTransferRow   = (_isRSSForTransfer && _rssMigAge > 0) ? projectionByAge.get(_rssMigAge) : null;
+  // Unified RA and cash-top-up figures at the transfer age
+  const _cardRaAtTransfer   = _isRSSForTransfer ? (_rssTransferRow?.ra || 0) : raAtPayout;
+  const _cardCumTopUps      = _isRSSForTransfer ? (_rssTransferRow?.cumRaCashTopUps ?? 0) : cumulativeCashTopUps;
+  const _cardTransferBase   = Math.max(0, _cardRaAtTransfer - _cardCumTopUps);
+  const _cardTransferRaw    = Math.round(_cardTransferBase * _raTransferPct);
+  const _cardRaOaTransfer   = _birthYear >= 1958 ? Math.max(0, _cardTransferRaw - 5000) : _cardTransferRaw;
+  const _cardRaAfterTransfer = _cardRaAtTransfer - _cardRaOaTransfer;
+  // ── end of unified card vars ──────────────────────────────────────────────
+
   // householdData: post-hoc combination of primary + spouse projections.
   // Computes combined totals, combined CPF LIFE monthly (via interpolateCpfLife),
   // and combined net worth at key ages. Consumed only by the Household tab.
@@ -7304,14 +7348,17 @@ export default function App() {
     // spouse uses the default formula (10 + 2*(payoutAge−65), clamped 10–20).
     const sBasPct = Math.min(20, Math.max(10, 10 + (spousePa - 65) * 2));
     // ── Fix 2: compute all three plan payouts per member ─────────────────────────
-    // D4-Bug2: CPF LIFE payout is based on the full RA at payout age (before the OA transfer).
-    // Primary: raAtPayout (component-scope, full pre-transfer RA). Spouse: sRaAtPA (same logic).
-    const pLifeStdAtPA = Math.round(interpolateCpfLife(raAtPayout, 'std', pIsMale, pa));
-    const pLifeEscAtPA = Math.round(interpolateCpfLife(raAtPayout, 'esc', pIsMale, pa));
-    const pLifeBasAtPA = Math.round(interpolateCpfLife(raAtPayout, 'bas', pIsMale, pa) * (1 - basicPremiumPct / 100) / 0.90);
-    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'std', sIsMale, pa));
-    const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'esc', sIsMale, pa));
-    const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaAtPA, 'bas', sIsMale, pa) * (1 - sBasPct / 100) / 0.90);
+    // applyRaOaTransfer: when ON use post-transfer RA (raAfterTransfer / sRaForLife) so payout
+    // figures reflect the reduced RA that enters the LIFE pool after the OA transfer.
+    // When OFF, use full pre-transfer RA for both members (consistent with lifePlans useMemo).
+    const pRaBase = debouncedInputs.applyRaOaTransfer ? raAfterTransfer : raAtPayout;
+    const sRaBase = debouncedInputs.applyRaOaTransfer ? sRaForLife    : sRaAtPA;
+    const pLifeStdAtPA = Math.round(interpolateCpfLife(pRaBase, 'std', pIsMale, pa));
+    const pLifeEscAtPA = Math.round(interpolateCpfLife(pRaBase, 'esc', pIsMale, pa));
+    const pLifeBasAtPA = Math.round(interpolateCpfLife(pRaBase, 'bas', pIsMale, pa) * (1 - basicPremiumPct / 100) / 0.90);
+    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaBase, 'std', sIsMale, pa));
+    const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaBase, 'esc', sIsMale, pa));
+    const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaBase, 'bas', sIsMale, pa) * (1 - sBasPct / 100) / 0.90);
     const rows = [];
     for (let age = startAge; age <= 95; age++) {
       const pRow = projectionByAge.get(age) || {};
@@ -7396,10 +7443,10 @@ export default function App() {
     // NX10 fix: use debouncedInputs inside useMemos that depend on the debounced projection
     const pAge = Number(debouncedInputs.payoutAge) || 65;
     const male = debouncedInputs.isMale !== false;
-    // CPF LIFE payout is calculated on RA AFTER the 20% OA transfer.
-    // The transfer reduces the RA entering the LIFE pool — payouts are correspondingly lower.
-    // D4-Bug2: use full raAtPayout (pre-transfer) — CPF LIFE payout is set on the full RA premium.
-    const raBase = raAtPayout;
+    // CPF LIFE payout base: when applyRaOaTransfer is ON, payouts are based on post-transfer RA
+    // (the amount actually entering the LIFE pool). When OFF, full pre-transfer RA is used.
+    // D4-Bug2 note: prior code always used raAtPayout; toggle now gives the user the choice.
+    const raBase = debouncedInputs.applyRaOaTransfer ? raAfterTransfer : raAtPayout;
     // ── Standard Plan: linear interpolation from 2026 CPF Estimator lookup table ──
     // The 7% deferral is a marketing approximation for Standard Plan only;
     // the correct approach is to read the actual RA from the projection at each
@@ -7425,14 +7472,15 @@ export default function App() {
       escalating: { name: "Escalating", start: escStartActive,  startM: escStartM, startF: escStartF },
       basic:      { name: "Basic",      start: basStartActive,  startM: basStartM, startF: basStartF }
     };
-  }, [raAtPayout, debouncedInputs.payoutAge, debouncedInputs.isMale]); // N1 fix: was raAfterTransfer — body reads raAtPayout (raBase); dep must match
+  }, [raAtPayout, raAfterTransfer, debouncedInputs.payoutAge, debouncedInputs.isMale, debouncedInputs.applyRaOaTransfer]); // dep: raAfterTransfer added for toggle
 
   const payoutProjection = useMemo(() => {
     let data = [];
     const pAge = Number(debouncedInputs.payoutAge) || 65; // NX10 fix: stay in sync with projection
-    // initialRA = RA after 20% transfer — this is what enters the CPF LIFE pool
-    // D4-Bug2: use full raAtPayout (pre-transfer) as the CPF LIFE premium base.
-    const initialRA = raAtPayout;
+    // initialRA: RA entering the CPF LIFE pool. When applyRaOaTransfer is ON the birth-year-gated
+    // OA transfer has already reduced RA, so payouts are based on the lower post-transfer amount.
+    // D4-Bug2 note: prior code always used raAtPayout; toggle now gives the user the choice.
+    const initialRA = debouncedInputs.applyRaOaTransfer ? raAfterTransfer : raAtPayout;
     const includeProp = debouncedInputs.includeProperty ?? true; // use debounced — deps already list debouncedInputs.includeProperty
     let cumPayoutStandard = 0, cumPayoutEscalating = 0, cumPayoutBasic = 0;
 
@@ -14177,18 +14225,38 @@ ${milestoneSnapshotHtml}
                     })()}
                   </div>
 
-                  {/* RA → OA Transfer at Payout Age — read-only info card */}
-                  {/* Suppressed for pure RSS members: the transfer is handled inside runRSSEngine */}
-                  {!_isRSSForTransfer && (
+                  {/* RA → OA Transfer at Payout / Migration Age — info card with toggle */}
+                  {/* Hidden for pure RSS members with no migration (no transfer ever fires) */}
+                  {_showTransferCard && (
                     <div style={{ background: "rgba(var(--clr-blue2-rgb),0.06)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
 
-                      {/* Card header */}
+                      {/* Card header + toggle */}
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
                         <ArrowRightLeft style={{ width: 13, height: 13, color: "var(--clr-blue2)", flexShrink: 0 }} />
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue2)", textTransform: "uppercase" }}>
-                          RA → OA Transfer at Age {payoutAge65}
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue2)", textTransform: "uppercase", flex: 1 }}>
+                          RA → OA Transfer at Age {_cardTransferAge}
+                          {_isRSSForTransfer && <span style={{ fontWeight: 400, fontSize: 11, color: "var(--text-muted)", marginLeft: 5 }}>(CPF LIFE migration age)</span>}
                         </span>
-                        <TooltipBox id="t-ra-oa-info" text="At payout age, CPF transfers a birth-year-gated portion of your eligible RA savings to OA. Eligible base = RA at payout age minus cumulative cash top-ups (RSTU), OA→RA CPF transfers, and government grants. Born 1958+: 20% of eligible base − $5,000 (floor $0). Born 1957: 10% of eligible base. Born 1956 or earlier: not eligible. The transferred amount moves freely to OA. CPF LIFE payouts are based on RA after this transfer." />
+                        <TooltipBox id="t-ra-oa-info" text="CPF Board policy: at payout age (non-RSS) or migration age (RSS), a birth-year-gated portion of eligible RA is transferred to OA as a freely-withdrawable lump sum. Eligible base = RA at that age minus cumulative cash top-ups (RSTU), OA→RA CPF transfers, and government grants. Born 1958+: 20% − $5,000. Born 1957: 10%. Born 1956 or earlier: not eligible. Toggle ON to model this in the projection (CPF LIFE payouts will be based on the reduced RA)." />
+                      </div>
+
+                      {/* Apply toggle */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "7px 10px", marginBottom: 10 }}>
+                        <div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>Apply transfer in projection</span>
+                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "1px 0 0", lineHeight: 1.4 }}>
+                            {inputs.applyRaOaTransfer
+                              ? "ON — OA boosted, RA reduced at transfer age. CPF LIFE payouts based on post-transfer RA."
+                              : "OFF — Projection unchanged. Transfer shown below for reference only."}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setInputs(p => ({ ...p, applyRaOaTransfer: !p.applyRaOaTransfer }))}
+                          style={{ flexShrink: 0, marginLeft: 10, padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                            background: inputs.applyRaOaTransfer ? "var(--clr-blue2)" : "var(--bg-muted)",
+                            color: inputs.applyRaOaTransfer ? "#fff" : "var(--text-muted)" }}>
+                          {inputs.applyRaOaTransfer ? "ON" : "OFF"}
+                        </button>
                       </div>
 
                       {/* Birth-year eligibility badge */}
@@ -14209,29 +14277,33 @@ ${milestoneSnapshotHtml}
                       {_raTransferPct > 0 ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12 }}>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ color: "var(--text-muted)" }}>Projected RA at age {payoutAge65}</span>
-                            <span style={{ color: "var(--text-highlight)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(raAtPayout)}</span>
+                            <span style={{ color: "var(--text-muted)" }}>Projected RA at age {_cardTransferAge}</span>
+                            <span style={{ color: "var(--text-highlight)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(_cardRaAtTransfer)}</span>
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
                             <span style={{ color: "var(--text-muted)" }}>Less: cash top-ups / transfers / grants</span>
-                            <span style={{ color: "var(--clr-red)", fontFamily: "monospace" }}>− {formatCurrency(cumulativeCashTopUps)}</span>
+                            <span style={{ color: "var(--clr-red)", fontFamily: "monospace" }}>− {formatCurrency(_cardCumTopUps)}</span>
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border-subtle)", paddingTop: 5 }}>
                             <span style={{ color: "var(--text-muted)" }}>
                               Eligible base ({Math.round(_raTransferPct * 100)}%{_birthYear >= 1958 ? " then − $5,000" : ""} applied)
                             </span>
-                            <span style={{ color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(raTransferBase)}</span>
+                            <span style={{ color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(_cardTransferBase)}</span>
                           </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(var(--clr-blue2-rgb),0.1)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", borderRadius: 6, padding: "5px 8px", marginTop: 2 }}>
-                            <span style={{ color: "var(--clr-blue2)", fontWeight: 700 }}>↑ Transfer to OA (freely withdrawable)</span>
-                            <span style={{ color: "var(--clr-blue2)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(raOaTransfer)}</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: inputs.applyRaOaTransfer ? "rgba(var(--clr-blue2-rgb),0.15)" : "rgba(var(--clr-blue2-rgb),0.06)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", borderRadius: 6, padding: "5px 8px", marginTop: 2 }}>
+                            <span style={{ color: "var(--clr-blue2)", fontWeight: 700 }}>
+                              {inputs.applyRaOaTransfer ? "↑ Transfer to OA (applied in projection)" : "↑ Transfer to OA (reference only — toggle OFF)"}
+                            </span>
+                            <span style={{ color: "var(--clr-blue2)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(_cardRaOaTransfer)}</span>
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
                             <span style={{ color: "var(--text-muted)" }}>RA entering CPF LIFE pool</span>
-                            <span style={{ color: "var(--clr-emerald)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(raAfterTransfer)}</span>
+                            <span style={{ color: inputs.applyRaOaTransfer ? "var(--clr-emerald)" : "var(--text-muted)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(_cardRaAfterTransfer)}</span>
                           </div>
                           <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "3px 0 0", lineHeight: 1.5 }}>
-                            Auto-applied by engine at payout age. CPF LIFE monthly payouts are based on the RA entering the pool ({formatCurrency(raAfterTransfer)}), not the full pre-transfer RA.
+                            {inputs.applyRaOaTransfer
+                              ? `Transfer is applied in the engine at age ${_cardTransferAge}. CPF LIFE payouts are based on RA after transfer (${formatCurrency(_cardRaAfterTransfer)}).`
+                              : `Toggle ON to apply. CPF LIFE payouts will recalculate on ${formatCurrency(_cardRaAfterTransfer)} (post-transfer RA).`}
                           </p>
                         </div>
                       ) : (
@@ -14240,22 +14312,24 @@ ${milestoneSnapshotHtml}
                         </p>
                       )}
 
-                      {/* Section B — OA withdrawal rights sub-card */}
+                      {/* Section B — OA withdrawal rights sub-card (anchored to payoutAge65 for both modes) */}
                       {(() => {
                         const _rsGrowthPct = (Number(debouncedInputs.retirementSumGrowth) || 3) / 100;
                         const _baseYearPA  = Number(debouncedInputs.currentYear) || 2026;
                         const _baseAgePA   = Number(debouncedInputs.currentAge) || 35;
                         const _payoutYear  = _baseYearPA + (payoutAge65 - _baseAgePA);
                         const _frsAtPA     = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + _rsGrowthPct, Math.max(0, _payoutYear - 2026)));
-                        const _frsOnTrack  = raAtPayout >= _frsAtPA;
+                        // For FRS check: use RA at payoutAge65 for non-RSS; for RSS use RA at rssPayoutStartAge
+                        const _checkAge    = _isRSSForTransfer ? (Number(debouncedInputs.rssPayoutStartAge) || 65) : payoutAge65;
+                        const _raForFrs    = projectionByAge.get(_checkAge)?.ra || 0;
+                        const _frsOnTrack  = _raForFrs >= _frsAtPA;
                         const _oaAtPA      = projectionByAge.get(payoutAge65)?.oa || 0;
-                        // Birth-year OA withdrawal cap when FRS is NOT set aside (per CPF Board infographic cpf.gov.sg/A55)
                         const _oaCapPct    = _birthYear >= 1958 ? null
                           : _birthYear === 1957 ? 10
                           : _birthYear === 1956 ? 20
                           : _birthYear === 1955 ? 30
                           : _birthYear === 1954 ? 40
-                          : 50; // 1953 or earlier
+                          : 50;
                         const _oaCapAmt    = _oaCapPct != null ? Math.round(_oaAtPA * _oaCapPct / 100) : 5000;
                         return (
                           <div style={{ background: _frsOnTrack ? "rgba(var(--clr-emerald-rgb),0.06)" : "rgba(var(--clr-amber-rgb),0.07)", border: `1px solid ${_frsOnTrack ? "rgba(var(--clr-emerald-rgb),0.3)" : "rgba(var(--clr-amber-rgb),0.35)"}`, borderRadius: 8, padding: "8px 11px", marginTop: 10 }}>
@@ -14266,14 +14340,14 @@ ${milestoneSnapshotHtml}
                               <div>
                                 <p style={{ fontSize: 12, fontWeight: 700, color: _frsOnTrack ? "var(--clr-emerald)" : "var(--clr-amber)", margin: "0 0 2px" }}>
                                   {_frsOnTrack
-                                    ? `FRS on track at age ${payoutAge65} — full OA withdrawal access`
-                                    : `FRS not yet met at age ${payoutAge65} — OA withdrawal restricted`}
+                                    ? `FRS on track at age ${_checkAge} — full OA withdrawal access`
+                                    : `FRS not yet met at age ${_checkAge} — OA withdrawal restricted`}
                                 </p>
                                 <p style={{ fontSize: 12, color: _frsOnTrack ? "var(--text-muted)" : "#fdba74", margin: 0, lineHeight: 1.5 }}>
                                   {_frsOnTrack
-                                    ? `Projected RA ${formatCurrency(raAtPayout)} ≥ FRS ${formatCurrency(_frsAtPA)} — you can withdraw any amount from OA at payout age.`
+                                    ? `Projected RA ${formatCurrency(_raForFrs)} ≥ FRS ${formatCurrency(_frsAtPA)} — you can withdraw any amount from OA at payout age.`
                                     : _birthYear >= 1958
-                                      ? `Born 1958+: OA withdrawal capped at $5,000 until FRS is set aside (projected RA ${formatCurrency(raAtPayout)} vs FRS ${formatCurrency(_frsAtPA)}).`
+                                      ? `Born 1958+: OA withdrawal capped at $5,000 until FRS is set aside (projected RA ${formatCurrency(_raForFrs)} vs FRS ${formatCurrency(_frsAtPA)}).`
                                       : `Born ${_birthYear}: OA withdrawal capped at ${_oaCapPct}% of OA (≈ ${formatCurrency(_oaCapAmt)} on projected OA ${formatCurrency(_oaAtPA)}) until FRS is set aside.`}
                                 </p>
                               </div>
