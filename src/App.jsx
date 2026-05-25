@@ -12392,7 +12392,7 @@ ${milestoneSnapshotHtml}
                           onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                           onFocus={() => setFocusedField(n)}
                           aria-label={l} aria-invalid={!!inputErrors[n]}
-                          readOnly={false} {/* Bug 2 fix: age is bidirectional — editing it reverse-derives birthYear */}
+                          readOnly={false}
                           className={fieldChanged(n) ? "cpf-fc" : undefined}
                           style={{
                             width: "100%", padding: "8px 12px",
