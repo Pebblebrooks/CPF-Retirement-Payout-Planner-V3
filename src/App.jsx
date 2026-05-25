@@ -5097,13 +5097,18 @@ export default function App() {
   // Phase 1 — Readiness tab: auto-collapse sidebar on entry, restore on exit.
   // Uses a ref to remember the pre-readiness open state so toggling the sidebar
   // manually on other tabs (hide/show) is still respected after leaving Readiness.
+  // Mobile/tablet (≤1024px): always collapse when switching to any tab — the KPI
+  // strip and tab content should be unobstructed; user re-opens via the Inputs bar.
+  // Desktop (>1024px): restore previous open state when leaving Readiness.
   const sidebarWasOpenRef = useRef(true);
   useEffect(() => {
     if (activeTab === "readiness") {
       sidebarWasOpenRef.current = sidebarOpen; // remember current state
       setSidebarOpen(false);                   // collapse for max dashboard width
+    } else if (window.innerWidth <= 1024) {
+      setSidebarOpen(false);                   // mobile/tablet: always hide inputs on tab switch
     } else if (sidebarWasOpenRef.current) {
-      setSidebarOpen(true);                    // restore if it was open before
+      setSidebarOpen(true);                    // desktop only: restore if it was open before
     }
     // sidebarOpen intentionally omitted from deps — we only want to fire on tab transitions
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -11172,11 +11177,22 @@ ${milestoneSnapshotHtml}
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
-          /* KPI-only strip inside cpf-main-wrap — no longer needs its own sticky */
-          .cpf-tabs-kpi-header { position: static; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           /* Fix 1: when inputs sidebar is open on tablet, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
+          /* Fix M-KPI-1 (tablet): collapse sidebar-wrap to 0 when inputs are hidden —
+             eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
+          .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
+            height: 0 !important; padding: 0 !important; overflow: hidden !important;
+            border: none !important; min-height: 0 !important;
+          }
+          /* Fix M-KPI-2 (tablet): KPI strip — hidden when input panel is open (would render
+             below all input fields due to DOM order sidebar→main-wrap); sticky at the correct
+             offset (header 48 + tab strip 44 + input-params-bar 44 = 136px) when inputs closed */
+          .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
+          .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
+            position: sticky !important; top: 136px !important; z-index: 40 !important;
+          }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           /* Logo alignment: match header left/right padding to sidebar-inner (14px) */
           .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
@@ -11263,11 +11279,23 @@ ${milestoneSnapshotHtml}
           /* Show Share/Report/etc in the gear dropdown on mobile */
           .cpf-gear-mobile-share { display: contents !important; }
           /* cpf-tabs-hamburger intentionally not shown — tab strip is horizontally scrollable */
-          .cpf-tabs-kpi-header { position: static; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           /* Fix 1: when inputs sidebar is open on mobile, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
+          /* Fix M-KPI-1 (mobile): collapse sidebar-wrap to 0 when inputs are hidden —
+             eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
+          .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
+            height: 0 !important; padding: 0 !important; overflow: hidden !important;
+            border: none !important; min-height: 0 !important;
+          }
+          /* Fix M-KPI-2 (mobile): KPI strip — hidden when input panel is open (DOM order puts it
+             below all input fields: sidebar→main-wrap); sticky at correct offset
+             (header 48 + tab strip 44 + input-params-bar 44 = 136px) when inputs closed */
+          .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
+          .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
+            position: sticky !important; top: 136px !important; z-index: 40 !important;
+          }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
           .rg-5, .rg-4, .rg-3, .rg-2 { grid-template-columns: 1fr 1fr !important; }
@@ -11367,14 +11395,22 @@ ${milestoneSnapshotHtml}
           .cpf-mobile-top-spacer { display: block !important; height: 48px; flex-shrink: 0; }
           /* Pin Input Parameters bar below fixed header + tab strip */
           .cpf-input-params-bar { position: fixed !important; top: 92px !important; left: 0 !important; right: 0 !important; }
-          /* Push sidebar sections below the fixed params bar (~44px) */
-          .cpf-sidebar-wrap { padding-top: 44px; }
+          /* Push sidebar sections below the fixed params bar (~44px) — only when open */
+          .cpf-layout[data-sidebar-open="true"] .cpf-sidebar-wrap { padding-top: 44px; }
+          .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
+            height: 0 !important; padding: 0 !important; overflow: hidden !important;
+            border: none !important; min-height: 0 !important;
+          }
+          /* KPI strip: hidden when inputs open, sticky below stacked bars when closed */
+          .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
+          .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
+            position: sticky !important; top: 136px !important; z-index: 40 !important;
+          }
           /* Shrink logo on tiny screens */
           .cpf-logo-text { font-size: 14px !important; }
           .cpf-logo-sub  { display: none !important; }
           /* Full-width tab strip: fixed header → sticky at top:48px */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
-          .cpf-tabs-kpi-header { position: static; }
           .desktop-only { display: none !important; }
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
           #docs-sticky-nav { top: 136px !important; }
@@ -12174,7 +12210,7 @@ ${milestoneSnapshotHtml}
               const isLifeLocked = id === "life" && isForeigner;
               return (
                 <button key={id} role="tab" aria-selected={activeTab === id} aria-controls={`panel-${id}`}
-                  onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 768) setSidebarOpen(false); }}
+                  onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
                   title={isLifeLocked ? "CPF LIFE — not available to foreigners" : undefined}
                   style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: "transparent", color: activeTab === id ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: activeTab === id ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLifeLocked ? 0.45 : 1 }}>
                   <Icon style={{ width: 14, height: 14 }} />{label}{isLifeLocked && <span style={{ fontSize: 11, marginLeft: 2 }}>🔒</span>}
@@ -12209,7 +12245,7 @@ ${milestoneSnapshotHtml}
                 {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
                   const isLifeLocked = id === "life" && isForeigner;
                   return (
-                    <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 768) setSidebarOpen(false); }}
+                    <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
                       style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: activeTab === id ? 800 : 600, border: "none", background: activeTab === id ? `${accent}18` : "transparent", color: isLifeLocked ? "rgba(160,160,160,0.4)" : activeTab === id ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: isLifeLocked ? 0.5 : 1 }}>
                       <Icon style={{ width: 13, height: 13 }} />{label}{isLifeLocked && " 🔒"}
                     </button>
