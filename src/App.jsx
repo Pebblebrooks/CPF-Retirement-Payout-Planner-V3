@@ -11139,7 +11139,9 @@ ${milestoneSnapshotHtml}
            Desktop (≥1025px) only; tablet/mobile never enter cockpit.
            ═══════════════════════════════════════════════════════════════ */
         @media (min-width: 1025px) {
-          /* Root layout shell: fill 100% of viewport height */
+          /* NOTE: data-cockpit is set on cpf-layout, not cpf-page-wrap, so this selector
+             never matches. Kept for documentation only — cpf-page-wrap padding is
+             irrelevant to the cockpit grid which lives entirely inside cpf-layout. */
           .cpf-page-wrap[data-cockpit="true"] {
             max-width: 100% !important;
             padding: 0 !important;
@@ -11147,9 +11149,11 @@ ${milestoneSnapshotHtml}
           /* Hide sidebar + tabs-kpi-header; cockpit provides its own card layout */
           .cpf-layout[data-cockpit="true"] {
             grid-template-columns: 1fr !important;
+            grid-template-rows: 1fr !important;   /* explicit row so grid items can resolve height:100% */
+            align-items: stretch !important;       /* override base align-items:start so cpf-main-wrap fills the cell */
             gap: 0 !important;
             padding: 0 !important;
-            height: calc(100vh - 40px - 42px) !important; /* viewport minus header minus tab strip */
+            height: 100% !important;              /* let the flex parent (theme-dark/light) determine this; was: calc(100vh - 40px - 42px) */
             overflow: hidden !important;
           }
           .cpf-layout[data-cockpit="true"] .cpf-sidebar-wrap { display: none !important; }
@@ -11164,7 +11168,8 @@ ${milestoneSnapshotHtml}
             padding: 0 !important;
             gap: 0 !important;
             overflow: hidden !important;
-            height: 100% !important;
+            flex: 1 !important;        /* fill remaining height after cpf-tabs-kpi-header; was: height:100% which overflowed the flex column */
+            min-height: 0 !important;  /* required: allows flex:1 item to shrink below its content size */
             display: block !important;
           }
           /* 3-column cockpit grid */
