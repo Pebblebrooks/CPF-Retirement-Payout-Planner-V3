@@ -6415,6 +6415,34 @@ export default function App() {
         setWhatIfOaDrawdown(null);
         setWhatIfSrsContrib(null);
         setWhatIfPrivGrowth(null);
+        // Goal Simulator — clear stale solver output and sub-tab position.
+        // goalResult must be nulled explicitly: it is NOT derived from inputs,
+        // so resetting inputs alone leaves the old computed result visible on
+        // the Strategy tab, showing wrong baseline/gap/strategy figures against
+        // the fresh default profile. goalApplied is also cleared here directly
+        // (belt-and-suspenders — the useEffect on vcSaTopup/vc3aCash only fires
+        // when those fields were non-zero before reset, so explicit clear is safer).
+        setGoalResult(null);
+        setGoalStratTab("goal");
+        setGoalSolving(false);
+        setGoalApplied(null);
+        // Life Events form — clear any in-progress partial edits.
+        // inputs.lifeEvents is already reset to [] via DEFAULT_INPUTS above,
+        // but leFormState holds the unsaved form fields independently and must
+        // be cleared separately, otherwise a ghost form appears over empty events.
+        setLeFormState({});
+        // Gap alert — re-enable so it evaluates fresh against the default profile.
+        // If dismissed before reset, it would never reappear for the new inputs.
+        setGapAlertDismissed(false);
+        // Chart view state — reset all toggles so the user sees a clean chart
+        // immediately after reset rather than inheriting a prior display mode.
+        setHighlightPlan("standard");
+        setPrimaryLifePlan("standard");
+        setSpouseLifePlan("standard");
+        setViewMode("bequest");
+        setIsRealDollars(false);
+        setShowMonteCarlo(false);
+        setShowBaseline(false);
         setActiveTab("readiness");
         showToast("All inputs, scenarios, and What-If data reset to defaults.");
       }
