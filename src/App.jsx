@@ -5082,8 +5082,9 @@ function CockpitView({
       {/* ══ CENTRE COLUMN ══ */}
       <div className="cockpit-col">
 
-        {/* Card 4 — Accumulation chart */}
-        <div className="cockpit-card grow">
+        {/* Card 4 — Accumulation chart: flex:3 so chart gets 75% of the available flex space;
+             What-if card below gets flex:1 (25%). Without this the chart consumed 100%. */}
+        <div className="cockpit-card grow" style={{ flex: 3 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
             <div className="cockpit-card-lbl" style={{ margin: 0 }}>Accumulation projection</div>
             <div style={{ display: "flex", gap: 10 }}>
@@ -5143,8 +5144,9 @@ function CockpitView({
           ))}
         </div>
 
-        {/* Card 6 — What-if sliders */}
-        <div className="cockpit-card" style={{ flexShrink: 0 }}>
+        {/* Card 6 — What-if sliders: cockpit-card grow (flex:1) so it shares space with the chart
+             (flex:3) above — chart 75%, what-if 25%. Was flexShrink:0 which let chart take 100%. */}
+        <div className="cockpit-card grow">
           <div className="cockpit-card-lbl">What-if explorer</div>
           <div className="ck-slider-row">
             <div className="ck-slider-hdr"><span>Payout age</span><span>{wiPA}</span></div>
@@ -11172,10 +11174,13 @@ ${milestoneSnapshotHtml}
             min-height: 0 !important;  /* required: allows flex:1 item to shrink below its content size */
             display: block !important;
           }
-          /* 3-column cockpit grid */
+          /* 3-column cockpit grid — fluid side columns so the grid adapts to any
+             desktop viewport (≥1025px) without overflowing or leaving dead space.
+             minmax(185px,220px): left never narrower than 185px or wider than 220px;
+             minmax(200px,235px): right similarly bounded; middle takes the rest. */
           .cockpit-grid {
             display: grid;
-            grid-template-columns: 230px 1fr 240px;
+            grid-template-columns: minmax(185px, 220px) 1fr minmax(200px, 235px);
             gap: 6px;
             padding: 6px;
             height: 100%;
