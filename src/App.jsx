@@ -5000,6 +5000,7 @@ export default function App() {
   const [goalResult,   setGoalResult]   = useState(null);             // solver output object
   const [goalSolving,  setGoalSolving]  = useState(false);            // spinner while computing
   const [goalApplied,  setGoalApplied]  = useState(null);             // "A"|"B"|"C"|null last-applied strategy
+  const [preApplySnapshot, setPreApplySnapshot] = useState(null);    // { vcSaTopup, vc3aCash } captured before last Apply — enables per-strategy Revert without touching other inputs
   // BUG-2 fix: Life Events panel state hoisted from IIFE to top-level useState.
   // Calling React.useState inside an IIFE embedded in JSX violates Rules of Hooks:
   // the hook call count changes when the IIFE is conditionally skipped, React's
@@ -5121,8 +5122,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // Goal Simulator — clear "Applied" badge when user manually edits the levers after applying a strategy
-  useEffect(() => { setGoalApplied(null); }, [inputs.vcSaTopup, inputs.vc3aCash]);
+  // Goal Simulator — clear "Applied" badge and snapshot when user manually edits the levers after applying a strategy.
+  // This ensures the Revert button doesn't linger with a stale snapshot once the user has taken ownership of the values.
+  useEffect(() => { setGoalApplied(null); setPreApplySnapshot(null); }, [inputs.vcSaTopup, inputs.vc3aCash]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Advanced Settings gate — auto-expand if imported/shared profile has advanced data
   useEffect(() => {
@@ -6426,6 +6428,7 @@ export default function App() {
         setGoalStratTab("goal");
         setGoalSolving(false);
         setGoalApplied(null);
+        setPreApplySnapshot(null);
         // Life Events form — clear any in-progress partial edits.
         // inputs.lifeEvents is already reset to [] via DEFAULT_INPUTS above,
         // but leFormState holds the unsaved form fields independently and must
@@ -20696,13 +20699,17 @@ ${milestoneSnapshotHtml}
               const pctOfTarget = goalResult ? Math.min(100, (goalResult.baseline / goalResult.targetAmt) * 100) : 0;
 
               const applyStrategy = (overrides, stratLetter) => {
+                // Snapshot current lever values before overwriting — enables per-card "↩ Revert"
+                // without touching any other inputs. Snapshot is cleared if the user manually
+                // edits either lever after applying (useEffect above) or on global reset.
+                setPreApplySnapshot({ vcSaTopup: Number(inputs.vcSaTopup) || 0, vc3aCash: Number(inputs.vc3aCash) || 0 });
                 setInputs(prev => ({ ...prev, ...overrides }));
                 setGoalApplied(stratLetter);
                 // Switch to Accumulation so the user sees the chart update immediately
                 setTimeout(() => setActiveTab("accumulation"), 80);
               };
 
-              const StrategyCard = ({ letter, title, icon, color, strat, onApply }) => {
+              const StrategyCard = ({ letter, title, icon, color, strat, onApply, onRevert }) => {
                 const applied = goalApplied === letter;
                 return (
                   <div style={{ background: "var(--bg-input)", border: `1px solid ${strat.feasible ? color + "55" : "var(--border-subtle)"}`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -20723,11 +20730,32 @@ ${milestoneSnapshotHtml}
                           <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Total annual cash</span><br /><strong style={{ color }}>{fmt(strat.totalCash)}</strong></div>
                           <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Monthly equiv.</span><br /><strong style={{ color }}>{fmt(strat.totalCash / 12)}/mo</strong></div>
                         </div>
-                        <button
-                          onClick={() => applied ? null : onApply()}
-                          style={{ alignSelf: "flex-start", marginTop: 4, padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: applied ? "default" : "pointer", border: "none", background: applied ? "#22c55e22" : color, color: applied ? "#22c55e" : "#fff", transition: "all .2s" }}>
-                          {applied ? "✅ Applied to Profile" : "Apply to Profile →"}
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <button
+                            onClick={() => applied ? null : onApply()}
+                            style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: applied ? "default" : "pointer", border: "none", background: applied ? "#22c55e22" : color, color: applied ? "#22c55e" : "#fff", transition: "all .2s" }}>
+                            {applied ? "✅ Applied to Profile" : "Apply to Profile →"}
+                          </button>
+                          {/* Revert button — only shown when this strategy is the active applied one
+                              and preApplySnapshot is available. Restores vcSaTopup + vc3aCash to
+                              their exact pre-apply values without touching any other inputs. */}
+                          {applied && preApplySnapshot && (
+                            <button
+                              onClick={() => {
+                                setInputs(prev => ({
+                                  ...prev,
+                                  vcSaTopup: preApplySnapshot.vcSaTopup,
+                                  vc3aCash:  preApplySnapshot.vc3aCash,
+                                }));
+                                setGoalApplied(null);
+                                setPreApplySnapshot(null);
+                              }}
+                              title={`Restore RSTU to $${(preApplySnapshot.vcSaTopup || 0).toLocaleString()} and VC3A to $${(preApplySnapshot.vc3aCash || 0).toLocaleString()}`}
+                              style={{ padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(248,113,113,0.4)", background: "rgba(248,113,113,0.08)", color: "#f87171", transition: "all .2s" }}>
+                              ↩ Revert
+                            </button>
+                          )}
+                        </div>
                       </>
                     ) : (
                       <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
@@ -20848,38 +20876,103 @@ ${milestoneSnapshotHtml}
                       {/* Target input row */}
                       <div>
                         <p style={{ margin: "0 0 12px", fontWeight: 700, fontSize: 15, color: "var(--text-highlight)" }}>Set your CPF target at payout age</p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                          {[1e6, 2e6, 4e6, 1e7].map(preset => (
-                            <button key={preset}
-                              onClick={() => setInputs(prev => ({ ...prev, goalTargetCPF: preset }))}
-                              style={{ padding: "7px 16px", borderRadius: 20, fontWeight: 700, fontSize: 13, border: "2px solid", cursor: "pointer", transition: "all .15s",
-                                borderColor: Number(inputs.goalTargetCPF) === preset ? "#f43f5e" : "var(--border-strong)",
-                                background:  Number(inputs.goalTargetCPF) === preset ? "#f43f5e18" : "var(--bg-input)",
-                                color:       Number(inputs.goalTargetCPF) === preset ? "#f43f5e"   : "var(--text-muted)" }}>
-                              {preset >= 1e6 ? `${preset/1e6 === Math.floor(preset/1e6) ? preset/1e6 : (preset/1e6).toFixed(0)}M${pa}` : `${preset/1e3}k${pa}`}
-                            </button>
-                          ))}
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "4px 10px" }}>
-                            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
-                            <input type="number" min={0} step={100000}
-                              value={inputs.goalTargetCPF || ""}
-                              onChange={e => setInputs(prev => ({ ...prev, goalTargetCPF: Number(e.target.value) || 0 }))}
-                              placeholder="Custom amount"
-                              style={{ width: 130, border: "none", background: "transparent", color: "var(--text-primary)", fontSize: 13, outline: "none" }} />
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>at age</span>
-                            <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>{pa}</span>
-                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>(payout age — set in sidebar)</span>
-                          </div>
-                        </div>
+                        {(() => {
+                          // ── Smart preset logic ──────────────────────────────────────────
+                          // Derive current projected CPF total at payout age from the already-
+                          // computed displayAccumulation (O(1) via accumulationByAge Map).
+                          // This avoids re-running the engine and stays in sync with the chart.
+                          const projRow = accumulationByAge.get(pa);
+                          const baselineCPF = projRow
+                            ? (projRow.oa || 0) + (projRow.sa || 0) + (projRow.ra || 0) + (projRow.ma || 0)
+                            : 0;
+
+                          // Fixed anchors — always shown so users have recognisable reference points.
+                          // If baseline exceeds all anchors (>$10M), add one dynamic stretch above it.
+                          const FIXED_ANCHORS = [1e6, 2e6, 4e6, 1e7];
+                          const presets = baselineCPF > 1e7
+                            ? [...FIXED_ANCHORS, Math.ceil((baselineCPF + 1e6) / 1e6) * 1e6]
+                            : FIXED_ANCHORS;
+
+                          return (
+                            <>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                                {presets.map(preset => {
+                                  const isMet      = baselineCPF > 0 && preset <= baselineCPF;
+                                  const isSelected = Number(inputs.goalTargetCPF) === preset;
+                                  const isDynamic  = !FIXED_ANCHORS.includes(preset);
+                                  return (
+                                    <div key={preset} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                                      <button
+                                        onClick={() => setInputs(prev => ({ ...prev, goalTargetCPF: preset }))}
+                                        title={isMet ? `Your current projection ($${Math.round(baselineCPF).toLocaleString()}) already exceeds this target` : undefined}
+                                        style={{
+                                          padding: "7px 16px", borderRadius: 20, fontWeight: 700, fontSize: 13,
+                                          border: "2px solid", cursor: "pointer", transition: "all .15s",
+                                          opacity: isMet && !isSelected ? 0.55 : 1,
+                                          borderColor: isSelected ? (isDynamic ? "#0ea5e9" : "#f43f5e") : isMet ? "var(--border-subtle)" : "var(--border-strong)",
+                                          background:  isSelected ? (isDynamic ? "#0ea5e918" : "#f43f5e18") : isMet ? "transparent" : "var(--bg-input)",
+                                          color:       isSelected ? (isDynamic ? "#0ea5e9"   : "#f43f5e")   : isMet ? "var(--text-muted)" : "var(--text-muted)",
+                                          textDecoration: isMet && !isSelected ? "line-through" : "none",
+                                        }}>
+                                        {isDynamic ? "🎯 " : ""}
+                                        {preset >= 1e6
+                                          ? `${preset / 1e6 === Math.floor(preset / 1e6) ? preset / 1e6 : (preset / 1e6).toFixed(1)}M${pa}`
+                                          : `${preset / 1e3}k${pa}`}
+                                      </button>
+                                      {/* "✅ met" badge shown below each preset the member already exceeds */}
+                                      {isMet && !isSelected && (
+                                        <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700, letterSpacing: 0.2 }}>✅ met</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "4px 10px" }}>
+                                  <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
+                                  <input type="number" min={0} step={100000}
+                                    value={inputs.goalTargetCPF || ""}
+                                    onChange={e => setInputs(prev => ({ ...prev, goalTargetCPF: Number(e.target.value) || 0 }))}
+                                    placeholder="Custom amount"
+                                    style={{ width: 130, border: "none", background: "transparent", color: "var(--text-primary)", fontSize: 13, outline: "none" }} />
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <span style={{ fontSize: 13, color: "var(--text-muted)" }}>at age</span>
+                                  <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>{pa}</span>
+                                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>(payout age — set in sidebar)</span>
+                                </div>
+                              </div>
+                              {/* Contextual hint — only shown when at least one preset is already met */}
+                              {baselineCPF > 0 && presets.some(p => p <= baselineCPF) && (
+                                <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                                  💡 Your current projection is <strong style={{ color: "var(--text-primary)" }}>{(() => { const b = baselineCPF; return b >= 1e6 ? `$${(b/1e6).toFixed(2)}M` : `$${Math.round(b/1e3)}k`; })()}</strong> at age {pa} — struck-through presets are already met. Select a higher target to find new strategies.
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
 
-                      {/* Calculate button */}
-                      <button onClick={solveGoal} disabled={goalSolving || !Number(inputs.goalTargetCPF)}
-                        style={{ alignSelf: "flex-start", padding: "10px 26px", borderRadius: 10, fontWeight: 700, fontSize: 14, border: "none", cursor: goalSolving || !Number(inputs.goalTargetCPF) ? "not-allowed" : "pointer", background: goalSolving || !Number(inputs.goalTargetCPF) ? "var(--bg-input)" : "#f43f5e", color: goalSolving || !Number(inputs.goalTargetCPF) ? "var(--text-muted)" : "#fff", transition: "all .2s" }}>
-                        {goalSolving ? "⏳ Calculating…" : "⚡ Calculate Strategies"}
-                      </button>
+                      {/* Action buttons row: Calculate + Clear Simulator */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <button onClick={solveGoal} disabled={goalSolving || !Number(inputs.goalTargetCPF)}
+                          style={{ padding: "10px 26px", borderRadius: 10, fontWeight: 700, fontSize: 14, border: "none", cursor: goalSolving || !Number(inputs.goalTargetCPF) ? "not-allowed" : "pointer", background: goalSolving || !Number(inputs.goalTargetCPF) ? "var(--bg-input)" : "#f43f5e", color: goalSolving || !Number(inputs.goalTargetCPF) ? "var(--text-muted)" : "#fff", transition: "all .2s" }}>
+                          {goalSolving ? "⏳ Calculating…" : "⚡ Calculate Strategies"}
+                        </button>
+                        {/* Clear Simulator — resets only goal target + solver state. Does NOT revert
+                            any applied lever values (use "↩ Revert" on the strategy card for that). */}
+                        {(Number(inputs.goalTargetCPF) > 0 || goalResult) && (
+                          <button
+                            onClick={() => {
+                              setInputs(prev => ({ ...prev, goalTargetCPF: 0 }));
+                              setGoalResult(null);
+                              setGoalApplied(null);
+                              setPreApplySnapshot(null);
+                            }}
+                            title="Clear the goal target and solver results. Applied lever values (RSTU / VC3A) are not changed — use ↩ Revert on the strategy card to undo those."
+                            style={{ padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 13, border: "1px solid var(--border-strong)", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all .2s" }}>
+                            🗑 Clear Simulator
+                          </button>
+                        )}
+                      </div>
 
                       {/* Results */}
                       {goalResult && (
