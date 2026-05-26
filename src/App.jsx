@@ -4891,6 +4891,11 @@ export default function App() {
   const isForeignerRef      = useRef(false);        // stable ref so keyboard nav can read current citizenship
   const cpfSchemeRef        = useRef('cpf_life');   // stable ref so keyboard nav can read current scheme
   const householdEnabledRef = useRef(false);        // stable ref so keyboard nav can read current household state
+  // Guard flag: set to true by applyStrategy before it writes vcSaTopup/vc3aCash so the
+  // lever-change useEffect can distinguish a programmatic apply from a manual sidebar edit.
+  // Without this flag, the useEffect fires after every applyStrategy call and immediately
+  // nulls goalApplied + preApplySnapshot — the "Applied" badge and Revert button never render.
+  const isApplyingStrategyRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState("readiness");
   activeTabRef.current = activeTab; // keep ref current for keyboard shortcut handler
@@ -5123,8 +5128,17 @@ export default function App() {
   }, [activeTab]);
 
   // Goal Simulator — clear "Applied" badge and snapshot when user manually edits the levers after applying a strategy.
-  // This ensures the Revert button doesn't linger with a stale snapshot once the user has taken ownership of the values.
-  useEffect(() => { setGoalApplied(null); setPreApplySnapshot(null); }, [inputs.vcSaTopup, inputs.vc3aCash]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The isApplyingStrategyRef guard prevents this from firing when applyStrategy itself writes
+  // vcSaTopup/vc3aCash — without it, the useEffect nulls goalApplied + preApplySnapshot on the
+  // same render cycle as the apply, so the "Applied" badge and ↩ Revert button never appear.
+  useEffect(() => {
+    if (isApplyingStrategyRef.current) {
+      isApplyingStrategyRef.current = false; // consume the flag — next manual sidebar edit will fire normally
+      return;
+    }
+    setGoalApplied(null);
+    setPreApplySnapshot(null);
+  }, [inputs.vcSaTopup, inputs.vc3aCash]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Advanced Settings gate — auto-expand if imported/shared profile has advanced data
   useEffect(() => {
@@ -20703,6 +20717,10 @@ ${milestoneSnapshotHtml}
                 // without touching any other inputs. Snapshot is cleared if the user manually
                 // edits either lever after applying (useEffect above) or on global reset.
                 setPreApplySnapshot({ vcSaTopup: Number(inputs.vcSaTopup) || 0, vc3aCash: Number(inputs.vc3aCash) || 0 });
+                // Set guard flag BEFORE setInputs so the lever-change useEffect skips its clear
+                // on the render triggered by this apply. The flag is consumed (set back to false)
+                // inside the useEffect on its next fire — any subsequent manual sidebar edit fires normally.
+                isApplyingStrategyRef.current = true;
                 setInputs(prev => ({ ...prev, ...overrides }));
                 setGoalApplied(stratLetter);
                 // Switch to Accumulation so the user sees the chart update immediately
@@ -20742,6 +20760,7 @@ ${milestoneSnapshotHtml}
                           {applied && preApplySnapshot && (
                             <button
                               onClick={() => {
+                                isApplyingStrategyRef.current = true; // suppress lever-change useEffect — this write is a controlled revert, not a manual edit
                                 setInputs(prev => ({
                                   ...prev,
                                   vcSaTopup: preApplySnapshot.vcSaTopup,
@@ -20962,12 +20981,45 @@ ${milestoneSnapshotHtml}
                         {(Number(inputs.goalTargetCPF) > 0 || goalResult) && (
                           <button
                             onClick={() => {
-                              setInputs(prev => ({ ...prev, goalTargetCPF: 0 }));
-                              setGoalResult(null);
-                              setGoalApplied(null);
-                              setPreApplySnapshot(null);
+                              // If a strategy was applied and the pre-apply snapshot is intact,
+                              // offer to also revert vcSaTopup/vc3aCash to their pre-apply values.
+                              // The snapshot is guaranteed to be present here (not null) because
+                              // the isApplyingStrategyRef fix prevents the lever-change useEffect
+                              // from wiping it on the same render cycle as the apply.
+                              if (goalApplied !== null && preApplySnapshot !== null) {
+                                const fmtAmt = v => v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : `$${Number(v).toLocaleString()}`;
+                                setConfirmModal({
+                                  title: "Clear Simulator",
+                                  message: `Clear the goal target and revert the applied lever values?\n\n• RSTU top-up → ${fmtAmt(preApplySnapshot.vcSaTopup)}/yr (was ${fmtAmt(Number(inputs.vcSaTopup) || 0)}/yr)\n• VC3A contribution → ${fmtAmt(preApplySnapshot.vc3aCash)}/yr (was ${fmtAmt(Number(inputs.vc3aCash) || 0)}/yr)\n\nThe goal target and solver results will also be cleared.`,
+                                  onConfirm: () => {
+                                    isApplyingStrategyRef.current = true; // suppress lever-change useEffect during revert write
+                                    setInputs(prev => ({
+                                      ...prev,
+                                      goalTargetCPF: 0,
+                                      vcSaTopup: preApplySnapshot.vcSaTopup,
+                                      vc3aCash:  preApplySnapshot.vc3aCash,
+                                    }));
+                                    setGoalResult(null);
+                                    setGoalApplied(null);
+                                    setPreApplySnapshot(null);
+                                    setConfirmModal(null);
+                                  },
+                                  confirmLabel: "Clear & Revert",
+                                  confirmColor: "#f43f5e",
+                                  cancelLabel: "Cancel",
+                                });
+                              } else {
+                                // No strategy applied (or snapshot already consumed by a manual edit) —
+                                // clear only the simulator UI state, leave lever values untouched.
+                                setInputs(prev => ({ ...prev, goalTargetCPF: 0 }));
+                                setGoalResult(null);
+                                setGoalApplied(null);
+                                setPreApplySnapshot(null);
+                              }
                             }}
-                            title="Clear the goal target and solver results. Applied lever values (RSTU / VC3A) are not changed — use ↩ Revert on the strategy card to undo those."
+                            title={goalApplied !== null && preApplySnapshot !== null
+                              ? "Clear goal target and revert applied RSTU / VC3A values — you will be asked to confirm"
+                              : "Clear the goal target and solver results"}
                             style={{ padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 13, border: "1px solid var(--border-strong)", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all .2s" }}>
                             🗑 Clear Simulator
                           </button>
