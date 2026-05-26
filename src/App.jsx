@@ -5112,17 +5112,28 @@ export default function App() {
   // manually on other tabs (hide/show) is still respected after leaving Readiness.
   // Mobile/tablet (≤1024px): always collapse when switching to any tab — the KPI
   // strip and tab content should be unobstructed; user re-opens via the Inputs bar.
-  // Desktop (>1024px): restore previous open state when leaving Readiness.
+  // Desktop (>1024px): restore previous open state ONLY when leaving Readiness.
+  //
+  // Bug fixed: sidebarWasOpenRef was initialised to `true` and only updated on
+  // Readiness entry. The old guard `else if (sidebarWasOpenRef.current)` fired on
+  // EVERY desktop tab switch and always called setSidebarOpen(true), overriding the
+  // user's manual Hide toggle whenever they navigated between non-readiness tabs.
+  // Fix: prevTabRef tracks where we came from. The restore branch now only fires
+  // when prevTab === "readiness", leaving sidebarOpen untouched on all other
+  // desktop tab switches so the user's manual choice is fully respected.
   const sidebarWasOpenRef = useRef(true);
+  const prevTabRef = useRef(null);
   useEffect(() => {
     if (activeTab === "readiness") {
-      sidebarWasOpenRef.current = sidebarOpen; // remember current state
-      setSidebarOpen(false);                   // collapse for max dashboard width
+      sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Readiness
+      setSidebarOpen(false);                   // auto-collapse for max dashboard width
     } else if (window.innerWidth <= 1024) {
       setSidebarOpen(false);                   // mobile/tablet: always hide inputs on tab switch
-    } else if (sidebarWasOpenRef.current) {
-      setSidebarOpen(true);                    // desktop only: restore if it was open before
+    } else if (prevTabRef.current === "readiness") {
+      setSidebarOpen(sidebarWasOpenRef.current); // desktop: restore exact pre-Readiness state
     }
+    // desktop non-readiness → non-readiness: leave sidebarOpen untouched — respect manual toggle
+    prevTabRef.current = activeTab;
     // sidebarOpen intentionally omitted from deps — we only want to fire on tab transitions
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
