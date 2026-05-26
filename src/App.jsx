@@ -582,6 +582,7 @@ const DEFAULT_INPUTS = {
   annualPrivateSaving: 0,
   privateAssetGrowthRate: 0,
   privateAssetGoal: 0,        // optional target private asset value at payout age (0 = no goal; shows % of net worth instead)
+  goalTargetCPF: 0,           // Goal Simulator: desired total CPF balance at payout age (0 = no goal set)
   plannedDownpaymentOA: 0,
   downpaymentAge: 35,
   // OA Drawdown (post-payout-age supplementary income from OA)
@@ -1132,6 +1133,7 @@ const INPUT_LABELS = {
   targetMonthlyIncome: "Target Monthly Income", currentPrivateAssets: "Private Assets",
   annualPrivateSaving: "Annual Private Saving", privateAssetGrowthRate: "Private Asset Growth %",
   privateAssetGoal: "Private Asset Goal",
+  goalTargetCPF: "CPF Goal Target",
   plannedDownpaymentOA: "OA Downpayment", downpaymentAge: "Downpayment Age",
   oaDrawdownStartAge: "OA Drawdown Start Age", oaDrawdownMonthly: "OA Monthly Drawdown",
   oaDrawdownFloor: "OA Drawdown Floor", propMonetiseEnabled: "Prop Monetise",
@@ -4874,480 +4876,6 @@ function ReadinessTab({
   );
 }
 // ─────────────────────────────────────────────────────────────────────────────
-// COCKPIT VIEW — full-viewport single-page dashboard
-// Merged: Readiness gauge · Accumulation chart · CPF LIFE plans · Account balances
-//         Milestone alerts · What-if sliders · Income strategy · Gantt timeline
-// Quick-Input wizard lets users update key fields without opening the full sidebar.
-// ─────────────────────────────────────────────────────────────────────────────
-function CockpitView({
-  inputs, setInputs, debouncedInputs,
-  displayAccumulation, accumulationByAge,
-  lifePlans, milestones, highlightPlan, setHighlightPlan,
-  payoutAge65, isDark, isRealDollars,
-  whatIfPayoutAge, setWhatIfPayoutAge,
-  whatIfSaTopup, setWhatIfSaTopup,
-  whatIfSalaryBump, setWhatIfSalaryBump,
-  whatIfProjection, basicPremiumPct, applyInflation,
-  qiOpen, setQiOpen, qiStep, setQiStep, qiSel, setQiSel, showToast,
-}) {
-  const ca = Number(debouncedInputs.currentAge) || 35;
-  const pa = payoutAge65;
-
-  // ── Derived values ──────────────────────────────────────────────────────────
-  const paRow    = accumulationByAge.get(pa) || displayAccumulation[displayAccumulation.length - 1] || {};
-  const oaAtPA   = paRow.oa || 0;
-  const saAtPA   = paRow.sa || 0;
-  const maAtPA   = paRow.ma || 0;
-  const raAtPA   = paRow.ra || 0;
-  const totalAtPA = oaAtPA + saAtPA + maAtPA + raAtPA;
-
-  // RA at 55 for FRS coverage calc
-  const ra55Row = ca >= 55 ? (displayAccumulation[0] || {}) : (accumulationByAge.get(55) || {});
-  const raAt55  = ra55Row.ra || 0;
-
-  // FRS/BRS/ERS estimates (project current FRS by retirement sum growth rate)
-  const rsGrowth  = (Number(debouncedInputs.retirementSumGrowthRate) || 3) / 100;
-  const yearsToPA = Math.max(0, pa - ca);
-  const frsNow    = 213000; // 2026 base
-  const frsAtPA   = Math.round(frsNow * Math.pow(1 + rsGrowth, yearsToPA));
-  const brsAtPA   = Math.round(frsAtPA / 2);
-  const ersAtPA   = frsAtPA * 2;
-  const frsAtPct  = Math.min(100, Math.round((raAtPA / frsAtPA) * 100));
-  const brsAtPct  = Math.min(100, Math.round((raAtPA / brsAtPA) * 100));
-  const ersAtPct  = Math.min(100, Math.round((raAtPA / ersAtPA) * 100));
-  const brsMet    = raAtPA >= brsAtPA;
-  const frsMet    = raAtPA >= frsAtPA;
-
-  // Readiness score (simplified — mirrors ReadinessTab logic)
-  const targetMonthly = Number(debouncedInputs.targetMonthlyIncome) || 3000;
-  const planKey    = highlightPlan || 'standard';
-  const planPayout = lifePlans?.[planKey]?.monthly || 0;
-  const incCovPct  = targetMonthly > 0 ? Math.min(100, Math.round((planPayout / targetMonthly) * 100)) : 0;
-  const readScore  = Math.round((frsAtPct * 0.5) + (incCovPct * 0.5));
-  const scoreColor = readScore >= 70 ? "var(--clr-green)" : readScore >= 40 ? "var(--clr-amber)" : "var(--clr-red)";
-  const scoreLabel = readScore >= 70 ? "On Track" : readScore >= 40 ? "Needs Attention" : "Off Track";
-
-  // Accumulation chart data
-  const chartData  = displayAccumulation.filter(r => r.age >= ca && r.age <= Math.max(pa + 5, 75));
-
-  // Quick-Input wizard steps definition
-  const QI_STEPS = [
-    { q: "Current age", sub: "Drives all projection timelines.", type: "opts",
-      opts: [["25–30","28"],["31–35","33"],["36–40","38"],["41–45","43"],["46–55","50"],["56+","58"]] },
-    { q: "Citizenship status", sub: "Determines CPF scheme and contribution rates.", type: "opts",
-      opts: [["Singapore Citizen (SC)","sc"],["PR — Year 1 (G/G)","pr1"],["PR — Year 2 (G/G)","pr2"],["PR — Year 3+ (full)","pr3"],["Foreigner (SRS only)","fg"]] },
-    { q: "Monthly gross salary", sub: "Used for mandatory contribution auto-calc.", type: "num", prefix: "SGD $", placeholder: "e.g. 5000", field: "monthlyWage" },
-    { q: "Current OA balance", sub: "Your Ordinary Account balance today.", type: "num", prefix: "OA $", placeholder: "e.g. 45000", field: "oaBalance" },
-    { q: "Target monthly income in retirement", sub: "Sets your income coverage % target.", type: "opts",
-      opts: [["$2,000/mo","2000"],["$2,500/mo","2500"],["$3,000/mo","3000"],["$4,000/mo","4000"],["$5,000+/mo","5000"]] },
-  ];
-
-  const totalSteps = QI_STEPS.length;
-  const currentStep = QI_STEPS[qiStep] || null;
-
-  function applyQIResults() {
-    const updates = {};
-    if (qiSel[0]) updates.currentAge = qiSel[0];
-    if (qiSel[1]) { /* citizenship handled by field name in full sidebar */ }
-    if (qiSel[2]) updates.monthlyWage = Number(qiSel[2]);
-    if (qiSel[3]) updates.oaBalance   = Number(qiSel[3]);
-    if (qiSel[4]) updates.targetMonthlyIncome = Number(qiSel[4]);
-    if (Object.keys(updates).length > 0) {
-      setInputs(prev => ({ ...prev, ...updates }));
-      showToast("✓ Cockpit inputs applied — projection recalculating");
-    }
-    setQiOpen(false);
-    setQiStep(0);
-    setQiSel({});
-  }
-
-  // Milestone display — top 4 from existing milestones array
-  const displayMilestones = (milestones || []).slice(0, 5);
-
-  // Income stream totals for strategy section
-  const oaDrawMonthly = Number(debouncedInputs.oaDrawdownMonthly) || 0;
-  const srsMonthly    = Math.round((Number(debouncedInputs.srsAnnualContribution) || 0) / 12);
-  const totalIncome   = planPayout + oaDrawMonthly;
-  const incomeGap     = Math.max(0, targetMonthly - totalIncome);
-  const maxBarWidth   = Math.max(targetMonthly, totalIncome) || 1;
-
-  // Gantt timeline segments (fraction of age-35 to age-95 window)
-  const ageSpan = 60; // 35→95
-  function ganttPos(startAge, endAge) {
-    return {
-      left: `${Math.max(0, ((Math.max(startAge, 35) - 35) / ageSpan) * 100)}%`,
-      width: `${Math.min(100, (((Math.min(endAge, 95) - Math.max(startAge, 35)) / ageSpan) * 100))}%`,
-    };
-  }
-  const contribStop = Number(debouncedInputs.contributionStopAge) || 65;
-  const housingStop = Number(debouncedInputs.housingStopAge) || 55;
-  const housingStart = ca;
-
-  // WI slider state — use whatIf values when set, else current inputs
-  const wiPA   = whatIfPayoutAge  !== null ? whatIfPayoutAge  : pa;
-  const wiRSTU = whatIfSaTopup    !== null ? whatIfSaTopup    : (Number(debouncedInputs.vcSaTopup) || 0);
-  const wiSB   = whatIfSalaryBump !== null ? whatIfSalaryBump : 0;
-
-  const fmtK = v => v >= 1000000 ? `$${(v/1000000).toFixed(2)}M` : v >= 1000 ? `$${Math.round(v/1000)}k` : `$${Math.round(v)}`;
-  const fmtMo = v => `$${Math.round(v).toLocaleString()}/mo`;
-
-  return (
-    <div className="cockpit-grid">
-
-      {/* ══ LEFT COLUMN ══ */}
-      <div className="cockpit-col">
-
-        {/* Card 1 — Readiness gauge + sub-scores */}
-        <div className="cockpit-card">
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 4 }}>
-            <svg width="116" height="66" viewBox="0 0 116 66">
-              <path d="M12 60 A46 46 0 0 1 104 60" fill="none" stroke="var(--bg-base)" strokeWidth="10" strokeLinecap="round"/>
-              <path d="M12 60 A46 46 0 0 1 104 60" fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round"
-                strokeDasharray="144.5" strokeDashoffset={`${144.5 * (1 - readScore / 100)}`}/>
-              <text x="58" y="52" textAnchor="middle" fontSize="18" fontWeight="800" fill="var(--text-main)" fontFamily="inherit">{readScore}</text>
-              <text x="58" y="63" textAnchor="middle" fontSize="8" fill="var(--text-muted)" fontFamily="inherit">READINESS</text>
-            </svg>
-            <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20, background: readScore >= 70 ? "rgba(var(--clr-emerald-rgb),0.12)" : readScore >= 40 ? "rgba(var(--clr-amber-rgb),0.12)" : "rgba(var(--clr-red-rgb),0.12)", color: scoreColor, border: `1px solid ${scoreColor}44`, marginTop: 2 }}>{scoreLabel}</span>
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <div className="ck-pb-row">
-              <span className="ck-pb-lbl">FRS coverage</span>
-              <div className="ck-pb-track"><div className="ck-pb-fill" style={{ width: `${frsAtPct}%`, background: frsAtPct >= 100 ? "var(--clr-green)" : frsAtPct >= 60 ? "var(--clr-amber)" : "var(--clr-red)" }}/></div>
-              <span className="ck-pb-pct" style={{ color: frsAtPct >= 100 ? "var(--clr-green)" : frsAtPct >= 60 ? "var(--clr-amber)" : "var(--clr-red)" }}>{frsAtPct}%</span>
-            </div>
-            <div className="ck-pb-row">
-              <span className="ck-pb-lbl">Income cover</span>
-              <div className="ck-pb-track"><div className="ck-pb-fill" style={{ width: `${incCovPct}%`, background: "var(--clr-blue2)" }}/></div>
-              <span className="ck-pb-pct" style={{ color: "var(--clr-blue2)" }}>{incCovPct}%</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2 — Total CPF + FRS target bars */}
-        <div className="cockpit-card">
-          <div className="cockpit-card-lbl">Total CPF at {pa}</div>
-          <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--clr-blue2)", fontVariantNumeric: "tabular-nums" }}>{fmtK(totalAtPA)}</div>
-          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2, marginBottom: 8 }}>{isRealDollars ? "real (inflation-adj)" : "nominal"}</div>
-          <div className="ck-div"><span className="ck-div-lbl">FRS targets at {pa}</span><div className="ck-div-line"/></div>
-          <div className="ck-pb-row">
-            <span className="ck-pb-lbl">BRS {fmtK(brsAtPA)}</span>
-            <div className="ck-pb-track"><div className="ck-pb-fill" style={{ width: `${brsAtPct}%`, background: "var(--clr-green)" }}/></div>
-            <span className="ck-pb-pct" style={{ color: "var(--clr-green)" }}>{brsAtPct >= 100 ? "✓" : `${brsAtPct}%`}</span>
-          </div>
-          <div className="ck-pb-row">
-            <span className="ck-pb-lbl">FRS {fmtK(frsAtPA)}</span>
-            <div className="ck-pb-track"><div className="ck-pb-fill" style={{ width: `${frsAtPct}%`, background: frsMet ? "var(--clr-green)" : "var(--clr-amber)" }}/></div>
-            <span className="ck-pb-pct" style={{ color: frsMet ? "var(--clr-green)" : "var(--clr-amber)" }}>{frsAtPct >= 100 ? "✓" : `${frsAtPct}%`}</span>
-          </div>
-          <div className="ck-pb-row">
-            <span className="ck-pb-lbl">ERS {fmtK(ersAtPA)}</span>
-            <div className="ck-pb-track"><div className="ck-pb-fill" style={{ width: `${ersAtPct}%`, background: ersAtPct >= 100 ? "var(--clr-green)" : "var(--text-subtle)" }}/></div>
-            <span className="ck-pb-pct" style={{ color: "var(--text-muted)" }}>{ersAtPct}%</span>
-          </div>
-        </div>
-
-        {/* Card 3 — Milestone alerts */}
-        <div className="cockpit-card grow">
-          <div className="cockpit-card-lbl" style={{ marginBottom: 4 }}>
-            Milestones
-            {displayMilestones.filter(m => m.severity === "high" || m.type === "alert").length > 0 && (
-              <span style={{ marginLeft: 5, background: "rgba(var(--clr-red-rgb),0.12)", color: "var(--clr-red)", fontSize: 9, padding: "1px 5px", borderRadius: 10, fontWeight: 800 }}>
-                {displayMilestones.filter(m => m.severity === "high" || m.type === "alert").length}
-              </span>
-            )}
-          </div>
-          <div style={{ overflowY: "auto", flex: 1 }}>
-            {displayMilestones.length === 0 && (
-              <div style={{ fontSize: 10, color: "var(--text-muted)", padding: "6px 0" }}>No milestones — run the projection first.</div>
-            )}
-            {displayMilestones.map((m, i) => {
-              const dotColor = m.severity === "high" || m.type === "alert" ? "var(--clr-red)" :
-                               m.severity === "medium" ? "var(--clr-amber)" :
-                               m.type === "achievement" ? "var(--clr-green)" : "var(--clr-blue2)";
-              return (
-                <div key={i} className="ck-ms-row">
-                  <div className="ck-ms-dot" style={{ background: dotColor }}/>
-                  <div>
-                    <div className="ck-ms-age">Age {m.age}{m.label ? ` · ${m.label}` : ""}</div>
-                    <div className="ck-ms-text">{m.text || m.description || ""}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-      </div>{/* /left col */}
-
-      {/* ══ CENTRE COLUMN ══ */}
-      <div className="cockpit-col">
-
-        {/* Card 4 — Accumulation chart: flex:3 so chart gets 75% of the available flex space;
-             What-if card below gets flex:1 (25%). Without this the chart consumed 100%. */}
-        <div className="cockpit-card grow" style={{ flex: 3 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <div className="cockpit-card-lbl" style={{ margin: 0 }}>Accumulation projection</div>
-            <div style={{ display: "flex", gap: 10 }}>
-              {[["RA / SA","#b794f4"],["OA","#63b3ed"],["MA","#f6ad55"]].map(([l,c]) => (
-                <span key={l} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, color: "var(--text-muted)" }}>
-                  <span style={{ width: 10, height: 3, background: c, borderRadius: 2, display: "inline-block" }}/>
-                  {l}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="ck-chart-area">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="ckRA" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#b794f4" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#b794f4" stopOpacity={0.02}/>
-                  </linearGradient>
-                  <linearGradient id="ckOA" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#63b3ed" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#63b3ed" stopOpacity={0.02}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" strokeOpacity={0.5}/>
-                <XAxis dataKey="age" tick={{ fontSize: 9, fill: "var(--text-muted)" }} tickLine={false} axisLine={false}/>
-                <YAxis tickFormatter={v => fmtK(v)} tick={{ fontSize: 9, fill: "var(--text-muted)" }} tickLine={false} axisLine={false} width={44}/>
-                <Tooltip
-                  contentStyle={STYLES.chartTooltip}
-                  itemStyle={STYLES.chartTooltipItem}
-                  labelStyle={STYLES.chartTooltipLabel}
-                  formatter={(v, name) => [fmtK(v), name]}
-                  labelFormatter={v => `Age ${v}`}
-                  wrapperStyle={STYLES.chartTooltipWrapper}
-                />
-                <ReferenceLine x={55} stroke="var(--border-strong)" strokeDasharray="3 3" label={{ value: "55", fontSize: 8, fill: "var(--text-subtle)" }}/>
-                <ReferenceLine x={pa} stroke="var(--clr-green)" strokeDasharray="3 3" label={{ value: `${pa}`, fontSize: 8, fill: "var(--clr-green)" }}/>
-                <Area type="monotone" dataKey="ra" stackId="1" stroke="#b794f4" strokeWidth={1.5} fill="url(#ckRA)" name="RA/SA"/>
-                <Area type="monotone" dataKey="oa" stackId="2" stroke="#63b3ed" strokeWidth={1.5} fill="url(#ckOA)" name="OA"/>
-                <Area type="monotone" dataKey="ma" stroke="#f6ad55" strokeWidth={1.2} fill="none" strokeDasharray="4 3" name="MA"/>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Card 5 — KPI mini strip */}
-        <div className="cockpit-kpi-row">
-          {[
-            { label: "Total contributions", value: fmtK((Number(debouncedInputs.oaBalance)||0)+(Number(debouncedInputs.saBalance)||0)+(Number(debouncedInputs.maBalance)||0)), color: "var(--clr-blue2)" },
-            { label: `Net CPF at ${pa}`, value: fmtK(totalAtPA), color: "var(--clr-green)" },
-            { label: "RSTU tax saving/yr", value: `$${Math.round(Math.min(Number(debouncedInputs.vcSaTopup)||0, 8000) * 0.22).toLocaleString()}`, color: "var(--clr-amber)" },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="cockpit-kpi-mini">
-              <div style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>{label}</div>
-              <div style={{ fontSize: 14, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums", color }}>{value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Card 6 — What-if sliders: cockpit-card grow (flex:1) so it shares space with the chart
-             (flex:3) above — chart 75%, what-if 25%. Was flexShrink:0 which let chart take 100%. */}
-        <div className="cockpit-card grow">
-          <div className="cockpit-card-lbl">What-if explorer</div>
-          <div className="ck-slider-row">
-            <div className="ck-slider-hdr"><span>Payout age</span><span>{wiPA}</span></div>
-            <input type="range" className="ck-range" min={60} max={70} step={1} value={wiPA}
-              onChange={e => setWhatIfPayoutAge(Number(e.target.value))}/>
-          </div>
-          <div className="ck-slider-row">
-            <div className="ck-slider-hdr"><span>Annual RSTU top-up</span><span>${wiRSTU.toLocaleString()}</span></div>
-            <input type="range" className="ck-range" min={0} max={15300} step={100} value={wiRSTU}
-              onChange={e => setWhatIfSaTopup(Number(e.target.value))}/>
-          </div>
-          <div className="ck-slider-row" style={{ marginBottom: 0 }}>
-            <div className="ck-slider-hdr"><span>Salary bump</span><span>${(wiSB).toLocaleString()}/yr</span></div>
-            <input type="range" className="ck-range" min={0} max={30000} step={500} value={wiSB}
-              onChange={e => setWhatIfSalaryBump(Number(e.target.value))}/>
-          </div>
-          {(whatIfPayoutAge !== null || whatIfSaTopup !== null || whatIfSalaryBump !== null) && (
-            <button onClick={() => { setWhatIfPayoutAge(null); setWhatIfSaTopup(null); setWhatIfSalaryBump(null); }}
-              style={{ marginTop: 6, fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "var(--bg-muted)", color: "var(--text-muted)", cursor: "pointer" }}>
-              ↺ Reset sliders
-            </button>
-          )}
-        </div>
-
-      </div>{/* /centre col */}
-
-      {/* ══ RIGHT COLUMN ══ */}
-      <div className="cockpit-col">
-
-        {/* Card 7 — CPF LIFE monthly payout + plan selector */}
-        <div className="cockpit-card">
-          <div className="cockpit-card-lbl">Monthly CPF LIFE payout</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "var(--clr-green)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
-            {fmtMo(lifePlans?.[highlightPlan]?.monthly || 0)}
-          </div>
-          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2, marginBottom: 8 }}>
-            {(highlightPlan || "standard").charAt(0).toUpperCase() + (highlightPlan || "standard").slice(1)} plan · starts age {pa}
-          </div>
-          {[["standard","Standard"],["escalating","Escalating"],["basic","Basic"]].map(([key, label]) => {
-            const mo = lifePlans?.[key]?.monthly || 0;
-            const isActive = (highlightPlan || "standard") === key;
-            return (
-              <div key={key} className={`ck-plan-row${isActive ? " ck-active" : ""}`}
-                onClick={() => setHighlightPlan(key)}>
-                <span style={{ fontSize: 11, fontWeight: 700 }}>{label}</span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: isActive ? "var(--clr-blue2)" : "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{fmtMo(mo)}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Card 8 — Account balances at payout age */}
-        <div className="cockpit-card">
-          <div className="cockpit-card-lbl">Account balances at {pa}</div>
-          {[
-            { name: "OA", val: oaAtPA, color: "#63b3ed" },
-            { name: "MA", val: maAtPA, color: "#f6ad55" },
-            { name: "RA", val: raAtPA, color: "#b794f4" },
-          ].map(({ name, val, color }) => {
-            const pct = totalAtPA > 0 ? (val / totalAtPA) * 100 : 0;
-            return (
-              <div key={name} className="ck-acct-row">
-                <span className="ck-acct-nm">{name}</span>
-                <div className="ck-acct-tk"><div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 3 }}/></div>
-                <span className="ck-acct-val" style={{ color }}>{fmtK(val)}</span>
-              </div>
-            );
-          })}
-          {/* Stacked segment bar */}
-          {totalAtPA > 0 && (
-            <div style={{ display: "flex", height: 12, borderRadius: 3, overflow: "hidden", marginTop: 4 }}>
-              <div style={{ width: `${(oaAtPA/totalAtPA)*100}%`, background: "#63b3ed", opacity: 0.75 }}/>
-              <div style={{ width: `${(maAtPA/totalAtPA)*100}%`, background: "#f6ad55", opacity: 0.75 }}/>
-              <div style={{ width: `${(raAtPA/totalAtPA)*100}%`, background: "#b794f4", opacity: 0.75 }}/>
-            </div>
-          )}
-        </div>
-
-        {/* Card 9 — Income strategy + Gantt */}
-        <div className="cockpit-card grow">
-          <div className="cockpit-card-lbl">Retirement income strategy</div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 8 }}>
-            Target {fmtMo(targetMonthly)} · Age {pa}–95
-          </div>
-          {[
-            { name: "CPF LIFE", val: planPayout, color: "var(--clr-blue2)" },
-            { name: "OA drawdown", val: oaDrawMonthly, color: "var(--clr-green)" },
-            { name: "SRS est.", val: srsMonthly, color: "var(--clr-purple)" },
-          ].map(({ name, val, color }) => (
-            <div key={name} className="ck-inc-row">
-              <span className="ck-inc-nm">{name}</span>
-              <div className="ck-inc-tk">
-                <div className="ck-inc-fill" style={{ width: `${(val / maxBarWidth) * 100}%`, background: color }}/>
-              </div>
-              <span className="ck-inc-val" style={{ color }}>{val > 0 ? `$${val.toLocaleString()}` : "—"}</span>
-            </div>
-          ))}
-          {incomeGap > 0 ? (
-            <div style={{ padding: "4px 7px", borderRadius: 6, background: "rgba(var(--clr-red-rgb),0.08)", border: "1px solid rgba(var(--clr-red-rgb),0.2)", fontSize: 10, color: "var(--clr-red)", fontWeight: 700, marginTop: 2 }}>
-              Gap: ${incomeGap.toLocaleString()}/mo — set OA drawdown in sidebar
-            </div>
-          ) : totalIncome > 0 ? (
-            <div style={{ padding: "4px 7px", borderRadius: 6, background: "rgba(var(--clr-emerald-rgb),0.08)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", fontSize: 10, color: "var(--clr-green)", fontWeight: 700, marginTop: 2 }}>
-              ✓ Target met · {fmtMo(targetMonthly)} covered
-            </div>
-          ) : null}
-
-          <div className="ck-div" style={{ marginTop: 10 }}><span className="ck-div-lbl">Contribution timeline</span><div className="ck-div-line"/></div>
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-            {[
-              { name: "Mandatory", start: ca, end: contribStop, color: "var(--clr-blue2)" },
-              { name: "RSTU/VC", start: ca, end: Math.min(55, contribStop), color: "var(--clr-green)" },
-              { name: "Housing OA", start: housingStart, end: housingStop, color: "var(--clr-amber)" },
-              { name: "CPF LIFE", start: pa, end: 95, color: "var(--clr-purple)" },
-            ].map(({ name, start, end, color }) => {
-              const pos = ganttPos(start, end);
-              return (
-                <div key={name} className="ck-gantt-row">
-                  <span className="ck-gantt-nm">{name}</span>
-                  <div className="ck-gantt-tk">
-                    <div className="ck-gantt-bar" style={{ ...pos, background: color }}/>
-                  </div>
-                </div>
-              );
-            })}
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "var(--text-muted)", marginTop: 2, paddingLeft: 2 }}>
-              {[35, 45, 55, 65, 75, 95].map(a => <span key={a}>{a}</span>)}
-            </div>
-          </div>
-        </div>
-
-      </div>{/* /right col */}
-
-      {/* ══ QUICK-INPUT OVERLAY ══ */}
-      {qiOpen && (
-        <div className="qi-overlay" onClick={e => { if (e.target === e.currentTarget) { setQiOpen(false); }}}>
-          <div className="qi-panel">
-            <div className="qi-hdr">
-              <span style={{ fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", gap: 7 }}>
-                Quick Input
-                <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-muted)" }}>{qiStep + 1} / {totalSteps}</span>
-              </span>
-              <button onClick={() => setQiOpen(false)}
-                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 3px", fontFamily: "inherit" }}>✕</button>
-            </div>
-            <div className="qi-steps-row">
-              {QI_STEPS.map((_, i) => (
-                <div key={i} className={`qi-sdot${i < qiStep ? " done" : i === qiStep ? " active" : ""}`}/>
-              ))}
-            </div>
-            {qiStep < totalSteps ? (
-              <div className="qi-body">
-                <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4, color: "var(--text-main)" }}>{currentStep.q}</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 10, lineHeight: 1.5 }}>{currentStep.sub}</div>
-                {currentStep.type === "opts" ? (
-                  <div>
-                    {currentStep.opts.map(([label, val]) => (
-                      <button key={val} className={`qi-opt${qiSel[qiStep] === val ? " qi-sel" : ""}`}
-                        onClick={() => setQiSel(prev => ({ ...prev, [qiStep]: val }))}>
-                        {label}
-                        {qiSel[qiStep] === val && <span style={{ fontSize: 11 }}>✓</span>}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <input className="qi-input-field" type="number" placeholder={currentStep.placeholder}
-                    value={qiSel[qiStep] || ""}
-                    onChange={e => setQiSel(prev => ({ ...prev, [qiStep]: e.target.value }))}/>
-                )}
-                <div className="qi-nav-row">
-                  {qiStep > 0
-                    ? <button onClick={() => setQiStep(s => s - 1)}>← Back</button>
-                    : <button onClick={() => setQiOpen(false)}>Cancel</button>
-                  }
-                  <button className="qi-primary"
-                    onClick={() => {
-                      if (qiStep < totalSteps - 1) setQiStep(s => s + 1);
-                      else applyQIResults();
-                    }}>
-                    {qiStep < totalSteps - 1 ? "Next →" : "Apply ✓"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ padding: "20px 14px", textAlign: "center" }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(var(--clr-emerald-rgb),0.12)", border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
-                  <CheckCircle2 style={{ width: 18, height: 18, color: "var(--clr-green)" }}/>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 3 }}>Profile updated</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 12 }}>Projection recalculates automatically.</div>
-                <button onClick={applyQIResults} style={{ padding: "6px 16px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--bg-muted)", fontSize: 11, cursor: "pointer", color: "var(--text-main)", fontFamily: "inherit", fontWeight: 700 }}>Done</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-    </div>/* /cockpit-grid */
-  );
-}
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
@@ -5463,15 +4991,16 @@ export default function App() {
   const [tabsMenuPos, setTabsMenuPos] = useState({ top: 0, right: 16 }); // fixed coords computed at open-time
   const [desktopMode, setDesktopMode] = useState("auto");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [cockpitMode, setCockpitMode] = useState(false);
-  // Quick-Input wizard state for cockpit mode
-  const [qiOpen, setQiOpen]   = useState(false);
-  const [qiStep, setQiStep]   = useState(0);
-  const [qiSel,  setQiSel]    = useState({});
   const [showPresets, setShowPresets] = useState(false);
   const [tableSubTab, setTableSubTab] = useState("projection");
   const [showDataTableGuide, setShowDataTableGuide] = useState(false);
   const [showWisEligibility, setShowWisEligibility] = useState(false); // WIS eligibility panel toggle — must be top-level (Rules of Hooks)
+  // Goal Simulator state (Strategy tab → Goal sub-tab)
+  const [goalStratTab, setGoalStratTab] = useState("goal");           // "goal" | "roadmap"
+  const [goalResult,   setGoalResult]   = useState(null);             // solver output object
+  const [goalSolving,  setGoalSolving]  = useState(false);            // spinner while computing
+  const [goalApplied,  setGoalApplied]  = useState(null);             // "A"|"B"|"C"|null last-applied strategy
+  const [preApplySnapshot, setPreApplySnapshot] = useState(null);    // { vcSaTopup, vc3aCash } captured before last Apply — enables per-strategy Revert without touching other inputs
   // BUG-2 fix: Life Events panel state hoisted from IIFE to top-level useState.
   // Calling React.useState inside an IIFE embedded in JSX violates Rules of Hooks:
   // the hook call count changes when the IIFE is conditionally skipped, React's
@@ -5576,17 +5105,26 @@ export default function App() {
   // Phase 1 — Readiness tab: auto-collapse sidebar on entry, restore on exit.
   // Uses a ref to remember the pre-readiness open state so toggling the sidebar
   // manually on other tabs (hide/show) is still respected after leaving Readiness.
+  // Mobile/tablet (≤1024px): always collapse when switching to any tab — the KPI
+  // strip and tab content should be unobstructed; user re-opens via the Inputs bar.
+  // Desktop (>1024px): restore previous open state when leaving Readiness.
   const sidebarWasOpenRef = useRef(true);
   useEffect(() => {
     if (activeTab === "readiness") {
       sidebarWasOpenRef.current = sidebarOpen; // remember current state
       setSidebarOpen(false);                   // collapse for max dashboard width
+    } else if (window.innerWidth <= 1024) {
+      setSidebarOpen(false);                   // mobile/tablet: always hide inputs on tab switch
     } else if (sidebarWasOpenRef.current) {
-      setSidebarOpen(true);                    // restore if it was open before
+      setSidebarOpen(true);                    // desktop only: restore if it was open before
     }
     // sidebarOpen intentionally omitted from deps — we only want to fire on tab transitions
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // Goal Simulator — clear "Applied" badge and snapshot when user manually edits the levers after applying a strategy.
+  // This ensures the Revert button doesn't linger with a stale snapshot once the user has taken ownership of the values.
+  useEffect(() => { setGoalApplied(null); setPreApplySnapshot(null); }, [inputs.vcSaTopup, inputs.vc3aCash]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Advanced Settings gate — auto-expand if imported/shared profile has advanced data
   useEffect(() => {
@@ -6758,6 +6296,99 @@ export default function App() {
     });
   };
 
+  // ─── Goal Simulator Solver ────────────────────────────────────────────────
+  // Binary-searches runProjectionEngine for the minimum annual contribution
+  // required via each lever (RSTU, VC3A, blended) to hit inputs.goalTargetCPF
+  // at the member's payout age.  Called only on button click — never reactive.
+  // CPFIS excluded: engine models CPFIS as an OA outflow only; returns are not
+  // modelled, so CPFIS cannot increase CPF totals.
+  const solveGoal = () => {
+    const targetAmt = Number(inputs.goalTargetCPF) || 0;
+    if (targetAmt <= 0) return;
+    setGoalSolving(true);
+    setGoalResult(null);
+
+    // Defer one tick so the spinner renders before the synchronous compute
+    setTimeout(() => {
+      try {
+        const pa        = Number(debouncedInputs.payoutAge) || 65;
+        const baseInp   = { ...debouncedInputs };
+        const RSTU_CAP  = 8000;
+        const VC3A_CAP  = 37740;
+        const ITER      = 30; // binary search iterations — precision ~$0.008 on any range
+
+        // Helper: run engine; return total CPF (OA+SA/RA+MA) at payout age
+        const getTotal = (overrides) => {
+          const rows = runProjectionEngine({ ...baseInp, ...overrides });
+          const row  = rows.find(r => r.age === pa) || {};
+          return (row.oa || 0) + (row.sa || 0) + (row.ra || 0) + (row.ma || 0);
+        };
+
+        const baseline = getTotal({});
+
+        // Binary search helper — finds minimum lever value so getTotal >= target
+        const bsearch = (key, lo, hi, extraOverrides = {}) => {
+          let L = lo, H = hi;
+          if (getTotal({ ...extraOverrides, [key]: H }) < targetAmt) return null; // infeasible
+          for (let i = 0; i < ITER; i++) {
+            const mid = (L + H) / 2;
+            if (getTotal({ ...extraOverrides, [key]: mid }) >= targetAmt) H = mid;
+            else L = mid;
+          }
+          return Math.ceil(H / 100) * 100; // round up to nearest $100
+        };
+
+        // ── Strategy A: RSTU alone ──────────────────────────────────────────
+        const curRSTU     = Number(baseInp.vcSaTopup) || 0;
+        const maxTotalA   = getTotal({ vcSaTopup: RSTU_CAP });
+        const rstuNeeded  = bsearch("vcSaTopup", curRSTU, RSTU_CAP);
+        const stratA = {
+          lever: "vcSaTopup", cap: RSTU_CAP, maxTotal: maxTotalA,
+          needed: rstuNeeded,
+          feasible: rstuNeeded !== null,
+          totalCash: rstuNeeded,
+        };
+
+        // ── Strategy B: VC3A alone ──────────────────────────────────────────
+        const curVC3A     = Number(baseInp.vc3aCash) || 0;
+        const maxTotalB   = getTotal({ vc3aCash: VC3A_CAP });
+        const vc3aNeeded  = bsearch("vc3aCash", curVC3A, VC3A_CAP);
+        const stratB = {
+          lever: "vc3aCash", cap: VC3A_CAP, maxTotal: maxTotalB,
+          needed: vc3aNeeded,
+          feasible: vc3aNeeded !== null,
+          totalCash: vc3aNeeded,
+        };
+
+        // ── Strategy C: Blended — max RSTU first, fill gap with VC3A ───────
+        const maxTotalC   = getTotal({ vcSaTopup: RSTU_CAP, vc3aCash: VC3A_CAP });
+        let stratC;
+        if (maxTotalC < targetAmt) {
+          // Even at full RSTU + full VC3A the target is unreachable
+          stratC = { feasible: false, rstu: RSTU_CAP, vc3a: VC3A_CAP, totalCash: RSTU_CAP + VC3A_CAP, maxTotal: maxTotalC };
+        } else {
+          // With full RSTU locked, binary search VC3A for the remainder
+          const vc3aForBlend = bsearch("vc3aCash", 0, VC3A_CAP, { vcSaTopup: RSTU_CAP }) || 0;
+          stratC = {
+            feasible: true,
+            rstu: RSTU_CAP,
+            vc3a: vc3aForBlend,
+            totalCash: RSTU_CAP + vc3aForBlend,
+          };
+        }
+
+        // ── Sensitivity: how much does $1,000/yr add via each lever? ────────
+        const sensitivityRSTU = getTotal({ vcSaTopup: curRSTU + 1000 }) - baseline;
+        const sensitivityVC3A = getTotal({ vc3aCash:  curVC3A + 1000 }) - baseline;
+
+        setGoalResult({ baseline, targetAmt, gap: targetAmt - baseline, stratA, stratB, stratC, sensitivityRSTU, sensitivityVC3A });
+      } finally {
+        setGoalSolving(false);
+      }
+    }, 20);
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const handleReset = () => {
     setConfirmModal({
       message: "Reset all inputs and clear all scenarios, What-If, and comparison data?",
@@ -6786,6 +6417,35 @@ export default function App() {
         setWhatIfOaDrawdown(null);
         setWhatIfSrsContrib(null);
         setWhatIfPrivGrowth(null);
+        // Goal Simulator — clear stale solver output and sub-tab position.
+        // goalResult must be nulled explicitly: it is NOT derived from inputs,
+        // so resetting inputs alone leaves the old computed result visible on
+        // the Strategy tab, showing wrong baseline/gap/strategy figures against
+        // the fresh default profile. goalApplied is also cleared here directly
+        // (belt-and-suspenders — the useEffect on vcSaTopup/vc3aCash only fires
+        // when those fields were non-zero before reset, so explicit clear is safer).
+        setGoalResult(null);
+        setGoalStratTab("goal");
+        setGoalSolving(false);
+        setGoalApplied(null);
+        setPreApplySnapshot(null);
+        // Life Events form — clear any in-progress partial edits.
+        // inputs.lifeEvents is already reset to [] via DEFAULT_INPUTS above,
+        // but leFormState holds the unsaved form fields independently and must
+        // be cleared separately, otherwise a ghost form appears over empty events.
+        setLeFormState({});
+        // Gap alert — re-enable so it evaluates fresh against the default profile.
+        // If dismissed before reset, it would never reappear for the new inputs.
+        setGapAlertDismissed(false);
+        // Chart view state — reset all toggles so the user sees a clean chart
+        // immediately after reset rather than inheriting a prior display mode.
+        setHighlightPlan("standard");
+        setPrimaryLifePlan("standard");
+        setSpouseLifePlan("standard");
+        setViewMode("bequest");
+        setIsRealDollars(false);
+        setShowMonteCarlo(false);
+        setShowBaseline(false);
         setActiveTab("readiness");
         showToast("All inputs, scenarios, and What-If data reset to defaults.");
       }
@@ -11134,206 +10794,6 @@ ${milestoneSnapshotHtml}
         .cpf-tab-content::-webkit-scrollbar { width: 5px; }
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
         .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
-
-        /* ═══════════════════════════════════════════════════════════════
-           COCKPIT MODE — full-viewport single-page dashboard
-           Activated by data-cockpit="true" on cpf-page-wrap.
-           Desktop (≥1025px) only; tablet/mobile never enter cockpit.
-           ═══════════════════════════════════════════════════════════════ */
-        @media (min-width: 1025px) {
-          /* NOTE: data-cockpit is set on cpf-layout, not cpf-page-wrap, so this selector
-             never matches. Kept for documentation only — cpf-page-wrap padding is
-             irrelevant to the cockpit grid which lives entirely inside cpf-layout. */
-          .cpf-page-wrap[data-cockpit="true"] {
-            max-width: 100% !important;
-            padding: 0 !important;
-          }
-          /* Hide sidebar + tabs-kpi-header; cockpit provides its own card layout */
-          .cpf-layout[data-cockpit="true"] {
-            grid-template-columns: 1fr !important;
-            grid-template-rows: 1fr !important;   /* explicit row so grid items can resolve height:100% */
-            align-items: stretch !important;       /* override base align-items:start so cpf-main-wrap fills the cell */
-            gap: 0 !important;
-            padding: 0 !important;
-            height: 100% !important;              /* let the flex parent (theme-dark/light) determine this; was: calc(100vh - 40px - 42px) */
-            overflow: hidden !important;
-          }
-          .cpf-layout[data-cockpit="true"] .cpf-sidebar-wrap { display: none !important; }
-          .cpf-layout[data-cockpit="true"] .cpf-tabs-kpi-header .kpi-strip-wrap { display: none !important; }
-          /* Main wrap fills the single column */
-          .cpf-layout[data-cockpit="true"] .cpf-main-wrap {
-            height: 100% !important;
-            overflow: hidden !important;
-          }
-          /* Tab content area becomes the cockpit shell */
-          .cpf-layout[data-cockpit="true"] .cpf-tab-content {
-            padding: 0 !important;
-            gap: 0 !important;
-            overflow: hidden !important;
-            flex: 1 !important;        /* fill remaining height after cpf-tabs-kpi-header; was: height:100% which overflowed the flex column */
-            min-height: 0 !important;  /* required: allows flex:1 item to shrink below its content size */
-            display: block !important;
-          }
-          /* 3-column cockpit grid — fluid side columns so the grid adapts to any
-             desktop viewport (≥1025px) without overflowing or leaving dead space.
-             minmax(185px,220px): left never narrower than 185px or wider than 220px;
-             minmax(200px,235px): right similarly bounded; middle takes the rest. */
-          .cockpit-grid {
-            display: grid;
-            grid-template-columns: minmax(185px, 220px) 1fr minmax(200px, 235px);
-            gap: 6px;
-            padding: 6px;
-            height: 100%;
-            overflow: hidden;
-            box-sizing: border-box;
-            background: var(--bg-base);
-          }
-          .cockpit-col {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            min-width: 0;
-            height: 100%;
-            overflow: hidden;
-          }
-          /* Cards inside cockpit */
-          .cockpit-card {
-            background: var(--bg-panel);
-            border: 1px solid var(--border-subtle);
-            border-radius: 10px;
-            padding: 9px 11px;
-            flex-shrink: 0;
-          }
-          .cockpit-card.grow {
-            flex: 1;
-            min-height: 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-          }
-          .cockpit-card-lbl {
-            font-size: 9px;
-            font-weight: 800;
-            color: var(--text-muted);
-            letter-spacing: 0.07em;
-            text-transform: uppercase;
-            margin-bottom: 6px;
-          }
-          /* KPI row */
-          .cockpit-kpi-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 4px;
-            flex-shrink: 0;
-          }
-          .cockpit-kpi-mini {
-            background: var(--bg-muted);
-            border: 1px solid var(--border-subtle);
-            border-radius: 8px;
-            padding: 7px 9px;
-          }
-          /* Prog bars */
-          .ck-pb-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-          .ck-pb-lbl  { font-size: 10px; color: var(--text-muted); width: 78px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-          .ck-pb-track{ flex: 1; height: 5px; background: var(--bg-base); border-radius: 3px; overflow: hidden; }
-          .ck-pb-fill { height: 100%; border-radius: 3px; }
-          .ck-pb-pct  { font-size: 10px; font-weight: 700; width: 30px; text-align: right; flex-shrink: 0; }
-          /* Milestone rows */
-          .ck-ms-row   { display: flex; gap: 7px; align-items: flex-start; padding: 5px 0; border-bottom: 1px solid var(--border-subtle); }
-          .ck-ms-row:last-child { border-bottom: none; }
-          .ck-ms-dot   { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
-          .ck-ms-age   { font-size: 10px; font-weight: 800; color: var(--text-main); line-height: 1.3; }
-          .ck-ms-text  { font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-top: 1px; }
-          /* Account bars */
-          .ck-acct-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-          .ck-acct-nm  { font-size: 10px; color: var(--text-muted); width: 22px; flex-shrink: 0; }
-          .ck-acct-tk  { flex: 1; height: 6px; background: var(--bg-base); border-radius: 3px; overflow: hidden; }
-          .ck-acct-val { font-size: 10px; font-weight: 700; width: 50px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-          /* Income bars */
-          .ck-inc-row  { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-          .ck-inc-nm   { font-size: 10px; color: var(--text-muted); width: 70px; flex-shrink: 0; }
-          .ck-inc-tk   { flex: 1; height: 13px; background: var(--bg-base); border-radius: 3px; overflow: hidden; }
-          .ck-inc-fill { height: 100%; border-radius: 3px; opacity: 0.75; }
-          .ck-inc-val  { font-size: 10px; font-weight: 700; width: 48px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-          /* Plan rows */
-          .ck-plan-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border-subtle); cursor: pointer; margin-bottom: 4px; transition: all 0.12s; }
-          .ck-plan-row.ck-active { border-color: var(--clr-blue2); background: rgba(var(--clr-blue2-rgb),0.08); }
-          .ck-plan-row:hover:not(.ck-active) { background: var(--bg-muted); }
-          /* Sliders */
-          .ck-slider-row { margin-bottom: 7px; }
-          .ck-slider-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
-          .ck-slider-hdr span:first-child { font-size: 10px; color: var(--text-muted); }
-          .ck-slider-hdr span:last-child  { font-size: 10px; font-weight: 700; color: var(--text-main); font-variant-numeric: tabular-nums; }
-          input.ck-range { width: 100%; height: 4px; accent-color: var(--clr-blue2); cursor: pointer; }
-          /* Gantt mini */
-          .ck-gantt-row  { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-          .ck-gantt-nm   { font-size: 9px; color: var(--text-muted); width: 72px; flex-shrink: 0; }
-          .ck-gantt-tk   { flex: 1; height: 9px; background: var(--bg-base); border-radius: 2px; position: relative; overflow: hidden; }
-          .ck-gantt-bar  { position: absolute; height: 100%; border-radius: 2px; opacity: 0.7; }
-          /* Divider */
-          .ck-div { display: flex; align-items: center; gap: 6px; margin: 7px 0 5px; }
-          .ck-div-lbl { font-size: 9px; font-weight: 800; color: var(--text-subtle); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
-          .ck-div-line{ flex: 1; height: 1px; background: var(--border-subtle); }
-          /* Chart fill area inside cockpit-card.grow */
-          .ck-chart-area { flex: 1; min-height: 0; position: relative; }
-          /* Quick-Input overlay */
-          .qi-overlay {
-            position: fixed; inset: 0;
-            background: rgba(0,0,0,0.45);
-            z-index: 200;
-            display: flex; align-items: flex-start; justify-content: flex-end;
-            padding: 44px 14px 0; /* below nav+tabstrip */
-          }
-          .qi-panel {
-            background: var(--bg-panel);
-            border: 1px solid var(--border-strong);
-            border-radius: 14px;
-            width: 290px;
-            overflow: hidden;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.45);
-          }
-          .qi-hdr {
-            padding: 10px 14px 8px;
-            border-bottom: 1px solid var(--border-subtle);
-            display: flex; align-items: center; justify-content: space-between;
-          }
-          .qi-steps-row { display: flex; gap: 3px; padding: 8px 14px; }
-          .qi-sdot { height: 3px; flex: 1; border-radius: 2px; background: var(--bg-muted); transition: background 0.2s; }
-          .qi-sdot.done   { background: var(--clr-green); }
-          .qi-sdot.active { background: var(--clr-blue2); }
-          .qi-body { padding: 10px 14px 14px; }
-          .qi-opt {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border-subtle);
-            cursor: pointer; font-size: 11px; width: 100%; text-align: left;
-            background: transparent; color: var(--text-main); font-family: inherit;
-            margin-bottom: 4px; transition: all 0.1s;
-          }
-          .qi-opt:hover   { background: var(--bg-muted); }
-          .qi-opt.qi-sel  { border-color: var(--clr-blue2); background: rgba(var(--clr-blue2-rgb),0.1); color: var(--clr-blue2); }
-          .qi-input-field {
-            width: 100%; padding: 7px 10px; border-radius: 8px;
-            border: 1px solid var(--border-strong); background: var(--bg-input);
-            font-size: 12px; color: var(--text-main); font-family: inherit; outline: none;
-          }
-          .qi-input-field:focus { border-color: var(--clr-blue2); }
-          .qi-nav-row { display: flex; gap: 6px; margin-top: 10px; }
-          .qi-nav-row button {
-            flex: 1; padding: 6px; border-radius: 8px; border: 1px solid var(--border-strong);
-            font-size: 11px; cursor: pointer; background: var(--bg-muted); color: var(--text-main);
-            font-family: inherit; font-weight: 700; transition: background 0.12s;
-          }
-          .qi-nav-row button.qi-primary {
-            background: var(--clr-blue2); color: #fff; border-color: var(--clr-blue2);
-          }
-          .qi-nav-row button:hover:not(.qi-primary) { background: var(--bg-base); }
-          /* Cockpit mode: hide the recalculating bar's container since we replaced the KPI strip */
-          .cpf-layout[data-cockpit="true"] .cpf-tabs-kpi-header {
-            border: none !important;
-            box-shadow: none !important;
-          }
-        }
-
         /* ─── DESKTOP VIEWPORT MODES (HD and below — unchanged) ─────── */
         .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 0; }
         @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 0; } }
@@ -11851,11 +11311,22 @@ ${milestoneSnapshotHtml}
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
-          /* KPI-only strip inside cpf-main-wrap — no longer needs its own sticky */
-          .cpf-tabs-kpi-header { position: static; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           /* Fix 1: when inputs sidebar is open on tablet, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
+          /* Fix M-KPI-1 (tablet): collapse sidebar-wrap to 0 when inputs are hidden —
+             eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
+          .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
+            height: 0 !important; padding: 0 !important; overflow: hidden !important;
+            border: none !important; min-height: 0 !important;
+          }
+          /* Fix M-KPI-2 (tablet): KPI strip — hidden when input panel is open (would render
+             below all input fields due to DOM order sidebar→main-wrap); sticky at the correct
+             offset (header 48 + tab strip 44 + input-params-bar 44 = 136px) when inputs closed */
+          .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
+          .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
+            position: sticky !important; top: 136px !important; z-index: 40 !important;
+          }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           /* Logo alignment: match header left/right padding to sidebar-inner (14px) */
           .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
@@ -11942,11 +11413,23 @@ ${milestoneSnapshotHtml}
           /* Show Share/Report/etc in the gear dropdown on mobile */
           .cpf-gear-mobile-share { display: contents !important; }
           /* cpf-tabs-hamburger intentionally not shown — tab strip is horizontally scrollable */
-          .cpf-tabs-kpi-header { position: static; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           /* Fix 1: when inputs sidebar is open on mobile, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
+          /* Fix M-KPI-1 (mobile): collapse sidebar-wrap to 0 when inputs are hidden —
+             eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
+          .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
+            height: 0 !important; padding: 0 !important; overflow: hidden !important;
+            border: none !important; min-height: 0 !important;
+          }
+          /* Fix M-KPI-2 (mobile): KPI strip — hidden when input panel is open (DOM order puts it
+             below all input fields: sidebar→main-wrap); sticky at correct offset
+             (header 48 + tab strip 44 + input-params-bar 44 = 136px) when inputs closed */
+          .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
+          .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
+            position: sticky !important; top: 136px !important; z-index: 40 !important;
+          }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
           .rg-5, .rg-4, .rg-3, .rg-2 { grid-template-columns: 1fr 1fr !important; }
@@ -12046,14 +11529,22 @@ ${milestoneSnapshotHtml}
           .cpf-mobile-top-spacer { display: block !important; height: 48px; flex-shrink: 0; }
           /* Pin Input Parameters bar below fixed header + tab strip */
           .cpf-input-params-bar { position: fixed !important; top: 92px !important; left: 0 !important; right: 0 !important; }
-          /* Push sidebar sections below the fixed params bar (~44px) */
-          .cpf-sidebar-wrap { padding-top: 44px; }
+          /* Push sidebar sections below the fixed params bar (~44px) — only when open */
+          .cpf-layout[data-sidebar-open="true"] .cpf-sidebar-wrap { padding-top: 44px; }
+          .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
+            height: 0 !important; padding: 0 !important; overflow: hidden !important;
+            border: none !important; min-height: 0 !important;
+          }
+          /* KPI strip: hidden when inputs open, sticky below stacked bars when closed */
+          .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
+          .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
+            position: sticky !important; top: 136px !important; z-index: 40 !important;
+          }
           /* Shrink logo on tiny screens */
           .cpf-logo-text { font-size: 14px !important; }
           .cpf-logo-sub  { display: none !important; }
           /* Full-width tab strip: fixed header → sticky at top:48px */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
-          .cpf-tabs-kpi-header { position: static; }
           .desktop-only { display: none !important; }
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
           #docs-sticky-nav { top: 136px !important; }
@@ -12734,10 +12225,6 @@ ${milestoneSnapshotHtml}
                     onClick={() => { setSidebarOpen(v => !v); setShowSettingsMenu(false); }}>
                     <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Input Panel" : "Show Input Panel"}
                   </button>
-                  <button className="cpf-nav-dd-item" style={{ color: cockpitMode ? "var(--clr-blue2)" : "var(--text-subtle)" }}
-                    onClick={() => { setCockpitMode(v => !v); setShowSettingsMenu(false); setQiOpen(false); setQiStep(0); setQiSel({}); }}>
-                    <LayoutDashboard style={{ width: 13, height: 13 }} />{cockpitMode ? "Exit Cockpit Mode" : "Cockpit Mode"}
-                  </button>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
                   <button className="cpf-nav-dd-item" style={{ color: "#22d3ee" }}
                     onClick={() => { setShowWizard(true); setShowSettingsMenu(false); }}>
@@ -12851,23 +12338,13 @@ ${milestoneSnapshotHtml}
       {/* ── Full-width tab strip — sticky on tablet/mobile; spans full width on all viewports ── */}
       <nav className="cpf-tabs-full-width" aria-label="Dashboard sections">
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0, display: "flex", alignItems: "stretch" }}>
-          {/* Cockpit Quick-Input pill — shown only in cockpit mode, left side of tab strip */}
-          {cockpitMode && (
-            <button
-              onClick={() => { setQiOpen(v => !v); setQiStep(0); setQiSel({}); }}
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", fontSize: 12, fontWeight: 700, border: "1px solid var(--border-strong)", borderRadius: 7, background: qiOpen ? "rgba(var(--clr-blue2-rgb),0.14)" : "var(--bg-muted)", color: qiOpen ? "var(--clr-blue2)" : "var(--text-main)", cursor: "pointer", flexShrink: 0, alignSelf: "center", marginLeft: 8, transition: "all 0.12s" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--clr-green)", display: "inline-block" }} />
-              Quick Input
-              <ChevronDown style={{ width: 11, height: 11, marginLeft: 1, transform: qiOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-            </button>
-          )}
           {/* Scrollable tab buttons */}
           <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", flex: "1 1 auto", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
             {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
               const isLifeLocked = id === "life" && isForeigner;
               return (
                 <button key={id} role="tab" aria-selected={activeTab === id} aria-controls={`panel-${id}`}
-                  onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 768) setSidebarOpen(false); }}
+                  onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
                   title={isLifeLocked ? "CPF LIFE — not available to foreigners" : undefined}
                   style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: "transparent", color: activeTab === id ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: activeTab === id ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLifeLocked ? 0.45 : 1 }}>
                   <Icon style={{ width: 14, height: 14 }} />{label}{isLifeLocked && <span style={{ fontSize: 11, marginLeft: 2 }}>🔒</span>}
@@ -12902,7 +12379,7 @@ ${milestoneSnapshotHtml}
                 {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
                   const isLifeLocked = id === "life" && isForeigner;
                   return (
-                    <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 768) setSidebarOpen(false); }}
+                    <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
                       style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: activeTab === id ? 800 : 600, border: "none", background: activeTab === id ? `${accent}18` : "transparent", color: isLifeLocked ? "rgba(160,160,160,0.4)" : activeTab === id ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: isLifeLocked ? 0.5 : 1 }}>
                       <Icon style={{ width: 13, height: 13 }} />{label}{isLifeLocked && " 🔒"}
                     </button>
@@ -12947,7 +12424,6 @@ ${milestoneSnapshotHtml}
         className="cpf-layout"
         data-mode={desktopMode}
         data-sidebar-open={sidebarOpen ? "true" : "false"}
-        data-cockpit={cockpitMode ? "true" : "false"}
         style={{
           maxWidth: desktopMode === 'fhd' ? '100%' : desktopMode === 'hd' ? '1440px' : '100%',
           flex: '1 1 0',
@@ -16363,41 +15839,8 @@ ${milestoneSnapshotHtml}
           </div>
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
           <div className="cpf-tab-content">
-            {/* ══ COCKPIT MODE VIEW ══ Replaces all tab content when cockpitMode is on */}
-            {cockpitMode && (
-              <CockpitView
-                inputs={inputs}
-                setInputs={setInputs}
-                debouncedInputs={debouncedInputs}
-                displayAccumulation={displayAccumulation}
-                accumulationByAge={accumulationByAge}
-                lifePlans={lifePlans}
-                milestones={milestones}
-                highlightPlan={highlightPlan}
-                setHighlightPlan={setHighlightPlan}
-                payoutAge65={payoutAge65}
-                isDark={isDark}
-                isRealDollars={isRealDollars}
-                whatIfPayoutAge={whatIfPayoutAge}
-                setWhatIfPayoutAge={setWhatIfPayoutAge}
-                whatIfSaTopup={whatIfSaTopup}
-                setWhatIfSaTopup={setWhatIfSaTopup}
-                whatIfSalaryBump={whatIfSalaryBump}
-                setWhatIfSalaryBump={setWhatIfSalaryBump}
-                whatIfProjection={whatIfProjection}
-                basicPremiumPct={basicPremiumPct}
-                applyInflation={applyInflation}
-                qiOpen={qiOpen}
-                setQiOpen={setQiOpen}
-                qiStep={qiStep}
-                setQiStep={setQiStep}
-                qiSel={qiSel}
-                setQiSel={setQiSel}
-                showToast={showToast}
-              />
-            )}
             {/* ── READINESS TAB ── */}
-            {!cockpitMode && activeTab === "readiness" && (
+            {activeTab === "readiness" && (
               <ReadinessTab
                 inputs={inputs}
                 displayAccumulation={displayAccumulation}
@@ -16417,7 +15860,7 @@ ${milestoneSnapshotHtml}
               />
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
-            {!cockpitMode && activeTab === "guide" && guideView === 'quickstart' && (
+            {activeTab === "guide" && guideView === 'quickstart' && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
                 {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
@@ -16589,7 +16032,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── SUMMARY TAB ── */}
-            {!cockpitMode && activeTab === "summary" && (
+            {activeTab === "summary" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
                 {/* UX-P2-B: Contribution gap alert — moved from buried sidebar position to top of
@@ -18129,7 +17572,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── ACCUMULATION TAB ── */}
-            {!cockpitMode && activeTab === "accumulation" && (
+            {activeTab === "accumulation" && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
                 {/* ── Context banners (RSS / Foreigner) ── */}
                 {(() => {
@@ -18402,6 +17845,16 @@ ${milestoneSnapshotHtml}
                           strokeWidth={1.5} strokeDasharray="6 3"
                           label={{ position: "insideTopRight", value: `📈 P2: ${p2Rate}%/yr`, fill: "var(--clr-lime)", fontSize: 10, fontWeight: "bold" }} />;
                       })()}
+                      {/* Goal Simulator — target line (horizontal dashed) */}
+                      {Number(debouncedInputs.goalTargetCPF) > 0 && (
+                        <ReferenceLine
+                          y={Number(debouncedInputs.goalTargetCPF)}
+                          stroke="#f43f5e"
+                          strokeWidth={2}
+                          strokeDasharray="8 4"
+                          label={{ value: `🎯 ${Number(debouncedInputs.goalTargetCPF) >= 1e6 ? `$${(Number(debouncedInputs.goalTargetCPF)/1e6).toFixed(1)}M` : `$${Math.round(Number(debouncedInputs.goalTargetCPF)/1e3)}k`} Goal`, position: "insideTopLeft", fill: "#f43f5e", fontSize: 11, fontWeight: "bold" }}
+                        />
+                      )}
                       <defs>
                         <linearGradient id="accOaGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%"  stopColor="#1d4ed8" stopOpacity={0.30} />
@@ -18600,7 +18053,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── RSS TAB — Full drawdown engine (PR-2) ── */}
-            {!cockpitMode && activeTab === "rss" && (() => {
+            {activeTab === "rss" && (() => {
               const isRSSMode = debouncedInputs.cpfScheme === 'rss';
               if (!isRSSMode) return null;
               // Extract RSS-specific values from the projection array
@@ -18869,7 +18322,7 @@ ${milestoneSnapshotHtml}
                 but if the user was already on the LIFE tab before switching to RSS the
                 activeTab state can be "life" momentarily (the switch useEffect also calls
                 setActiveTab to redirect, but this guard is the belt-and-suspenders defence). */}
-            {!cockpitMode && activeTab === "life" && debouncedInputs.cpfScheme !== 'rss' && (
+            {activeTab === "life" && debouncedInputs.cpfScheme !== 'rss' && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
                 <div className="life-chart-header" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
@@ -19174,7 +18627,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── COMPARE TAB ── */}
-            {!cockpitMode && activeTab === "compare" && (
+            {activeTab === "compare" && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
 
                 {/* ── SECTION 2: Scenario Comparison ── */}
@@ -19294,7 +18747,7 @@ ${milestoneSnapshotHtml}
             )}
 
             {/* ── HOUSEHOLD TAB ── */}
-            {!cockpitMode && activeTab === "household" && (() => {
+            {activeTab === "household" && (() => {
               const fmt = v => `$${Math.round(v).toLocaleString()}`;
               const fmtK = v => `$${(v/1000).toFixed(0)}K`;
               const fmtM = v => `$${(v/1e6).toFixed(2)}M`;
@@ -19907,7 +19360,7 @@ ${milestoneSnapshotHtml}
             })()}
 
             {/* ── DATA TABLE TAB ── */}
-            {!cockpitMode && activeTab === "table" && (
+            {activeTab === "table" && (
               <div>
                 {/* Tab header */}
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: "16px 20px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
@@ -20340,7 +19793,7 @@ ${milestoneSnapshotHtml}
                 because the Quick Start block already owns the outer panel when guideView==='quickstart'.
                 When guideView==='reference' the Quick Start block renders null so this block is the
                 sole child of the tab content div. */}
-            {!cockpitMode && activeTab === "guide" && guideView === 'reference' && (
+            {activeTab === "guide" && guideView === 'reference' && (
               <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
                     and Quick Start/Reference buttons do not scroll away when reading docs. */}
@@ -21236,9 +20689,86 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── STRATEGY TAB ── */}
-            {!cockpitMode && activeTab === "strategy" && (() => {
+            {activeTab === "strategy" && (() => {
               const pa = payoutAge65; // CQ-2 fix: use debounced value to match payoutProjection data (cpfLifeMonthly at L9137)
               const ca = Number(inputs.currentAge) || 35;
+
+              // ── Goal Simulator helpers ──────────────────────────────────────
+              const fmt  = (n) => "$" + Math.round(n).toLocaleString();
+              const fmtK = (n) => n >= 1e6 ? `$${(n/1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(1)}k` : fmt(n);
+              const pctOfTarget = goalResult ? Math.min(100, (goalResult.baseline / goalResult.targetAmt) * 100) : 0;
+
+              const applyStrategy = (overrides, stratLetter) => {
+                // Snapshot current lever values before overwriting — enables per-card "↩ Revert"
+                // without touching any other inputs. Snapshot is cleared if the user manually
+                // edits either lever after applying (useEffect above) or on global reset.
+                setPreApplySnapshot({ vcSaTopup: Number(inputs.vcSaTopup) || 0, vc3aCash: Number(inputs.vc3aCash) || 0 });
+                setInputs(prev => ({ ...prev, ...overrides }));
+                setGoalApplied(stratLetter);
+                // Switch to Accumulation so the user sees the chart update immediately
+                setTimeout(() => setActiveTab("accumulation"), 80);
+              };
+
+              const StrategyCard = ({ letter, title, icon, color, strat, onApply, onRevert }) => {
+                const applied = goalApplied === letter;
+                return (
+                  <div style={{ background: "var(--bg-input)", border: `1px solid ${strat.feasible ? color + "55" : "var(--border-subtle)"}`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 18 }}>{icon}</span>
+                      <span style={{ fontWeight: 700, fontSize: 15, color: strat.feasible ? color : "var(--text-muted)" }}>Strategy {letter} — {title}</span>
+                      {strat.feasible
+                        ? <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#22c55e", background: "#22c55e18", borderRadius: 20, padding: "2px 10px" }}>✅ Feasible</span>
+                        : <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#ef4444", background: "#ef444418", borderRadius: 20, padding: "2px 10px" }}>❌ Insufficient</span>}
+                    </div>
+
+                    {strat.feasible ? (
+                      <>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
+                          {strat.rstu != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>RSTU / yr</span><br /><strong style={{ color }}>{fmt(strat.rstu)}</strong></div>}
+                          {strat.vc3a != null && strat.vc3a > 0 && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>VC3A / yr</span><br /><strong style={{ color }}>{fmt(strat.vc3a)}</strong></div>}
+                          {strat.needed != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>{letter === "A" ? "RSTU" : "VC3A"} / yr</span><br /><strong style={{ color }}>{fmt(strat.needed)}</strong></div>}
+                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Total annual cash</span><br /><strong style={{ color }}>{fmt(strat.totalCash)}</strong></div>
+                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Monthly equiv.</span><br /><strong style={{ color }}>{fmt(strat.totalCash / 12)}/mo</strong></div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <button
+                            onClick={() => applied ? null : onApply()}
+                            style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: applied ? "default" : "pointer", border: "none", background: applied ? "#22c55e22" : color, color: applied ? "#22c55e" : "#fff", transition: "all .2s" }}>
+                            {applied ? "✅ Applied to Profile" : "Apply to Profile →"}
+                          </button>
+                          {/* Revert button — only shown when this strategy is the active applied one
+                              and preApplySnapshot is available. Restores vcSaTopup + vc3aCash to
+                              their exact pre-apply values without touching any other inputs. */}
+                          {applied && preApplySnapshot && (
+                            <button
+                              onClick={() => {
+                                setInputs(prev => ({
+                                  ...prev,
+                                  vcSaTopup: preApplySnapshot.vcSaTopup,
+                                  vc3aCash:  preApplySnapshot.vc3aCash,
+                                }));
+                                setGoalApplied(null);
+                                setPreApplySnapshot(null);
+                              }}
+                              title={`Restore RSTU to $${(preApplySnapshot.vcSaTopup || 0).toLocaleString()} and VC3A to $${(preApplySnapshot.vc3aCash || 0).toLocaleString()}`}
+                              style={{ padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(248,113,113,0.4)", background: "rgba(248,113,113,0.08)", color: "#f87171", transition: "all .2s" }}>
+                              ↩ Revert
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                        Maximum reachable with this lever alone: <strong style={{ color: "var(--text-primary)" }}>{fmtK(strat.maxTotal)}</strong><br />
+                        Remaining gap after cap: <strong style={{ color: "#ef4444" }}>{fmtK(goalResult.targetAmt - strat.maxTotal)}</strong><br />
+                        Try Strategy C (Blended) to combine levers.
+                      </div>
+                    )}
+                  </div>
+                );
+              };
+
+              // ── Roadmap helpers (unchanged from original) ──────────────────
               const target = Number(inputs.targetMonthlyIncome) || 0;
               const srsStart = Math.max(Number(inputs.srsDrawdownStartAge) || 63, 63);
               const srsYears = Math.min(Math.max(Number(inputs.srsDrawdownYears) || 10, 1), 10);
@@ -21324,7 +20854,215 @@ ${milestoneSnapshotHtml}
               const shortfall = target > 0 ? target - totalCombined : 0;
 
               return (
-                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 24 }}>
+                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
+
+                  {/* ── Sub-navigation: Goal Simulator | Income Roadmap ── */}
+                  <div style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
+                    {[
+                      { id: "goal",    label: "🎯 Goal Simulator"  },
+                      { id: "roadmap", label: "📅 Income Roadmap"  },
+                    ].map(({ id, label }) => (
+                      <button key={id} onClick={() => setGoalStratTab(id)}
+                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ══ GOAL SIMULATOR ════════════════════════════════════════ */}
+                  {goalStratTab === "goal" && (
+                    <div style={{ padding: "24px 24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
+
+                      {/* Target input row */}
+                      <div>
+                        <p style={{ margin: "0 0 12px", fontWeight: 700, fontSize: 15, color: "var(--text-highlight)" }}>Set your CPF target at payout age</p>
+                        {(() => {
+                          // ── Smart preset logic ──────────────────────────────────────────
+                          // Derive current projected CPF total at payout age from the already-
+                          // computed displayAccumulation (O(1) via accumulationByAge Map).
+                          // This avoids re-running the engine and stays in sync with the chart.
+                          const projRow = accumulationByAge.get(pa);
+                          const baselineCPF = projRow
+                            ? (projRow.oa || 0) + (projRow.sa || 0) + (projRow.ra || 0) + (projRow.ma || 0)
+                            : 0;
+
+                          // Fixed anchors — always shown so users have recognisable reference points.
+                          // If baseline exceeds all anchors (>$10M), add one dynamic stretch above it.
+                          const FIXED_ANCHORS = [1e6, 2e6, 4e6, 1e7];
+                          const presets = baselineCPF > 1e7
+                            ? [...FIXED_ANCHORS, Math.ceil((baselineCPF + 1e6) / 1e6) * 1e6]
+                            : FIXED_ANCHORS;
+
+                          return (
+                            <>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                                {presets.map(preset => {
+                                  const isMet      = baselineCPF > 0 && preset <= baselineCPF;
+                                  const isSelected = Number(inputs.goalTargetCPF) === preset;
+                                  const isDynamic  = !FIXED_ANCHORS.includes(preset);
+                                  return (
+                                    <div key={preset} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                                      <button
+                                        onClick={() => setInputs(prev => ({ ...prev, goalTargetCPF: preset }))}
+                                        title={isMet ? `Your current projection ($${Math.round(baselineCPF).toLocaleString()}) already exceeds this target` : undefined}
+                                        style={{
+                                          padding: "7px 16px", borderRadius: 20, fontWeight: 700, fontSize: 13,
+                                          border: "2px solid", cursor: "pointer", transition: "all .15s",
+                                          opacity: isMet && !isSelected ? 0.55 : 1,
+                                          borderColor: isSelected ? (isDynamic ? "#0ea5e9" : "#f43f5e") : isMet ? "var(--border-subtle)" : "var(--border-strong)",
+                                          background:  isSelected ? (isDynamic ? "#0ea5e918" : "#f43f5e18") : isMet ? "transparent" : "var(--bg-input)",
+                                          color:       isSelected ? (isDynamic ? "#0ea5e9"   : "#f43f5e")   : isMet ? "var(--text-muted)" : "var(--text-muted)",
+                                          textDecoration: isMet && !isSelected ? "line-through" : "none",
+                                        }}>
+                                        {isDynamic ? "🎯 " : ""}
+                                        {preset >= 1e6
+                                          ? `${preset / 1e6 === Math.floor(preset / 1e6) ? preset / 1e6 : (preset / 1e6).toFixed(1)}M${pa}`
+                                          : `${preset / 1e3}k${pa}`}
+                                      </button>
+                                      {/* "✅ met" badge shown below each preset the member already exceeds */}
+                                      {isMet && !isSelected && (
+                                        <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700, letterSpacing: 0.2 }}>✅ met</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "4px 10px" }}>
+                                  <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
+                                  <input type="number" min={0} step={100000}
+                                    value={inputs.goalTargetCPF || ""}
+                                    onChange={e => setInputs(prev => ({ ...prev, goalTargetCPF: Number(e.target.value) || 0 }))}
+                                    placeholder="Custom amount"
+                                    style={{ width: 130, border: "none", background: "transparent", color: "var(--text-primary)", fontSize: 13, outline: "none" }} />
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <span style={{ fontSize: 13, color: "var(--text-muted)" }}>at age</span>
+                                  <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>{pa}</span>
+                                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>(payout age — set in sidebar)</span>
+                                </div>
+                              </div>
+                              {/* Contextual hint — only shown when at least one preset is already met */}
+                              {baselineCPF > 0 && presets.some(p => p <= baselineCPF) && (
+                                <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                                  💡 Your current projection is <strong style={{ color: "var(--text-primary)" }}>{(() => { const b = baselineCPF; return b >= 1e6 ? `$${(b/1e6).toFixed(2)}M` : `$${Math.round(b/1e3)}k`; })()}</strong> at age {pa} — struck-through presets are already met. Select a higher target to find new strategies.
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Action buttons row: Calculate + Clear Simulator */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <button onClick={solveGoal} disabled={goalSolving || !Number(inputs.goalTargetCPF)}
+                          style={{ padding: "10px 26px", borderRadius: 10, fontWeight: 700, fontSize: 14, border: "none", cursor: goalSolving || !Number(inputs.goalTargetCPF) ? "not-allowed" : "pointer", background: goalSolving || !Number(inputs.goalTargetCPF) ? "var(--bg-input)" : "#f43f5e", color: goalSolving || !Number(inputs.goalTargetCPF) ? "var(--text-muted)" : "#fff", transition: "all .2s" }}>
+                          {goalSolving ? "⏳ Calculating…" : "⚡ Calculate Strategies"}
+                        </button>
+                        {/* Clear Simulator — resets only goal target + solver state. Does NOT revert
+                            any applied lever values (use "↩ Revert" on the strategy card for that). */}
+                        {(Number(inputs.goalTargetCPF) > 0 || goalResult) && (
+                          <button
+                            onClick={() => {
+                              setInputs(prev => ({ ...prev, goalTargetCPF: 0 }));
+                              setGoalResult(null);
+                              setGoalApplied(null);
+                              setPreApplySnapshot(null);
+                            }}
+                            title="Clear the goal target and solver results. Applied lever values (RSTU / VC3A) are not changed — use ↩ Revert on the strategy card to undo those."
+                            style={{ padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 13, border: "1px solid var(--border-strong)", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all .2s" }}>
+                            🗑 Clear Simulator
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Results */}
+                      {goalResult && (
+                        <>
+                          {/* Gap Snapshot */}
+                          <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                            <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>📊 Gap Snapshot — age {pa}</p>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "8px 20px" }}>
+                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Current projected</span><br /><strong style={{ color: "var(--text-primary)", fontSize: 16 }}>{fmtK(goalResult.baseline)}</strong></div>
+                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Your target</span><br /><strong style={{ color: "#f43f5e", fontSize: 16 }}>{fmtK(goalResult.targetAmt)}</strong></div>
+                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Gap to close</span><br /><strong style={{ color: goalResult.gap > 0 ? "#f97316" : "#22c55e", fontSize: 16 }}>{goalResult.gap > 0 ? fmtK(goalResult.gap) : "✅ Already met!"}</strong></div>
+                            </div>
+                            {/* Progress bar */}
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                                <span>{pctOfTarget.toFixed(1)}% of the way there</span>
+                                <span>{fmtK(goalResult.targetAmt)}</span>
+                              </div>
+                              <div style={{ height: 8, borderRadius: 4, background: "var(--bg-panel)", overflow: "hidden" }}>
+                                <div style={{ height: "100%", borderRadius: 4, width: `${pctOfTarget}%`, background: pctOfTarget >= 100 ? "#22c55e" : pctOfTarget >= 60 ? "#f97316" : "#ef4444", transition: "width .4s" }} />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Strategy Cards */}
+                          {goalResult.gap > 0 && (
+                            <>
+                              <p style={{ margin: "4px 0 0", fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>💡 Strategies to reach your goal</p>
+                              <StrategyCard letter="A" title="RSTU Top-Up" icon="📈" color="#6366f1"
+                                strat={{ ...goalResult.stratA, rstu: null, vc3a: null }}
+                                onApply={() => applyStrategy({ vcSaTopup: goalResult.stratA.needed }, "A")} />
+                              <StrategyCard letter="B" title="VC3A Contribution" icon="💰" color="#0ea5e9"
+                                strat={{ ...goalResult.stratB, rstu: null, vc3a: null }}
+                                onApply={() => applyStrategy({ vc3aCash: goalResult.stratB.needed }, "B")} />
+                              <StrategyCard letter="C" title="Blended — RSTU + VC3A" icon="⚡" color="#f43f5e"
+                                strat={{ ...goalResult.stratC, needed: null }}
+                                onApply={() => applyStrategy({ vcSaTopup: goalResult.stratC.rstu, vc3aCash: goalResult.stratC.vc3a }, "C")} />
+                            </>
+                          )}
+
+                          {/* Sensitivity */}
+                          <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: "14px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+                            <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "var(--text-highlight)" }}>📐 Sensitivity — each extra $1,000/yr adds…</p>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }}>
+                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>via RSTU</span><br /><strong style={{ color: "#6366f1" }}>+{fmtK(goalResult.sensitivityRSTU)}</strong> at age {pa}</div>
+                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>via VC3A</span><br /><strong style={{ color: "#0ea5e9" }}>+{fmtK(goalResult.sensitivityVC3A)}</strong> at age {pa}</div>
+                            </div>
+                            <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>ℹ️ CPFIS excluded — investment returns are not modelled in the engine; CPFIS is an OA outflow only and cannot increase projected CPF totals.</p>
+                          </div>
+                        </>
+                      )}
+
+                      {!goalResult && !goalSolving && (() => {
+                        const hasTarget = Number(inputs.goalTargetCPF) > 0;
+                        return hasTarget ? (
+                          /* ── Shared-link / imported-profile case ──────────────────────────
+                             goalTargetCPF is already set (came in via inputs) but goalResult is
+                             null because solver output is never serialised into the share link
+                             (it's transient — always recomputable from inputs, and excluding it
+                             keeps URLs short and prevents stale-result confusion). This banner
+                             replaces the generic "set a target" prompt so the user understands
+                             their goal is loaded and one click is all that's needed.          */
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "rgba(14,165,233,0.08)", border: "1px solid rgba(14,165,233,0.35)", borderRadius: 10, padding: "14px 16px" }}>
+                            <span style={{ fontSize: 20, lineHeight: 1 }}>💡</span>
+                            <div style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.65 }}>
+                              <strong style={{ color: "#0ea5e9" }}>Goal target loaded from your profile</strong><br />
+                              Your target of{" "}
+                              <strong style={{ color: "#f43f5e" }}>
+                                {Number(inputs.goalTargetCPF) >= 1e6
+                                  ? `$${(Number(inputs.goalTargetCPF) / 1e6).toFixed(Number(inputs.goalTargetCPF) % 1e6 === 0 ? 0 : 2)}M`
+                                  : `$${Number(inputs.goalTargetCPF).toLocaleString()}`}
+                              </strong>{" "}
+                              at age <strong style={{ color: "var(--text-highlight)" }}>{pa}</strong> is already set.
+                              Click <strong>⚡ Calculate Strategies</strong> above to run the solver and see personalised RSTU / VC3A strategies for this profile.
+                            </div>
+                          </div>
+                        ) : (
+                          /* ── Fresh session case — no target set yet ───────────────────── */
+                          <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                            Set a target above and click <strong>Calculate Strategies</strong> to see personalised top-up plans based on your current profile.<br />
+                            The solver computes the minimum annual contribution via RSTU, VC3A, and a blended approach to reach your goal by age {pa}.
+                          </p>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* ══ INCOME ROADMAP (original content) ════════════════════ */}
+                  {goalStratTab === "roadmap" && (
+                    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
 
                   {/* ── Strategy tab intro — UX-14: auto-opens on first visit ── */}
                   <details open={introDetailsOpen} onToggle={e => setIntroDetailsOpen(e.currentTarget.open)} style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
@@ -21785,6 +21523,8 @@ ${milestoneSnapshotHtml}
                       }
                     </p>
                   </div>
+                </div>
+                  )}
                 </div>
               );
             })()}
