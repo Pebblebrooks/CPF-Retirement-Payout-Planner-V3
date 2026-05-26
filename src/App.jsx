@@ -5111,9 +5111,13 @@ function CockpitView({
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" strokeOpacity={0.5}/>
                 <XAxis dataKey="age" tick={{ fontSize: 9, fill: "var(--text-muted)" }} tickLine={false} axisLine={false}/>
                 <YAxis tickFormatter={v => fmtK(v)} tick={{ fontSize: 9, fill: "var(--text-muted)" }} tickLine={false} axisLine={false} width={44}/>
-                <RechartsTooltip
-                  contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 10 }}
+                <Tooltip
+                  contentStyle={STYLES.chartTooltip}
+                  itemStyle={STYLES.chartTooltipItem}
+                  labelStyle={STYLES.chartTooltipLabel}
                   formatter={(v, name) => [fmtK(v), name]}
+                  labelFormatter={v => `Age ${v}`}
+                  wrapperStyle={STYLES.chartTooltipWrapper}
                 />
                 <ReferenceLine x={55} stroke="var(--border-strong)" strokeDasharray="3 3" label={{ value: "55", fontSize: 8, fill: "var(--text-subtle)" }}/>
                 <ReferenceLine x={pa} stroke="var(--clr-green)" strokeDasharray="3 3" label={{ value: `${pa}`, fontSize: 8, fill: "var(--clr-green)" }}/>
@@ -5327,7 +5331,7 @@ function CockpitView({
             ) : (
               <div style={{ padding: "20px 14px", textAlign: "center" }}>
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(var(--clr-emerald-rgb),0.12)", border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
-                  <CheckCircle style={{ width: 18, height: 18, color: "var(--clr-green)" }}/>
+                  <CheckCircle2 style={{ width: 18, height: 18, color: "var(--clr-green)" }}/>
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 3 }}>Profile updated</div>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 12 }}>Projection recalculates automatically.</div>
