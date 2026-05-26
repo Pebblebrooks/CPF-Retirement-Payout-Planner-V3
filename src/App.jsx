@@ -20723,8 +20723,10 @@ ${milestoneSnapshotHtml}
                 isApplyingStrategyRef.current = true;
                 setInputs(prev => ({ ...prev, ...overrides }));
                 setGoalApplied(stratLetter);
-                // Switch to Accumulation so the user sees the chart update immediately
-                setTimeout(() => setActiveTab("accumulation"), 80);
+                // Intentionally no tab switch: user stays on the Strategy tab to see the
+                // "✅ Applied" badge and "↩ Revert" button in context, and to compare the
+                // other strategy cards. Auto-switching to Growth abandoned the user mid-task
+                // and was also a contributing factor in the goalApplied race condition (Bug 1).
               };
 
               const StrategyCard = ({ letter, title, icon, color, strat, onApply, onRevert }) => {
