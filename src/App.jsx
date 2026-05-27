@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, createContext, useContext } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -4530,774 +4530,6 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CockpitDashboard — Full-screen executive overview (sidebar hidden)
-// Pure display component. All data arrives via props — no engine calls, no
-// new state mutations. Each panel has a → Full View chip that calls onNavigate()
-// to exit cockpit and jump to the corresponding tab.
-// ─────────────────────────────────────────────────────────────────────────────
-function CockpitDashboard({
-  inputs, isDark, isRealDollars, isForeigner, isRSSMode,
-  displayAccumulation, accumulationByAge, payoutAge65,
-  lifePlans, highlightPlan, setHighlightPlan, basicPremiumPct,
-  payoutProjection, milestones, gapAlert, xirrByAge,
-  estimatedTaxSavings, monteCarloData,
-  householdEnabled, debouncedSpouseInputs, spouseAccumulationByAge, displayHouseholdByAge,
-  scenarioA, scenarioB, scenarioLabelA, scenarioLabelB, comparisonData,
-  applyInflation, formatCurrency,
-  onNavigate, onExit,
-}) {
-  const fmt  = v => "$" + Math.round(Number(v) || 0).toLocaleString();
-  const fmtK = v => "$" + ((Number(v) || 0) / 1000).toFixed(0) + "k";
-  const fmtM = v => { const n = (Number(v) || 0); return n >= 1e6 ? "$" + (n/1e6).toFixed(2) + "M" : fmt(n); };
-  const fmtPct = v => (Number(v) || 0).toFixed(1) + "%";
-
-  const ca  = Number(inputs.currentAge)  || 35;
-  const pa  = payoutAge65;
-  const isMale = inputs.isMale !== false;
-
-  // ── Key projection rows ──────────────────────────────────────────────────
-  const rowAtPayout = displayAccumulation?.find(r => r.age === pa) || {};
-  const rowAt95     = displayAccumulation?.find(r => r.age === 95) || displayAccumulation?.[displayAccumulation.length - 1] || {};
-  const rowAt55     = displayAccumulation?.find(r => r.age === 55) || {};
-
-  const oaAtPayout  = Number(rowAtPayout.oa)  || 0;
-  const maAtPayout  = Number(rowAtPayout.ma)  || 0;
-  const raAtPayout  = Number(rowAtPayout.ra)  || 0;
-  const totalAtPayout = oaAtPayout + maAtPayout + raAtPayout;
-
-  const nwAtPayout  = Number(rowAtPayout.netWorth  ?? rowAtPayout.nw  ?? totalAtPayout);
-  const nwAt95      = Number(rowAt95.netWorth       ?? rowAt95.nw      ?? 0);
-  const raAt55      = Number(rowAt55.ra ?? rowAt55.sa ?? 0);
-
-  // ── LIFE plans ──────────────────────────────────────────────────────────
-  const stdPlan = lifePlans?.standard;
-  const escPlan = lifePlans?.escalating;
-  const basPlan = lifePlans?.basic;
-
-  const getMonthly = (plan) => {
-    if (!plan) return 0;
-    const raw = isMale ? (plan.startM || 0) : (plan.startF || 0);
-    if (highlightPlan === 'basic') return Math.round(raw * (1 - (basicPremiumPct || 0) / 100) / 0.90);
-    return raw;
-  };
-  const stdMonthly = getMonthly(stdPlan);
-  const escMonthly = getMonthly(escPlan);
-  const basMonthly = getMonthly(basPlan);
-  const activeMonthly = highlightPlan === 'escalating' ? escMonthly : highlightPlan === 'basic' ? basMonthly : stdMonthly;
-
-  // ── Readiness metrics ───────────────────────────────────────────────────
-  const frsTarget   = Number(inputs.frsTarget)  || 220000;
-  const brsTarget   = Math.round(frsTarget / 2);
-  const ersTarget   = Math.round(frsTarget * 2);
-  const monthlyTarget = Number(inputs.monthlyTarget) || 0;
-  const incomeCoverage = monthlyTarget > 0 ? Math.min(999, Math.round((activeMonthly / monthlyTarget) * 100)) : 0;
-  const frsCoverage    = frsTarget > 0 ? Math.min(999, Math.round((raAt55 / frsTarget) * 100)) : 0;
-  const frsMet   = raAt55 >= frsTarget;
-  const brsMet   = raAt55 >= brsTarget;
-  const readinessScore = Math.min(100, Math.round(
-    (frsCoverage  * 0.35) +
-    (incomeCoverage * 0.35) +
-    (Math.min(100, (nwAtPayout / Math.max(1, frsTarget * 3)) * 100) * 0.30)
-  ));
-  const readinessLabel = readinessScore >= 80 ? "On Track" : readinessScore >= 60 ? "Progressing" : readinessScore >= 40 ? "At Risk" : "Action Needed";
-  const readinessColor = readinessScore >= 80 ? "var(--clr-green)" : readinessScore >= 60 ? "var(--clr-amber)" : "var(--clr-red)";
-
-  // ── Accumulation series for mini-chart ──────────────────────────────────
-  const accumSeries = (accumulationByAge || []).filter(r => r.age >= ca && r.age <= pa);
-
-  // ── Decumulation series ─────────────────────────────────────────────────
-  const decumSeries = (displayAccumulation || []).filter(r => r.age >= pa && r.age <= 95);
-
-  // ── CPF LIFE payout series ───────────────────────────────────────────────
-  const maxLifeAge = 95;
-  const lifeSeries = Array.from({ length: maxLifeAge - pa + 1 }, (_, i) => {
-    const age = pa + i;
-    const stdVal  = stdMonthly;
-    const escVal  = Math.round(escMonthly * Math.pow(1.02, i));
-    const basVal  = basMonthly;
-    return { age, std: stdVal, esc: escVal, bas: basVal };
-  });
-
-  // ── Growth story totals ─────────────────────────────────────────────────
-  const lastRow = displayAccumulation?.[displayAccumulation.length - 1] || {};
-  const cumContrib  = Number(lastRow.cumContrib  ?? lastRow.cumMandatory  ?? 0);
-  const cumInterest = Number(lastRow.cumInterest ?? 0);
-  const cumOutflows = Number(lastRow.cumOutflow  ?? lastRow.cumHousing    ?? 0);
-  const contribRatio = cumContrib > 0 ? (cumInterest / cumContrib).toFixed(2) : "0.00";
-
-  // ── XIRR values ──────────────────────────────────────────────────────────
-  const xirrStd = xirrByAge?.['standard']?.[pa];
-  const xirrEsc = xirrByAge?.['escalating']?.[pa];
-  const xirrBas = xirrByAge?.['basic']?.[pa];
-
-  // ── Milestone / alert counts ─────────────────────────────────────────────
-  const alertItems = (milestones || []).filter(m => m.severity === 'high' || m.severity === 'medium' || m.type === 'alert');
-  const alertCount = alertItems.length + (gapAlert ? 1 : 0);
-
-  // ── Cashflow totals ──────────────────────────────────────────────────────
-  const totalInflow  = Number(lastRow.cumInflow   ?? cumContrib);
-  const totalOutflow = Number(lastRow.cumOutflow  ?? cumOutflows);
-  const netCashflow  = totalAtPayout;
-
-  // ── Household ────────────────────────────────────────────────────────────
-  const spousePa = Number(debouncedSpouseInputs?.payoutAge) || 67;
-  const spouseRowAtPayout = spouseAccumulationByAge?.find?.(r => r.age === spousePa) || {};
-  const spouseTotalAtPayout = (Number(spouseRowAtPayout.oa) || 0) + (Number(spouseRowAtPayout.ma) || 0) + (Number(spouseRowAtPayout.ra) || 0);
-
-  const combinedCPF = totalAtPayout + spouseTotalAtPayout;
-  const spousePlanKey = debouncedSpouseInputs?.highlightPlan || 'standard';
-  const spouseLifePlan = lifePlans?.spouseStandard || lifePlans?.[spousePlanKey];
-  const spouseIsMale = debouncedSpouseInputs?.isMale !== false;
-  const spouseMonthly = spouseLifePlan ? (spouseIsMale ? (spouseLifePlan.startM || 0) : (spouseLifePlan.startF || 0)) : 0;
-  const combinedMonthly = activeMonthly + spouseMonthly;
-  const combinedIncCoverage = monthlyTarget > 0 ? Math.min(999, Math.round((combinedMonthly / monthlyTarget) * 100)) : 0;
-
-  // ── Compare delta ────────────────────────────────────────────────────────
-  const hasCompare = scenarioA && scenarioB;
-  const cmpATotal = hasCompare ? (Number(scenarioA?.projection?.find?.(r => r.age === pa)?.oa || 0) + Number(scenarioA?.projection?.find?.(r => r.age === pa)?.ra || 0) + Number(scenarioA?.projection?.find?.(r => r.age === pa)?.ma || 0)) : 0;
-  const cmpBTotal = totalAtPayout;
-  const cmpDelta = cmpBTotal - cmpATotal;
-
-  // ── Monte Carlo ───────────────────────────────────────────────────────────
-  const mcProb = monteCarloData?.probSufficiency ?? monteCarloData?.probMeetFRS ?? null;
-
-  // ── SVG chart helpers ─────────────────────────────────────────────────────
-  const W = 420, H = 130;
-  const toSvgX = (age, minAge, maxAge) => 28 + ((age - minAge) / Math.max(1, maxAge - minAge)) * (W - 40);
-  const toSvgY = (val, minVal, maxVal) => H - 10 - ((val - minVal) / Math.max(1, maxVal - minVal)) * (H - 22);
-
-  const mkLine = (series, xKey, yKey, minAge, maxAge, minV, maxV) => {
-    if (!series?.length) return "";
-    return series.map((d, i) => {
-      const x = toSvgX(d[xKey], minAge, maxAge).toFixed(1);
-      const y = toSvgY(d[yKey] || 0, minV, maxV).toFixed(1);
-      return (i === 0 ? `M${x},${y}` : `L${x},${y}`);
-    }).join(" ");
-  };
-
-  const mkArea = (series, xKey, yKey, minAge, maxAge, minV, maxV) => {
-    const line = mkLine(series, xKey, yKey, minAge, maxAge, minV, maxV);
-    if (!line) return "";
-    const lastD = series[series.length - 1];
-    const firstD = series[0];
-    const x0 = toSvgX(firstD[xKey], minAge, maxAge).toFixed(1);
-    const x1 = toSvgX(lastD[xKey], minAge, maxAge).toFixed(1);
-    const yBase = (H - 10).toFixed(1);
-    return `${line} L${x1},${yBase} L${x0},${yBase} Z`;
-  };
-
-  // Accum chart max
-  const accumMax = Math.max(1, ...accumSeries.map(r => (r.oa || 0) + (r.sa || 0) + (r.ma || 0) + (r.ra || 0)));
-  // Decum chart max
-  const decumMax = Math.max(1, oaAtPayout, maAtPayout);
-  // Life chart max
-  const lifeMax  = Math.max(1, ...lifeSeries.map(r => Math.max(r.std, r.esc, r.bas, monthlyTarget)));
-
-  const panelStyle = {
-    background: "var(--bg-panel)", border: "1px solid var(--border-subtle)",
-    borderRadius: 14, padding: "10px 12px", overflow: "hidden",
-  };
-  const hdrStyle = {
-    display: "flex", alignItems: "center", gap: 6, marginBottom: 8,
-  };
-  const titleStyle = {
-    fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
-    textTransform: "uppercase", color: "var(--text-muted)", flex: 1,
-  };
-  const chipStyle = {
-    fontSize: 10, padding: "2px 7px", borderRadius: 999,
-    border: "1px solid var(--border-strong)", color: "var(--text-muted)",
-    cursor: "pointer", background: "transparent", whiteSpace: "nowrap",
-  };
-  const numStyle = (color) => ({
-    fontSize: 20, fontWeight: 800, color: color || "var(--text-main)",
-    lineHeight: 1.1, fontVariantNumeric: "tabular-nums",
-  });
-  const subStyle = { fontSize: 10, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.35 };
-  const divStyle = { height: 1, background: "var(--border-subtle)", margin: "5px 0" };
-  const microLbl = { fontSize: 10, color: "var(--text-muted)" };
-  const microVal = (color) => ({ fontSize: 10, fontWeight: 700, color: color || "var(--text-main)", fontVariantNumeric: "tabular-nums" });
-
-  const PanelIcon = ({ color, icon: Icon }) => (
-    <div style={{ width: 16, height: 16, borderRadius: 4, background: color + "22",
-      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      <Icon style={{ width: 10, height: 10, color }} />
-    </div>
-  );
-
-  const NavChip = ({ label = "→ Full view", onClick }) => (
-    <button style={chipStyle} onClick={onClick}>{label}</button>
-  );
-
-  const BarTrack = ({ pct, color, height = 5 }) => (
-    <div style={{ height, background: "var(--bg-input)", borderRadius: 999, overflow: "hidden", marginTop: 3 }}>
-      <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: color, borderRadius: 999 }} />
-    </div>
-  );
-
-  const MiniStat = ({ label, value, color, sub }) => (
-    <div style={{ borderBottom: "1px solid var(--border-subtle)", paddingBottom: 5, marginBottom: 5 }}>
-      <div style={microLbl}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: color || "var(--text-main)", fontVariantNumeric: "tabular-nums" }}>{value}</div>
-      {sub && <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 1 }}>{sub}</div>}
-    </div>
-  );
-
-  const SmallCard = ({ label, value, color, note }) => (
-    <div style={{ background: "var(--bg-input)", borderRadius: 8, padding: "6px 8px" }}>
-      <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: color || "var(--text-main)", fontVariantNumeric: "tabular-nums" }}>{value}</div>
-      {note && <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 1 }}>{note}</div>}
-    </div>
-  );
-
-  // ── Readiness gauge arc ───────────────────────────────────────────────────
-  const GAUGE_R = 38, GAUGE_CX = 50, GAUGE_CY = 50;
-  const arcLen  = Math.PI * GAUGE_R; // semicircle circumference
-  const arcFill = arcLen * (1 - readinessScore / 100);
-  const gaugeArc = `M${GAUGE_CX - GAUGE_R},${GAUGE_CY} A${GAUGE_R},${GAUGE_R} 0 0 1 ${GAUGE_CX + GAUGE_R},${GAUGE_CY}`;
-
-  // ── Show household vs compare in R4C3 ────────────────────────────────────
-  const showHousehold = householdEnabled;
-
-  return (
-    <div style={{
-      display: "flex", flexDirection: "column", gap: 6, padding: 8,
-      background: "var(--bg-base)", minHeight: "calc(100vh - 52px)",
-    }}>
-
-      {/* ══ KPI STRIP ══════════════════════════════════════════════════════ */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5,
-        background: "var(--bg-panel)", border: "1px solid var(--border-subtle)",
-        borderRadius: 12, padding: "6px 10px",
-      }}>
-        {[
-          { lbl: "Total CPF @ " + pa, val: fmt(totalAtPayout), color: "var(--clr-blue)" },
-          { lbl: "Monthly LIFE payout", val: fmt(activeMonthly) + "/mo", color: "var(--clr-green)" },
-          { lbl: "Net worth @ 95", val: fmtM(nwAt95), color: "var(--clr-purple)" },
-          { lbl: "FRS gap @ 55", val: raAt55 >= frsTarget ? "✓ Met" : "−" + fmt(frsTarget - raAt55), color: frsMet ? "var(--clr-green)" : "var(--clr-red)" },
-          { lbl: "XIRR (std)", val: xirrStd != null ? fmtPct(xirrStd * 100) : "—", color: "var(--clr-green)" },
-          { lbl: "Est. tax saving", val: estimatedTaxSavings ? fmt(estimatedTaxSavings) + "/yr" : "—", color: "var(--clr-amber)" },
-          { lbl: "Inflation adj.", val: (Number(inputs.inflationRate) || 2).toFixed(1) + "% p.a.", color: "var(--text-muted)" },
-        ].map(({ lbl, val, color }) => (
-          <div key={lbl} style={{ textAlign: "center", padding: "4px 6px", background: "var(--bg-input)", borderRadius: 8 }}>
-            <div style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 2 }}>{lbl}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color, fontVariantNumeric: "tabular-nums" }}>{val}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ══ ROW 1: 6 Snapshot micro-cards ════════════════════════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 6 }}>
-
-        {/* R1C1 Readiness */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}>
-            <PanelIcon color="var(--clr-green)" icon={Activity} />
-            <span style={titleStyle}>Readiness</span>
-            <NavChip onClick={() => onNavigate("readiness")} />
-          </div>
-          <svg width="100%" height="54" viewBox="0 0 100 54" style={{ display: "block", margin: "0 auto 4px" }}>
-            <path d={gaugeArc} fill="none" stroke="var(--border-strong)" strokeWidth="7" strokeLinecap="round" />
-            <path d={gaugeArc} fill="none" stroke={readinessColor} strokeWidth="7" strokeLinecap="round"
-              strokeDasharray={arcLen} strokeDashoffset={arcFill} />
-            <text x="50" y="46" textAnchor="middle" fontSize="18" fontWeight="800" fill={readinessColor}>{readinessScore}</text>
-          </svg>
-          <div style={{ ...subStyle, textAlign: "center", color: readinessColor, fontWeight: 700, marginBottom: 4 }}>{readinessLabel}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <div><div style={{ display: "flex", justifyContent: "space-between", ...microLbl }}><span>FRS coverage</span><span style={microVal(frsMet ? "var(--clr-green)" : "var(--clr-amber)")}>{frsCoverage}%</span></div><BarTrack pct={frsCoverage} color={frsMet ? "var(--clr-green)" : "var(--clr-amber)"} /></div>
-            <div><div style={{ display: "flex", justifyContent: "space-between", ...microLbl }}><span>Income coverage</span><span style={microVal(incomeCoverage >= 100 ? "var(--clr-green)" : "var(--clr-amber)")}>{incomeCoverage}%</span></div><BarTrack pct={incomeCoverage} color={incomeCoverage >= 100 ? "var(--clr-green)" : "var(--clr-amber)"} /></div>
-          </div>
-        </div>
-
-        {/* R1C2 Income goal */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-blue)" icon={Target} /><span style={titleStyle}>Income goal</span><NavChip onClick={() => onNavigate("summary")} /></div>
-          <div style={numStyle(incomeCoverage >= 100 ? "var(--clr-green)" : "var(--clr-amber)")}>{incomeCoverage}%</div>
-          <div style={subStyle}>{fmt(activeMonthly)} of {monthlyTarget ? fmt(monthlyTarget) : "—"}/mo target</div>
-          <div style={divStyle} />
-          <div style={microLbl}>Shortfall <span style={microVal("var(--clr-red)")}>{monthlyTarget > activeMonthly ? "−" + fmt(monthlyTarget - activeMonthly) + "/mo" : "✓ Surplus"}</span></div>
-          <div style={{ ...microLbl, marginTop: 3 }}>Income replacement <span style={microVal()}>{inputs.salary ? fmtPct((activeMonthly * 12 / Number(inputs.salary)) * 100) : "—"}</span></div>
-        </div>
-
-        {/* R1C3 Total CPF */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-blue)" icon={Briefcase} /><span style={titleStyle}>Total CPF</span><NavChip onClick={() => onNavigate("summary")} /></div>
-          <div style={numStyle("var(--clr-blue)")}>{fmt(totalAtPayout)}</div>
-          <div style={subStyle}>at payout age {pa} · {isRealDollars ? "real $" : "nominal"}</div>
-          <div style={divStyle} />
-          <div style={microLbl}>OA <span style={microVal()}>{fmt(oaAtPayout)}</span> · RA <span style={microVal()}>{fmt(raAtPayout)}</span></div>
-          <div style={{ ...microLbl, marginTop: 3 }}>MA <span style={microVal()}>{fmt(maAtPayout)}</span> (BHS capped)</div>
-        </div>
-
-        {/* R1C4 Monthly LIFE payout */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-green)" icon={TrendingUp} /><span style={titleStyle}>Monthly LIFE</span><NavChip onClick={() => onNavigate("life")} /></div>
-          <div style={numStyle("var(--clr-green)")}>{fmt(activeMonthly)}<span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>/mo</span></div>
-          <div style={subStyle}>{highlightPlan?.charAt(0).toUpperCase() + highlightPlan?.slice(1)} plan · CPF LIFE</div>
-          <div style={divStyle} />
-          <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-            {[["standard", stdMonthly, "var(--clr-blue)"], ["escalating", escMonthly, "var(--clr-purple)"], ["basic", basMonthly, "var(--clr-amber)"]].map(([plan, val, color]) => (
-              <button key={plan} onClick={() => setHighlightPlan(plan)}
-                style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, cursor: "pointer", fontWeight: 700,
-                  background: highlightPlan === plan ? color + "22" : "var(--bg-input)",
-                  color: highlightPlan === plan ? color : "var(--text-muted)",
-                  border: `1px solid ${highlightPlan === plan ? color + "66" : "var(--border-strong)"}` }}>
-                {plan.charAt(0).toUpperCase() + plan.slice(1)} {fmt(val)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* R1C5 Payout age + alerts */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-purple)" icon={Clock} /><span style={titleStyle}>Payout age</span><NavChip onClick={() => onNavigate("summary")} /></div>
-          <div style={numStyle("var(--clr-purple)")}>{pa}</div>
-          <div style={subStyle}>CPF LIFE · {highlightPlan} plan · {isMale ? "Male" : "Female"}</div>
-          <div style={divStyle} />
-          {alertCount > 0 ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 8px", borderRadius: 8,
-              background: "rgba(var(--clr-red-rgb),0.1)", border: "1px solid rgba(var(--clr-red-rgb),0.3)" }}>
-              <Bell style={{ width: 10, height: 10, color: "var(--clr-red)" }} />
-              <span style={{ fontSize: 10, color: "var(--clr-red)", fontWeight: 700 }}>{alertCount} alert{alertCount > 1 ? "s" : ""} — action needed</span>
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 8px", borderRadius: 8,
-              background: "rgba(var(--clr-green-rgb),0.1)", border: "1px solid rgba(var(--clr-green-rgb),0.3)" }}>
-              <CheckCircle2 style={{ width: 10, height: 10, color: "var(--clr-green)" }} />
-              <span style={{ fontSize: 10, color: "var(--clr-green)", fontWeight: 700 }}>All checks passed</span>
-            </div>
-          )}
-        </div>
-
-        {/* R1C6 Goal card */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-amber)" icon={Star} /><span style={titleStyle}>Goal</span><NavChip onClick={() => onNavigate("summary")} /></div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>Target monthly income</div>
-          <div style={numStyle("var(--clr-amber)")}>{monthlyTarget ? fmt(monthlyTarget) : "—"}<span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>/mo</span></div>
-          <div style={divStyle} />
-          <div style={microLbl}>Wealth multiple <span style={microVal("var(--clr-green)")}>{nwAtPayout && monthlyTarget ? (nwAtPayout / (monthlyTarget * 12)).toFixed(1) + "×" : "—"}</span></div>
-          <div style={{ ...microLbl, marginTop: 3 }}>Net worth @ 95 <span style={microVal("var(--clr-blue)")}>{fmtM(nwAt95)}</span></div>
-        </div>
-      </div>
-
-      {/* ══ ROW 2: Account health ════════════════════════════════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
-
-        {/* R2C1 Account balances */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-blue)" icon={BarChart2} /><span style={titleStyle}>Account balances · age {pa}</span><NavChip onClick={() => onNavigate("summary")} /></div>
-          {/* stacked bar */}
-          <div style={{ height: 10, borderRadius: 4, overflow: "hidden", display: "flex", marginBottom: 5 }}>
-            {totalAtPayout > 0 && [
-              [oaAtPayout, "var(--clr-blue)"], [maAtPayout, "var(--clr-amber)"], [raAtPayout, "var(--clr-purple)"]
-            ].map(([v, c], i) => (
-              <div key={i} style={{ flex: v, background: c, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {v / totalAtPayout > 0.12 && <span style={{ fontSize: 8, color: "#fff" }}>{Math.round(v/totalAtPayout*100)}%</span>}
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 8, fontSize: 9, color: "var(--text-muted)", marginBottom: 6 }}>
-            {[["OA", "var(--clr-blue)"], ["MA", "var(--clr-amber)"], ["RA", "var(--clr-purple)"]].map(([l, c]) => (
-              <span key={l} style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <span style={{ width: 6, height: 6, borderRadius: 1, background: c, display: "inline-block" }} />{l}
-              </span>
-            ))}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4, marginBottom: 8 }}>
-            <SmallCard label="OA" value={fmt(oaAtPayout)} color="var(--clr-blue)" />
-            <SmallCard label="MA" value={fmt(maAtPayout)} color="var(--clr-amber)" />
-            <SmallCard label="RA" value={fmt(raAtPayout)} color="var(--clr-purple)" />
-          </div>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-              <span style={microLbl}>RA vs FRS target at 55</span>
-              <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 999, fontWeight: 700,
-                background: frsMet ? "rgba(var(--clr-green-rgb),0.12)" : brsMet ? "rgba(var(--clr-amber-rgb),0.12)" : "rgba(var(--clr-red-rgb),0.12)",
-                color: frsMet ? "var(--clr-green)" : brsMet ? "var(--clr-amber)" : "var(--clr-red)",
-                border: `1px solid ${frsMet ? "rgba(var(--clr-green-rgb),0.3)" : brsMet ? "rgba(var(--clr-amber-rgb),0.3)" : "rgba(var(--clr-red-rgb),0.3)"}` }}>
-                {frsMet ? "FRS met" : brsMet ? "BRS met" : "Below BRS"}
-              </span>
-            </div>
-            <BarTrack pct={(raAt55 / ersTarget) * 100} color={frsMet ? "var(--clr-green)" : "var(--clr-amber)"} height={6} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>
-              <span>$0</span><span>BRS</span><span>FRS</span><span>ERS</span>
-            </div>
-          </div>
-        </div>
-
-        {/* R2C2 Growth story */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-green)" icon={TrendingUp} /><span style={titleStyle}>Growth story · age {ca} → {pa}</span><NavChip onClick={() => onNavigate("accumulation")} /></div>
-          {[
-            { label: "You & employer contributed", val: cumContrib, color: "var(--clr-blue)", pct: 85 },
-            { label: "Interest earned (2.5–5% p.a.)", val: cumInterest, color: "var(--clr-green)", pct: Math.min(95, (cumInterest / Math.max(1, cumContrib)) * 85) },
-            { label: "Outflows (housing, medical)", val: -cumOutflows, color: "var(--clr-red)", pct: Math.min(95, (cumOutflows / Math.max(1, cumContrib)) * 85) },
-          ].map(({ label, val, color, pct }) => (
-            <div key={label} style={{ marginBottom: 7 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, marginBottom: 2 }}>
-                <span style={microLbl}>{label}</span>
-                <span style={{ ...microVal(color), fontSize: 11 }}>{val < 0 ? "−" + fmt(Math.abs(val)) : fmt(val)}</span>
-              </div>
-              <BarTrack pct={pct} color={color} height={6} />
-            </div>
-          ))}
-          <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 7, display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-            <span style={microLbl}>Total at age {pa}</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: "var(--text-main)", fontVariantNumeric: "tabular-nums" }}>{fmt(totalAtPayout)}</span>
-          </div>
-          <div style={{ padding: "6px 8px", background: "var(--bg-input)", borderRadius: 8, fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>
-            For every <strong style={{ color: "var(--text-main)" }}>$1</strong> contributed, interest added <strong style={{ color: "var(--clr-green)" }}>${contribRatio}</strong> — {pa - ca} yrs compounding.
-          </div>
-        </div>
-
-        {/* R2C3 CPF LIFE plans */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-purple)" icon={ShieldCheck} /><span style={titleStyle}>CPF LIFE plans</span><NavChip onClick={() => onNavigate("life")} /></div>
-          {[
-            { key: "standard", label: "Standard plan", val: stdMonthly, color: "var(--clr-green)", desc: "Balanced payout · moderate bequest" },
-            { key: "escalating", label: "Escalating plan", val: escMonthly, color: "var(--clr-blue)", desc: "Starts lower · rises 2%/yr" },
-            { key: "basic", label: "Basic plan", val: basMonthly, color: "var(--clr-amber)", desc: "Highest bequest · lower payout" },
-          ].map(({ key, label, val, color, desc }) => (
-            <div key={key} onClick={() => setHighlightPlan(key)} style={{
-              background: highlightPlan === key ? color + "15" : "var(--bg-input)",
-              border: `1px solid ${highlightPlan === key ? color + "55" : "var(--border-subtle)"}`,
-              borderRadius: 8, padding: "7px 9px", marginBottom: 4, cursor: "pointer",
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-            }}>
-              <div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{label}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: highlightPlan === key ? color : "var(--text-main)", fontVariantNumeric: "tabular-nums" }}>{fmt(val)}<span style={{ fontSize: 9, fontWeight: 400, color: "var(--text-muted)" }}>/mo</span></div>
-                <div style={{ fontSize: 9, color: "var(--text-muted)" }}>{desc}</div>
-              </div>
-              {highlightPlan === key && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 999, background: color + "22", color, border: `1px solid ${color}55`, fontWeight: 700 }}>active</span>}
-            </div>
-          ))}
-          <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>RA at payout: <strong style={{ color: "var(--text-main)", fontVariantNumeric: "tabular-nums" }}>{fmt(raAtPayout)}</strong> · {isMale ? "Male" : "Female"}</div>
-        </div>
-      </div>
-
-      {/* ══ ROW 3: Accumulation chart + stats ════════════════════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: "4fr 1fr 1fr", gap: 6 }}>
-
-        {/* R3C1-4 Accumulation chart */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-blue)" icon={BarChart3} /><span style={titleStyle}>CPF accumulation · age {ca} → {pa}</span><NavChip onClick={() => onNavigate("accumulation")} /></div>
-          <div style={{ display: "flex", gap: 10, fontSize: 9, color: "var(--text-muted)", marginBottom: 5, flexWrap: "wrap" }}>
-            {[["OA", "var(--clr-blue)"], ["SA", "#b45309"], ["MA", "var(--clr-amber)"], ["RA (post-55)", "var(--clr-purple)"]].map(([l, c]) => (
-              <span key={l} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                <span style={{ width: 7, height: 7, borderRadius: 2, background: c, display: "inline-block" }} />{l}
-              </span>
-            ))}
-          </div>
-          <svg width="100%" height="130" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block" }}>
-            <defs>
-              {[["aOA","var(--clr-blue)"],["aSA","#b45309"],["aMA","var(--clr-amber)"],["aRA","var(--clr-purple)"]].map(([id, c]) => (
-                <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={c} stopOpacity="0.28" /><stop offset="95%" stopColor={c} stopOpacity="0.04" />
-                </linearGradient>
-              ))}
-            </defs>
-            {[0.25, 0.5, 0.75].map(f => {
-              const y = (H - 10 - f * (H - 22)).toFixed(0);
-              return <line key={f} x1="28" y1={y} x2={W - 12} y2={y} stroke="var(--border-subtle)" strokeWidth="0.5" />;
-            })}
-            {accumSeries.length > 1 && (() => {
-              const toY = (v) => toSvgY(v, 0, accumMax);
-              const toX = (a) => toSvgX(a, ca, pa);
-              const oaPath = accumSeries.map((r,i) => `${i===0?"M":"L"}${toX(r.age).toFixed(1)},${toY(r.oa||0).toFixed(1)}`).join(" ");
-              const saPath = accumSeries.map((r,i) => `${i===0?"M":"L"}${toX(r.age).toFixed(1)},${toY(r.sa||0).toFixed(1)}`).join(" ");
-              const maPath = accumSeries.map((r,i) => `${i===0?"M":"L"}${toX(r.age).toFixed(1)},${toY(r.ma||0).toFixed(1)}`).join(" ");
-              const raPath = accumSeries.filter(r=>r.age>=55).map((r,i) => `${i===0?"M":"L"}${toX(r.age).toFixed(1)},${toY(r.ra||0).toFixed(1)}`).join(" ");
-              const mkFill = (pts, c, gId) => {
-                if (!pts) return null;
-                const first = pts.split(" ")[0].replace("M","").split(",");
-                const last  = pts.split(" ").slice(-1)[0].replace("L","").split(",");
-                const area  = `${pts} L${last[0]},${H-10} L${first[0]},${H-10} Z`;
-                return <><path d={area} fill={`url(#${gId})`} /><path d={pts} fill="none" stroke={c} strokeWidth="1.5" /></>;
-              };
-              const age55x = toX(55).toFixed(1);
-              const agePax = toX(pa).toFixed(1);
-              return (<>
-                {mkFill(oaPath, "var(--clr-blue)", "aOA")}
-                {mkFill(saPath, "#b45309", "aSA")}
-                {mkFill(maPath, "var(--clr-amber)", "aMA")}
-                {raPath && mkFill(raPath, "var(--clr-purple)", "aRA")}
-                <line x1={age55x} y1="5" x2={age55x} y2={H-10} stroke="var(--clr-purple)" strokeWidth="0.8" strokeDasharray="3 2" />
-                <text x={Number(age55x)+3} y="14" fontSize="7" fill="var(--clr-purple)">SA→RA</text>
-                <line x1={agePax} y1="5" x2={agePax} y2={H-10} stroke="var(--clr-green)" strokeWidth="0.8" strokeDasharray="3 2" />
-                <text x={Number(agePax)-28} y="14" fontSize="7" fill="var(--clr-green)">LIFE start</text>
-              </>);
-            })()}
-            {[ca, Math.round((ca + pa) / 2), 55, pa].filter((v,i,a) => a.indexOf(v) === i).map(age => (
-              <text key={age} x={toSvgX(age, ca, pa)} y={H + 2} textAnchor="middle" fontSize="8" fill="var(--text-muted)">{age}</text>
-            ))}
-          </svg>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4, marginTop: 5 }}>
-            {[["Age 55","SA closes → RA","#b45309"],["Age 55","Housing stop","#d946ef"],["Age " + pa,"Contributions stop","var(--clr-blue)"],["Age " + pa,"LIFE begins","var(--clr-green)"]].map(([age, desc, c]) => (
-              <div key={age+desc} style={{ background: "var(--bg-input)", borderRadius: "0 0 6px 6px", borderTop: `2px solid ${c}`, padding: "4px 6px" }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: c }}>{age}</div>
-                <div style={{ fontSize: 9, color: "var(--text-muted)" }}>{desc}</div>
-              </div>
-            ))}
-          </div>
-          {mcProb != null && (
-            <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "4px 8px", borderRadius: 8,
-              background: "rgba(var(--clr-green-rgb),0.1)", border: "1px solid rgba(var(--clr-green-rgb),0.3)", marginTop: 5 }}>
-              <TrendingUp style={{ width: 12, height: 12, color: "var(--clr-green)" }} />
-              <span style={{ fontSize: 9, color: "var(--text-muted)" }}>Monte Carlo · 200 runs</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: "var(--clr-green)", fontVariantNumeric: "tabular-nums" }}>{Math.round(mcProb * 100)}%</span>
-              <span style={{ fontSize: 9, color: "var(--text-muted)" }}>probability of meeting FRS</span>
-            </div>
-          )}
-        </div>
-
-        {/* R3C5 Retirement outcomes */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-blue)" icon={Target} /><span style={titleStyle}>Retirement outcomes</span><NavChip onClick={() => onNavigate("summary")} /></div>
-          <MiniStat label={"Net worth · age " + pa} value={fmtM(nwAtPayout)} color="var(--clr-blue)" sub="CPF + property + private" />
-          <MiniStat label="Net worth · age 95" value={fmtM(nwAt95)} sub="under active plan" />
-          <MiniStat label="Income replacement" value={inputs.salary ? fmtPct((activeMonthly * 12 / Number(inputs.salary)) * 100) : "—"} color="var(--clr-amber)" sub="CPF LIFE ÷ last salary" />
-          <MiniStat label="CPF coverage" value={incomeCoverage + "%"} color="var(--clr-amber)" sub={"of " + (monthlyTarget ? fmt(monthlyTarget) : "—") + "/mo target"} />
-          <MiniStat label="Wealth multiple" value={nwAtPayout && monthlyTarget ? (nwAtPayout / (monthlyTarget * 12)).toFixed(1) + "×" : "—"} color="var(--clr-green)" />
-        </div>
-
-        {/* R3C6 Growth & returns */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-green)" icon={TrendingUp} /><span style={titleStyle}>Growth &amp; returns</span><NavChip onClick={() => onNavigate("summary")} /></div>
-          <MiniStat label="CPF interest earned" value={fmt(cumInterest)} color="var(--clr-green)" sub={cumContrib > 0 ? Math.round(cumInterest/cumContrib*100) + "% of contributions" : ""} />
-          <MiniStat label="Contribution multiplier" value={cumContrib > 0 ? (totalAtPayout / cumContrib).toFixed(2) + "×" : "—"} color="var(--clr-green)" />
-          <MiniStat label={"XIRR · " + (highlightPlan || "Standard")} value={xirrStd != null ? fmtPct((highlightPlan === "escalating" ? (xirrEsc??0) : highlightPlan === "basic" ? (xirrBas??0) : (xirrStd??0)) * 100) : "—"} color="var(--clr-green)" />
-          <MiniStat label="XIRR · Standard" value={xirrStd != null ? fmtPct(xirrStd * 100) : "—"} />
-          <MiniStat label="XIRR · Escalating" value={xirrEsc != null ? fmtPct(xirrEsc * 100) : "—"} />
-          <div style={{ ...microLbl, marginTop: 1 }}>XIRR · Basic <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{xirrBas != null ? fmtPct(xirrBas * 100) : "—"}</span></div>
-        </div>
-      </div>
-
-      {/* ══ ROW 3b: Decumulation + LIFE plan charts ══════════════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-
-        {/* R3b LEFT: Decumulation chart */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-red)" icon={TrendingDown} /><span style={titleStyle}>Decumulation · OA drawdown · age {pa} → 95</span><NavChip onClick={() => onNavigate("summary")} /></div>
-          <div style={{ display: "flex", gap: 10, fontSize: 9, color: "var(--text-muted)", marginBottom: 5, flexWrap: "wrap" }}>
-            {[["OA balance","var(--clr-blue)"],["MA balance","var(--clr-amber)"],["OA draw (est.)","var(--clr-red)"],["LIFE payout","var(--clr-green)"]].map(([l,c]) => (
-              <span key={l} style={{ display:"flex",alignItems:"center",gap:3 }}><span style={{ width:7,height:7,borderRadius:2,background:c,display:"inline-block"}} />{l}</span>
-            ))}
-          </div>
-          <svg width="100%" height="140" viewBox={`0 0 ${W} 140`} preserveAspectRatio="none" style={{ display: "block" }}>
-            <defs>
-              <linearGradient id="dOA" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="var(--clr-blue)" stopOpacity="0.25"/><stop offset="95%" stopColor="var(--clr-blue)" stopOpacity="0.03"/></linearGradient>
-              <linearGradient id="dMA" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="var(--clr-amber)" stopOpacity="0.2"/><stop offset="95%" stopColor="var(--clr-amber)" stopOpacity="0.03"/></linearGradient>
-            </defs>
-            {[0.25,0.5,0.75].map(f => { const y=(130-f*(130-15)).toFixed(0); return <line key={f} x1="30" y1={y} x2={W-8} y2={y} stroke="var(--border-subtle)" strokeWidth="0.5" />; })}
-            {decumSeries.length > 1 && (() => {
-              const toX2 = a => toSvgX(a, pa, 95);
-              const toY2 = v => { const H2=130; return H2-8-((v/Math.max(1,decumMax))*(H2-20)); };
-              const oaLine = decumSeries.map((r,i)=>`${i===0?"M":"L"}${toX2(r.age).toFixed(1)},${toY2(r.oa||0).toFixed(1)}`).join(" ");
-              const maLine = decumSeries.map((r,i)=>`${i===0?"M":"L"}${toX2(r.age).toFixed(1)},${toY2(r.ma||0).toFixed(1)}`).join(" ");
-              const lifeY  = toY2(activeMonthly * 12 / 12 * (decumMax / Math.max(1, oaAtPayout)) * (oaAtPayout * 0.15)).toFixed(1);
-              const oaFirst=decumSeries[0]; const oaLast=decumSeries[decumSeries.length-1];
-              const oaArea=`${oaLine} L${toX2(oaLast.age).toFixed(1)},122 L${toX2(oaFirst.age).toFixed(1)},122 Z`;
-              const maArea=`${maLine} L${toX2(oaLast.age).toFixed(1)},122 L${toX2(oaFirst.age).toFixed(1)},122 Z`;
-              // find OA depletion age
-              const depletionRow = decumSeries.find(r => (r.oa||0) < 1000);
-              const depAge = depletionRow?.age;
-              return (<>
-                <path d={oaArea} fill="url(#dOA)" /><path d={oaLine} fill="none" stroke="var(--clr-blue)" strokeWidth="1.5" />
-                <path d={maArea} fill="url(#dMA)" /><path d={maLine} fill="none" stroke="var(--clr-amber)" strokeWidth="1" />
-                <line x1={toX2(pa)} y1="5" x2={toX2(Math.min(95,pa+30))} y2="5" stroke="var(--clr-green)" strokeWidth="1.5" />
-                {depAge && depAge <= 94 && (<>
-                  <line x1={toX2(depAge).toFixed(1)} y1="8" x2={toX2(depAge).toFixed(1)} y2="125" stroke="var(--clr-red)" strokeWidth="0.8" strokeDasharray="2 2" />
-                  <text x={Number(toX2(depAge).toFixed(1))-18} y="18" fontSize="7" fill="var(--clr-red)">OA depleted</text>
-                  <text x={Number(toX2(depAge).toFixed(1))-18} y="26" fontSize="7" fill="var(--clr-red)">~age {depAge}</text>
-                </>)}
-              </>);
-            })()}
-            {[pa, Math.round((pa+95)/2), 80, 95].filter((v,i,a)=>a.indexOf(v)===i && v>=pa && v<=95).map(age => (
-              <text key={age} x={toSvgX(age,pa,95)} y="138" textAnchor="middle" fontSize="8" fill="var(--text-muted)">{age}</text>
-            ))}
-          </svg>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4, marginTop: 5 }}>
-            <SmallCard label={"OA at " + pa} value={fmt(oaAtPayout)} color="var(--clr-blue)" />
-            <SmallCard label="OA depletion" value={decumSeries.find(r=>(r.oa||0)<1000)?.age ? "Age " + decumSeries.find(r=>(r.oa||0)<1000).age : "Sustains"} color="var(--clr-red)" />
-            <SmallCard label={"MA at " + pa} value={fmt(maAtPayout)} color="var(--clr-amber)" />
-            <SmallCard label="LIFE floor" value={fmt(activeMonthly) + "/mo"} color="var(--clr-green)" />
-          </div>
-        </div>
-
-        {/* R3b RIGHT: CPF LIFE plan comparison chart */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-green)" icon={Activity} /><span style={titleStyle}>CPF LIFE plan comparison · monthly payout · age {pa} → 95</span><NavChip onClick={() => onNavigate("life")} /></div>
-          <div style={{ display: "flex", gap: 10, fontSize: 9, color: "var(--text-muted)", marginBottom: 5, flexWrap: "wrap" }}>
-            {[["Standard","var(--clr-green)"],["Escalating","var(--clr-blue)"],["Basic","var(--clr-amber)"],["Income target","var(--clr-red)"]].map(([l,c])=>(
-              <span key={l} style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:7,height:7,borderRadius:2,background:c,display:"inline-block"}}/>{l}</span>
-            ))}
-          </div>
-          <svg width="100%" height="140" viewBox={`0 0 ${W} 140`} preserveAspectRatio="none" style={{ display: "block" }}>
-            <defs>
-              {[["lStd","var(--clr-green)"],["lEsc","var(--clr-blue)"],["lBas","var(--clr-amber)"]].map(([id,c])=>(
-                <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={c} stopOpacity="0.14"/><stop offset="95%" stopColor={c} stopOpacity="0.02"/>
-                </linearGradient>
-              ))}
-            </defs>
-            {[0.25,0.5,0.75].map(f => { const y=(130-f*(130-12)).toFixed(0); return <line key={f} x1="30" y1={y} x2={W-8} y2={y} stroke="var(--border-subtle)" strokeWidth="0.5" />; })}
-            {lifeSeries.length > 1 && (() => {
-              const toXL = a => toSvgX(a, pa, maxLifeAge);
-              const toYL = v => { const H2=130; return (H2-8-((v/Math.max(1,lifeMax))*(H2-20))).toFixed(1); };
-              const stdLine = lifeSeries.map((r,i)=>`${i===0?"M":"L"}${toXL(r.age).toFixed(1)},${toYL(r.std)}`).join(" ");
-              const escLine = lifeSeries.map((r,i)=>`${i===0?"M":"L"}${toXL(r.age).toFixed(1)},${toYL(r.esc)}`).join(" ");
-              const basLine = lifeSeries.map((r,i)=>`${i===0?"M":"L"}${toXL(r.age).toFixed(1)},${toYL(r.bas)}`).join(" ");
-              const targetY = toYL(monthlyTarget);
-              const mkFillL = (pts,gId,c) => { const f=pts.split(" ")[0].replace("M","").split(","); const l=pts.split(" ").slice(-1)[0].replace("L","").split(","); const a=`${pts} L${l[0]},122 L${f[0]},122 Z`; return <><path d={a} fill={`url(#${gId})`}/><path d={pts} fill="none" stroke={c} strokeWidth="1.5"/></>; };
-              // find crossover age (escalating > standard)
-              const crossRow = lifeSeries.find(r => r.esc >= r.std);
-              const crossAge = crossRow?.age;
-              return (<>
-                {mkFillL(stdLine,"lStd","var(--clr-green)")}
-                {mkFillL(escLine,"lEsc","var(--clr-blue)")}
-                {mkFillL(basLine,"lBas","var(--clr-amber)")}
-                {monthlyTarget > 0 && <line x1="30" y1={targetY} x2={W-8} y2={targetY} stroke="var(--clr-red)" strokeWidth="1" strokeDasharray="4 3" />}
-                {crossAge && crossAge > pa && crossAge < 94 && (<>
-                  <line x1={toXL(crossAge).toFixed(1)} y1="8" x2={toXL(crossAge).toFixed(1)} y2="122" stroke="var(--clr-blue)" strokeWidth="0.6" strokeDasharray="2 2"/>
-                  <text x={Number(toXL(crossAge).toFixed(1))+2} y="18" fontSize="7" fill="var(--clr-blue)">Esc&gt;Std</text>
-                  <text x={Number(toXL(crossAge).toFixed(1))+2} y="26" fontSize="7" fill="var(--clr-blue)">age {crossAge}</text>
-                </>)}
-              </>);
-            })()}
-            {[pa, Math.round((pa+95)/2), 80, 95].filter((v,i,a)=>a.indexOf(v)===i && v>=pa && v<=95).map(age => (
-              <text key={age} x={toSvgX(age,pa,maxLifeAge)} y="138" textAnchor="middle" fontSize="8" fill="var(--text-muted)">{age}</text>
-            ))}
-          </svg>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4, marginTop: 5 }}>
-            <SmallCard label="Standard · flat" value={fmt(stdMonthly) + "/mo"} color="var(--clr-green)" />
-            <SmallCard label="Escalating · 2%/yr" value={fmt(escMonthly) + " → " + fmt(Math.round(escMonthly * Math.pow(1.02, 95 - pa)))} color="var(--clr-blue)" />
-            <SmallCard label="Basic · flat + bequest" value={fmt(basMonthly) + "/mo"} color="var(--clr-amber)" />
-          </div>
-        </div>
-      </div>
-
-      {/* ══ ROW 4: Cashflow/Tax + Alerts + Household/Compare ════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
-
-        {/* R4C1 Cashflow & tax */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}><PanelIcon color="var(--clr-amber)" icon={ArrowRightLeft} /><span style={titleStyle}>Cashflow &amp; tax</span><NavChip onClick={() => onNavigate("table")} /></div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 5, marginBottom: 7 }}>
-            <SmallCard label="Cumulative contributions" value={fmt(cumContrib)} color="var(--clr-green)" note={"avg " + fmt(Math.round(cumContrib / Math.max(1, pa - ca))) + "/yr"} />
-            <SmallCard label="Cumulative outflows" value={fmt(cumOutflows)} color="var(--clr-red)" note={cumContrib > 0 ? Math.round(cumOutflows/cumContrib*100) + "% of contributions" : ""} />
-            <SmallCard label="Total interest earned" value={fmt(cumInterest)} color="var(--clr-blue)" note={(pa - ca) + "-yr compound" } />
-            <SmallCard label="Est. RSTU tax saving" value={estimatedTaxSavings ? fmt(estimatedTaxSavings) + "/yr" : "—"} color="var(--clr-amber)" note="~24% marginal rate" />
-          </div>
-          <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={microLbl}>Net CPF at age {pa}</span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--clr-green)", fontVariantNumeric: "tabular-nums" }}>+{fmt(totalAtPayout)}</span>
-          </div>
-        </div>
-
-        {/* R4C2 Milestone alerts */}
-        <div style={panelStyle}>
-          <div style={hdrStyle}>
-            <PanelIcon color="var(--clr-amber)" icon={Bell} />
-            <span style={titleStyle}>Milestone alerts</span>
-            {alertCount > 0 && (
-              <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 999, fontWeight: 700,
-                background: "rgba(var(--clr-red-rgb),0.12)", color: "var(--clr-red)",
-                border: "1px solid rgba(var(--clr-red-rgb),0.3)", marginLeft: 2 }}>
-                {alertCount} alert{alertCount > 1 ? "s" : ""}
-              </span>
-            )}
-            <NavChip onClick={() => onNavigate("summary")} />
-          </div>
-          {gapAlert && (
-            <div style={{ display: "flex", gap: 7, alignItems: "flex-start", padding: "5px 7px", borderRadius: 8,
-              marginBottom: 4, borderLeft: "2px solid var(--clr-red)", background: "rgba(var(--clr-red-rgb),0.08)" }}>
-              <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 999, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0,
-                background: "rgba(var(--clr-red-rgb),0.12)", color: "var(--clr-red)", border: "1px solid rgba(var(--clr-red-rgb),0.3)" }}>Gap</span>
-              <span style={{ fontSize: 10, color: "var(--text-main)", lineHeight: 1.4 }}>{gapAlert}</span>
-            </div>
-          )}
-          {alertItems.slice(0, 4).map((m, i) => (
-            <div key={i} style={{ display: "flex", gap: 7, alignItems: "flex-start", padding: "5px 7px", borderRadius: 8,
-              marginBottom: 4, borderLeft: `2px solid ${m.severity === "high" ? "var(--clr-red)" : "var(--clr-amber)"}`,
-              background: m.severity === "high" ? "rgba(var(--clr-red-rgb),0.06)" : "rgba(var(--clr-amber-rgb),0.06)" }}>
-              <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 999, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0,
-                color: m.severity === "high" ? "var(--clr-red)" : "var(--clr-amber)",
-                background: m.severity === "high" ? "rgba(var(--clr-red-rgb),0.12)" : "rgba(var(--clr-amber-rgb),0.12)",
-                border: `1px solid ${m.severity === "high" ? "rgba(var(--clr-red-rgb),0.3)" : "rgba(var(--clr-amber-rgb),0.3)"}` }}>
-                {m.age ? "Age " + m.age : m.severity}
-              </span>
-              <span style={{ fontSize: 10, color: "var(--text-main)", lineHeight: 1.4 }}>{m.message || m.text || String(m)}</span>
-            </div>
-          ))}
-          {alertCount === 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 8px", borderRadius: 8,
-              background: "rgba(var(--clr-green-rgb),0.08)", border: "1px solid rgba(var(--clr-green-rgb),0.25)" }}>
-              <CheckCircle2 style={{ width: 11, height: 11, color: "var(--clr-green)" }} />
-              <span style={{ fontSize: 10, color: "var(--clr-green)", fontWeight: 700 }}>No alerts — all checks passed</span>
-            </div>
-          )}
-        </div>
-
-        {/* R4C3 Household (if enabled) OR Compare delta (if scenarios set) */}
-        {showHousehold ? (
-          <div style={panelStyle}>
-            <div style={hdrStyle}><PanelIcon color="var(--clr-purple)" icon={Users} /><span style={titleStyle}>Household · combined view</span><NavChip onClick={() => onNavigate("household")} /></div>
-            <SmallCard label={"Combined CPF at age " + spousePa} value={fmt(combinedCPF)} color="var(--clr-purple)" />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, margin: "5px 0" }}>
-              <SmallCard label="Est. combined monthly" value={fmt(combinedMonthly) + "/mo"} color="var(--clr-green)" />
-              <SmallCard label="Income coverage" value={combinedIncCoverage + "%"} color={combinedIncCoverage >= 100 ? "var(--clr-green)" : "var(--clr-amber)"} />
-            </div>
-            <div style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.5, marginTop: 4 }}>
-              Primary (age {pa}) · Spouse (age {spousePa}) · independent projections
-            </div>
-          </div>
-        ) : hasCompare ? (
-          <div style={panelStyle}>
-            <div style={hdrStyle}><PanelIcon color="var(--clr-green)" icon={Split} /><span style={titleStyle}>Scenario compare</span><NavChip onClick={() => onNavigate("compare")} /></div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 6 }}>
-              <div style={{ background: "var(--bg-input)", borderRadius: 8, padding: "8px 10px", borderTop: "2px solid var(--clr-blue)" }}>
-                <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 2 }}>{scenarioLabelA || "Scenario A"}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", fontVariantNumeric: "tabular-nums" }}>{fmt(cmpATotal)}</div>
-              </div>
-              <div style={{ background: "var(--bg-input)", borderRadius: 8, padding: "8px 10px", borderTop: "2px solid var(--clr-green)" }}>
-                <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 2 }}>{scenarioLabelB || "Scenario B (current)"}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-green)", fontVariantNumeric: "tabular-nums" }}>{fmt(cmpBTotal)}</div>
-              </div>
-            </div>
-            <div style={{ padding: "7px 9px", background: "rgba(var(--clr-green-rgb),0.1)", borderRadius: 8, border: "1px solid rgba(var(--clr-green-rgb),0.3)" }}>
-              <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 2 }}>Delta (B − A)</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: cmpDelta >= 0 ? "var(--clr-green)" : "var(--clr-red)", fontVariantNumeric: "tabular-nums" }}>
-                {cmpDelta >= 0 ? "+" : ""}{fmt(cmpDelta)} total CPF
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={panelStyle}>
-            <div style={hdrStyle}><PanelIcon color="var(--clr-purple)" icon={Users} /><span style={titleStyle}>Household / Scenarios</span></div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.6, padding: "8px 0" }}>
-              Enable <strong style={{ color: "var(--text-main)" }}>Household mode</strong> in the sidebar to see a combined projection for two members, or save <strong style={{ color: "var(--text-main)" }}>Scenario A &amp; B</strong> in the Compare tab to see a delta view here.
-            </div>
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-              <button onClick={() => onNavigate("household")} style={{ fontSize: 10, padding: "5px 10px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
-                <Users style={{ width: 10, height: 10, display: "inline", marginRight: 4 }} />Household
-              </button>
-              <button onClick={() => onNavigate("compare")} style={{ fontSize: 10, padding: "5px 10px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
-                <Split style={{ width: 10, height: 10, display: "inline", marginRight: 4 }} />Compare
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // ReadinessTab — Phase 1+2 implementation
 // Pure display component: reads computed data via props, writes back via existing
@@ -5437,7 +4669,7 @@ function ReadinessTab({
   const bigNumStyle = { fontSize: 26, fontWeight: 700, color: "var(--text-bright)", letterSpacing: "-0.02em", lineHeight: 1.1 };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="readiness-tab-outer" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* ── ROW 1: Gauge + 3-col KPI hero ── */}
       <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
@@ -5658,7 +4890,6 @@ export default function App() {
   const activeTabRef = useRef("readiness");
   const isForeignerRef      = useRef(false);        // stable ref so keyboard nav can read current citizenship
   const cpfSchemeRef        = useRef('cpf_life');   // stable ref so keyboard nav can read current scheme
-  const cockpitModeRef      = useRef(false);        // stable ref for keyboard handler (avoids stale closure)
   const householdEnabledRef = useRef(false);        // stable ref so keyboard nav can read current household state
   // Guard flag: set to true by applyStrategy before it writes vcSaTopup/vc3aCash so the
   // lever-change useEffect can distinguish a programmatic apply from a manual sidebar edit.
@@ -5764,8 +4995,6 @@ export default function App() {
   const hamburgerRef = useRef(null);                              // FIX (Bug 2 iOS): tracks button DOM node for portal positioning
   const [tabsMenuPos, setTabsMenuPos] = useState({ top: 0, right: 16 }); // fixed coords computed at open-time
   const [desktopMode, setDesktopMode] = useState("auto");
-  const [cockpitMode, setCockpitMode] = useState(false);
-  cockpitModeRef.current = cockpitMode; // keep ref current for keyboard shortcut handler
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPresets, setShowPresets] = useState(false);
   const [tableSubTab, setTableSubTab] = useState("projection");
@@ -5894,10 +5123,21 @@ export default function App() {
   // desktop tab switches so the user's manual choice is fully respected.
   const sidebarWasOpenRef = useRef(true);
   const prevTabRef = useRef(null);
+  // Tracks explicit user show/hide choice made WHILE on the Readiness tab.
+  // null  = no explicit override yet → auto-collapse on every entry (first-visit default).
+  // true/false = user has deliberately toggled; honour that choice on re-entry.
+  // Set inside handleSidebarToggle when activeTab === 'readiness'.
+  const readinessSidebarUserPref = useRef(null);
   useEffect(() => {
     if (activeTab === "readiness") {
       sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Readiness
-      setSidebarOpen(false);                   // auto-collapse for max dashboard width
+      // If the user has previously made an explicit show/hide choice on this tab, honour it.
+      // Otherwise default to auto-collapse so the dashboard gets maximum width on first entry.
+      if (readinessSidebarUserPref.current !== null) {
+        setSidebarOpen(readinessSidebarUserPref.current);
+      } else {
+        setSidebarOpen(false);                 // first-entry default: auto-collapse
+      }
     } else if (window.innerWidth <= 1024) {
       setSidebarOpen(false);                   // mobile/tablet: always hide inputs on tab switch
     } else if (prevTabRef.current === "readiness") {
@@ -5908,21 +5148,6 @@ export default function App() {
     // sidebarOpen intentionally omitted from deps — we only want to fire on tab transitions
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
-
-  // ── Cockpit mode: auto-collapse sidebar on enter, restore on exit ────────
-  // Uses the same sidebarWasOpenRef pattern as Readiness so manual sidebar
-  // preference is preserved when the user exits cockpit mode.
-  useEffect(() => {
-    if (cockpitMode) {
-      sidebarWasOpenRef.current = sidebarOpen;
-      setSidebarOpen(false);
-    } else {
-      // Only restore if cockpitMode just switched off (not on initial mount)
-      setSidebarOpen(sidebarWasOpenRef.current);
-    }
-    // sidebarOpen intentionally omitted — snapshot on entry only
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cockpitMode]);
 
   // Goal Simulator — clear "Applied" badge and snapshot when user manually edits the levers after applying a strategy.
   // The isApplyingStrategyRef guard prevents this from firing when applyStrategy itself writes
@@ -6662,11 +5887,6 @@ export default function App() {
   // through stable refs so the handler always uses current state/functions.
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
-      // Exit cockpit with Escape; suppress all other shortcuts while cockpit is open
-      if (cockpitModeRef.current) {
-        if (e.key === 'Escape') setCockpitMode(false);
-        return;
-      }
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
         // UX-12: was Ctrl+S — conflicted with browser "Save Page". Changed to Ctrl+Shift+S.
         e.preventDefault();
@@ -9159,7 +8379,7 @@ export default function App() {
     // Finance Ratios silently showed no XIRR values. Skipping all other tabs (accumulation,
     // compare, household, ledger, strategy) avoids the 270-iteration Newton-Raphson cost
     // on input changes while those tabs are open.
-    if (activeTab !== "table" && activeTab !== "summary" && !cockpitMode) return {};
+    if (activeTab !== "table" && activeTab !== "summary") return {};
     const pa = payoutAge65; // use debounced value — matches projection/payoutProjection which are also debounced
     const ca = Number(debouncedInputs.currentAge) || 35;
 
@@ -10854,6 +10074,33 @@ ${milestoneSnapshotHtml}
       setExportModal({ type: "pdf", content: html });
     } catch (e) { setConfirmModal({ title: "Report Failed", message: "Could not generate the PDF report: " + e.message, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" }); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
   };
+  // ─── SIDEBAR TOGGLE HANDLER ───────────────────────────────────────────────────
+  // Wraps setSidebarOpen so that when the user manually toggles the sidebar while
+  // ON the Readiness tab, both refs are updated to reflect their intention:
+  //   sidebarWasOpenRef      — used by prevTabRef===readiness branch when LEAVING Readiness
+  //   readinessSidebarUserPref — used by the readiness entry branch on EVERY RE-ENTRY
+  // Without sidebarWasOpenRef, leaving Readiness would restore the PRE-entry state.
+  // Without readinessSidebarUserPref, re-entering Readiness would always auto-collapse
+  // even if the user had explicitly opened the panel on a previous visit.
+  const handleSidebarToggle = useCallback(() => {
+    setSidebarOpen(v => {
+      const next = !v;
+      if (activeTab === 'readiness') {
+        // User explicitly toggled while ON Readiness — update both refs so:
+        //   sidebarWasOpenRef  → restore this state when leaving Readiness
+        //   readinessSidebarUserPref → honour this choice on every future re-entry
+        sidebarWasOpenRef.current = next;
+      }
+      // Always track the user's explicit show/hide intent regardless of which tab
+      // they are on. Without this, toggling Show on any other tab left
+      // readinessSidebarUserPref === null, causing Readiness to auto-collapse
+      // on entry even though the user had just explicitly opened the panel.
+      readinessSidebarUserPref.current = next;
+      return next;
+    });
+    setShowSettingsMenu(false);
+  }, [activeTab]);
+
   // ─── EXECUTIVE DASHBOARD MODE ─────────────────────────────────────────────────
   // Activates when: FHD/auto≥1920px + sidebar collapsed + on Summary tab.
   // Replaces the normal vertical-scroll layout with a fixed 2-row × 2-col grid
@@ -10873,6 +10120,7 @@ ${milestoneSnapshotHtml}
       setZ2z3Expanded(true);
       setLifePlansExpanded(true);
       setZ5Expanded(true);
+      setZ6Expanded(true);
     }
   }, [execDashMode]);
 
@@ -12158,60 +11406,169 @@ ${milestoneSnapshotHtml}
         }
 
         /* ─── EXECUTIVE DASHBOARD — FHD + sidebar collapsed + Summary tab ─────────────
-           Activates via .summary-exec-dash (applied by React when execDashMode is true).
-           Two-row, two-column CSS Grid — no scrolling, all critical data fits on screen:
-             Row 1 (auto): Zone 1 hero KPI tiles — full width (2 cols)
-             Row 2 (1fr):  Col A 40% → Account Balances (Z2) and FRS tracker
-                           Col B 60% → CPF LIFE Plans (Z4) or RSS summary
-           Zone 3 (growth story), Zone 5 (milestone alerts), Zone 6 (supporting stats),
-           milestone snapshots spine chart, gap alert, intro accordion, what-if explorer,
-           property notices — all hidden in exec mode (non-critical for exec view; alerts
-           are already surfaced via the Z1 alert badge and milestone count in Z1 footer).
-           Inside the shown zones, collapse buttons are hidden (collapsing a zone inside
-           a fixed grid creates empty space rather than reclaiming height).              */
+           Activates via .summary-exec-dash (added by React when execDashMode is true).
+           Three-column × four-row CSS Grid — no outer scroll; each zone cell has its own
+           overflow-y:auto so content that overflows its bounded area scrolls internally.
+
+           Grid anatomy (at 1920 × 1080 with header + tabs ≈ 92px overhead):
+             Row 1 (auto  ≈110px):  Zone 1 KPI tiles — full width
+             Row 2 (2fr   ≈360px):  z23-wrap col1 │ Zone 4 LIFE plans col2 │ Zone 5 alerts col3
+             Row 3 (1fr   ≈180px):  z23-wrap cont │ Goal card col2         │ Zone 6 stats col3
+             Row 4 (1fr   ≈180px):  z23-wrap cont │ What-If col2           │ rss col3 (if RSS mode)
+
+           Each column = 1fr ≈ 613px at 1920px — no over-stretching.
+           z23-wrap spans rows 2–4 showing both Z2 (Account Balances) and Z3 (Growth Story).
+           Zone 4 spans rows 2–3; Goal Card sits in row 4 below it.
+           Zone 5 / Zone 6 / What-If stack individually in column 3.
+
+           Still hidden (secondary / interactive — not exec-at-a-glance):
+             gap-alert, post-wizard, intro accordion, milestone-snap spine, pledge, ra-oa
+           Shown: z23-wrap (Z2+Z3), Z4 / rss, Goal, Z5, Z6, What-If (all with own scroll)
+           Collapse buttons hidden — collapsing in a fixed grid creates dead empty space.    */
         .summary-exec-dash {
           display: grid !important;
           flex-direction: unset !important;
-          grid-template-columns: 40% 1fr;
-          grid-template-rows: auto 1fr;
+          grid-template-columns: 1fr 1fr 1fr;
+          grid-template-rows: auto 2fr 1fr 1fr;
           gap: 12px !important;
           height: 100%;
           min-height: 0;
-          padding-bottom: 12px;
         }
-        /* Row 1: Zone 1 hero KPI tiles — spans both columns */
-        .summary-exec-dash [data-zone="z1"]       { grid-column: 1 / -1; grid-row: 1; }
-        /* Row 2 Col A: Account Balances (Zone 2+3 wrapper, Zone 3 hidden inside) */
-        .summary-exec-dash [data-zone="z23-wrap"] { grid-column: 1; grid-row: 2; overflow-y: auto; min-height: 0; }
-        /* Row 2 Col B: CPF LIFE Plans (Zone 4) or RSS summary */
-        .summary-exec-dash [data-zone="z4"]        { grid-column: 2; grid-row: 2; overflow-y: auto; min-height: 0; }
-        .summary-exec-dash [data-zone="rss"]       { grid-column: 2; grid-row: 2; overflow-y: auto; min-height: 0; }
-        /* Col B — Goal Card as a compact band at the bottom of the LIFE/RSS panel.
-           Uses absolute positioning inside the already-scrollable col B area via a
-           flex wrapper below (see z4 / rss data-zone containers above).             */
-        .summary-exec-dash [data-zone="goal"]      { grid-column: 2; grid-row: 3; }
 
-        /* ── Hide non-essential zones in exec mode ── */
+        /* Row 1: Zone 1 KPI tiles — spans all 3 columns */
+        .summary-exec-dash [data-zone="z1"]       { grid-column: 1 / -1; grid-row: 1; }
+
+        /* Col 1, rows 2–4: Account Balances + Growth Story — both Z2 and Z3 visible */
+        .summary-exec-dash [data-zone="z23-wrap"] {
+          grid-column: 1; grid-row: 2 / 5;
+          overflow-y: auto; min-height: 0;
+        }
+
+        /* Col 2, rows 2–3: CPF LIFE Plans (standard/escalating/basic) */
+        .summary-exec-dash [data-zone="z4"]       {
+          grid-column: 2; grid-row: 2 / 4;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 2 rows 2–3 in RSS mode */
+        .summary-exec-dash [data-zone="rss"]      {
+          grid-column: 2; grid-row: 2 / 4;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 2, row 4: Goal Income Card */
+        .summary-exec-dash [data-zone="goal"]     { grid-column: 2; grid-row: 4; min-height: 0; }
+
+        /* Col 3, row 2: Milestone Alerts */
+        .summary-exec-dash [data-zone="z5"]       {
+          grid-column: 3; grid-row: 2;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 3, row 3: Supporting Statistics */
+        .summary-exec-dash [data-zone="z6"]       {
+          grid-column: 3; grid-row: 3;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 3, row 4: What-If Explorer */
+        .summary-exec-dash [data-zone="what-if"]  {
+          grid-column: 3; grid-row: 4;
+          overflow-y: auto; min-height: 0;
+        }
+
+        /* ── Show Z3 inside z23-wrap (restore both Z2 and Z3 side-by-side) ── */
+        /* z2-z3-grid stays at its default 1fr 1fr — no override needed */
+
+        /* ── Hide non-exec zones (secondary / volatile — not useful at a glance) ── */
         .summary-exec-dash [data-zone="gap-alert"],
         .summary-exec-dash [data-zone="post-wizard"],
         .summary-exec-dash [data-zone="intro"],
         .summary-exec-dash [data-zone="milestone-snap"],
         .summary-exec-dash [data-zone="pledge"],
-        .summary-exec-dash [data-zone="ra-oa"],
-        .summary-exec-dash [data-zone="z5"],
-        .summary-exec-dash [data-zone="z6"],
-        .summary-exec-dash [data-zone="what-if"]  { display: none !important; }
-
-        /* ── Zone 3 hidden inside z23-wrap → Zone 2 fills the full Col A width ── */
-        .summary-exec-dash [data-zone="z23-wrap"] [data-zone="z3"] { display: none !important; }
-        .summary-exec-dash [data-zone="z23-wrap"] .z2-z3-grid { grid-template-columns: 1fr !important; }
+        .summary-exec-dash [data-zone="ra-oa"]    { display: none !important; }
 
         /* ── Hide Expand/Collapse toggle buttons inside shown zones ──
-           Collapsing a zone in exec mode creates empty grid space; buttons are noise. */
-        .summary-exec-dash [data-collapse-btn]     { display: none !important; }
+           Collapsing a zone creates dead empty grid space in exec mode. */
+        .summary-exec-dash [data-collapse-btn]    { display: none !important; }
 
-        /* ── Remove outer padding on cpf-tab-content so exec grid fills to edges ── */
-        .cpf-tab-content[data-exec="true"]         { overflow: hidden !important; padding-top: 0 !important; padding-bottom: 0 !important; }
+        /* ── Remove outer padding on cpf-tab-content so exec grid fills edge-to-edge ── */
+        .cpf-tab-content[data-exec="true"]        {
+          overflow: hidden !important;
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
+        }
+
+        /* ── Readiness tab in FHD with sidebar collapsed: centre content, prevent over-stretch ──
+           The Readiness sidebar auto-collapses on entry so this fires immediately in FHD.
+           Cap all three row grids at 1400px and centre them to match other tab card widths. */
+        .cpf-layout[data-sidebar-open="false"] .readiness-tab-outer {
+          max-width: 1400px;
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        /* ── All other KPI tabs (Accumulation, Life, Compare, Household, Strategy, RSS, Guide)
+           when sidebar is collapsed: same 1400px cap + centring as Readiness.
+           Applies in FHD (sidebar collapsed via grid-template-columns:0 1fr) and in HD when
+           the user manually hides the panel. Summary tab is deliberately excluded — its exec
+           dashboard is designed to fill the full viewport for maximum information density.
+           Readiness tab is excluded — already handled by .readiness-tab-outer above.         */
+        .cpf-layout[data-sidebar-open="false"] .fhd-tab-inner {
+          max-width: 1400px;
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        /* FHD sidebar-hidden: fill viewport height + adaptive chart sizing.
+           cpf-main-wrap is height:100% + overflow:hidden. flex:1 on cpf-tab-content
+           stretches it to fill remaining height below the KPI strip and tab bar.
+           fhd-tab-inner fills cpf-tab-content and becomes the internal scroll zone.
+           Exec dashboard (data-exec=true) excluded - it manages its own grid layout.
+           fhd-chart-grow: applied in JSX to fixed-height chart divs. Expands to fill
+           remaining vertical space in FHD-collapsed; !important overrides inline height. */
+        .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
+          flex: 1 1 0;
+          min-height: 0;
+          overflow: hidden;
+          padding: 8px 0;
+        }
+        .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-tab-inner {
+          flex: 1 1 0;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          overflow-y: auto;
+          overflow-x: hidden;
+          scrollbar-width: thin;
+          scrollbar-color: var(--border-strong) transparent;
+        }
+        .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-chart-grow {
+          flex: 1 1 0 !important;
+          height: auto !important;
+          min-height: 220px !important;
+          max-height: 540px;
+        }
+        @media (min-width: 1920px) {
+          .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
+            flex: 1 1 0;
+            min-height: 0;
+            overflow: hidden;
+            padding: 8px 0;
+          }
+          .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-tab-inner {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-strong) transparent;
+          }
+          .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-chart-grow {
+            flex: 1 1 0 !important;
+            height: auto !important;
+            min-height: 220px !important;
+            max-height: 540px;
+          }
+        }
 
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
         @media (max-width: 1024px) and (min-width: 769px) {
@@ -13059,27 +12416,14 @@ ${milestoneSnapshotHtml}
               <button onClick={() => setIsRealDollars(true)} style={{ padding: "5px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: isRealDollars ? "var(--ctrl-active-bg)" : "transparent", color: isRealDollars ? "#ffffff" : "var(--text-muted)", whiteSpace: "nowrap" }}>Real ($)</button>
             </div>
 
-            {/* 3. Cockpit — desktop only; toggles the consolidated executive dashboard */}
-            <button className="cpf-nav-d-only" onClick={() => setCockpitMode(v => !v)}
-              style={{ display: "flex", alignItems: "center", gap: 5,
-                background: cockpitMode ? "rgba(var(--clr-blue2-rgb),0.14)" : "var(--bg-panel)",
-                color: cockpitMode ? "var(--clr-blue)" : "var(--text-main)",
-                padding: "6px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-                border: `1px solid ${cockpitMode ? "rgba(var(--clr-blue2-rgb),0.4)" : "var(--border-strong)"}`,
-                cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, transition: "all 0.12s" }}
-              title={cockpitMode ? "Exit cockpit view (Esc)" : "Open consolidated cockpit dashboard"}>
-              <LayoutDashboard style={{ width: 13, height: 13 }} />
-              {cockpitMode ? "Exit Cockpit" : "Cockpit"}
-            </button>
-
-            {/* 4. Samples — desktop only (promoted before Share for discoverability) */}
+            {/* 3. Samples — desktop only (promoted before Share for discoverability) */}
             <button className="cpf-nav-d-only" onClick={() => setShowPresets(true)}
               style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", padding: "6px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
               title="Load a sample profile">
               <Users style={{ width: 13, height: 13 }} />Samples
             </button>
 
-            {/* 5. Share dropdown — desktop + tablet */}
+            {/* 4. Share dropdown — desktop + tablet */}
             <div className="cpf-nav-dt-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
                 onClick={() => { setShowShareMenu(v => !v); setShowReportMenu(false); setShowSettingsMenu(false); }}
@@ -13103,7 +12447,7 @@ ${milestoneSnapshotHtml}
               )}
             </div>
 
-            {/* 6. Report dropdown — desktop + tablet */}
+            {/* 5. Report dropdown — desktop + tablet */}
             <div className="cpf-nav-dt-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
                 onClick={() => { setShowReportMenu(v => !v); setShowShareMenu(false); setShowSettingsMenu(false); }}
@@ -13124,7 +12468,7 @@ ${milestoneSnapshotHtml}
               )}
             </div>
 
-            {/* 7. Display — desktop only: FHD/HD/Auto + Dark/Light + Sidebar toggle + Setup Wizard */}
+            {/* 6. Display — desktop only: FHD/HD/Auto + Dark/Light + Sidebar toggle + Setup Wizard */}
             <div className="cpf-nav-d-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
                 onClick={() => { setShowSettingsMenu(v => !v); setShowShareMenu(false); setShowReportMenu(false); }}
@@ -13148,7 +12492,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
                   <button className="cpf-nav-dd-item" style={{ color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)" }}
-                    onClick={() => { setSidebarOpen(v => !v); setShowSettingsMenu(false); }}>
+                    onClick={handleSidebarToggle}>
                     <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Input Panel" : "Show Input Panel"}
                   </button>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
@@ -13160,7 +12504,7 @@ ${milestoneSnapshotHtml}
               )}
             </div>
 
-            {/* 8. Reset — desktop only, moved to end (destructive action goes last) */}
+            {/* 7. Reset — desktop only, moved to end (destructive action goes last) */}
             <button className="cpf-nav-d-only" onClick={handleReset}
               style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.08)", color: "var(--clr-red)", padding: "6px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px solid rgba(239,68,68,0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
               title="Reset all inputs to defaults">
@@ -13242,7 +12586,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
                   <button className="cpf-nav-dd-item" style={{ color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)" }}
-                    onClick={() => { setSidebarOpen(v => !v); setShowSettingsMenu(false); }}>
+                    onClick={handleSidebarToggle}>
                     <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Input Panel" : "Show Input Panel"}
                   </button>
                 </div>
@@ -16765,44 +16109,8 @@ ${milestoneSnapshotHtml}
           </div>
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
           <div className="cpf-tab-content" data-exec={execDashMode ? "true" : undefined}>
-            {/* ── COCKPIT DASHBOARD ── */}
-            {cockpitMode && (
-              <CockpitDashboard
-                inputs={debouncedInputs}
-                isDark={isDark}
-                isRealDollars={isRealDollars}
-                isForeigner={isForeigner}
-                isRSSMode={isRSSMode}
-                displayAccumulation={displayAccumulation}
-                accumulationByAge={accumulationByAge}
-                payoutAge65={payoutAge65}
-                lifePlans={lifePlans}
-                highlightPlan={highlightPlan}
-                setHighlightPlan={setHighlightPlan}
-                basicPremiumPct={basicPremiumPct}
-                payoutProjection={payoutProjection}
-                milestones={milestones}
-                gapAlert={gapAlert}
-                xirrByAge={xirrByAge}
-                estimatedTaxSavings={estimatedTaxSavings}
-                monteCarloData={monteCarloData}
-                householdEnabled={householdEnabled}
-                debouncedSpouseInputs={debouncedSpouseInputs}
-                spouseAccumulationByAge={spouseAccumulationByAge}
-                displayHouseholdByAge={displayHouseholdByAge}
-                scenarioA={scenarioA}
-                scenarioB={scenarioB}
-                scenarioLabelA={scenarioLabelA}
-                scenarioLabelB={scenarioLabelB}
-                comparisonData={comparisonData}
-                applyInflation={applyInflation}
-                formatCurrency={formatCurrency}
-                onNavigate={(tabId) => { setCockpitMode(false); setActiveTab(tabId); }}
-                onExit={() => setCockpitMode(false)}
-              />
-            )}
             {/* ── READINESS TAB ── */}
-            {activeTab === "readiness" && !cockpitMode && (
+            {activeTab === "readiness" && (
               <ReadinessTab
                 inputs={inputs}
                 displayAccumulation={displayAccumulation}
@@ -16823,7 +16131,7 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
             {activeTab === "guide" && guideView === 'quickstart' && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
                 {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
                 <div id="qs-sticky-banner" style={{ position: "sticky", top: -28, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
@@ -16850,10 +16158,11 @@ ${milestoneSnapshotHtml}
                       e.target.value = "";
                       const target = document.getElementById(id);
                       const bar    = document.getElementById('qs-sticky-banner');
-                      const scrollEl = target?.closest('.cpf-tab-content');
+                      const scrollEl = target?.closest('.fhd-tab-inner') || target?.closest('.cpf-tab-content');
                       if (bar && target) {
                         const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
-                        const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
+                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                         if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
                         else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -16878,10 +16187,11 @@ ${milestoneSnapshotHtml}
                       <button key={id} onClick={() => {
                         const target = document.getElementById(id);
                         const bar    = document.getElementById('qs-sticky-banner');
-                        const scrollEl = target?.closest('.cpf-tab-content');
+                        const scrollEl = target?.closest('.fhd-tab-inner') || target?.closest('.cpf-tab-content');
                         if (bar && target) {
                           const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
-                          const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
+                          const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                          const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                           if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
                           else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                         } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -16978,8 +16288,9 @@ ${milestoneSnapshotHtml}
                   <div style={{ position: "sticky", bottom: 20, display: "flex", justifyContent: "flex-end", pointerEvents: "none", marginTop: 4 }}>
                     <button
                       onClick={() => {
-                        const scrollEl = document.querySelector('.cpf-tab-content');
-                        const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
+                        const scrollEl = document.querySelector('.fhd-tab-inner') || document.querySelector('.cpf-tab-content');
+                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                         if (isScrollable) { scrollEl.scrollTo({ top: 0, behavior: 'smooth' }); }
                         else              { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                       }}
@@ -16994,7 +16305,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── SUMMARY TAB ── */}
-            {activeTab === "summary" && !cockpitMode && (
+            {activeTab === "summary" && (
               <div className={execDashMode ? "summary-exec-dash" : ""} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
                 {/* UX-P2-B: Contribution gap alert — moved from buried sidebar position to top of
@@ -18534,8 +17845,8 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── ACCUMULATION TAB ── */}
-            {activeTab === "accumulation" && !cockpitMode && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
+            {activeTab === "accumulation" && (
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
                 {/* ── Context banners (RSS / Foreigner) ── */}
                 {(() => {
                   const isRSSGrowth = debouncedInputs.cpfScheme === 'rss';
@@ -18687,7 +17998,7 @@ ${milestoneSnapshotHtml}
                     </div>
                   </>);
                 })()}
-                <div style={{ height: 380, minHeight: 380 }}>
+                <div className="fhd-chart-grow" style={{ height: 380, minHeight: 220 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <AreaChart data={(() => {
                       // S1 fix: for RSS members, payoutAge65 (= 65) < currentAge (= 68), so the old
@@ -19035,10 +18346,7 @@ ${milestoneSnapshotHtml}
                 ? (Number(debouncedInputs.saBalance) || 0)
                 : (accumulationByAge.get(rssStartAge)?.ra || 0);
               return (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-                {/* Header + eligibility bar */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>RSS — Retirement Sum Scheme Drawdown</h3>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(var(--clr-blue-rgb),0.06)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", fontSize: 12, color: "var(--text-muted)" }}>
                     {[
                       ["🏛 Eligibility", "SC & PR born before 1958"],
@@ -19052,7 +18360,6 @@ ${milestoneSnapshotHtml}
                       </div>
                     ))}
                   </div>
-                </div>
 
                 {/* Depletion age alert — prominent if < 85 */}
                 {depletionAge != null && (
@@ -19284,8 +18591,8 @@ ${milestoneSnapshotHtml}
                 but if the user was already on the LIFE tab before switching to RSS the
                 activeTab state can be "life" momentarily (the switch useEffect also calls
                 setActiveTab to redirect, but this guard is the belt-and-suspenders defence). */}
-            {activeTab === "life" && !cockpitMode && debouncedInputs.cpfScheme !== 'rss' && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+            {activeTab === "life" && debouncedInputs.cpfScheme !== 'rss' && (
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
                 <div className="life-chart-header" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
                   {/* B6: CPF LIFE eligibility info bar */}
@@ -19420,7 +18727,7 @@ ${milestoneSnapshotHtml}
                     </button>
                   ))}
                 </div>
-                <div style={{ height: 350, minHeight: 350 }}>
+                <div className="fhd-chart-grow" style={{ height: 350, minHeight: 220 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <LineChart data={displayProjection.filter(d => d.age >= payoutAge65)}> {/* BUG-51 fix: use debounced payoutAge65 */}
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
@@ -19589,8 +18896,8 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── COMPARE TAB ── */}
-            {activeTab === "compare" && !cockpitMode && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+            {activeTab === "compare" && (
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
 
                 {/* ── SECTION 2: Scenario Comparison ── */}
                 <div>
@@ -19709,7 +19016,7 @@ ${milestoneSnapshotHtml}
             )}
 
             {/* ── HOUSEHOLD TAB ── */}
-            {activeTab === "household" && !cockpitMode && (() => {
+            {activeTab === "household" && (() => {
               const fmt = v => `$${Math.round(v).toLocaleString()}`;
               const fmtK = v => `$${(v/1000).toFixed(0)}K`;
               const fmtM = v => `$${(v/1e6).toFixed(2)}M`;
@@ -19772,7 +19079,7 @@ ${milestoneSnapshotHtml}
 
               if (!householdEnabled || !spouseProjection.length) {
                 return (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  <div className="fhd-tab-inner" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                     gap: 14, padding: 60, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20 }}>
                     <Users style={{ width: 48, height: 48, color: "var(--text-muted)", opacity: 0.4 }} />
                     <p style={{ fontSize: 14, color: "var(--text-muted)", textAlign: "center", maxWidth: 340, lineHeight: 1.5, margin: 0 }}>
@@ -19783,7 +19090,7 @@ ${milestoneSnapshotHtml}
               }
 
               return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div className="fhd-tab-inner" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {/* Header */}
                   <div style={{ background: "var(--bg-panel)", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 20,
                     padding: "18px 22px", display: "flex", alignItems: "center", gap: 14 }}>
@@ -20322,7 +19629,7 @@ ${milestoneSnapshotHtml}
             })()}
 
             {/* ── DATA TABLE TAB ── */}
-            {activeTab === "table" && !cockpitMode && (
+            {activeTab === "table" && (
               <div>
                 {/* Tab header */}
                 <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: "16px 20px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
@@ -20756,7 +20063,7 @@ ${milestoneSnapshotHtml}
                 When guideView==='reference' the Quick Start block renders null so this block is the
                 sole child of the tab content div. */}
             {activeTab === "guide" && guideView === 'reference' && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
                     and Quick Start/Reference buttons do not scroll away when reading docs. */}
                 <div id="docs-sticky-nav" style={{ position: "sticky", top: -20, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
@@ -20785,14 +20092,16 @@ ${milestoneSnapshotHtml}
                       const target = document.querySelector(href);
                       if (!target) return;
                       const stickyBar = document.getElementById('docs-sticky-nav');
-                      const scrollEl = target.closest('.cpf-tab-content');
+                      // In FHD+collapsed mode the scroll container is .fhd-tab-inner (overflow-y:auto).
+                      // .cpf-tab-content becomes overflow:hidden — scrollBy() on it is a silent no-op.
+                      // Always prefer the inner scroll zone; fall back to cpf-tab-content for sidebar-open mode.
+                      const scrollEl = target.closest('.fhd-tab-inner') || target.closest('.cpf-tab-content');
                       if (stickyBar) {
                         const delta = target.getBoundingClientRect().top
                                     - stickyBar.getBoundingClientRect().bottom
                                     - 8;
-                        const isScrollable = scrollEl &&
-                          getComputedStyle(scrollEl).overflowY !== 'visible' &&
-                          getComputedStyle(scrollEl).overflowY !== 'clip';
+                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                         if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
                         else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else {
@@ -20860,19 +20169,17 @@ ${milestoneSnapshotHtml}
                         // fixed scrollMarginTop fails when the bar wraps to 3+ rows (bar bottom ~176px
                         // but old scrollMarginTop was only 160px, hiding the section heading).
                         const stickyBar = document.getElementById('docs-sticky-nav');
-                        const scrollEl = target.closest('.cpf-tab-content');
+                        const scrollEl = target.closest('.fhd-tab-inner') || target.closest('.cpf-tab-content');
                         if (stickyBar) {
                           // delta = how far to scroll so target top lands just below sticky bar bottom
                           const delta = target.getBoundingClientRect().top
                                       - stickyBar.getBoundingClientRect().bottom
                                       - 8; // 8px breathing room below the bar
-                          // On desktop cpf-tab-content is overflow:auto (real scroll container).
-                          // On tablet/mobile it is overflow:visible — scrollBy is a no-op there,
-                          // so fall back to window.scrollBy which uses the same viewport-relative
-                          // delta (getBoundingClientRect is always relative to the viewport).
-                          const isScrollable = scrollEl &&
-                            getComputedStyle(scrollEl).overflowY !== 'visible' &&
-                            getComputedStyle(scrollEl).overflowY !== 'clip';
+                          // In FHD+collapsed, cpf-tab-content is overflow:hidden — scrollBy is a no-op.
+                          // The real scroll zone is .fhd-tab-inner (overflow-y:auto). Also exclude
+                          // 'hidden' from the isScrollable check so we don't silently swallow the scroll.
+                          const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                          const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                           if (isScrollable) {
                             scrollEl.scrollBy({ top: delta, behavior: 'smooth' });
                           } else {
@@ -21823,7 +21130,7 @@ ${milestoneSnapshotHtml}
               const shortfall = target > 0 ? target - totalCombined : 0;
 
               return (
-                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
+                <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
 
                   {/* ── Sub-navigation: Goal Simulator | Income Roadmap ── */}
                   <div style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
