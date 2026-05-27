@@ -5123,10 +5123,21 @@ export default function App() {
   // desktop tab switches so the user's manual choice is fully respected.
   const sidebarWasOpenRef = useRef(true);
   const prevTabRef = useRef(null);
+  // Tracks explicit user show/hide choice made WHILE on the Readiness tab.
+  // null  = no explicit override yet → auto-collapse on every entry (first-visit default).
+  // true/false = user has deliberately toggled; honour that choice on re-entry.
+  // Set inside handleSidebarToggle when activeTab === 'readiness'.
+  const readinessSidebarUserPref = useRef(null);
   useEffect(() => {
     if (activeTab === "readiness") {
       sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Readiness
-      setSidebarOpen(false);                   // auto-collapse for max dashboard width
+      // If the user has previously made an explicit show/hide choice on this tab, honour it.
+      // Otherwise default to auto-collapse so the dashboard gets maximum width on first entry.
+      if (readinessSidebarUserPref.current !== null) {
+        setSidebarOpen(readinessSidebarUserPref.current);
+      } else {
+        setSidebarOpen(false);                 // first-entry default: auto-collapse
+      }
     } else if (window.innerWidth <= 1024) {
       setSidebarOpen(false);                   // mobile/tablet: always hide inputs on tab switch
     } else if (prevTabRef.current === "readiness") {
@@ -10065,17 +10076,20 @@ ${milestoneSnapshotHtml}
   };
   // ─── SIDEBAR TOGGLE HANDLER ───────────────────────────────────────────────────
   // Wraps setSidebarOpen so that when the user manually toggles the sidebar while
-  // ON the Readiness tab, sidebarWasOpenRef is updated to reflect their intention.
-  // Without this, leaving Readiness always restores the PRE-entry state, ignoring
-  // any manual Show/Hide the user performed while on that tab — which is inconsistent
-  // with every other tab (where manual toggles are preserved across tab switches).
+  // ON the Readiness tab, both refs are updated to reflect their intention:
+  //   sidebarWasOpenRef      — used by prevTabRef===readiness branch when LEAVING Readiness
+  //   readinessSidebarUserPref — used by the readiness entry branch on EVERY RE-ENTRY
+  // Without sidebarWasOpenRef, leaving Readiness would restore the PRE-entry state.
+  // Without readinessSidebarUserPref, re-entering Readiness would always auto-collapse
+  // even if the user had explicitly opened the panel on a previous visit.
   const handleSidebarToggle = useCallback(() => {
     setSidebarOpen(v => {
       const next = !v;
       if (activeTab === 'readiness') {
         // User explicitly chose to show/hide while on Readiness — honour that choice
-        // when they switch away (prevTabRef === 'readiness' restore will use this value)
+        // both when switching away AND on future re-entries to this tab.
         sidebarWasOpenRef.current = next;
+        readinessSidebarUserPref.current = next;
       }
       return next;
     });
@@ -11480,6 +11494,18 @@ ${milestoneSnapshotHtml}
            The Readiness sidebar auto-collapses on entry so this fires immediately in FHD.
            Cap all three row grids at 1400px and centre them to match other tab card widths. */
         .cpf-layout[data-sidebar-open="false"] .readiness-tab-outer {
+          max-width: 1400px;
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        /* ── All other KPI tabs (Accumulation, Life, Compare, Household, Strategy, RSS, Guide)
+           when sidebar is collapsed: same 1400px cap + centring as Readiness.
+           Applies in FHD (sidebar collapsed via grid-template-columns:0 1fr) and in HD when
+           the user manually hides the panel. Summary tab is deliberately excluded — its exec
+           dashboard is designed to fill the full viewport for maximum information density.
+           Readiness tab is excluded — already handled by .readiness-tab-outer above.         */
+        .cpf-layout[data-sidebar-open="false"] .fhd-tab-inner {
           max-width: 1400px;
           width: 100%;
           margin: 0 auto;
@@ -16046,7 +16072,7 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
             {activeTab === "guide" && guideView === 'quickstart' && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
                 {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
                 <div id="qs-sticky-banner" style={{ position: "sticky", top: -28, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
@@ -17758,7 +17784,7 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── ACCUMULATION TAB ── */}
             {activeTab === "accumulation" && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
                 {/* ── Context banners (RSS / Foreigner) ── */}
                 {(() => {
                   const isRSSGrowth = debouncedInputs.cpfScheme === 'rss';
@@ -18258,10 +18284,7 @@ ${milestoneSnapshotHtml}
                 ? (Number(debouncedInputs.saBalance) || 0)
                 : (accumulationByAge.get(rssStartAge)?.ra || 0);
               return (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-                {/* Header + eligibility bar */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>RSS — Retirement Sum Scheme Drawdown</h3>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(var(--clr-blue-rgb),0.06)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", fontSize: 12, color: "var(--text-muted)" }}>
                     {[
                       ["🏛 Eligibility", "SC & PR born before 1958"],
@@ -18508,7 +18531,7 @@ ${milestoneSnapshotHtml}
                 activeTab state can be "life" momentarily (the switch useEffect also calls
                 setActiveTab to redirect, but this guard is the belt-and-suspenders defence). */}
             {activeTab === "life" && debouncedInputs.cpfScheme !== 'rss' && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
                 <div className="life-chart-header" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
                   {/* B6: CPF LIFE eligibility info bar */}
@@ -18813,7 +18836,7 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── COMPARE TAB ── */}
             {activeTab === "compare" && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
 
                 {/* ── SECTION 2: Scenario Comparison ── */}
                 <div>
@@ -18995,7 +19018,7 @@ ${milestoneSnapshotHtml}
 
               if (!householdEnabled || !spouseProjection.length) {
                 return (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  <div className="fhd-tab-inner" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                     gap: 14, padding: 60, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20 }}>
                     <Users style={{ width: 48, height: 48, color: "var(--text-muted)", opacity: 0.4 }} />
                     <p style={{ fontSize: 14, color: "var(--text-muted)", textAlign: "center", maxWidth: 340, lineHeight: 1.5, margin: 0 }}>
@@ -19006,7 +19029,7 @@ ${milestoneSnapshotHtml}
               }
 
               return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div className="fhd-tab-inner" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {/* Header */}
                   <div style={{ background: "var(--bg-panel)", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 20,
                     padding: "18px 22px", display: "flex", alignItems: "center", gap: 14 }}>
@@ -19979,7 +20002,7 @@ ${milestoneSnapshotHtml}
                 When guideView==='reference' the Quick Start block renders null so this block is the
                 sole child of the tab content div. */}
             {activeTab === "guide" && guideView === 'reference' && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
                 {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
                     and Quick Start/Reference buttons do not scroll away when reading docs. */}
                 <div id="docs-sticky-nav" style={{ position: "sticky", top: -20, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
@@ -21046,7 +21069,7 @@ ${milestoneSnapshotHtml}
               const shortfall = target > 0 ? target - totalCombined : 0;
 
               return (
-                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
+                <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
 
                   {/* ── Sub-navigation: Goal Simulator | Income Roadmap ── */}
                   <div style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
