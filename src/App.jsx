@@ -5897,10 +5897,19 @@ export default function App() {
   // desktop tab switches so the user's manual choice is fully respected.
   const sidebarWasOpenRef = useRef(true);
   const prevTabRef = useRef(null);
+  // Fix: readinessSidebarUserPref tracks the user's explicit show/hide intent.
+  // Without this, toggling Show on any other tab left the ref null, causing
+  // Readiness to always auto-collapse on re-entry even after the user opened the panel.
+  const readinessSidebarUserPref = useRef(null);
   useEffect(() => {
     if (activeTab === "readiness") {
       sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Readiness
-      setSidebarOpen(false);                   // auto-collapse for max dashboard width
+      // Honour the user's explicit preference if they set one from another tab
+      if (readinessSidebarUserPref.current !== null) {
+        setSidebarOpen(readinessSidebarUserPref.current);
+      } else {
+        setSidebarOpen(false);                   // auto-collapse for max dashboard width
+      }
     } else if (window.innerWidth <= 1024) {
       setSidebarOpen(false);                   // mobile/tablet: always hide inputs on tab switch
     } else if (prevTabRef.current === "readiness") {
@@ -12172,49 +12181,155 @@ ${milestoneSnapshotHtml}
            are already surfaced via the Z1 alert badge and milestone count in Z1 footer).
            Inside the shown zones, collapse buttons are hidden (collapsing a zone inside
            a fixed grid creates empty space rather than reclaiming height).              */
+        /* ─── EXECUTIVE DASHBOARD GRID ────────────────────────────────────────────
+           Previous 4-row layout gave What-If only ~180px which cut off its content.
+           New 3-row layout gives col 3 bottom cell ≈ 310px, split ~140px / ~160px.    */
         .summary-exec-dash {
           display: grid !important;
           flex-direction: unset !important;
-          grid-template-columns: 40% 1fr;
-          grid-template-rows: auto 1fr;
+          grid-template-columns: 1fr 1fr 1fr;
+          grid-template-rows: auto 2fr 1.2fr;
           gap: 12px !important;
           height: 100%;
           min-height: 0;
-          padding-bottom: 12px;
         }
-        /* Row 1: Zone 1 hero KPI tiles — spans both columns */
-        .summary-exec-dash [data-zone="z1"]       { grid-column: 1 / -1; grid-row: 1; }
-        /* Row 2 Col A: Account Balances (Zone 2+3 wrapper, Zone 3 hidden inside) */
-        .summary-exec-dash [data-zone="z23-wrap"] { grid-column: 1; grid-row: 2; overflow-y: auto; min-height: 0; }
-        /* Row 2 Col B: CPF LIFE Plans (Zone 4) or RSS summary */
-        .summary-exec-dash [data-zone="z4"]        { grid-column: 2; grid-row: 2; overflow-y: auto; min-height: 0; }
-        .summary-exec-dash [data-zone="rss"]       { grid-column: 2; grid-row: 2; overflow-y: auto; min-height: 0; }
-        /* Col B — Goal Card as a compact band at the bottom of the LIFE/RSS panel.
-           Uses absolute positioning inside the already-scrollable col B area via a
-           flex wrapper below (see z4 / rss data-zone containers above).             */
-        .summary-exec-dash [data-zone="goal"]      { grid-column: 2; grid-row: 3; }
 
-        /* ── Hide non-essential zones in exec mode ── */
+        /* Row 1: Zone 1 KPI tiles — spans all 3 columns */
+        .summary-exec-dash [data-zone="z1"]       { grid-column: 1 / -1; grid-row: 1; }
+
+        /* Col 1, rows 2–3: Account Balances + Growth Story */
+        .summary-exec-dash [data-zone="z23-wrap"] {
+          grid-column: 1; grid-row: 2 / 4;
+          overflow-y: auto; min-height: 0;
+        }
+
+        /* Col 2, row 2: CPF LIFE Plans */
+        .summary-exec-dash [data-zone="z4"]       {
+          grid-column: 2; grid-row: 2;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 2 row 2 in RSS mode */
+        .summary-exec-dash [data-zone="rss"]      {
+          grid-column: 2; grid-row: 2;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 2, row 3: Goal Income Card */
+        .summary-exec-dash [data-zone="goal"]     {
+          grid-column: 2; grid-row: 3;
+          overflow-y: auto; min-height: 0;
+        }
+
+        /* Col 3, row 2: Milestone Alerts */
+        .summary-exec-dash [data-zone="z5"]       {
+          grid-column: 3; grid-row: 2;
+          overflow-y: auto; min-height: 0;
+        }
+
+        /* Col 3, row 3: Supporting Stats + What-If stacked in a flex column.
+           Both zones share this grid cell via the .exec-col3-bottom wrapper div
+           added in JSX. The wrapper is the grid item; z6 and what-if are its flex children. */
+        .summary-exec-dash .exec-col3-bottom {
+          grid-column: 3; grid-row: 3;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          min-height: 0;
+          overflow: hidden;
+        }
+        .summary-exec-dash .exec-col3-bottom [data-zone="z6"] {
+          flex: 0 0 auto;
+          max-height: 48%;
+          overflow-y: auto; min-height: 0;
+        }
+        .summary-exec-dash .exec-col3-bottom [data-zone="what-if"] {
+          flex: 1 1 0;
+          overflow-y: auto; min-height: 0;
+        }
+        /* ── Show Z3 inside z23-wrap (restore both Z2 and Z3 side-by-side) ── */
+        /* z2-z3-grid stays at its default 1fr 1fr — no override needed */
+
+        /* ── Hide non-exec zones (secondary / volatile — not useful at a glance) ── */
         .summary-exec-dash [data-zone="gap-alert"],
         .summary-exec-dash [data-zone="post-wizard"],
         .summary-exec-dash [data-zone="intro"],
         .summary-exec-dash [data-zone="milestone-snap"],
         .summary-exec-dash [data-zone="pledge"],
-        .summary-exec-dash [data-zone="ra-oa"],
-        .summary-exec-dash [data-zone="z5"],
-        .summary-exec-dash [data-zone="z6"],
-        .summary-exec-dash [data-zone="what-if"]  { display: none !important; }
-
-        /* ── Zone 3 hidden inside z23-wrap → Zone 2 fills the full Col A width ── */
-        .summary-exec-dash [data-zone="z23-wrap"] [data-zone="z3"] { display: none !important; }
-        .summary-exec-dash [data-zone="z23-wrap"] .z2-z3-grid { grid-template-columns: 1fr !important; }
+        .summary-exec-dash [data-zone="ra-oa"]    { display: none !important; }
 
         /* ── Hide Expand/Collapse toggle buttons inside shown zones ──
-           Collapsing a zone in exec mode creates empty grid space; buttons are noise. */
-        .summary-exec-dash [data-collapse-btn]     { display: none !important; }
+           Collapsing a zone creates dead empty grid space in exec mode. */
+        .summary-exec-dash [data-collapse-btn]    { display: none !important; }
 
-        /* ── Remove outer padding on cpf-tab-content so exec grid fills to edges ── */
-        .cpf-tab-content[data-exec="true"]         { overflow: hidden !important; padding-top: 0 !important; padding-bottom: 0 !important; }
+        /* ── Remove outer padding on cpf-tab-content so exec grid fills edge-to-edge ── */
+        .cpf-tab-content[data-exec="true"]        {
+          overflow: hidden !important;
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
+        }
+
+        /* ── All other KPI tabs (Accumulation, Life, Compare, Household, Strategy, RSS, Guide)
+           when sidebar is collapsed: same 1400px cap + centring as Readiness.
+           Summary tab deliberately excluded — its exec dashboard fills the full viewport.
+           Readiness tab excluded — already handled by .readiness-tab-outer above.         */
+        .cpf-layout[data-sidebar-open="false"] .fhd-tab-inner {
+          max-width: 1400px;
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        /* FHD sidebar-hidden: fill viewport height + adaptive chart sizing.
+           cpf-main-wrap is height:100% + overflow:hidden. flex:1 on cpf-tab-content
+           stretches it to fill remaining height below the KPI strip and tab bar.
+           fhd-tab-inner fills cpf-tab-content and becomes the internal scroll zone.
+           Exec dashboard (data-exec=true) excluded - it manages its own grid layout.
+           fhd-chart-grow: applied in JSX to fixed-height chart divs. Expands to fill
+           remaining vertical space in FHD-collapsed; !important overrides inline height. */
+        .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
+          flex: 1 1 0;
+          min-height: 0;
+          overflow: hidden;
+          padding: 8px 0;
+        }
+        .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-tab-inner {
+          flex: 1 1 0;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          overflow-y: auto;
+          overflow-x: hidden;
+          scrollbar-width: thin;
+          scrollbar-color: var(--border-strong) transparent;
+        }
+        .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-chart-grow {
+          flex: 1 1 0 !important;
+          height: auto !important;
+          min-height: 220px !important;
+          max-height: 540px;
+        }
+        @media (min-width: 1920px) {
+          .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
+            flex: 1 1 0;
+            min-height: 0;
+            overflow: hidden;
+            padding: 8px 0;
+          }
+          .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-tab-inner {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-strong) transparent;
+          }
+          .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-chart-grow {
+            flex: 1 1 0 !important;
+            height: auto !important;
+            min-height: 220px !important;
+            max-height: 540px;
+          }
+        }
 
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
         @media (max-width: 1024px) and (min-width: 769px) {
@@ -13151,7 +13266,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
                   <button className="cpf-nav-dd-item" style={{ color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)" }}
-                    onClick={() => { setSidebarOpen(v => !v); setShowSettingsMenu(false); }}>
+                    onClick={() => { setSidebarOpen(v => { const next = !v; if (activeTab === 'readiness') sidebarWasOpenRef.current = next; readinessSidebarUserPref.current = next; return next; }); setShowSettingsMenu(false); }}>
                     <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Input Panel" : "Show Input Panel"}
                   </button>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
@@ -13245,7 +13360,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
                   <button className="cpf-nav-dd-item" style={{ color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)" }}
-                    onClick={() => { setSidebarOpen(v => !v); setShowSettingsMenu(false); }}>
+                    onClick={() => { setSidebarOpen(v => { const next = !v; if (activeTab === 'readiness') sidebarWasOpenRef.current = next; readinessSidebarUserPref.current = next; return next; }); setShowSettingsMenu(false); }}>
                     <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Input Panel" : "Show Input Panel"}
                   </button>
                 </div>
@@ -13326,7 +13441,7 @@ ${milestoneSnapshotHtml}
           into the main content area. Hidden on desktop (sidebar always visible). */}
       <div className="cpf-input-params-bar" data-tab={activeTab} style={{ display: "none" }}>
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0 }}>
-          <div onClick={() => setSidebarOpen(v => !v)}
+          <div onClick={() => setSidebarOpen(v => { const next = !v; if (activeTab === 'readiness') sidebarWasOpenRef.current = next; readinessSidebarUserPref.current = next; return next; })}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", cursor: "pointer", userSelect: "none" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <SlidersHorizontal style={{ width: 14, height: 14, color: "var(--clr-emerald)" }} />
@@ -16853,10 +16968,11 @@ ${milestoneSnapshotHtml}
                       e.target.value = "";
                       const target = document.getElementById(id);
                       const bar    = document.getElementById('qs-sticky-banner');
-                      const scrollEl = target?.closest('.cpf-tab-content');
+                      const scrollEl = target?.closest('.fhd-tab-inner') || target?.closest('.cpf-tab-content');
                       if (bar && target) {
                         const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
-                        const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
+                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                         if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
                         else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -16881,10 +16997,11 @@ ${milestoneSnapshotHtml}
                       <button key={id} onClick={() => {
                         const target = document.getElementById(id);
                         const bar    = document.getElementById('qs-sticky-banner');
-                        const scrollEl = target?.closest('.cpf-tab-content');
+                        const scrollEl = target?.closest('.fhd-tab-inner') || target?.closest('.cpf-tab-content');
                         if (bar && target) {
                           const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
-                          const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
+                          const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                          const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                           if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
                           else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                         } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -16981,8 +17098,9 @@ ${milestoneSnapshotHtml}
                   <div style={{ position: "sticky", bottom: 20, display: "flex", justifyContent: "flex-end", pointerEvents: "none", marginTop: 4 }}>
                     <button
                       onClick={() => {
-                        const scrollEl = document.querySelector('.cpf-tab-content');
-                        const isScrollable = scrollEl && getComputedStyle(scrollEl).overflowY !== 'visible' && getComputedStyle(scrollEl).overflowY !== 'clip';
+                        const scrollEl = document.querySelector('.fhd-tab-inner') || document.querySelector('.cpf-tab-content');
+                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                         if (isScrollable) { scrollEl.scrollTo({ top: 0, behavior: 'smooth' }); }
                         else              { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                       }}
@@ -18030,6 +18148,8 @@ ${milestoneSnapshotHtml}
                   ))}
                 </div>
 
+                {/* ── ZONE 6 + What-If: share col3 row3 in exec dash via exec-col3-bottom wrapper ── */}
+                <div className={execDashMode ? "exec-col3-bottom" : ""}>
                 {/* ── ZONE 6: Supporting statistics ── */}
                 {(() => {
                   // I-4 fix: zone-6 deflation helper — same formula as displayAccumulation
@@ -18281,7 +18401,7 @@ ${milestoneSnapshotHtml}
                 {/* Estate at Death has moved to the LIFE tab — see LIFE → Estate at Death section */}
 
                 {/* ── What-If Explorer — full explorer moved from Compare tab (Q2 migration) ── */}
-                <details data-zone="what-if" style={{ borderRadius: 18, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", overflow: "visible" }}>
+                <details data-zone="what-if" open={execDashMode || undefined} style={{ borderRadius: 18, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", overflow: "visible" }}>
                   <summary style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                     <SlidersHorizontal style={{ width: 16, height: 16, color: "var(--clr-green)", flexShrink: 0 }} />
                     <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>What-If Explorer</span>
@@ -18534,11 +18654,12 @@ ${milestoneSnapshotHtml}
                     })()}
                   </div>
                 </details>
+                </div>{/* end exec-col3-bottom: z6 + what-if col3 row3 wrapper */}
               </div>
             )}
             {/* ── ACCUMULATION TAB ── */}
             {activeTab === "accumulation" && !cockpitMode && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
                 {/* ── Context banners (RSS / Foreigner) ── */}
                 {(() => {
                   const isRSSGrowth = debouncedInputs.cpfScheme === 'rss';
@@ -18690,7 +18811,7 @@ ${milestoneSnapshotHtml}
                     </div>
                   </>);
                 })()}
-                <div style={{ height: 380, minHeight: 380 }}>
+                <div className="fhd-chart-grow" style={{ height: 380, minHeight: 220 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <AreaChart data={(() => {
                       // S1 fix: for RSS members, payoutAge65 (= 65) < currentAge (= 68), so the old
@@ -19288,7 +19409,7 @@ ${milestoneSnapshotHtml}
                 activeTab state can be "life" momentarily (the switch useEffect also calls
                 setActiveTab to redirect, but this guard is the belt-and-suspenders defence). */}
             {activeTab === "life" && !cockpitMode && debouncedInputs.cpfScheme !== 'rss' && (
-              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
                 <div className="life-chart-header" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
                   {/* B6: CPF LIFE eligibility info bar */}
@@ -19423,7 +19544,7 @@ ${milestoneSnapshotHtml}
                     </button>
                   ))}
                 </div>
-                <div style={{ height: 350, minHeight: 350 }}>
+                <div className="fhd-chart-grow" style={{ height: 350, minHeight: 220 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <LineChart data={displayProjection.filter(d => d.age >= payoutAge65)}> {/* BUG-51 fix: use debounced payoutAge65 */}
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
@@ -20788,14 +20909,15 @@ ${milestoneSnapshotHtml}
                       const target = document.querySelector(href);
                       if (!target) return;
                       const stickyBar = document.getElementById('docs-sticky-nav');
-                      const scrollEl = target.closest('.cpf-tab-content');
+                      // In FHD+collapsed mode the scroll container is .fhd-tab-inner (overflow-y:auto).
+                      // .cpf-tab-content becomes overflow:hidden — scrollBy() on it is a silent no-op.
+                      const scrollEl = target.closest('.fhd-tab-inner') || target.closest('.cpf-tab-content');
                       if (stickyBar) {
                         const delta = target.getBoundingClientRect().top
                                     - stickyBar.getBoundingClientRect().bottom
                                     - 8;
-                        const isScrollable = scrollEl &&
-                          getComputedStyle(scrollEl).overflowY !== 'visible' &&
-                          getComputedStyle(scrollEl).overflowY !== 'clip';
+                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                         if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
                         else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else {
@@ -20863,19 +20985,15 @@ ${milestoneSnapshotHtml}
                         // fixed scrollMarginTop fails when the bar wraps to 3+ rows (bar bottom ~176px
                         // but old scrollMarginTop was only 160px, hiding the section heading).
                         const stickyBar = document.getElementById('docs-sticky-nav');
-                        const scrollEl = target.closest('.cpf-tab-content');
+                        // In FHD+collapsed mode the scroll container is .fhd-tab-inner (overflow-y:auto).
+                        // .cpf-tab-content becomes overflow:hidden — scrollBy is a no-op there.
+                        const scrollEl = target.closest('.fhd-tab-inner') || target.closest('.cpf-tab-content');
                         if (stickyBar) {
-                          // delta = how far to scroll so target top lands just below sticky bar bottom
                           const delta = target.getBoundingClientRect().top
                                       - stickyBar.getBoundingClientRect().bottom
-                                      - 8; // 8px breathing room below the bar
-                          // On desktop cpf-tab-content is overflow:auto (real scroll container).
-                          // On tablet/mobile it is overflow:visible — scrollBy is a no-op there,
-                          // so fall back to window.scrollBy which uses the same viewport-relative
-                          // delta (getBoundingClientRect is always relative to the viewport).
-                          const isScrollable = scrollEl &&
-                            getComputedStyle(scrollEl).overflowY !== 'visible' &&
-                            getComputedStyle(scrollEl).overflowY !== 'clip';
+                                      - 8;
+                          const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                          const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                           if (isScrollable) {
                             scrollEl.scrollBy({ top: delta, behavior: 'smooth' });
                           } else {
@@ -21644,8 +21762,12 @@ ${milestoneSnapshotHtml}
                   <button
                     onClick={() => {
                       const nav = document.getElementById("docs-sticky-nav");
-                      const scroller = nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content");
-                      if (scroller && getComputedStyle(scroller).overflowY !== 'visible') { scroller.scrollTo({ top: 0, behavior: 'smooth' }); } else { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                      // In FHD+collapsed the real scroll container is .fhd-tab-inner; prefer it, fall back to cpf-tab-content.
+                      const scroller = nav?.closest(".fhd-tab-inner") || document.querySelector(".fhd-tab-inner")
+                                    || nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content");
+                      const oy = scroller ? getComputedStyle(scroller).overflowY : '';
+                      const isScrollable = scroller && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
+                      if (isScrollable) { scroller.scrollTo({ top: 0, behavior: 'smooth' }); } else { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                     }}
                     style={{ pointerEvents: "all", display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 700, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
                     <ChevronUp style={{ width: 13, height: 13 }} />Back to top
