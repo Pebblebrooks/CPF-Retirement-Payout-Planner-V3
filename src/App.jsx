@@ -18298,7 +18298,6 @@ ${milestoneSnapshotHtml}
                       </div>
                     ))}
                   </div>
-                </div>
 
                 {/* Depletion age alert — prominent if < 85 */}
                 {depletionAge != null && (
