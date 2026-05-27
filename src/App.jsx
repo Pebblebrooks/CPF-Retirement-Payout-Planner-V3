@@ -11425,11 +11425,26 @@ ${milestoneSnapshotHtml}
              gap-alert, post-wizard, intro accordion, milestone-snap spine, pledge, ra-oa
            Shown: z23-wrap (Z2+Z3), Z4 / rss, Goal, Z5, Z6, What-If (all with own scroll)
            Collapse buttons hidden — collapsing in a fixed grid creates dead empty space.    */
+        /* ── Executive Dashboard grid ─────────────────────────────────────────────
+           3-column × 3-row layout at FHD (1920×1080, overhead ≈ 92px → ~988px for grid)
+
+           Grid anatomy:
+             Row 1 (auto  ≈ 110px): z1 KPI tiles — full width
+             Row 2 (2fr   ≈ 520px): z23-wrap col1 │ z4/rss col2 │ z5 (Milestones) col3
+             Row 3 (1.2fr ≈ 310px): z23-wrap cont │ goal col2   │ z6+what-if flex col3
+
+           Col 3 row 3 is a flex column containing z6 (Supporting Stats) on top and
+           what-if (What-If Explorer) below — both scrollable within their own half.
+           What-If <details> is forced open in exec mode via [open] attribute so its
+           sliders are always visible without needing a click.
+
+           Previous 4-row layout gave What-If only ~180px which cut off its content.
+           New 3-row layout gives col 3 bottom cell ≈ 310px, split ~140px / ~160px.    */
         .summary-exec-dash {
           display: grid !important;
           flex-direction: unset !important;
           grid-template-columns: 1fr 1fr 1fr;
-          grid-template-rows: auto 2fr 1fr 1fr;
+          grid-template-rows: auto 2fr 1.2fr;
           gap: 12px !important;
           height: 100%;
           min-height: 0;
@@ -11438,41 +11453,54 @@ ${milestoneSnapshotHtml}
         /* Row 1: Zone 1 KPI tiles — spans all 3 columns */
         .summary-exec-dash [data-zone="z1"]       { grid-column: 1 / -1; grid-row: 1; }
 
-        /* Col 1, rows 2–4: Account Balances + Growth Story — both Z2 and Z3 visible */
+        /* Col 1, rows 2–3: Account Balances + Growth Story */
         .summary-exec-dash [data-zone="z23-wrap"] {
-          grid-column: 1; grid-row: 2 / 5;
+          grid-column: 1; grid-row: 2 / 4;
           overflow-y: auto; min-height: 0;
         }
 
-        /* Col 2, rows 2–3: CPF LIFE Plans (standard/escalating/basic) */
+        /* Col 2, row 2: CPF LIFE Plans */
         .summary-exec-dash [data-zone="z4"]       {
-          grid-column: 2; grid-row: 2 / 4;
+          grid-column: 2; grid-row: 2;
           overflow-y: auto; min-height: 0;
         }
-        /* Col 2 rows 2–3 in RSS mode */
+        /* Col 2 row 2 in RSS mode */
         .summary-exec-dash [data-zone="rss"]      {
-          grid-column: 2; grid-row: 2 / 4;
+          grid-column: 2; grid-row: 2;
           overflow-y: auto; min-height: 0;
         }
-        /* Col 2, row 4: Goal Income Card */
-        .summary-exec-dash [data-zone="goal"]     { grid-column: 2; grid-row: 4; min-height: 0; }
+        /* Col 2, row 3: Goal Income Card */
+        .summary-exec-dash [data-zone="goal"]     {
+          grid-column: 2; grid-row: 3;
+          overflow-y: auto; min-height: 0;
+        }
 
         /* Col 3, row 2: Milestone Alerts */
         .summary-exec-dash [data-zone="z5"]       {
           grid-column: 3; grid-row: 2;
           overflow-y: auto; min-height: 0;
         }
-        /* Col 3, row 3: Supporting Statistics */
-        .summary-exec-dash [data-zone="z6"]       {
-          grid-column: 3; grid-row: 3;
-          overflow-y: auto; min-height: 0;
-        }
-        /* Col 3, row 4: What-If Explorer */
-        .summary-exec-dash [data-zone="what-if"]  {
-          grid-column: 3; grid-row: 4;
-          overflow-y: auto; min-height: 0;
-        }
 
+        /* Col 3, row 3: Supporting Stats + What-If stacked in a flex column.
+           Both zones share this grid cell via the .exec-col3-bottom wrapper div
+           added in JSX. The wrapper is the grid item; z6 and what-if are its flex children. */
+        .summary-exec-dash .exec-col3-bottom {
+          grid-column: 3; grid-row: 3;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          min-height: 0;
+          overflow: hidden;
+        }
+        .summary-exec-dash .exec-col3-bottom [data-zone="z6"] {
+          flex: 0 0 auto;
+          max-height: 48%;
+          overflow-y: auto; min-height: 0;
+        }
+        .summary-exec-dash .exec-col3-bottom [data-zone="what-if"] {
+          flex: 1 1 0;
+          overflow-y: auto; min-height: 0;
+        }
         /* ── Show Z3 inside z23-wrap (restore both Z2 and Z3 side-by-side) ── */
         /* z2-z3-grid stays at its default 1fr 1fr — no override needed */
 
@@ -17338,6 +17366,8 @@ ${milestoneSnapshotHtml}
                   ))}
                 </div>
 
+                {/* ── ZONE 6 + What-If: share col3 row3 in exec dash via exec-col3-bottom wrapper ── */}
+                <div className={execDashMode ? "exec-col3-bottom" : ""}>
                 {/* ── ZONE 6: Supporting statistics ── */}
                 {(() => {
                   // I-4 fix: zone-6 deflation helper — same formula as displayAccumulation
@@ -17589,7 +17619,7 @@ ${milestoneSnapshotHtml}
                 {/* Estate at Death has moved to the LIFE tab — see LIFE → Estate at Death section */}
 
                 {/* ── What-If Explorer — full explorer moved from Compare tab (Q2 migration) ── */}
-                <details data-zone="what-if" style={{ borderRadius: 18, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", overflow: "visible" }}>
+                <details data-zone="what-if" open={execDashMode || undefined} style={{ borderRadius: 18, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", overflow: "visible" }}>
                   <summary style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
                     <SlidersHorizontal style={{ width: 16, height: 16, color: "var(--clr-green)", flexShrink: 0 }} />
                     <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>What-If Explorer</span>
@@ -17842,6 +17872,7 @@ ${milestoneSnapshotHtml}
                     })()}
                   </div>
                 </details>
+                </div>{/* end exec-col3-bottom: z6 + what-if col3 row3 wrapper */}
               </div>
             )}
             {/* ── ACCUMULATION TAB ── */}
@@ -20947,9 +20978,16 @@ ${milestoneSnapshotHtml}
                 <div style={{ position: "sticky", bottom: 16, display: "flex", justifyContent: "flex-end", pointerEvents: "none", zIndex: 10, marginTop: 8 }}>
                   <button
                     onClick={() => {
+                      // In FHD+collapsed mode the scroll container is .fhd-tab-inner (overflow-y:auto).
+                      // .cpf-tab-content becomes overflow:hidden — scrollTo on it is a silent no-op.
+                      // Prefer the inner scroll zone; fall back to cpf-tab-content for sidebar-open mode.
                       const nav = document.getElementById("docs-sticky-nav");
-                      const scroller = nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content");
-                      if (scroller && getComputedStyle(scroller).overflowY !== 'visible') { scroller.scrollTo({ top: 0, behavior: 'smooth' }); } else { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                      const scroller = nav?.closest(".fhd-tab-inner") || document.querySelector(".fhd-tab-inner")
+                                    || nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content");
+                      const oy = scroller ? getComputedStyle(scroller).overflowY : '';
+                      const isScrollable = scroller && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
+                      if (isScrollable) { scroller.scrollTo({ top: 0, behavior: 'smooth' }); }
+                      else { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                     }}
                     style={{ pointerEvents: "all", display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 700, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
                     <ChevronUp style={{ width: 13, height: 13 }} />Back to top
