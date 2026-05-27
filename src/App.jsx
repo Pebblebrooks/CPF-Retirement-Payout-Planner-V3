@@ -4669,7 +4669,7 @@ function ReadinessTab({
   const bigNumStyle = { fontSize: 26, fontWeight: 700, color: "var(--text-bright)", letterSpacing: "-0.02em", lineHeight: 1.1 };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="readiness-tab-outer" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* ── ROW 1: Gauge + 3-col KPI hero ── */}
       <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
@@ -10063,6 +10063,25 @@ ${milestoneSnapshotHtml}
       setExportModal({ type: "pdf", content: html });
     } catch (e) { setConfirmModal({ title: "Report Failed", message: "Could not generate the PDF report: " + e.message, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" }); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
   };
+  // ─── SIDEBAR TOGGLE HANDLER ───────────────────────────────────────────────────
+  // Wraps setSidebarOpen so that when the user manually toggles the sidebar while
+  // ON the Readiness tab, sidebarWasOpenRef is updated to reflect their intention.
+  // Without this, leaving Readiness always restores the PRE-entry state, ignoring
+  // any manual Show/Hide the user performed while on that tab — which is inconsistent
+  // with every other tab (where manual toggles are preserved across tab switches).
+  const handleSidebarToggle = useCallback(() => {
+    setSidebarOpen(v => {
+      const next = !v;
+      if (activeTab === 'readiness') {
+        // User explicitly chose to show/hide while on Readiness — honour that choice
+        // when they switch away (prevTabRef === 'readiness' restore will use this value)
+        sidebarWasOpenRef.current = next;
+      }
+      return next;
+    });
+    setShowSettingsMenu(false);
+  }, [activeTab]);
+
   // ─── EXECUTIVE DASHBOARD MODE ─────────────────────────────────────────────────
   // Activates when: FHD/auto≥1920px + sidebar collapsed + on Summary tab.
   // Replaces the normal vertical-scroll layout with a fixed 2-row × 2-col grid
@@ -10082,6 +10101,7 @@ ${milestoneSnapshotHtml}
       setZ2z3Expanded(true);
       setLifePlansExpanded(true);
       setZ5Expanded(true);
+      setZ6Expanded(true);
     }
   }, [execDashMode]);
 
@@ -11367,60 +11387,103 @@ ${milestoneSnapshotHtml}
         }
 
         /* ─── EXECUTIVE DASHBOARD — FHD + sidebar collapsed + Summary tab ─────────────
-           Activates via .summary-exec-dash (applied by React when execDashMode is true).
-           Two-row, two-column CSS Grid — no scrolling, all critical data fits on screen:
-             Row 1 (auto): Zone 1 hero KPI tiles — full width (2 cols)
-             Row 2 (1fr):  Col A 40% → Account Balances (Z2) and FRS tracker
-                           Col B 60% → CPF LIFE Plans (Z4) or RSS summary
-           Zone 3 (growth story), Zone 5 (milestone alerts), Zone 6 (supporting stats),
-           milestone snapshots spine chart, gap alert, intro accordion, what-if explorer,
-           property notices — all hidden in exec mode (non-critical for exec view; alerts
-           are already surfaced via the Z1 alert badge and milestone count in Z1 footer).
-           Inside the shown zones, collapse buttons are hidden (collapsing a zone inside
-           a fixed grid creates empty space rather than reclaiming height).              */
+           Activates via .summary-exec-dash (added by React when execDashMode is true).
+           Three-column × four-row CSS Grid — no outer scroll; each zone cell has its own
+           overflow-y:auto so content that overflows its bounded area scrolls internally.
+
+           Grid anatomy (at 1920 × 1080 with header + tabs ≈ 92px overhead):
+             Row 1 (auto  ≈110px):  Zone 1 KPI tiles — full width
+             Row 2 (2fr   ≈360px):  z23-wrap col1 │ Zone 4 LIFE plans col2 │ Zone 5 alerts col3
+             Row 3 (1fr   ≈180px):  z23-wrap cont │ Goal card col2         │ Zone 6 stats col3
+             Row 4 (1fr   ≈180px):  z23-wrap cont │ What-If col2           │ rss col3 (if RSS mode)
+
+           Each column = 1fr ≈ 613px at 1920px — no over-stretching.
+           z23-wrap spans rows 2–4 showing both Z2 (Account Balances) and Z3 (Growth Story).
+           Zone 4 spans rows 2–3; Goal Card sits in row 4 below it.
+           Zone 5 / Zone 6 / What-If stack individually in column 3.
+
+           Still hidden (secondary / interactive — not exec-at-a-glance):
+             gap-alert, post-wizard, intro accordion, milestone-snap spine, pledge, ra-oa
+           Shown: z23-wrap (Z2+Z3), Z4 / rss, Goal, Z5, Z6, What-If (all with own scroll)
+           Collapse buttons hidden — collapsing in a fixed grid creates dead empty space.    */
         .summary-exec-dash {
           display: grid !important;
           flex-direction: unset !important;
-          grid-template-columns: 40% 1fr;
-          grid-template-rows: auto 1fr;
+          grid-template-columns: 1fr 1fr 1fr;
+          grid-template-rows: auto 2fr 1fr 1fr;
           gap: 12px !important;
           height: 100%;
           min-height: 0;
-          padding-bottom: 12px;
         }
-        /* Row 1: Zone 1 hero KPI tiles — spans both columns */
-        .summary-exec-dash [data-zone="z1"]       { grid-column: 1 / -1; grid-row: 1; }
-        /* Row 2 Col A: Account Balances (Zone 2+3 wrapper, Zone 3 hidden inside) */
-        .summary-exec-dash [data-zone="z23-wrap"] { grid-column: 1; grid-row: 2; overflow-y: auto; min-height: 0; }
-        /* Row 2 Col B: CPF LIFE Plans (Zone 4) or RSS summary */
-        .summary-exec-dash [data-zone="z4"]        { grid-column: 2; grid-row: 2; overflow-y: auto; min-height: 0; }
-        .summary-exec-dash [data-zone="rss"]       { grid-column: 2; grid-row: 2; overflow-y: auto; min-height: 0; }
-        /* Col B — Goal Card as a compact band at the bottom of the LIFE/RSS panel.
-           Uses absolute positioning inside the already-scrollable col B area via a
-           flex wrapper below (see z4 / rss data-zone containers above).             */
-        .summary-exec-dash [data-zone="goal"]      { grid-column: 2; grid-row: 3; }
 
-        /* ── Hide non-essential zones in exec mode ── */
+        /* Row 1: Zone 1 KPI tiles — spans all 3 columns */
+        .summary-exec-dash [data-zone="z1"]       { grid-column: 1 / -1; grid-row: 1; }
+
+        /* Col 1, rows 2–4: Account Balances + Growth Story — both Z2 and Z3 visible */
+        .summary-exec-dash [data-zone="z23-wrap"] {
+          grid-column: 1; grid-row: 2 / 5;
+          overflow-y: auto; min-height: 0;
+        }
+
+        /* Col 2, rows 2–3: CPF LIFE Plans (standard/escalating/basic) */
+        .summary-exec-dash [data-zone="z4"]       {
+          grid-column: 2; grid-row: 2 / 4;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 2 rows 2–3 in RSS mode */
+        .summary-exec-dash [data-zone="rss"]      {
+          grid-column: 2; grid-row: 2 / 4;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 2, row 4: Goal Income Card */
+        .summary-exec-dash [data-zone="goal"]     { grid-column: 2; grid-row: 4; min-height: 0; }
+
+        /* Col 3, row 2: Milestone Alerts */
+        .summary-exec-dash [data-zone="z5"]       {
+          grid-column: 3; grid-row: 2;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 3, row 3: Supporting Statistics */
+        .summary-exec-dash [data-zone="z6"]       {
+          grid-column: 3; grid-row: 3;
+          overflow-y: auto; min-height: 0;
+        }
+        /* Col 3, row 4: What-If Explorer */
+        .summary-exec-dash [data-zone="what-if"]  {
+          grid-column: 3; grid-row: 4;
+          overflow-y: auto; min-height: 0;
+        }
+
+        /* ── Show Z3 inside z23-wrap (restore both Z2 and Z3 side-by-side) ── */
+        /* z2-z3-grid stays at its default 1fr 1fr — no override needed */
+
+        /* ── Hide non-exec zones (secondary / volatile — not useful at a glance) ── */
         .summary-exec-dash [data-zone="gap-alert"],
         .summary-exec-dash [data-zone="post-wizard"],
         .summary-exec-dash [data-zone="intro"],
         .summary-exec-dash [data-zone="milestone-snap"],
         .summary-exec-dash [data-zone="pledge"],
-        .summary-exec-dash [data-zone="ra-oa"],
-        .summary-exec-dash [data-zone="z5"],
-        .summary-exec-dash [data-zone="z6"],
-        .summary-exec-dash [data-zone="what-if"]  { display: none !important; }
-
-        /* ── Zone 3 hidden inside z23-wrap → Zone 2 fills the full Col A width ── */
-        .summary-exec-dash [data-zone="z23-wrap"] [data-zone="z3"] { display: none !important; }
-        .summary-exec-dash [data-zone="z23-wrap"] .z2-z3-grid { grid-template-columns: 1fr !important; }
+        .summary-exec-dash [data-zone="ra-oa"]    { display: none !important; }
 
         /* ── Hide Expand/Collapse toggle buttons inside shown zones ──
-           Collapsing a zone in exec mode creates empty grid space; buttons are noise. */
-        .summary-exec-dash [data-collapse-btn]     { display: none !important; }
+           Collapsing a zone creates dead empty grid space in exec mode. */
+        .summary-exec-dash [data-collapse-btn]    { display: none !important; }
 
-        /* ── Remove outer padding on cpf-tab-content so exec grid fills to edges ── */
-        .cpf-tab-content[data-exec="true"]         { overflow: hidden !important; padding-top: 0 !important; padding-bottom: 0 !important; }
+        /* ── Remove outer padding on cpf-tab-content so exec grid fills edge-to-edge ── */
+        .cpf-tab-content[data-exec="true"]        {
+          overflow: hidden !important;
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
+        }
+
+        /* ── Readiness tab in FHD with sidebar collapsed: centre content, prevent over-stretch ──
+           The Readiness sidebar auto-collapses on entry so this fires immediately in FHD.
+           Cap all three row grids at 1400px and centre them to match other tab card widths. */
+        .cpf-layout[data-sidebar-open="false"] .readiness-tab-outer {
+          max-width: 1400px;
+          width: 100%;
+          margin: 0 auto;
+        }
 
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
         @media (max-width: 1024px) and (min-width: 769px) {
@@ -12344,7 +12407,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
                   <button className="cpf-nav-dd-item" style={{ color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)" }}
-                    onClick={() => { setSidebarOpen(v => !v); setShowSettingsMenu(false); }}>
+                    onClick={handleSidebarToggle}>
                     <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Input Panel" : "Show Input Panel"}
                   </button>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
@@ -12438,7 +12501,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
                   <button className="cpf-nav-dd-item" style={{ color: sidebarOpen ? "var(--clr-green)" : "var(--text-subtle)" }}
-                    onClick={() => { setSidebarOpen(v => !v); setShowSettingsMenu(false); }}>
+                    onClick={handleSidebarToggle}>
                     <SlidersHorizontal style={{ width: 13, height: 13 }} />{sidebarOpen ? "Hide Input Panel" : "Show Input Panel"}
                   </button>
                 </div>
