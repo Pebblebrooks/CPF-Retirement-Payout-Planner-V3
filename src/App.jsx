@@ -5218,10 +5218,16 @@ function CockpitDashboard({
           </div>
           {gapAlert && (
             <div style={{ display: "flex", gap: 7, alignItems: "flex-start", padding: "5px 7px", borderRadius: 8,
-              marginBottom: 4, borderLeft: "2px solid var(--clr-red)", background: "rgba(var(--clr-red-rgb),0.08)" }}>
+              marginBottom: 4,
+              borderLeft: `2px solid ${gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)"}`,
+              background: gapAlert.isUrgent ? "rgba(var(--clr-red-rgb),0.08)" : "rgba(var(--clr-amber-rgb),0.06)" }}>
               <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 999, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0,
-                background: "rgba(var(--clr-red-rgb),0.12)", color: "var(--clr-red)", border: "1px solid rgba(var(--clr-red-rgb),0.3)" }}>Gap</span>
-              <span style={{ fontSize: 10, color: "var(--text-main)", lineHeight: 1.4 }}>{gapAlert}</span>
+                background: gapAlert.isUrgent ? "rgba(var(--clr-red-rgb),0.12)" : "rgba(var(--clr-amber-rgb),0.10)",
+                color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)",
+                border: `1px solid ${gapAlert.isUrgent ? "rgba(var(--clr-red-rgb),0.3)" : "rgba(var(--clr-amber-rgb),0.35)"}` }}>Gap</span>
+              <span style={{ fontSize: 10, color: "var(--text-main)", lineHeight: 1.4 }}>
+                {gapAlert.raLabel}: {fmt(gapAlert.raForAlert)} — shortfall {fmt(gapAlert.frsGap)} vs FRS {fmt(gapAlert.projFRS55)} — top-up {fmt(gapAlert.annualTopUp)}/yr over {gapAlert.yearsToGo} yr
+              </span>
             </div>
           )}
           {alertItems.slice(0, 4).map((m, i) => (
