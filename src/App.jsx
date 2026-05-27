@@ -10086,11 +10086,16 @@ ${milestoneSnapshotHtml}
     setSidebarOpen(v => {
       const next = !v;
       if (activeTab === 'readiness') {
-        // User explicitly chose to show/hide while on Readiness — honour that choice
-        // both when switching away AND on future re-entries to this tab.
+        // User explicitly toggled while ON Readiness — update both refs so:
+        //   sidebarWasOpenRef  → restore this state when leaving Readiness
+        //   readinessSidebarUserPref → honour this choice on every future re-entry
         sidebarWasOpenRef.current = next;
-        readinessSidebarUserPref.current = next;
       }
+      // Always track the user's explicit show/hide intent regardless of which tab
+      // they are on. Without this, toggling Show on any other tab left
+      // readinessSidebarUserPref === null, causing Readiness to auto-collapse
+      // on entry even though the user had just explicitly opened the panel.
+      readinessSidebarUserPref.current = next;
       return next;
     });
     setShowSettingsMenu(false);
@@ -11509,6 +11514,60 @@ ${milestoneSnapshotHtml}
           max-width: 1400px;
           width: 100%;
           margin: 0 auto;
+        }
+
+        /* FHD sidebar-hidden: fill viewport height + adaptive chart sizing.
+           cpf-main-wrap is height:100% + overflow:hidden. flex:1 on cpf-tab-content
+           stretches it to fill remaining height below the KPI strip and tab bar.
+           fhd-tab-inner fills cpf-tab-content and becomes the internal scroll zone.
+           Exec dashboard (data-exec=true) excluded - it manages its own grid layout.
+           fhd-chart-grow: applied in JSX to fixed-height chart divs. Expands to fill
+           remaining vertical space in FHD-collapsed; !important overrides inline height. */
+        .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
+          flex: 1 1 0;
+          min-height: 0;
+          overflow: hidden;
+          padding: 8px 0;
+        }
+        .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-tab-inner {
+          flex: 1 1 0;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          overflow-y: auto;
+          overflow-x: hidden;
+          scrollbar-width: thin;
+          scrollbar-color: var(--border-strong) transparent;
+        }
+        .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-chart-grow {
+          flex: 1 1 0 !important;
+          height: auto !important;
+          min-height: 220px !important;
+          max-height: 540px;
+        }
+        @media (min-width: 1920px) {
+          .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
+            flex: 1 1 0;
+            min-height: 0;
+            overflow: hidden;
+            padding: 8px 0;
+          }
+          .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-tab-inner {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-strong) transparent;
+          }
+          .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-chart-grow {
+            flex: 1 1 0 !important;
+            height: auto !important;
+            min-height: 220px !important;
+            max-height: 540px;
+          }
         }
 
         /* ─── TABLET LANDSCAPE  769 – 1024 px ───────────────────────── */
@@ -17936,7 +17995,7 @@ ${milestoneSnapshotHtml}
                     </div>
                   </>);
                 })()}
-                <div style={{ height: 380, minHeight: 380 }}>
+                <div className="fhd-chart-grow" style={{ height: 380, minHeight: 220 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <AreaChart data={(() => {
                       // S1 fix: for RSS members, payoutAge65 (= 65) < currentAge (= 68), so the old
@@ -18665,7 +18724,7 @@ ${milestoneSnapshotHtml}
                     </button>
                   ))}
                 </div>
-                <div style={{ height: 350, minHeight: 350 }}>
+                <div className="fhd-chart-grow" style={{ height: 350, minHeight: 220 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     <LineChart data={displayProjection.filter(d => d.age >= payoutAge65)}> {/* BUG-51 fix: use debounced payoutAge65 */}
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
