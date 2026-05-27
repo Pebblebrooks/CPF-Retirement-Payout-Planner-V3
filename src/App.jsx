@@ -5668,7 +5668,6 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState("readiness");
   activeTabRef.current = activeTab; // keep ref current for keyboard shortcut handler
-  cockpitModeRef.current = cockpitMode; // keep ref current for keyboard shortcut handler
   const [highlightPlan, setHighlightPlan] = useState("standard");
   // HH-5: Independent CPF LIFE plan selector per member (replaces shared householdPlan).
   // pPlanKey drives primary's card + KPI strip primary column.
@@ -5766,6 +5765,7 @@ export default function App() {
   const [tabsMenuPos, setTabsMenuPos] = useState({ top: 0, right: 16 }); // fixed coords computed at open-time
   const [desktopMode, setDesktopMode] = useState("auto");
   const [cockpitMode, setCockpitMode] = useState(false);
+  cockpitModeRef.current = cockpitMode; // keep ref current for keyboard shortcut handler
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPresets, setShowPresets] = useState(false);
   const [tableSubTab, setTableSubTab] = useState("projection");
