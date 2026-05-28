@@ -1256,6 +1256,33 @@ function runProjectionWithDWZ(inputs, engineFn) {
   return finalPass;
 }
 
+// ── makeComputeGF ─────────────────────────────────────────────────────────────
+// BUG-10 fix: computeGF was defined identically inside both runRSSEngine and
+// runProjectionEngine. Extracted here as a factory so a single source of truth
+// exists — any future change to phase-salary or growth logic only needs one edit.
+//
+// Returns a function (age, bump=0) → growth factor that:
+//   Phase 1 (age < phaseAge or no phase): (1 + r1)^(age − startAge)
+//   Phase 2 (age ≥ phaseAge):            (1 + r1)^(phaseAge − startAge)
+//                                       × (1 + r2)^(age − phaseAge)
+// bump is a fractional one-year bonus adjustment (used for AW/bonus contributions).
+// Contribution zeroing during career breaks is handled upstream via leContribPaused
+// before computeGF is called — this function only handles salary growth scaling.
+function makeComputeGF(startAge, salaryGrowth, salaryPhaseAge, salaryGrowthRate2) {
+  return function computeGF(age, bump = 0) {
+    const yearsTotal = Math.max(0, age - startAge);
+    let gfVal;
+    if (salaryPhaseAge !== null && age >= salaryPhaseAge) {
+      const years1 = Math.max(0, salaryPhaseAge - startAge);
+      const years2 = Math.max(0, age - salaryPhaseAge);
+      gfVal = Math.pow(1 + salaryGrowth, years1) * Math.pow(1 + salaryGrowthRate2, years2);
+    } else {
+      gfVal = Math.pow(1 + salaryGrowth, yearsTotal);
+    }
+    return gfVal * (1 + bump);
+  };
+}
+
 function runRSSEngine(inputs, {
   overrideContribStop,
   overrideVcSA,
@@ -1315,18 +1342,8 @@ function runRSSEngine(inputs, {
   const salaryGrowthRate2 = (Number(inputs.salaryGrowthRate2) || 0) / 100;
   // Career break is now handled exclusively via Life Events (type: 'career_break') through leContribPaused.
   // The old careerBreakStartAge/EndAge fields have been removed from DEFAULT_INPUTS and are no longer read here.
-  const computeGF = (age, bump = 0) => {
-    const yearsTotal = Math.max(0, age - startAge);
-    let gfVal;
-    if (salaryPhaseAge !== null && age >= salaryPhaseAge) {
-      const years1 = Math.max(0, salaryPhaseAge - startAge);
-      const years2 = Math.max(0, age - salaryPhaseAge);
-      gfVal = Math.pow(1 + salaryGrowth, years1) * Math.pow(1 + salaryGrowthRate2, years2);
-    } else {
-      gfVal = Math.pow(1 + salaryGrowth, yearsTotal);
-    }
-    return gfVal * (1 + bump);
-  };
+  // BUG-10 fix: use shared makeComputeGF factory — removed duplicate inline definition.
+  const computeGF = makeComputeGF(startAge, salaryGrowth, salaryPhaseAge, salaryGrowthRate2);
   const baseOA_Emp = Number(inputs.empOaCont) || 0;
   const baseSA_Emp = Number(inputs.empSaCont) || 0;
   const baseMA_Emp = Number(inputs.empMaCont) || 0;
@@ -2149,18 +2166,8 @@ function runProjectionEngine(inputs, {
   // computeGF: returns the salary growth factor at a given age, respecting phase change only.
   // Phase 1: (1+r1)^(age-startAge). Phase 2 (age >= phaseAge): (1+r1)^(phaseAge-startAge) * (1+r2)^(age-phaseAge).
   // Contribution zeroing during a career break is handled upstream by leContribPaused before computeGF is called.
-  const computeGF = (age, bump = 0) => {
-    const yearsTotal = Math.max(0, age - startAge);
-    let gfVal;
-    if (salaryPhaseAge !== null && age >= salaryPhaseAge) {
-      const years1 = Math.max(0, salaryPhaseAge - startAge);
-      const years2 = Math.max(0, age - salaryPhaseAge);
-      gfVal = Math.pow(1 + salaryGrowth, years1) * Math.pow(1 + salaryGrowthRate2, years2);
-    } else {
-      gfVal = Math.pow(1 + salaryGrowth, yearsTotal);
-    }
-    return gfVal * (1 + bump);
-  };
+  // BUG-10 fix: use shared makeComputeGF factory — removed duplicate inline definition.
+  const computeGF = makeComputeGF(startAge, salaryGrowth, salaryPhaseAge, salaryGrowthRate2);
 
   const baseOA_Emp = Number(inputs.empOaCont) || 0;
   const baseSA_Emp = Number(inputs.empSaCont) || 0;
@@ -3797,7 +3804,12 @@ const computeXIRR = (cashFlows) => {
         df += -t * v / (denom * (1 + rate));
       }
       if (Math.abs(df) < 1e-12) break;
-      const newRate = rate - f / df;
+      const step = f / df;
+      // N-BUG-9 fix: guard against Infinity/NaN Newton step. This occurs when df → 0
+      // but f stays large (degenerate all-same-sign-subset or extreme cashflow ratios).
+      // A step > 10 is also economically implausible — clamp and bail to avoid divergence.
+      if (!isFinite(step) || Math.abs(step) > 10) break;
+      const newRate = rate - step;
       if (Math.abs(newRate - rate) < 1e-8) { rate = newRate; break; }
       rate = newRate;
       if (rate < -0.999) rate = -0.999;
@@ -5754,6 +5766,15 @@ export default function App() {
       if (pParam) {
         // New format: full state encoded via lzCompress (LZ77 or legacy base64url)
         const fullState = JSON.parse(lzDecompress(pParam));
+        // N-BUG-3 fix: warn the user if the share link was generated by a different
+        // app version. Fields added in newer versions will have been delta-dropped from
+        // older links (they matched DEFAULT_INPUTS at encode time but may now differ);
+        // fields removed in newer versions are silently ignored by buildSafeInputs.
+        // The warning doesn't block loading — it tells the user to re-check key settings.
+        const CURRENT_APP_VERSION = "V4-2026";
+        if (fullState.appVersion && fullState.appVersion !== CURRENT_APP_VERSION) {
+          showToast(`ℹ️ Share link was saved with ${fullState.appVersion} — loaded on ${CURRENT_APP_VERSION}. Some settings may have reset to defaults. Please review your profile.`);
+        }
         if (fullState.inputs) {
           // BUG-1 fix: use module-level buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
           const mergedInputs = buildSafeInputs(fullState.inputs);
@@ -7425,10 +7446,50 @@ export default function App() {
       dieWithZeroEnabled, dieWithZeroAge,
       retirementSumGrowth, // Rev #5
       salaryPhaseAge, salaryGrowthRate2, // Rev #22
-      lifeEvents, // Rev #D2
+      lifeEvents, // Rev #D2 — UUIDs stripped below to avoid spurious re-renders
       cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer, // RSS fields + transfer toggle
     });
-  }, [debouncedInputs]);
+    // N-BUG-5 fix: lifeEvents objects carry a UUID `id` field generated at creation time.
+    // Including raw lifeEvents in JSON.stringify means deleting+re-adding the same event
+    // (new UUID) triggers an unnecessary projection re-run even though the event data is
+    // identical. Stripping `id` before stringifying means engineKey only changes when the
+    // event content (type, ages, magnitude etc.) actually changes — matching the engine's
+    // own behaviour (the engine never reads event IDs).
+    const lifeEventsForKey = Array.isArray(lifeEvents)
+      ? lifeEvents.map(({ id: _id, ...rest }) => rest)
+      : [];
+    return JSON.stringify({
+      currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
+      isSelfEmployed, isMale, oaBalance, saBalance, maBalance,
+      empOaCont, empSaCont, empMaCont, vc3aCash, vcSaTopup, vcVhr,
+      annualGovGrant, govGrantMa, wisAmount,
+      oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
+      usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
+      cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
+      medicalUsage, medishieldIP, elderCareShield,
+      medicalInflationRate, propertyValue, propertyGrowthRate,
+      propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
+      salaryGross, salaryBonus, salaryGrowthRate, netTradeIncome,
+      sellPropertyAge,
+      currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
+      plannedDownpaymentOA, downpaymentAge,
+      srsBalance, srsAnnualContribution, srsContribStopAge, srsReturnRate,
+      srsDrawdownStartAge, srsDrawdownYears,
+      oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
+      propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
+      propMonetiseCashProceeds, propMonetiseRaTopup,
+      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD, birthMonth, birthYear,
+      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq,
+      cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
+      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, govGrantMaDur, wisDur,
+      cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur, oaWithdrawalDur,
+      dieWithZeroEnabled, dieWithZeroAge,
+      retirementSumGrowth,
+      salaryPhaseAge, salaryGrowthRate2,
+      lifeEvents: lifeEventsForKey,
+      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer,
+    });
+  }, [debouncedInputs]); // eslint-disable-line react-hooks/exhaustive-deps
   const projection = useMemo(() => {
     // RSS isolation: route to runRSSEngine (new parallel path) for pre-1958 members.
     // runProjectionEngine is never called when isRSS is true; both functions return
@@ -7762,10 +7823,17 @@ export default function App() {
   // no applied draw (_dwzOaMonthly is absent or 0). This can happen when a shared link
   // encodes dieWithZeroEnabled=true but oaDrawdownMonthly=0 — the user sees the toggle
   // ON yet the projection shows no drawdown, with no visible indication of the mismatch.
-  // The effect watches debouncedInputs.dieWithZeroEnabled so it fires on every toggle;
-  // projection is also in deps so it re-checks after the projection settles.
+  // N-BUG-7 fix: use a ref to only fire once per dieWithZeroEnabled=true transition.
+  // Without the ref, the effect fires on every projection reference change (every 180ms
+  // debounce) while DWZ is ON — producing spurious toasts on every input change.
+  const dwzWarnFiredRef = useRef(false);
   useEffect(() => {
-    if (debouncedInputs.dieWithZeroEnabled && !(projection._dwzOaMonthly > 0)) {
+    if (!debouncedInputs.dieWithZeroEnabled) {
+      dwzWarnFiredRef.current = false; // reset so next toggle-on re-evaluates
+      return;
+    }
+    if (!(projection._dwzOaMonthly > 0) && !dwzWarnFiredRef.current) {
+      dwzWarnFiredRef.current = true;
       showToast('⚠ Die with Zero is ON but no draw is applied — OA balance at payout age may be $0 or projection is still computing.');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
