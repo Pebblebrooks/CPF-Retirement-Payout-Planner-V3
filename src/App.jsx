@@ -16838,21 +16838,24 @@ ${milestoneSnapshotHtml}
                   // Use the live rssCurrentRa for the interest estimate (same logic as before, but
                   // the payout display now matches the RSS tab exactly).
                   const rssIsGrowing = rssDepEst === ">95" && rssAnnual > 0 && rssAnnual < rssCurrentRa * CPF_RATES.RA;
+                  // ── Fix 2: RSS cards — add sublabel to every card so strip height matches
+                  //    CPF LIFE mode (which always shows sublabel). Without this the strip
+                  //    visibly grows/shrinks when switching CPF scheme, causing layout reflow.
                   return isRSSKpi ? [
-                    { label: "Current RA", value: formatCurrency(rssCurrentRa), color: "var(--clr-blue)", tip: "Current Retirement Account balance — this is drawn down each month under RSS" },
-                    { label: "RSS Payout", value: inputs.rssMonthlyPayout > 0 ? formatCurrency(Number(inputs.rssMonthlyPayout)) + "/mo" : "Not set", color: inputs.rssMonthlyPayout > 0 ? "var(--clr-green)" : "var(--clr-red)", tip: "Your fixed CPF Board monthly payout under RSS" },
-                    { label: "Annual Draw", value: rssAnnual > 0 ? formatCurrency(rssAnnual) + "/yr" : "—", color: "var(--clr-blue)", tip: "Total annual RSS drawdown from RA (monthly × 12)" },
-                    { label: "Est. Depletion",
+                    { label: "Current RA",    sublabel: "Retirement Account",  value: formatCurrency(rssCurrentRa), color: "var(--clr-blue)", tip: "Current Retirement Account balance — this is drawn down each month under RSS" },
+                    { label: "RSS Payout",    sublabel: "monthly · fixed",     value: inputs.rssMonthlyPayout > 0 ? formatCurrency(Number(inputs.rssMonthlyPayout)) + "/mo" : "Not set", color: inputs.rssMonthlyPayout > 0 ? "var(--clr-green)" : "var(--clr-red)", tip: "Your fixed CPF Board monthly payout under RSS" },
+                    { label: "Annual Draw",   sublabel: "per year",            value: rssAnnual > 0 ? formatCurrency(rssAnnual) + "/yr" : "—", color: "var(--clr-blue)", tip: "Total annual RSS drawdown from RA (monthly × 12)" },
+                    { label: "Est. Depletion", sublabel: "projected RA → $0",
                       value: rssDepEst ? `Age ${rssDepEst}` : "—",
                       color: rssIsGrowing ? "var(--clr-amber)"
                            : (rssDepEst && typeof rssDepEst === "number" && rssDepEst < 85 ? "var(--clr-red)" : "var(--clr-green)"),
                       tip: rssIsGrowing
                         ? `RA is growing — your annual payout (${formatCurrency(rssAnnual)}/yr) is less than the 4% base interest your RA earns (~${formatCurrency(Math.round(rssCurrentRa * CPF_RATES.RA))}/yr). Increase your monthly payout above ~${formatCurrency(Math.ceil(rssCurrentRa * CPF_RATES.RA / 12))}/mo to project a depletion date.`
                         : `Projected age when RA reaches $0 under RSS — read directly from the engine projection (4% base + 1% extra on first $60k + 1% extra on first $30k). Matches the RSS tab depletion age exactly.` },
-                    { label: "Migration", value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge} · ${{ bas: 'Basic', std: 'Std', esc: 'Esc' }[inputs.lifePlanAtMigration || 'std']}` : "None", color: inputs.lifeMigrationAge > 0 ? "var(--clr-purple)" : "var(--text-muted)", tip: inputs.lifeMigrationAge > 0 ? `Migrating to CPF LIFE ${{ bas: 'Basic', std: 'Standard', esc: 'Escalating' }[inputs.lifePlanAtMigration || 'std']} plan at age ${inputs.lifeMigrationAge}` : "Staying on RSS until RA depletes — no CPF LIFE migration planned" },
-                    { label: "Payout Start", value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "var(--clr-amber)", tip: "Age when CPF Board began your RSS monthly payouts" },
+                    { label: "Migration",     sublabel: "to CPF LIFE",         value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge} · ${{ bas: 'Basic', std: 'Std', esc: 'Esc' }[inputs.lifePlanAtMigration || 'std']}` : "None", color: inputs.lifeMigrationAge > 0 ? "var(--clr-purple)" : "var(--text-muted)", tip: inputs.lifeMigrationAge > 0 ? `Migrating to CPF LIFE ${{ bas: 'Basic', std: 'Standard', esc: 'Escalating' }[inputs.lifePlanAtMigration || 'std']} plan at age ${inputs.lifeMigrationAge}` : "Staying on RSS until RA depletes — no CPF LIFE migration planned" },
+                    { label: "Payout Start",  sublabel: "by CPF Board",        value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "var(--clr-amber)", tip: "Age when CPF Board began your RSS monthly payouts" },
                   ] : (() => {
-                    // Zone 1 KPI strip: 3 metrics only — Total CPF | Active plan payout | Payout age
+                    // ── Core CPF LIFE metrics — always shown in the first 4 slots ──────────
                     const activePlan = highlightPlan || "standard";
                     const activePlanObj = lifePlans?.[activePlan];
                     const activePayoutRaw = activePlanObj
@@ -16865,12 +16868,89 @@ ${milestoneSnapshotHtml}
                       ? activePayoutRaw * (1 - basicPremiumPct / 100) / 0.90
                       : activePayoutRaw;
                     const planLabel = { standard: "Standard plan", escalating: "Escalating plan", basic: "Basic plan" }[activePlan] || "Standard plan";
-                    return [
-                      { label: "Total CPF", sublabel: `at payout age ${inputs.payoutAge}`, value: formatCurrency(dispTotal), color: "var(--clr-blue)", tip: "Total CPF balance (OA+MA+RA) at your chosen payout age — the nest egg that funds CPF LIFE payouts" },
-                      { label: planLabel, sublabel: "monthly payout", value: activePayout ? formatCurrency(Math.round(applyInflation(activePayout, inputs.payoutAge))) : "—", color: "var(--clr-emerald)", tip: `${planLabel} monthly payout from CPF LIFE. Switch plans in the plan comparison below. Figures from 2026 CPF Board data.` },
-                      { label: "Payout age", sublabel: "CPF LIFE start", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts." },
+
+                    // ── Fix 1: Reinstate ra55 as 4th card — computed above but previously
+                    //    dropped from the return array (dead code). RA at 55 is a critical
+                    //    FRS readiness signal, particularly relevant in FHD panel-hidden mode
+                    //    where the strip is the user's only persistent reference.
+                    // ── Fix 3: Payout age card colour changed from amber → blue.
+                    //    amber value on isEarly emerald background was a mixed-signal clash.
+                    //    Blue reads as neutral/informational, consistent with "Total CPF" card.
+                    const coreCards = [
+                      { label: "Total CPF",  sublabel: `at payout age ${inputs.payoutAge}`, value: formatCurrency(dispTotal),  color: "var(--clr-blue)",    tip: "Total CPF balance (OA+SA+MA+RA) at your chosen payout age — the nest egg that funds CPF LIFE payouts" },
+                      { label: planLabel,    sublabel: "monthly payout",                    value: activePayout ? formatCurrency(Math.round(applyInflation(activePayout, inputs.payoutAge))) : "—", color: "var(--clr-emerald)", tip: `${planLabel} monthly payout from CPF LIFE. Switch plans in the plan comparison below. Figures from 2026 CPF Board data.` },
+                      { label: "Payout age", sublabel: "CPF LIFE start",                   value: `${inputs.payoutAge}`,       color: "var(--clr-blue)",    tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts." },
+                      { label: "RA at 55",   sublabel: ra55Sublabel,                        value: ra55 > 0 ? formatCurrency(ra55) : "—", color: ra55 > 0 ? "var(--clr-purple)" : "var(--text-muted)", tip: ca2 >= 55 ? "Current Retirement Account balance — used to determine CPF LIFE eligibility and monthly payouts." : "Projected RA balance at age 55 — CPF LIFE auto-enrolment requires RA ≥ $60,000." },
                     ];
+
+                    // ── Fix 5: Tab-contextual 5th card — surface metrics relevant to the
+                    //    current tab. In FHD panel-hidden mode the strip is the only persistent
+                    //    header; a generic 4th card gives no extra signal when on a specialised
+                    //    tab. Each branch reads only variables already in scope.
+                    let contextCard = null;
+
+                    if (activeTab === "table") {
+                      // Table tab: XIRR is the primary metric — show it for the active plan
+                      const xirrPlan = highlightPlan || "standard";
+                      const xirrVal  = xirrByAge?.[xirrPlan]?.[payoutAge65];
+                      const xirrPlanShort = { standard: "Std", escalating: "Esc", basic: "Basic" }[xirrPlan] || "Std";
+                      contextCard = {
+                        label: `XIRR · ${xirrPlanShort}`,
+                        sublabel: `at payout age ${payoutAge65}`,
+                        value: xirrVal != null ? (xirrVal * 100).toFixed(2) + "%" : "—",
+                        color: xirrVal != null ? (xirrVal >= 0.04 ? "var(--clr-emerald)" : xirrVal >= 0.025 ? "var(--clr-amber)" : "var(--clr-red)") : "var(--text-muted)",
+                        tip: `Internal Rate of Return (XIRR) for the ${xirrPlan} CPF LIFE plan at payout age ${payoutAge65} — accounts for all contributions, employer, voluntary top-ups, and projected payouts to age 95.`,
+                      };
+                    } else if (activeTab === "household" && householdEnabled) {
+                      // Household tab: combined CPF total across both members
+                      const spousePaH = Number(debouncedSpouseInputs?.payoutAge) || 67;
+                      const spouseRowH = spouseAccumulationByAge?.get?.(spousePaH) || {};
+                      const spouseTotalH = (spouseRowH.oa || 0) + (spouseRowH.sa || 0) + (spouseRowH.ma || 0) + (spouseRowH.ra || 0);
+                      const combinedH = dispTotal + spouseTotalH;
+                      contextCard = {
+                        label: "Combined CPF",
+                        sublabel: "primary + spouse",
+                        value: combinedH > 0 ? formatCurrency(combinedH) : "—",
+                        color: "var(--clr-purple)",
+                        tip: `Combined CPF balance across both members at their respective payout ages (you: ${inputs.payoutAge}, spouse: ${spousePaH}). Used to assess household retirement sufficiency.`,
+                      };
+                    } else if (activeTab === "compare" && comparisonData?.length) {
+                      // Compare tab: net-worth delta between Scenario A and current at payout age
+                      const cmpRow = comparisonData.find(r => r.age === payoutAge65) || comparisonData[comparisonData.length - 1];
+                      const delta  = cmpRow ? ((cmpRow.yieldA ?? 0) - (cmpRow.yieldB ?? 0)) : null;
+                      contextCard = {
+                        label: "Scenario Δ",
+                        sublabel: `at age ${cmpRow?.age ?? payoutAge65}`,
+                        value: delta != null ? (delta >= 0 ? "+" : "") + formatCurrency(Math.round(delta)) : "—",
+                        color: delta == null ? "var(--text-muted)" : delta >= 0 ? "var(--clr-emerald)" : "var(--clr-red)",
+                        tip: `Net-worth difference between Scenario A and current at payout age ${payoutAge65}. Positive = Scenario A ends ahead; negative = current projection is stronger.`,
+                      };
+                    } else if ((activeTab === "strategy" || activeTab === "accumulation" || activeTab === "life") && estimatedTaxSavings > 0) {
+                      // Strategy / Accumulation / Life tabs: surface RSTU tax saving if active
+                      contextCard = {
+                        label: "Tax saving",
+                        sublabel: "RSTU · est. annual",
+                        value: formatCurrency(estimatedTaxSavings) + "/yr",
+                        color: "var(--clr-amber)",
+                        tip: `Estimated annual income tax relief from your RSTU top-up of ${formatCurrency(Number(inputs.vcSaTopup))}/yr at your marginal rate. Continues until SA/RA reaches FRS.`,
+                      };
+                    } else if (gapAlert && (activeTab === "strategy" || activeTab === "accumulation" || activeTab === "life")) {
+                      // Fallback for strategy/accumulation/life when no tax saving: show FRS gap
+                      contextCard = {
+                        label: "FRS gap",
+                        sublabel: "projected shortfall",
+                        value: formatCurrency(gapAlert.frsGap),
+                        color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)",
+                        tip: `Projected ${gapAlert.raLabel} is ${formatCurrency(gapAlert.frsGap)} short of FRS (${formatCurrency(gapAlert.projFRS55)}). Suggested top-up: ${formatCurrency(gapAlert.annualTopUp)}/yr over ${gapAlert.yearsToGo} yrs.`,
+                      };
+                    }
+
+                    return contextCard ? [...coreCards, contextCard] : coreCards;
                   })();
+                // ── Fix 4: isEarly extended to cover all non-first cards uniformly.
+                //    Previously capped at i < 4 — RSS cards 4 & 5 got transparent bg,
+                //    inconsistent with cards 0–3. Now all cards beyond index 0 share the
+                //    same subtle emerald tint for a unified strip appearance.
                 })().map(({ label, sublabel, value, color, tip }, i) => (
                   <KpiCard
                     key={i}
@@ -16880,7 +16960,7 @@ ${milestoneSnapshotHtml}
                     color={color}
                     tip={tip}
                     isFirst={i === 0}
-                    isEarly={i > 0 && i < 4}
+                    isEarly={i > 0}
                   />
                 ))}
               </div>{/* /kpi-strip */}
