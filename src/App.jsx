@@ -10824,9 +10824,19 @@ ${milestoneSnapshotHtml}
         .theme-light .strategy-income-table td { color: #162033 !important; }
         .theme-light .strategy-income-table th { color: #08111e !important; background: rgba(74,102,128,0.15) !important; }
 
-        /* ── Strategy tab: sticky sub-nav (Goal Simulator / Income Roadmap) on mobile/tablet ── */
-        @media (max-width: 1024px) {
-          .strategy-subnav { position: sticky; top: 0; z-index: 50; }
+        /* ── Strategy tab: sticky sub-nav (Goal Simulator / Income Roadmap) on mobile/tablet ──
+           z-index MUST be below every sticky-row layer so the subnav scrolls BEHIND them:
+             header z:50 · input-params-bar z:48 · tab-strip z:42 · KPI-header z:40
+           top is set to the bottom of the full sticky stack so the subnav sticks just
+           below the KPI strip rather than at the viewport top (which caused it to
+           overlap/cover the sticky rows).
+           Tablet (769–1024px): header 48 + tabs 44 + params 44 + KPI single-row ≈82px = 220px
+           Mobile  (≤768px):    same base 136px + KPI 2-row on mobile ≈136px = ~272px → 280px  */
+        @media (max-width: 1024px) and (min-width: 769px) {
+          .strategy-subnav { position: sticky; top: 220px; z-index: 30; }
+        }
+        @media (max-width: 768px) {
+          .strategy-subnav { position: sticky; top: 280px; z-index: 30; }
         }
 
         /* ── Light mode: welcome step cards — hard-coded dark bg ── */
@@ -11997,6 +12007,19 @@ ${milestoneSnapshotHtml}
           .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
           .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
             position: sticky !important; top: 136px !important; z-index: 40 !important;
+          }
+          /* Fix KPI sticky (≤640px): cpf-input-params-bar is position:fixed here, so it
+             takes zero document-flow space. Without this, cpf-main-wrap (and the KPI inside
+             it) starts at document-Y ≈ 92px (spacer:48 + tab-strip:44). The KPI's sticky
+             threshold is top:136px — but 92px is already ABOVE 136px from viewport top, so
+             sticky never activates and KPI just scrolls away.
+             Adding padding-top:44px compensates for the fixed bar's missing flow height,
+             pushing main-wrap content to start at Y = 136px. The KPI is now exactly at its
+             sticky threshold and correctly locks on first scroll.
+             Secondary benefit: previously the first 44px of every tab's content was invisible
+             behind the fixed input-params-bar; this padding reveals that content on all tabs. */
+          .cpf-layout[data-sidebar-open="false"] .cpf-main-wrap {
+            padding-top: 44px !important;
           }
           /* Shrink logo on tiny screens */
           .cpf-logo-text { font-size: 14px !important; }
