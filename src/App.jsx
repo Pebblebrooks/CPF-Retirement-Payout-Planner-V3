@@ -1811,8 +1811,10 @@ function runRSSEngine(inputs, {
           const raRoom = Math.max(0, projERS_rstu - ra);
           actualVcSa = Math.min(vcSaAmt, raRoom);
           // MRSS eligibility: SC-only, check RA BEFORE top-up, income ≤ $4k, lifetime cap $20k
-          const projBRS_rstu = Math.round(projERS_rstu / 4);
-          const mrssAgeOk = age >= 55 || isPwD;
+          // BUG-4 fix: direct BRS projection — ERS/4 was arithmetically equivalent but fragile.
+          const projBRS_rstu = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yrOffset));
+          // BUG-3 fix: PwD is a bypass for the under-55 requirement only — must include age < 55.
+          const mrssAgeOk = age >= 55 || (isPwD && age < 55);
           const mrssEligible = isSC && mrssAgeOk && ra < projBRS_rstu && mmssMonthlyIncome <= 4000 && cumMrssReceived < 20000 && actualVcSa > 0;
           ra += actualVcSa;
           cumRaCashTopUps += actualVcSa;
@@ -3010,8 +3012,10 @@ function runProjectionEngine(inputs, {
           const raRoom = Math.max(0, projERS_rstu - ra);
           actualVcSa = Math.min(vcSaAmt, raRoom);
           // MRSS eligibility: SC-only, check RA BEFORE top-up, income ≤ $4k, lifetime cap $20k
-          const projBRS_rstu = Math.round(projERS_rstu / 4);
-          const mrssAgeOk = age >= 55 || isPwD;
+          // BUG-4 fix: direct BRS projection — ERS/4 was arithmetically equivalent but fragile.
+          const projBRS_rstu = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yrOffset));
+          // BUG-3 fix: PwD is a bypass for the under-55 requirement only — must include age < 55.
+          const mrssAgeOk = age >= 55 || (isPwD && age < 55);
           const mrssEligible = isSC && mrssAgeOk && ra < projBRS_rstu && mmssMonthlyIncome <= 4000 && cumMrssReceived < 20000 && actualVcSa > 0;
           ra += actualVcSa;
           cumRaCashTopUps += actualVcSa;
@@ -4996,6 +5000,18 @@ export default function App() {
   const [tabsMenuPos, setTabsMenuPos] = useState({ top: 0, right: 16 }); // fixed coords computed at open-time
   const [desktopMode, setDesktopMode] = useState("auto");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Reactive viewport width — updates execDashMode when the window is resized.
+  // Debounced at 150ms so we don't fire a re-render on every pixel of drag.
+  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    let timer;
+    const onVpResize = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setViewportWidth(window.innerWidth), 150);
+    };
+    window.addEventListener('resize', onVpResize);
+    return () => { window.removeEventListener('resize', onVpResize); clearTimeout(timer); };
+  }, []);
   const [showPresets, setShowPresets] = useState(false);
   const [tableSubTab, setTableSubTab] = useState("projection");
   const [showDataTableGuide, setShowDataTableGuide] = useState(false);
@@ -5587,9 +5603,18 @@ export default function App() {
       } else if (raBalNow < frsNow55 && !hasProperty) {
         errs.oaToMaTransfer = `RA ($${raBalNow.toLocaleString()}) is below FRS ($${frsNow55.toLocaleString()}). Must own a property (BRS+property) or meet FRS to transfer OA→MA.`;
       }
-      // OA balance sufficiency check (mirrors A2 fix for OA→SA)
-      if (currentOaBal === 0) errs.oaToMaTransfer = "OA balance is $0 — transfer has no effect until OA accumulates funds";
-      else if (!errs.oaToMaTransfer && oaToMa > currentOaBal && currentOaBal > 0) errs.oaToMaTransfer = `Exceeds current OA balance ($${currentOaBal.toLocaleString()}). Engine will transfer up to available OA each year.`;
+      // OA balance sufficiency check — applies to BOTH self and loved-one transfers.
+      // BUG-6 fix: previously this was guarded by !errs.oaToMaTransfer, which caused
+      // the check to be skipped whenever the RA/BRS error above was already set.
+      // For the loved-one path the RA/BRS check is irrelevant (no RA requirement for
+      // a third-party top-up) yet the OA-balance warning still disappeared.
+      // Fix: run the OA-balance check unconditionally; overwrite any RA/BRS error only
+      // when OA = $0 (hard block), and add the softer cap-warning independently.
+      if (currentOaBal === 0) {
+        errs.oaToMaTransfer = "OA balance is $0 — transfer has no effect until OA accumulates funds";
+      } else if (oaToMa > currentOaBal && currentOaBal > 0 && !errs.oaToMaTransfer) {
+        errs.oaToMaTransfer = `Exceeds current OA balance ($${currentOaBal.toLocaleString()}). Engine will transfer up to available OA each year.`;
+      }
       // BHS headroom check (only relevant for self transfer)
       if (!errs.oaToMaTransfer && !(inp.oaToMaForLovedOne)) {
         const bhsNowVal = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + (Number(inp.retirementSumGrowth)||3)/100, Math.max(0, (Number(inp.currentYear) || 2026) - 2026)));
@@ -5687,9 +5712,29 @@ export default function App() {
 
   // P3-T12: Wizard handlers
   const handleWizardComplete = (mergedInputs) => {
-    setInputs(prev => ({ ...prev, ...mergedInputs }));
+    // BUG-2 fix: run through buildSafeInputs so boolean fields are correctly coerced
+    // (e.g. "true" → true) and lifeEvents is always a valid array — matching the
+    // safety processing applied by every other profile-loading path (import, URL share, presets).
+    const safeInputs = buildSafeInputs({ ...DEFAULT_INPUTS, ...mergedInputs });
+    // BUG-1 fix: update debouncedInputs immediately alongside inputs so engineKey
+    // evaluates against the wizard profile from the first render, not the stale
+    // DEFAULT_INPUTS that the 180ms debounce would otherwise leave in place.
+    setInputs(safeInputs);
+    setDebouncedInputs(safeInputs);
+    // BUG-11 fix: clear any stale validation highlights from a previously loaded
+    // profile — matches the setInputErrors({}) call in every other load path.
+    setInputErrors({});
     try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
     setShowWizard(false);
+    // Desktop only (FHD / HD / Auto — viewport > 1024px): open the input panel on
+    // Readiness so the user can see and refine their profile immediately after setup.
+    // This sets readinessSidebarUserPref so the Readiness auto-collapse effect takes
+    // the "honour explicit choice" path instead of the first-visit collapse default.
+    // Mobile/tablet (≤ 1024px) is left unchanged — the sidebar always collapses there
+    // on tab entry to avoid obscuring the readiness dashboard on narrow screens.
+    if (window.innerWidth > 1024) {
+      readinessSidebarUserPref.current = true;
+    }
     setActiveTab('readiness');
     showToast('✓ Setup complete — your profile is ready');
   };
@@ -7713,6 +7758,18 @@ export default function App() {
   const effectiveOaDrawMonthly  = debouncedInputs.dieWithZeroEnabled ? (projection._dwzOaMonthly || 0) : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
   const effectiveOaDrawStartAge = debouncedInputs.dieWithZeroEnabled ? (projection._dwzStartAge || Number(debouncedInputs.payoutAge) || 65) : (Number(debouncedInputs.oaDrawdownStartAge) || 0);
   const effectiveOaDrawFloor    = debouncedInputs.dieWithZeroEnabled ? 0 : (Number(debouncedInputs.oaDrawdownFloor) || 0);
+  // BUG-7 fix: surface a toast when Die with Zero is toggled ON but the projection has
+  // no applied draw (_dwzOaMonthly is absent or 0). This can happen when a shared link
+  // encodes dieWithZeroEnabled=true but oaDrawdownMonthly=0 — the user sees the toggle
+  // ON yet the projection shows no drawdown, with no visible indication of the mismatch.
+  // The effect watches debouncedInputs.dieWithZeroEnabled so it fires on every toggle;
+  // projection is also in deps so it re-checks after the projection settles.
+  useEffect(() => {
+    if (debouncedInputs.dieWithZeroEnabled && !(projection._dwzOaMonthly > 0)) {
+      showToast('⚠ Die with Zero is ON but no draw is applied — OA balance at payout age may be $0 or projection is still computing.');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedInputs.dieWithZeroEnabled, projection]);
   // NOTE: payoutAge65, raAtPayout, raOaTransfer, raAfterTransfer are declared ABOVE (before
   // householdData useMemo) to avoid TDZ — do not redeclare them here.
 
@@ -10103,14 +10160,15 @@ ${milestoneSnapshotHtml}
 
   // ─── EXECUTIVE DASHBOARD MODE ─────────────────────────────────────────────────
   // Activates when: FHD/auto≥1920px + sidebar collapsed + on Summary tab.
-  // Replaces the normal vertical-scroll layout with a fixed 2-row × 2-col grid
-  // so all critical data fits on screen without scrolling, like an exec dashboard.
-  // Scoped entirely to [data-zone] selectors — zero impact on any other tab or mode.
+  // Replaces the normal vertical-scroll layout with a 2-column grid so all
+  // critical data fits on-screen, like an exec dashboard.
+  // viewportWidth (reactive state) replaces the stale window.innerWidth snapshot
+  // so resizing the viewport in Auto mode correctly exits/enters exec dash.
   const execDashMode = useMemo(() =>
     !sidebarOpen &&
     activeTab === 'summary' &&
-    (desktopMode === 'fhd' || (desktopMode === 'auto' && window.innerWidth >= 1920)),
-    [sidebarOpen, activeTab, desktopMode]
+    (desktopMode === 'fhd' || (desktopMode === 'auto' && viewportWidth >= 1920)),
+    [sidebarOpen, activeTab, desktopMode, viewportWidth]
   );
   // Auto-expand collapsible zones when exec mode activates so content is immediately
   // visible without requiring the user to click expand — restores normal behaviour
@@ -11253,10 +11311,11 @@ ${milestoneSnapshotHtml}
           color: var(--text-muted);
         }
         .sidebar-chevron.open { transform: rotate(180deg); }
-        /* Passthrough wrapper — display:contents makes the div invisible to layout.
-           Used by exec-right-col when execDashMode is false so the JSX wrapper
-           does not disturb the normal vertical-scroll Summary tab layout. */
+        /* Passthrough wrappers — display:contents makes divs invisible to layout.
+           Used by exec-left-col and exec-right-col when execDashMode is false so
+           the JSX wrappers do not disturb the normal vertical-scroll layout. */
         .exec-right-col-passthrough { display: contents; }
+        .exec-left-col-passthrough  { display: contents; }
         /* UX-7: <details> summary — hide native disclosure triangle; we render our own ▼ Show text */
         details > summary { list-style: none; }
         details > summary::-webkit-details-marker { display: none; }
@@ -11444,65 +11503,73 @@ ${milestoneSnapshotHtml}
 
            Previous 4-row layout gave What-If only ~180px which cut off its content.
            New 3-row layout gives col 3 bottom cell ≈ 310px, split ~140px / ~160px.    */
-        /* ── Executive Dashboard grid — 2-column layout ───────────────────────────
-           Left col  (col 1): z1 KPI tiles (row 1, full-width) + z23-wrap Account
-                              Balances & Growth Story (row 2)
-           Right col (col 2): scrollable flex column containing — in order — z4/rss
-                              (CPF LIFE), goal (Income card), z5 (Milestone Alerts),
-                              z6 (Supporting Stats), what-if (What-If Explorer).
+        /* ── Executive Dashboard grid — 2-column, single-row layout ──────────────
+           Left col  (col 1 — exec-left-col): flex column:
+             • z1 KPI strip  (flex: 0 0 auto — fixed height, never squishes)
+             • z23-wrap       (flex: 1 1 0   — Account Balances + Growth, overflows)
+           Right col (col 2 — exec-right-col): full-height scrollable flex column:
+             z4/rss (CPF LIFE) → goal → z5 (Milestones) → z6 (Stats) → what-if
 
-           Grid anatomy (at 1920×1080, header+tabs ≈ 92px overhead → ~988px for grid):
-             Row 1 (auto ≈ 110px): z1 KPI tiles — full width
-             Row 2 (1fr  ≈ 878px): z23-wrap col 1 │ exec-right-col col 2 (scrollable)
+           Grid anatomy (at 1920×1080, header+tabs ≈ 92px → ~988px usable):
+             Single row (1fr ≈ 988px):
+               Col 1: exec-left-col  — z1 (~110px) + z23-wrap (remaining ~878px)
+               Col 2: exec-right-col — full 988px, flex column, overflow-y: auto
 
-           Right column scrolls internally so What-If Explorer is always reachable
-           without requiring the user to scroll the whole page.
+           Auto viewport fix (Issue 2):
+             execDashMode now reads reactive viewportWidth state (debounced resize
+             listener) instead of a stale window.innerWidth snapshot, so resizing
+             below 1920px in Auto mode correctly exits exec-dash immediately.
 
-           Viewport resize fix:
-             min-height: 700px prevents the grid rows from crushing below usable size.
-             overflow-y: auto on cpf-tab-content[data-exec] lets the page scroll when
-             the viewport is narrower than min-height (instead of clipping content).
-             @media (max-width: 1199px) converts to single-column full-page scroll.  */
+           Narrow viewport fix:
+             min-height: 700px + cpf-tab-content overflow-y: auto prevents crush/clip.
+             @media (max-width: 1199px) converts to single-column page scroll.       */
 
         .summary-exec-dash {
           display: grid !important;
           flex-direction: unset !important;
           grid-template-columns: 1fr 1fr;
-          grid-template-rows: auto 1fr;
+          grid-template-rows: 1fr;
           gap: 12px !important;
           height: 100%;
           min-height: 700px;
           min-width: 0;
         }
 
-        /* Row 1: KPI tiles — spans both columns */
-        .summary-exec-dash [data-zone="z1"] { grid-column: 1 / -1; grid-row: 1; }
-
-        /* Col 1, row 2: Account Balances + Growth Story — scrollable */
-        .summary-exec-dash [data-zone="z23-wrap"] {
-          grid-column: 1; grid-row: 2;
-          overflow-y: auto; min-height: 0;
+        /* Left column: flex column — z1 pinned top, z23-wrap fills remainder */
+        .summary-exec-dash .exec-left-col {
+          grid-column: 1; grid-row: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          min-height: 0;
+          overflow-y: auto;
+        }
+        .summary-exec-dash .exec-left-col [data-zone="z1"] {
+          flex: 0 0 auto;   /* KPI strip: fixed height, never squishes */
+        }
+        .summary-exec-dash .exec-left-col [data-zone="z23-wrap"] {
+          flex: 1 1 0;      /* Account Balances + Growth: fills remaining left height */
+          overflow-y: auto;
+          min-height: 0;
         }
 
-        /* Col 2, row 2: Right panel — all remaining zones stacked vertically,
-           scrollable so What-If Explorer is reachable when expanded */
+        /* Right column: full height, scrollable flex column */
         .summary-exec-dash .exec-right-col {
-          grid-column: 2; grid-row: 2;
+          grid-column: 2; grid-row: 1;
           display: flex;
           flex-direction: column;
           gap: 10px;
           overflow-y: auto;
           min-height: 0;
-          padding-right: 2px;   /* prevent scrollbar overlap */
+          padding-right: 2px;   /* clearance for scrollbar */
         }
 
-        /* exec-col3-bottom dissolves into exec-right-col's flex flow so z6 and
-           what-if are consecutive flex children (no separate grid placement needed) */
+        /* exec-col3-bottom dissolves into exec-right-col flex flow */
         .summary-exec-dash .exec-col3-bottom {
           display: contents;
         }
 
-        /* ── Hide non-exec zones (secondary / volatile — not useful at a glance) ── */
+        /* ── Hide secondary / volatile zones ── */
         .summary-exec-dash [data-zone="gap-alert"],
         .summary-exec-dash [data-zone="post-wizard"],
         .summary-exec-dash [data-zone="intro"],
@@ -11510,13 +11577,10 @@ ${milestoneSnapshotHtml}
         .summary-exec-dash [data-zone="pledge"],
         .summary-exec-dash [data-zone="ra-oa"]    { display: none !important; }
 
-        /* ── Hide Expand/Collapse toggle buttons inside shown zones ──
-           Collapsing a zone creates dead empty grid space in exec mode. */
+        /* ── Hide Expand/Collapse buttons (collapsing creates dead grid space) ── */
         .summary-exec-dash [data-collapse-btn]    { display: none !important; }
 
-        /* ── Tab content: allow page-level scroll when viewport < min-height ──
-           Previously overflow:hidden clipped content on viewport resize/zoom.
-           Now overflow-y:auto lets the tab scroll rather than distorting cards. */
+        /* ── Tab content: scroll rather than clip on viewport height resize ── */
         .cpf-tab-content[data-exec="true"] {
           overflow-x: hidden !important;
           overflow-y: auto !important;
@@ -11524,17 +11588,14 @@ ${milestoneSnapshotHtml}
           padding-bottom: 0 !important;
         }
 
-        /* ── Responsive: narrow viewport — single-column full-page scroll ──
-           At < 1200px the 2-col grid would produce columns too narrow to read.
-           Convert to single column; both z23-wrap and exec-right-col stack
-           vertically and scroll as a normal page rather than clipping. */
+        /* ── Responsive: narrow viewport — single-column full-page scroll ── */
         @media (max-width: 1199px) {
           .summary-exec-dash {
             grid-template-columns: 1fr !important;
             height: auto !important;
             min-height: unset !important;
           }
-          .summary-exec-dash [data-zone="z23-wrap"] {
+          .summary-exec-dash .exec-left-col {
             grid-column: 1 !important; grid-row: auto !important;
             overflow-y: visible !important;
           }
@@ -11575,21 +11636,23 @@ ${milestoneSnapshotHtml}
            Exec dashboard (data-exec=true) excluded - it manages its own grid layout.
            fhd-chart-grow: applied in JSX to fixed-height chart divs. Expands to fill
            remaining vertical space in FHD-collapsed; !important overrides inline height. */
+        /* FHD sidebar-hidden: tab content scrolls vertically when taller than viewport.
+           Previously overflow:hidden + flex:1 1 0 locked cpf-tab-content to exactly
+           the remaining viewport height, compressing all cards inside fhd-tab-inner.
+           Fix: overflow-y:auto lets the tab content scroll; height:auto on fhd-tab-inner
+           lets it grow to its natural content height rather than being squeezed to 1fr.
+           fhd-chart-grow keeps its max-height cap so charts don't balloon unbounded. */
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
-          flex: 1 1 0;
-          min-height: 0;
-          overflow: hidden;
+          overflow-y: auto;
+          overflow-x: hidden;
           padding: 8px 0;
         }
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-tab-inner {
-          flex: 1 1 0;
-          min-height: 0;
           display: flex;
           flex-direction: column;
-          overflow-y: auto;
+          height: auto;
+          overflow-y: visible;
           overflow-x: hidden;
-          scrollbar-width: thin;
-          scrollbar-color: var(--border-strong) transparent;
         }
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-chart-grow {
           flex: 1 1 0 !important;
@@ -11599,20 +11662,16 @@ ${milestoneSnapshotHtml}
         }
         @media (min-width: 1920px) {
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
-            flex: 1 1 0;
-            min-height: 0;
-            overflow: hidden;
+            overflow-y: auto;
+            overflow-x: hidden;
             padding: 8px 0;
           }
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-tab-inner {
-            flex: 1 1 0;
-            min-height: 0;
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
+            height: auto;
+            overflow-y: visible;
             overflow-x: hidden;
-            scrollbar-width: thin;
-            scrollbar-color: var(--border-strong) transparent;
           }
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-chart-grow {
             flex: 1 1 0 !important;
@@ -16496,6 +16555,13 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                 </details>
+                {/* ── ZONE 1 + ZONE 2/3: left column in exec dash, passthrough in normal mode ──
+                    exec-left-col makes z1 (KPI strip) + z23-wrap (Account Balances + Growth)
+                    a flex column (col 1, full height) when execDashMode is true.
+                    exec-left-col-passthrough uses display:contents so the wrapper is invisible
+                    to layout in normal vertical-scroll mode — zero impact on HD / non-exec. */}
+                <div className={execDashMode ? "exec-left-col" : "exec-left-col-passthrough"}>
+
                 {/* ── ZONE 1: Headline hero ── */}
                 {(() => {
                   // BUG-M1 fix: use accumulationByAge (same source as Zone 2/3 and milestone spine).
@@ -17166,6 +17232,8 @@ ${milestoneSnapshotHtml}
                     </p>
                   </div>
                 )}
+
+                </div>{/* end exec-left-col / exec-left-col-passthrough (z1 + z23-wrap) */}
 
                 {/* ── ZONE 4 → What-If: right column in exec dash, passthrough in normal mode ──
                     exec-right-col makes this a scrollable flex column (col 2, row 2) when
