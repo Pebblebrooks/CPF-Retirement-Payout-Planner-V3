@@ -5164,7 +5164,11 @@ export default function App() {
       if (readinessSidebarUserPref.current !== null) {
         setSidebarOpen(readinessSidebarUserPref.current);
       } else {
-        setSidebarOpen(false);                 // first-entry default: auto-collapse
+        // First-entry default: open on desktop (>1024px), collapse on mobile/tablet.
+        // Also record this as the explicit pref so re-entries honour the same choice.
+        const desktopDefault = window.innerWidth > 1024;
+        readinessSidebarUserPref.current = desktopDefault;
+        setSidebarOpen(desktopDefault);
       }
     } else if (window.innerWidth <= 1024) {
       setSidebarOpen(false);                   // mobile/tablet: always hide inputs on tab switch
@@ -10819,6 +10823,11 @@ ${milestoneSnapshotHtml}
         /* ── Light mode: strategy income table ── */
         .theme-light .strategy-income-table td { color: #162033 !important; }
         .theme-light .strategy-income-table th { color: #08111e !important; background: rgba(74,102,128,0.15) !important; }
+
+        /* ── Strategy tab: sticky sub-nav (Goal Simulator / Income Roadmap) on mobile/tablet ── */
+        @media (max-width: 1024px) {
+          .strategy-subnav { position: sticky; top: 0; z-index: 50; }
+        }
 
         /* ── Light mode: welcome step cards — hard-coded dark bg ── */
         .theme-light [style*="background: \"var(--bg-muted)\""] { background: var(--bg-muted); }
@@ -21176,7 +21185,12 @@ ${milestoneSnapshotHtml}
                 // Snapshot current lever values before overwriting — enables per-card "↩ Revert"
                 // without touching any other inputs. Snapshot is cleared if the user manually
                 // edits either lever after applying (useEffect above) or on global reset.
-                setPreApplySnapshot({ vcSaTopup: Number(inputs.vcSaTopup) || 0, vc3aCash: Number(inputs.vc3aCash) || 0 });
+                // Guard: only capture on the FIRST apply since the last clear so that applying
+                // a second strategy does not overwrite the original baseline — "Clear Simulator"
+                // and "↩ Revert" must always return to the state before ANY strategy was applied.
+                if (!preApplySnapshot) {
+                  setPreApplySnapshot({ vcSaTopup: Number(inputs.vcSaTopup) || 0, vc3aCash: Number(inputs.vc3aCash) || 0 });
+                }
                 // Set guard flag BEFORE setInputs so the lever-change useEffect skips its clear
                 // on the render triggered by this apply. The flag is consumed (set back to false)
                 // inside the useEffect on its next fire — any subsequent manual sidebar edit fires normally.
@@ -21338,7 +21352,7 @@ ${milestoneSnapshotHtml}
                 <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
 
                   {/* ── Sub-navigation: Goal Simulator | Income Roadmap ── */}
-                  <div style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
+                  <div className="strategy-subnav" style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
                     {[
                       { id: "goal",    label: "🎯 Goal Simulator"  },
                       { id: "roadmap", label: "📅 Income Roadmap"  },
@@ -21384,26 +21398,22 @@ ${milestoneSnapshotHtml}
                                   return (
                                     <div key={preset} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
                                       <button
-                                        onClick={() => setInputs(prev => ({ ...prev, goalTargetCPF: preset }))}
+                                        onClick={() => isMet ? null : setInputs(prev => ({ ...prev, goalTargetCPF: preset }))}
                                         title={isMet ? `Your current projection ($${Math.round(baselineCPF).toLocaleString()}) already exceeds this target` : undefined}
                                         style={{
                                           padding: "7px 16px", borderRadius: 20, fontWeight: 700, fontSize: 13,
-                                          border: "2px solid", cursor: "pointer", transition: "all .15s",
-                                          opacity: isMet && !isSelected ? 0.55 : 1,
-                                          borderColor: isSelected ? (isDynamic ? "#0ea5e9" : "#f43f5e") : isMet ? "var(--border-subtle)" : "var(--border-strong)",
-                                          background:  isSelected ? (isDynamic ? "#0ea5e918" : "#f43f5e18") : isMet ? "transparent" : "var(--bg-input)",
-                                          color:       isSelected ? (isDynamic ? "#0ea5e9"   : "#f43f5e")   : isMet ? "var(--text-muted)" : "var(--text-muted)",
-                                          textDecoration: isMet && !isSelected ? "line-through" : "none",
+                                          border: "2px solid", transition: "all .15s",
+                                          cursor: isMet ? "default" : "pointer",
+                                          pointerEvents: isMet ? "none" : "auto",
+                                          borderColor: isSelected ? (isDynamic ? "#0ea5e9" : "#f43f5e") : isMet ? "#22c55e" : "var(--border-strong)",
+                                          background:  isSelected ? (isDynamic ? "#0ea5e918" : "#f43f5e18") : isMet ? "#22c55e15" : "var(--bg-input)",
+                                          color:       isSelected ? (isDynamic ? "#0ea5e9"   : "#f43f5e")   : isMet ? "#22c55e"          : "var(--text-muted)",
                                         }}>
                                         {isDynamic ? "🎯 " : ""}
                                         {preset >= 1e6
                                           ? `${preset / 1e6 === Math.floor(preset / 1e6) ? preset / 1e6 : (preset / 1e6).toFixed(1)}M${pa}`
                                           : `${preset / 1e3}k${pa}`}
                                       </button>
-                                      {/* "✅ met" badge shown below each preset the member already exceeds */}
-                                      {isMet && !isSelected && (
-                                        <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700, letterSpacing: 0.2 }}>✅ met</span>
-                                      )}
                                     </div>
                                   );
                                 })}
@@ -21521,7 +21531,7 @@ ${milestoneSnapshotHtml}
                               <StrategyCard letter="B" title="VC3A Contribution" icon="💰" color="#0ea5e9"
                                 strat={{ ...goalResult.stratB, rstu: null, vc3a: null }}
                                 onApply={() => applyStrategy({ vc3aCash: goalResult.stratB.needed }, "B")} />
-                              <StrategyCard letter="C" title="Blended — RSTU + VC3A" icon="⚡" color="#f43f5e"
+                              <StrategyCard letter="C" title="Blended — RSTU + VC3A" icon="⚡" color="#10b981"
                                 strat={{ ...goalResult.stratC, needed: null }}
                                 onApply={() => applyStrategy({ vcSaTopup: goalResult.stratC.rstu, vc3aCash: goalResult.stratC.vc3a }, "C")} />
                             </>
