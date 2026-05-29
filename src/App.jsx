@@ -11017,7 +11017,7 @@ ${milestoneSnapshotHtml}
           overflow-x: clip;
           scrollbar-width: thin;
           scrollbar-color: var(--border-strong) transparent;
-          padding: 12px 0;
+          padding: 12px 4px;
           display: flex;
           flex-direction: column;
           gap: 16px;
@@ -11026,9 +11026,9 @@ ${milestoneSnapshotHtml}
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
         .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
         /* ─── DESKTOP VIEWPORT MODES (HD and below — unchanged) ─────── */
-        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 0; }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 0; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 0; } }
+        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 16px; }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 16px; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 16px; } }
         /* ─── DESKTOP SIDEBAR COLLAPSE (≥ 1025px) ──────────────────────────────────
            On tablet/mobile the sidebar is toggled via display:none on
            .cpf-sidebar-inner.sidebar-collapsed (inside their own @media blocks).
@@ -11152,13 +11152,13 @@ ${milestoneSnapshotHtml}
            ═══════════════════════════════════════════════════════════════ */
 
         /* ─── PAGE-WIDE WRAPPER ─── */
-        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 0; width: 100%; box-sizing: border-box; }
-        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 0; }
-        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 0; }
-        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; }
-        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 0; } }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; } }
+        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 16px; width: 100%; box-sizing: border-box; }
+        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 16px; }
+        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 16px; }
+        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 16px; }
+        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 16px; } }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 16px; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 16px; } }
 
         /* ═══════════════════════════════════════════════════════════════
            QHD / 4K RIGHT-PANEL MODULE  (within FHD layout scope)
@@ -11780,11 +11780,11 @@ ${milestoneSnapshotHtml}
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           /* Row 1 sticky: header always visible */
-          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; }
+          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; box-sizing: border-box; background: var(--header-bg); }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
-          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
+          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           /* Fix 1: when inputs sidebar is open on tablet, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
@@ -11806,7 +11806,7 @@ ${milestoneSnapshotHtml}
           .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Row 3 sticky: Input Parameters bar sits just below tab strip (~92px) */
-          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; }
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Responsive nav: hide desktop-only Display btn, show ⚙ gear */
@@ -11845,9 +11845,10 @@ ${milestoneSnapshotHtml}
           .tablet-action-bar { display: flex !important; }
           /* Docs tab sticky nav: inline style has marginTop:-28 so sticky "top" is relative to the
              margin edge (28px above the border). Override margin-top to 0 so "top" = exact pixel
-             from viewport top. Tablet has no fixed header so top:0 = stick right at viewport top. */
-          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
-          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
+             from viewport top. Tablet HAS a fixed header so top must account for full sticky stack
+             (header 48 + tab strip 44 + input-params-bar 44 = 136px). */
+          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
+          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
         }
 
         /* ─── MOBILE  ≤ 768 px ───────────────────────────────────────── */
@@ -11866,11 +11867,11 @@ ${milestoneSnapshotHtml}
           .cpf-page-wrap { padding-left: 12px !important; padding-right: 12px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Row 1 sticky: header always visible on mid-mobile (641-768px) */
-          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; }
+          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; box-sizing: border-box; background: var(--header-bg); }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
-          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
+          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
           /* Row 3 sticky: Input Parameters bar */
-          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; }
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Hide desktop+tablet-only nav buttons; show gear */
@@ -11955,9 +11956,10 @@ ${milestoneSnapshotHtml}
           .rd-kpi-hero { grid-template-columns: 1fr 1fr !important; }
           .rd-row2 { grid-template-columns: 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr !important; }
-          /* Docs tab: same margin-top:0 fix as tablet. No fixed header at 641–768px so top:0 is correct. */
-          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
-          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
+          /* Docs tab: same margin-top:0 fix as tablet. Header IS sticky at 641–768px so full
+             sticky stack applies: header 48 + tab strip 44 + input-params-bar 44 = 136px. */
+          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
+          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
         }
 
         /* ── Nom/Real responsive label helpers ─────────────────────────── */
