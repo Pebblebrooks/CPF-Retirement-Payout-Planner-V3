@@ -4893,6 +4893,24 @@ function ReadinessTab({
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Scroll-container helper ──────────────────────────────────────────────────
+// Walks the DOM from `el` upward, returning the first ancestor that is BOTH
+// declared as an overflow scroll/auto container AND actually scrollable at
+// runtime (scrollHeight > clientHeight). Pure CSS-class selectors (.closest)
+// fail in FHD/Auto sidebar-hidden mode because the layout reshapes cpf-tab-content
+// height — overflow-y:auto is present but scrollHeight === clientHeight, making
+// scrollBy/scrollTo silent no-ops. This check is the only runtime guarantee.
+function findScrollContainer(el) {
+  let node = el?.parentElement;
+  while (node && node !== document.body) {
+    const oy = getComputedStyle(node).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
@@ -11843,10 +11861,9 @@ ${milestoneSnapshotHtml}
           .rd-row3 { grid-template-columns: 1fr !important; }
           /* Tablet sticky bottom action bar — always shown on tablet, hidden elsewhere */
           .tablet-action-bar { display: flex !important; }
-          /* Docs tab sticky nav: inline style has marginTop:-28 so sticky "top" is relative to the
-             margin edge (28px above the border). Override margin-top to 0 so "top" = exact pixel
-             from viewport top. Tablet HAS a fixed header so top must account for full sticky stack
-             (header 48 + tab strip 44 + input-params-bar 44 = 136px). */
+          /* Docs/QS sticky nav: tablet header IS sticky (top:0, z-index:50) so the nav must
+             sit below the full sticky stack: header 48 + tab strip 44 + input-params-bar 44 = 136px.
+             The old top:0 made it compete with the header, causing overlap and blank-row bleed. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
           #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
         }
@@ -11956,8 +11973,8 @@ ${milestoneSnapshotHtml}
           .rd-kpi-hero { grid-template-columns: 1fr 1fr !important; }
           .rd-row2 { grid-template-columns: 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr !important; }
-          /* Docs tab: same margin-top:0 fix as tablet. Header IS sticky at 641–768px so full
-             sticky stack applies: header 48 + tab strip 44 + input-params-bar 44 = 136px. */
+          /* Docs/QS tab: header IS sticky at 641–768px so full sticky stack applies:
+             header 48 + tab strip 44 + input-params-bar 44 = 136px. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
           #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
         }
@@ -16381,13 +16398,11 @@ ${milestoneSnapshotHtml}
                       e.target.value = "";
                       const target = document.getElementById(id);
                       const bar    = document.getElementById('qs-sticky-banner');
-                      const scrollEl = target?.closest('.cpf-tab-content') || target?.closest('.fhd-tab-inner');
+                      const scrollEl = findScrollContainer(target);
                       if (bar && target) {
                         const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
-                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
-                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
-                        if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
-                        else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        if (scrollEl) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        else          { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
                     }}
                     style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 13, fontWeight: 600, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
@@ -16410,13 +16425,11 @@ ${milestoneSnapshotHtml}
                       <button key={id} onClick={() => {
                         const target = document.getElementById(id);
                         const bar    = document.getElementById('qs-sticky-banner');
-                        const scrollEl = target?.closest('.cpf-tab-content') || target?.closest('.fhd-tab-inner');
+                        const scrollEl = findScrollContainer(target);
                         if (bar && target) {
                           const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
-                          const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
-                          const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
-                          if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
-                          else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
+                          if (scrollEl) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
+                          else          { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                         } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
                       }} style={{ padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: `1px solid ${accent}44`, background: `${accent}14`, color: accent, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
                         onMouseEnter={e => { e.currentTarget.style.background = `${accent}28`; }}
@@ -16511,11 +16524,9 @@ ${milestoneSnapshotHtml}
                   <div style={{ position: "sticky", bottom: 20, display: "flex", justifyContent: "flex-end", pointerEvents: "none", marginTop: 4 }}>
                     <button
                       onClick={() => {
-                        const scrollEl = document.querySelector('.cpf-tab-content') || document.querySelector('.fhd-tab-inner');
-                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
-                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
-                        if (isScrollable) { scrollEl.scrollTo({ top: 0, behavior: 'smooth' }); }
-                        else              { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                        const scrollEl = findScrollContainer(document.getElementById('qs-sticky-banner'));
+                        if (scrollEl) { scrollEl.scrollTo({ top: 0, behavior: 'smooth' }); }
+                        else          { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                       }}
                       style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-panel)", backdropFilter: "blur(8px)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transition: "all 0.15s" }}
                       onMouseEnter={e => { e.currentTarget.style.color = "var(--text-bright)"; e.currentTarget.style.borderColor = "var(--clr-blue)"; }}
@@ -20334,18 +20345,16 @@ ${milestoneSnapshotHtml}
                       const target = document.querySelector(href);
                       if (!target) return;
                       const stickyBar = document.getElementById('docs-sticky-nav');
-                      // cpf-tab-content is now the desktop scroll zone (overflow-y:auto).
-                      // fhd-tab-inner has overflow-y:visible — not scrollable on desktop.
-                      // On mobile both are overflow:visible, so window.scrollBy is the fallback.
-                      const scrollEl = target.closest('.cpf-tab-content') || target.closest('.fhd-tab-inner');
+                      // findScrollContainer walks up from target checking both overflowY AND
+                      // scrollHeight > clientHeight — handles FHD/Auto sidebar-hidden where
+                      // cpf-tab-content has overflow-y:auto but may lack a height constraint.
+                      const scrollEl = findScrollContainer(target);
                       if (stickyBar) {
                         const delta = target.getBoundingClientRect().top
                                     - stickyBar.getBoundingClientRect().bottom
                                     - 8;
-                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
-                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
-                        if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
-                        else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        if (scrollEl) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        else          { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else {
                         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       }
@@ -20411,18 +20420,13 @@ ${milestoneSnapshotHtml}
                         // fixed scrollMarginTop fails when the bar wraps to 3+ rows (bar bottom ~176px
                         // but old scrollMarginTop was only 160px, hiding the section heading).
                         const stickyBar = document.getElementById('docs-sticky-nav');
-                        const scrollEl = target.closest('.cpf-tab-content') || target.closest('.fhd-tab-inner');
+                        const scrollEl = findScrollContainer(target);
                         if (stickyBar) {
                           // delta = how far to scroll so target top lands just below sticky bar bottom
                           const delta = target.getBoundingClientRect().top
                                       - stickyBar.getBoundingClientRect().bottom
                                       - 8; // 8px breathing room below the bar
-                          // cpf-tab-content is overflow-y:auto on desktop (the real scroll zone).
-                          // fhd-tab-inner is overflow-y:visible — isScrollable will be false for it.
-                          // On mobile both are visible → falls through to window.scrollBy correctly.
-                          const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
-                          const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
-                          if (isScrollable) {
+                          if (scrollEl) {
                             scrollEl.scrollBy({ top: delta, behavior: 'smooth' });
                           } else {
                             window.scrollBy({ top: delta, behavior: 'smooth' });
@@ -21193,15 +21197,11 @@ ${milestoneSnapshotHtml}
                 <div style={{ position: "sticky", bottom: 16, display: "flex", justifyContent: "flex-end", pointerEvents: "none", zIndex: 10, marginTop: 8 }}>
                   <button
                     onClick={() => {
-                      // In FHD+collapsed mode the scroll container is .fhd-tab-inner (overflow-y:auto).
-                      // .cpf-tab-content becomes overflow:hidden — scrollTo on it is a silent no-op.
-                      // Prefer the inner scroll zone; fall back to cpf-tab-content for sidebar-open mode.
+                      // findScrollContainer walks DOM upward from docs-sticky-nav, checking
+                      // both overflowY declaration and scrollHeight > clientHeight at runtime.
                       const nav = document.getElementById("docs-sticky-nav");
-                      const scroller = nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content")
-                                    || nav?.closest(".fhd-tab-inner")   || document.querySelector(".fhd-tab-inner");
-                      const oy = scroller ? getComputedStyle(scroller).overflowY : '';
-                      const isScrollable = scroller && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
-                      if (isScrollable) { scroller.scrollTo({ top: 0, behavior: 'smooth' }); }
+                      const scroller = findScrollContainer(nav);
+                      if (scroller) { scroller.scrollTo({ top: 0, behavior: 'smooth' }); }
                       else { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                     }}
                     style={{ pointerEvents: "all", display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 700, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
