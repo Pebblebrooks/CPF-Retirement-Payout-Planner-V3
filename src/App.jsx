@@ -11207,6 +11207,12 @@ ${milestoneSnapshotHtml}
           pointer-events: none;
           z-index: 2;
         }
+        /* On mobile the kpi-strip switches to a 2-column grid that fills the full width —
+           no horizontal overflow, so the right-edge fade overlay is not needed and would
+           visually clip the rightmost KPI card content by 36px. Hide it on mobile. */
+        @media (max-width: 768px) {
+          .kpi-strip-wrap::after { display: none; }
+        }
 
         /* FHD kpi-strip: cap at 974px and centre so it stays edge-aligned
            with the two hero cards below it. */
@@ -16373,7 +16379,7 @@ ${milestoneSnapshotHtml}
                       e.target.value = "";
                       const target = document.getElementById(id);
                       const bar    = document.getElementById('qs-sticky-banner');
-                      const scrollEl = target?.closest('.fhd-tab-inner') || target?.closest('.cpf-tab-content');
+                      const scrollEl = target?.closest('.cpf-tab-content') || target?.closest('.fhd-tab-inner');
                       if (bar && target) {
                         const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
                         const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
@@ -16402,7 +16408,7 @@ ${milestoneSnapshotHtml}
                       <button key={id} onClick={() => {
                         const target = document.getElementById(id);
                         const bar    = document.getElementById('qs-sticky-banner');
-                        const scrollEl = target?.closest('.fhd-tab-inner') || target?.closest('.cpf-tab-content');
+                        const scrollEl = target?.closest('.cpf-tab-content') || target?.closest('.fhd-tab-inner');
                         if (bar && target) {
                           const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
                           const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
@@ -16503,7 +16509,7 @@ ${milestoneSnapshotHtml}
                   <div style={{ position: "sticky", bottom: 20, display: "flex", justifyContent: "flex-end", pointerEvents: "none", marginTop: 4 }}>
                     <button
                       onClick={() => {
-                        const scrollEl = document.querySelector('.fhd-tab-inner') || document.querySelector('.cpf-tab-content');
+                        const scrollEl = document.querySelector('.cpf-tab-content') || document.querySelector('.fhd-tab-inner');
                         const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
                         const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                         if (isScrollable) { scrollEl.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -20326,10 +20332,10 @@ ${milestoneSnapshotHtml}
                       const target = document.querySelector(href);
                       if (!target) return;
                       const stickyBar = document.getElementById('docs-sticky-nav');
-                      // In FHD+collapsed mode the scroll container is .fhd-tab-inner (overflow-y:auto).
-                      // .cpf-tab-content becomes overflow:hidden — scrollBy() on it is a silent no-op.
-                      // Always prefer the inner scroll zone; fall back to cpf-tab-content for sidebar-open mode.
-                      const scrollEl = target.closest('.fhd-tab-inner') || target.closest('.cpf-tab-content');
+                      // cpf-tab-content is now the desktop scroll zone (overflow-y:auto).
+                      // fhd-tab-inner has overflow-y:visible — not scrollable on desktop.
+                      // On mobile both are overflow:visible, so window.scrollBy is the fallback.
+                      const scrollEl = target.closest('.cpf-tab-content') || target.closest('.fhd-tab-inner');
                       if (stickyBar) {
                         const delta = target.getBoundingClientRect().top
                                     - stickyBar.getBoundingClientRect().bottom
@@ -20403,15 +20409,15 @@ ${milestoneSnapshotHtml}
                         // fixed scrollMarginTop fails when the bar wraps to 3+ rows (bar bottom ~176px
                         // but old scrollMarginTop was only 160px, hiding the section heading).
                         const stickyBar = document.getElementById('docs-sticky-nav');
-                        const scrollEl = target.closest('.fhd-tab-inner') || target.closest('.cpf-tab-content');
+                        const scrollEl = target.closest('.cpf-tab-content') || target.closest('.fhd-tab-inner');
                         if (stickyBar) {
                           // delta = how far to scroll so target top lands just below sticky bar bottom
                           const delta = target.getBoundingClientRect().top
                                       - stickyBar.getBoundingClientRect().bottom
                                       - 8; // 8px breathing room below the bar
-                          // In FHD+collapsed, cpf-tab-content is overflow:hidden — scrollBy is a no-op.
-                          // The real scroll zone is .fhd-tab-inner (overflow-y:auto). Also exclude
-                          // 'hidden' from the isScrollable check so we don't silently swallow the scroll.
+                          // cpf-tab-content is overflow-y:auto on desktop (the real scroll zone).
+                          // fhd-tab-inner is overflow-y:visible — isScrollable will be false for it.
+                          // On mobile both are visible → falls through to window.scrollBy correctly.
                           const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
                           const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                           if (isScrollable) {
@@ -21189,8 +21195,8 @@ ${milestoneSnapshotHtml}
                       // .cpf-tab-content becomes overflow:hidden — scrollTo on it is a silent no-op.
                       // Prefer the inner scroll zone; fall back to cpf-tab-content for sidebar-open mode.
                       const nav = document.getElementById("docs-sticky-nav");
-                      const scroller = nav?.closest(".fhd-tab-inner") || document.querySelector(".fhd-tab-inner")
-                                    || nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content");
+                      const scroller = nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content")
+                                    || nav?.closest(".fhd-tab-inner")   || document.querySelector(".fhd-tab-inner");
                       const oy = scroller ? getComputedStyle(scroller).overflowY : '';
                       const isScrollable = scroller && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
                       if (isScrollable) { scroller.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -21285,7 +21291,7 @@ ${milestoneSnapshotHtml}
                       </>
                     ) : (
                       <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                        Maximum reachable with this lever alone: <strong style={{ color: "var(--text-primary)" }}>{fmtK(strat.maxTotal)}</strong><br />
+                        Maximum reachable with this lever alone: <strong style={{ color: "var(--text-bright)" }}>{fmtK(strat.maxTotal)}</strong><br />
                         Remaining gap after cap: <strong style={{ color: "#ef4444" }}>{fmtK(goalResult.targetAmt - strat.maxTotal)}</strong><br />
                         Try Strategy C (Blended) to combine levers.
                       </div>
@@ -21454,7 +21460,7 @@ ${milestoneSnapshotHtml}
                                     value={inputs.goalTargetCPF || ""}
                                     onChange={e => setInputs(prev => ({ ...prev, goalTargetCPF: Number(e.target.value) || 0 }))}
                                     placeholder="Custom amount"
-                                    style={{ width: 130, border: "none", background: "transparent", color: "var(--text-primary)", fontSize: 13, outline: "none" }} />
+                                    style={{ width: 130, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 13, outline: "none" }} />
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                   <span style={{ fontSize: 13, color: "var(--text-muted)" }}>at age</span>
@@ -21465,7 +21471,7 @@ ${milestoneSnapshotHtml}
                               {/* Contextual hint — only shown when at least one preset is already met */}
                               {baselineCPF > 0 && presets.some(p => p <= baselineCPF) && (
                                 <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                                  💡 Your current projection is <strong style={{ color: "var(--text-primary)" }}>{(() => { const b = baselineCPF; return b >= 1e6 ? `$${(b/1e6).toFixed(2)}M` : `$${Math.round(b/1e3)}k`; })()}</strong> at age {pa} — struck-through presets are already met. Select a higher target to find new strategies.
+                                  💡 Your current projection is <strong style={{ color: "var(--text-bright)" }}>{(() => { const b = baselineCPF; return b >= 1e6 ? `$${(b/1e6).toFixed(2)}M` : `$${Math.round(b/1e3)}k`; })()}</strong> at age {pa} — green pills are already met. Select a higher target to find new strategies.
                                 </p>
                               )}
                             </>
@@ -21536,7 +21542,7 @@ ${milestoneSnapshotHtml}
                           <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
                             <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>📊 Gap Snapshot — age {pa}</p>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "8px 20px" }}>
-                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Current projected</span><br /><strong style={{ color: "var(--text-primary)", fontSize: 16 }}>{fmtK(goalResult.baseline)}</strong></div>
+                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Current projected</span><br /><strong style={{ color: "var(--text-bright)", fontSize: 16 }}>{fmtK(goalResult.baseline)}</strong></div>
                               <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Your target</span><br /><strong style={{ color: "#f43f5e", fontSize: 16 }}>{fmtK(goalResult.targetAmt)}</strong></div>
                               <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Gap to close</span><br /><strong style={{ color: goalResult.gap > 0 ? "#f97316" : "#22c55e", fontSize: 16 }}>{goalResult.gap > 0 ? fmtK(goalResult.gap) : "✅ Already met!"}</strong></div>
                             </div>
@@ -21592,7 +21598,7 @@ ${milestoneSnapshotHtml}
                              their goal is loaded and one click is all that's needed.          */
                           <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "rgba(14,165,233,0.08)", border: "1px solid rgba(14,165,233,0.35)", borderRadius: 10, padding: "14px 16px" }}>
                             <span style={{ fontSize: 20, lineHeight: 1 }}>💡</span>
-                            <div style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.65 }}>
+                            <div style={{ fontSize: 13, color: "var(--text-bright)", lineHeight: 1.65 }}>
                               <strong style={{ color: "#0ea5e9" }}>Goal target loaded from your profile</strong><br />
                               Your target of{" "}
                               <strong style={{ color: "#f43f5e" }}>
