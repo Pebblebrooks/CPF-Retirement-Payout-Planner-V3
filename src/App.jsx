@@ -4893,24 +4893,6 @@ function ReadinessTab({
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── Scroll-container helper ──────────────────────────────────────────────────
-// Walks the DOM from `el` upward, returning the first ancestor that is BOTH
-// declared as an overflow scroll/auto container AND actually scrollable at
-// runtime (scrollHeight > clientHeight). Pure CSS-class selectors (.closest)
-// fail in FHD/Auto sidebar-hidden mode because the layout reshapes cpf-tab-content
-// height — overflow-y:auto is present but scrollHeight === clientHeight, making
-// scrollBy/scrollTo silent no-ops. This check is the only runtime guarantee.
-function findScrollContainer(el) {
-  let node = el?.parentElement;
-  while (node && node !== document.body) {
-    const oy = getComputedStyle(node).overflowY;
-    if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) return node;
-    node = node.parentElement;
-  }
-  return null;
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
@@ -11035,7 +11017,7 @@ ${milestoneSnapshotHtml}
           overflow-x: clip;
           scrollbar-width: thin;
           scrollbar-color: var(--border-strong) transparent;
-          padding: 12px 4px;
+          padding: 12px 0;
           display: flex;
           flex-direction: column;
           gap: 16px;
@@ -11044,9 +11026,9 @@ ${milestoneSnapshotHtml}
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
         .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
         /* ─── DESKTOP VIEWPORT MODES (HD and below — unchanged) ─────── */
-        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 16px; }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 16px; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 16px; } }
+        .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 0; }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 0; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 0; } }
         /* ─── DESKTOP SIDEBAR COLLAPSE (≥ 1025px) ──────────────────────────────────
            On tablet/mobile the sidebar is toggled via display:none on
            .cpf-sidebar-inner.sidebar-collapsed (inside their own @media blocks).
@@ -11170,13 +11152,13 @@ ${milestoneSnapshotHtml}
            ═══════════════════════════════════════════════════════════════ */
 
         /* ─── PAGE-WIDE WRAPPER ─── */
-        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 16px; width: 100%; box-sizing: border-box; }
-        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 16px; }
-        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 16px; }
-        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 16px; }
-        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 16px; } }
-        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 16px; } }
-        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 16px; } }
+        .cpf-page-wrap { max-width: 1920px; margin: 0 auto; padding: 6px 0; width: 100%; box-sizing: border-box; }
+        .cpf-page-wrap[data-mode="fhd"] { max-width: 100%; padding: 6px 0; }
+        .cpf-page-wrap[data-mode="hd"]  { max-width: 1440px; padding: 6px 0; }
+        .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; }
+        @media (min-width: 1920px) { .cpf-page-wrap[data-mode="auto"] { max-width: 100%; padding: 6px 0; } }
+        @media (min-width: 1440px) and (max-width: 1919px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; } }
+        @media (max-width: 1439px) and (min-width: 1025px) { .cpf-page-wrap[data-mode="auto"] { max-width: 1920px; padding: 6px 0; } }
 
         /* ═══════════════════════════════════════════════════════════════
            QHD / 4K RIGHT-PANEL MODULE  (within FHD layout scope)
@@ -11798,11 +11780,15 @@ ${milestoneSnapshotHtml}
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           /* Row 1 sticky: header always visible */
-          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; box-sizing: border-box; background: var(--header-bg); }
+          /* min-height:48px guarantees the outer element is never shorter than the
+             assumed height, closing any subpixel gap before the tab strip sticks.
+             background on the outer element ensures no transparent strip shows through
+             if the inner cpf-page-wrap ever falls short of the wrapper's bounding box. */
+          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; background: var(--header-bg); }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
-          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
+          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; background: var(--bg-panel); }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           /* Fix 1: when inputs sidebar is open on tablet, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
@@ -11824,7 +11810,8 @@ ${milestoneSnapshotHtml}
           .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Row 3 sticky: Input Parameters bar sits just below tab strip (~92px) */
-          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
+          /* min-height:44px guarantees consistent height matching the top:92px assumption */
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Responsive nav: hide desktop-only Display btn, show ⚙ gear */
@@ -11861,11 +11848,11 @@ ${milestoneSnapshotHtml}
           .rd-row3 { grid-template-columns: 1fr !important; }
           /* Tablet sticky bottom action bar — always shown on tablet, hidden elsewhere */
           .tablet-action-bar { display: flex !important; }
-          /* Docs/QS sticky nav: tablet header IS sticky (top:0, z-index:50) so the nav must
-             sit below the full sticky stack: header 48 + tab strip 44 + input-params-bar 44 = 136px.
-             The old top:0 made it compete with the header, causing overlap and blank-row bleed. */
-          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
-          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
+          /* Docs tab sticky nav: inline style has marginTop:-28 so sticky "top" is relative to the
+             margin edge (28px above the border). Override margin-top to 0 so "top" = exact pixel
+             from viewport top. Tablet has no fixed header so top:0 = stick right at viewport top. */
+          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
+          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
         }
 
         /* ─── MOBILE  ≤ 768 px ───────────────────────────────────────── */
@@ -11884,11 +11871,13 @@ ${milestoneSnapshotHtml}
           .cpf-page-wrap { padding-left: 12px !important; padding-right: 12px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Row 1 sticky: header always visible on mid-mobile (641-768px) */
-          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; box-sizing: border-box; background: var(--header-bg); }
+          /* min-height:48px + background on outer element — same gap-closing fix as tablet */
+          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; background: var(--header-bg); }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
-          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
+          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; background: var(--bg-panel); }
           /* Row 3 sticky: Input Parameters bar */
-          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
+          /* min-height:44px matches top:92px assumption; prevents gap before KPI strip sticks */
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Hide desktop+tablet-only nav buttons; show gear */
@@ -11905,7 +11894,9 @@ ${milestoneSnapshotHtml}
           /* Show Share/Report/etc in the gear dropdown on mobile */
           .cpf-gear-mobile-share { display: contents !important; }
           /* cpf-tabs-hamburger intentionally not shown — tab strip is horizontally scrollable */
-          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
+          /* padding: 0 12px — matches cpf-page-wrap horizontal padding (12px) at ≤768px so
+             content edges align with header/tab-strip/input-params-bar content edges */
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 12px; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           /* Fix 1: when inputs sidebar is open on mobile, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
@@ -11973,10 +11964,9 @@ ${milestoneSnapshotHtml}
           .rd-kpi-hero { grid-template-columns: 1fr 1fr !important; }
           .rd-row2 { grid-template-columns: 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr !important; }
-          /* Docs/QS tab: header IS sticky at 641–768px so full sticky stack applies:
-             header 48 + tab strip 44 + input-params-bar 44 = 136px. */
-          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
-          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
+          /* Docs tab: same margin-top:0 fix as tablet. No fixed header at 641–768px so top:0 is correct. */
+          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
+          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 0 !important; }
         }
 
         /* ── Nom/Real responsive label helpers ─────────────────────────── */
@@ -11993,7 +11983,9 @@ ${milestoneSnapshotHtml}
           /* W1 fix: cpf-main-wrap provides 6px horizontal inset; override cpf-tab-content
              horizontal padding (set to 10px in the 768px rule above) back to 0 so both
              the tab header and content area sit at the same 6px inset from the screen edge. */
-          .cpf-main-wrap { padding: 6px 6px; }
+          .cpf-main-wrap { padding: 6px 12px; }
+          /* padding: 6px 12px — horizontal 12px matches cpf-page-wrap at this breakpoint,
+             keeping content edges aligned with header/tab-strip on very small phones */
           .cpf-tab-content { padding: 10px 0 !important; }
           .rg-6, .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; gap: 5px !important; }
           .summary-row2 { grid-template-columns: 1fr !important; }
@@ -12017,7 +12009,10 @@ ${milestoneSnapshotHtml}
         /* ─── SMALL PHONE HEADER  ≤ 640 px ─────────────────────────── */
         @media (max-width: 640px) {
           /* Pin the header so gear + Nom/Real are always reachable */
-          header { position: fixed !important; top: 0; left: 0; right: 0; z-index: 50; }
+          /* min-height:48px + background: closes the potential gap between fixed header bottom
+             and the tab strip/spacer — if content renders shorter than 48px the transparent
+             strip would show the page behind it before the spacer pushes content down */
+          header { position: fixed !important; top: 0; left: 0; right: 0; z-index: 50; min-height: 48px; background: var(--header-bg); }
           /* Push layout content below the fixed header (~48px) */
           .cpf-mobile-top-spacer { display: block !important; height: 48px; flex-shrink: 0; }
           /* Pin Input Parameters bar below fixed header + tab strip */
@@ -16398,11 +16393,13 @@ ${milestoneSnapshotHtml}
                       e.target.value = "";
                       const target = document.getElementById(id);
                       const bar    = document.getElementById('qs-sticky-banner');
-                      const scrollEl = findScrollContainer(target);
+                      const scrollEl = target?.closest('.cpf-tab-content') || target?.closest('.fhd-tab-inner');
                       if (bar && target) {
                         const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
-                        if (scrollEl) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
-                        else          { window.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
+                        if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
                     }}
                     style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 13, fontWeight: 600, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
@@ -16425,11 +16422,13 @@ ${milestoneSnapshotHtml}
                       <button key={id} onClick={() => {
                         const target = document.getElementById(id);
                         const bar    = document.getElementById('qs-sticky-banner');
-                        const scrollEl = findScrollContainer(target);
+                        const scrollEl = target?.closest('.cpf-tab-content') || target?.closest('.fhd-tab-inner');
                         if (bar && target) {
                           const delta = target.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 10;
-                          if (scrollEl) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
-                          else          { window.scrollBy({ top: delta, behavior: 'smooth' }); }
+                          const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                          const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
+                          if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
+                          else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                         } else if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
                       }} style={{ padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: `1px solid ${accent}44`, background: `${accent}14`, color: accent, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
                         onMouseEnter={e => { e.currentTarget.style.background = `${accent}28`; }}
@@ -16524,9 +16523,11 @@ ${milestoneSnapshotHtml}
                   <div style={{ position: "sticky", bottom: 20, display: "flex", justifyContent: "flex-end", pointerEvents: "none", marginTop: 4 }}>
                     <button
                       onClick={() => {
-                        const scrollEl = findScrollContainer(document.getElementById('qs-sticky-banner'));
-                        if (scrollEl) { scrollEl.scrollTo({ top: 0, behavior: 'smooth' }); }
-                        else          { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                        const scrollEl = document.querySelector('.cpf-tab-content') || document.querySelector('.fhd-tab-inner');
+                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
+                        if (isScrollable) { scrollEl.scrollTo({ top: 0, behavior: 'smooth' }); }
+                        else              { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                       }}
                       style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-panel)", backdropFilter: "blur(8px)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transition: "all 0.15s" }}
                       onMouseEnter={e => { e.currentTarget.style.color = "var(--text-bright)"; e.currentTarget.style.borderColor = "var(--clr-blue)"; }}
@@ -20345,16 +20346,18 @@ ${milestoneSnapshotHtml}
                       const target = document.querySelector(href);
                       if (!target) return;
                       const stickyBar = document.getElementById('docs-sticky-nav');
-                      // findScrollContainer walks up from target checking both overflowY AND
-                      // scrollHeight > clientHeight — handles FHD/Auto sidebar-hidden where
-                      // cpf-tab-content has overflow-y:auto but may lack a height constraint.
-                      const scrollEl = findScrollContainer(target);
+                      // cpf-tab-content is now the desktop scroll zone (overflow-y:auto).
+                      // fhd-tab-inner has overflow-y:visible — not scrollable on desktop.
+                      // On mobile both are overflow:visible, so window.scrollBy is the fallback.
+                      const scrollEl = target.closest('.cpf-tab-content') || target.closest('.fhd-tab-inner');
                       if (stickyBar) {
                         const delta = target.getBoundingClientRect().top
                                     - stickyBar.getBoundingClientRect().bottom
                                     - 8;
-                        if (scrollEl) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
-                        else          { window.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                        const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
+                        if (isScrollable) { scrollEl.scrollBy({ top: delta, behavior: 'smooth' }); }
+                        else              { window.scrollBy({ top: delta, behavior: 'smooth' }); }
                       } else {
                         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       }
@@ -20420,13 +20423,18 @@ ${milestoneSnapshotHtml}
                         // fixed scrollMarginTop fails when the bar wraps to 3+ rows (bar bottom ~176px
                         // but old scrollMarginTop was only 160px, hiding the section heading).
                         const stickyBar = document.getElementById('docs-sticky-nav');
-                        const scrollEl = findScrollContainer(target);
+                        const scrollEl = target.closest('.cpf-tab-content') || target.closest('.fhd-tab-inner');
                         if (stickyBar) {
                           // delta = how far to scroll so target top lands just below sticky bar bottom
                           const delta = target.getBoundingClientRect().top
                                       - stickyBar.getBoundingClientRect().bottom
                                       - 8; // 8px breathing room below the bar
-                          if (scrollEl) {
+                          // cpf-tab-content is overflow-y:auto on desktop (the real scroll zone).
+                          // fhd-tab-inner is overflow-y:visible — isScrollable will be false for it.
+                          // On mobile both are visible → falls through to window.scrollBy correctly.
+                          const oy = scrollEl ? getComputedStyle(scrollEl).overflowY : '';
+                          const isScrollable = scrollEl && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
+                          if (isScrollable) {
                             scrollEl.scrollBy({ top: delta, behavior: 'smooth' });
                           } else {
                             window.scrollBy({ top: delta, behavior: 'smooth' });
@@ -21197,11 +21205,15 @@ ${milestoneSnapshotHtml}
                 <div style={{ position: "sticky", bottom: 16, display: "flex", justifyContent: "flex-end", pointerEvents: "none", zIndex: 10, marginTop: 8 }}>
                   <button
                     onClick={() => {
-                      // findScrollContainer walks DOM upward from docs-sticky-nav, checking
-                      // both overflowY declaration and scrollHeight > clientHeight at runtime.
+                      // In FHD+collapsed mode the scroll container is .fhd-tab-inner (overflow-y:auto).
+                      // .cpf-tab-content becomes overflow:hidden — scrollTo on it is a silent no-op.
+                      // Prefer the inner scroll zone; fall back to cpf-tab-content for sidebar-open mode.
                       const nav = document.getElementById("docs-sticky-nav");
-                      const scroller = findScrollContainer(nav);
-                      if (scroller) { scroller.scrollTo({ top: 0, behavior: 'smooth' }); }
+                      const scroller = nav?.closest(".cpf-tab-content") || document.querySelector(".cpf-tab-content")
+                                    || nav?.closest(".fhd-tab-inner")   || document.querySelector(".fhd-tab-inner");
+                      const oy = scroller ? getComputedStyle(scroller).overflowY : '';
+                      const isScrollable = scroller && oy !== 'visible' && oy !== 'clip' && oy !== 'hidden';
+                      if (isScrollable) { scroller.scrollTo({ top: 0, behavior: 'smooth' }); }
                       else { document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                     }}
                     style={{ pointerEvents: "all", display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 700, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
