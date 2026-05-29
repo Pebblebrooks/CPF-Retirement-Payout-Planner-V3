@@ -7458,43 +7458,15 @@ export default function App() {
       lifeEvents, // Rev #D2
       cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer, // RSS fields + transfer toggle
     } = debouncedInputs;
-    return JSON.stringify({
-      currentAge, currentYear, payoutAge, contributionStopAge, housingStopAge,
-      isSelfEmployed, isMale, oaBalance, saBalance, maBalance,
-      empOaCont, empSaCont, empMaCont, vc3aCash, vcSaTopup, vcVhr,
-      annualGovGrant, govGrantMa, wisAmount, // R-5: mrssGrant, mmssGrant removed
-      oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
-      usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
-      cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
-      medicalUsage, medishieldIP, elderCareShield,
-      medicalInflationRate, propertyValue, propertyGrowthRate,
-      propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
-      salaryGross, salaryBonus, salaryGrowthRate, netTradeIncome,
-      sellPropertyAge,
-      currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
-      plannedDownpaymentOA, downpaymentAge,
-      srsBalance, srsAnnualContribution, srsContribStopAge, srsReturnRate,
-      srsDrawdownStartAge, srsDrawdownYears,
-      oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
-      propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
-      propMonetiseCashProceeds, propMonetiseRaTopup,
-      vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD, birthMonth, birthYear, // D4 Phase2/3
-      vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq,
-      cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
-      vc3aDur, vcSaDur, vcMaDur, vcVhrDur, govGrantDur, govGrantMaDur, wisDur,
-      cpfisOaDur, cpfisSaDur, housingDur, oaToMaDur, oaToSaDur, oaEduLoanDur, oaWithdrawalDur,
-      dieWithZeroEnabled, dieWithZeroAge,
-      retirementSumGrowth, // Rev #5
-      salaryPhaseAge, salaryGrowthRate2, // Rev #22
-      lifeEvents, // Rev #D2 — UUIDs stripped below to avoid spurious re-renders
-      cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer, // RSS fields + transfer toggle
-    });
     // N-BUG-5 fix: lifeEvents objects carry a UUID `id` field generated at creation time.
     // Including raw lifeEvents in JSON.stringify means deleting+re-adding the same event
     // (new UUID) triggers an unnecessary projection re-run even though the event data is
     // identical. Stripping `id` before stringifying means engineKey only changes when the
     // event content (type, ages, magnitude etc.) actually changes — matching the engine's
     // own behaviour (the engine never reads event IDs).
+    // DEAD-CODE FIX: the previous codebase had a first `return JSON.stringify({...lifeEvents})`
+    // here that fired immediately, making the UUID-stripping logic below it completely
+    // unreachable. That premature return has been removed; this is now the sole return.
     const lifeEventsForKey = Array.isArray(lifeEvents)
       ? lifeEvents.map(({ id: _id, ...rest }) => rest)
       : [];
@@ -10860,15 +10832,44 @@ ${milestoneSnapshotHtml}
         .theme-light .strategy-income-table td { color: #162033 !important; }
         .theme-light .strategy-income-table th { color: #08111e !important; background: rgba(74,102,128,0.15) !important; }
 
-        /* ── Strategy tab: sticky sub-nav (Goal Simulator / Income Roadmap) on mobile/tablet ──
+        /* ── Strategy tab: sticky sub-nav (Goal Simulator / Income Roadmap) ─────────────────
            z-index MUST be below every sticky-row layer so the subnav scrolls BEHIND them:
              header z:50 · input-params-bar z:48 · tab-strip z:42 · KPI-header z:40
+
+           MOBILE/TABLET (≤1024px):
            top is calculated dynamically: base sticky stack (136px) + actual KPI header height
            measured at runtime by a ResizeObserver → --kpi-header-h CSS custom property.
            This handles both RSS (3 tile rows, ~198px KPI) and non-RSS (2 tile rows, ~135px KPI)
-           without any hardcoded breakpoint guessing. */
+           without any hardcoded breakpoint guessing.
+
+           DESKTOP FHD/HD (>1024px):
+           Subnav is sticky at the top of the scrolling content area (top: 0 within the
+           tab panel scroll container) so the Goal Simulator / Income Roadmap switcher
+           stays visible when scrolling long strategy content on large monitors.
+
+           BACKGROUND FIX (both breakpoints):
+           --bg-panel-muted is rgba with alpha in dark mode, causing content to bleed
+           through when the subnav sticks over scrolling content. The override below
+           forces a fully opaque background on the sticky element so nothing shows through. */
         @media (max-width: 1024px) {
-          .strategy-subnav { position: sticky; top: calc(136px + var(--kpi-header-h, 135px)); z-index: 30; }
+          .strategy-subnav {
+            position: sticky;
+            top: calc(136px + var(--kpi-header-h, 135px));
+            z-index: 30;
+            /* Opaque bg: prevent scroll-through bleed in dark and light mode */
+            background: var(--bg-panel) !important;
+            border-bottom: 1px solid var(--border-subtle);
+          }
+        }
+        @media (min-width: 1025px) {
+          .strategy-subnav {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            /* Opaque bg: same bleed fix for desktop */
+            background: var(--bg-panel) !important;
+            border-bottom: 1px solid var(--border-subtle);
+          }
         }
 
         /* ── Light mode: welcome step cards — hard-coded dark bg ── */
@@ -21399,7 +21400,12 @@ ${milestoneSnapshotHtml}
                 <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
 
                   {/* ── Sub-navigation: Goal Simulator | Income Roadmap ── */}
-                  <div className="strategy-subnav" style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
+                  {/* strategy-subnav: CSS class handles sticky + opaque bg on all viewports.
+                      The CSS background:var(--bg-panel) !important overrides the inline muted
+                      value to prevent scroll-bleed content showing through. overflow:clip (not
+                      hidden) preserves border-radius without creating a new stacking context
+                      that would break position:sticky inside the scroll container. */}
+                  <div className="strategy-subnav" style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "clip" }}>
                     {[
                       { id: "goal",    label: "🎯 Goal Simulator"  },
                       { id: "roadmap", label: "📅 Income Roadmap"  },
