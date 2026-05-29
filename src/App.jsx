@@ -10869,6 +10869,8 @@ ${milestoneSnapshotHtml}
             /* Opaque bg: same bleed fix for desktop */
             background: var(--bg-panel) !important;
             border-bottom: 1px solid var(--border-subtle);
+            /* Shadow: visually separates sticky subnav from scrolling content on FHD/HD */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18);
           }
         }
 
@@ -11050,10 +11052,11 @@ ${milestoneSnapshotHtml}
           overflow-x: clip;
           scrollbar-width: thin;
           scrollbar-color: var(--border-strong) transparent;
-          padding: 12px 4px;
+          padding: 12px 8px;
           display: flex;
           flex-direction: column;
           gap: 16px;
+          background: var(--bg-base); /* opaque scroll container — prevents strategy-subnav sticky bleed-through */
         }
         .cpf-tab-content::-webkit-scrollbar { width: 5px; }
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
@@ -11062,6 +11065,16 @@ ${milestoneSnapshotHtml}
         .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 16px; }
         @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 16px; } }
         @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 16px; } }
+        /* ─── NON-STANDARD DESKTOP VIEWPORT PADDING FIX (1025–1439px) ────────────
+           At sub-HD desktop widths the cpf-layout grid padding is only 16px, but
+           cpf-tab-content base padding is 8px horizontal. This gap causes card
+           borders and box-shadows to be clipped at the right edge on non-standard
+           viewport widths (e.g. 1100px, 1280px) in HD/auto mode regardless of
+           sidebar state. clamp() scales the horizontal padding proportionally so
+           content always has breathing room without over-padding at 1440px+.       */
+        @media (min-width: 1025px) and (max-width: 1439px) {
+          .cpf-tab-content { padding: 12px clamp(8px, 1.2vw, 16px) !important; }
+        }
         /* ─── DESKTOP SIDEBAR COLLAPSE (≥ 1025px) ──────────────────────────────────
            On tablet/mobile the sidebar is toggled via display:none on
            .cpf-sidebar-inner.sidebar-collapsed (inside their own @media blocks).
@@ -11771,7 +11784,7 @@ ${milestoneSnapshotHtml}
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
           overflow-y: auto;
           overflow-x: hidden;
-          padding: 8px 0;
+          padding: 8px clamp(8px, 1.5vw, 24px);
         }
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-tab-inner {
           display: flex;
@@ -11790,7 +11803,7 @@ ${milestoneSnapshotHtml}
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
             overflow-y: auto;
             overflow-x: hidden;
-            padding: 8px 0;
+            padding: 8px clamp(8px, 1.5vw, 24px);
           }
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-tab-inner {
             display: flex;
@@ -11818,9 +11831,7 @@ ${milestoneSnapshotHtml}
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
-          .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
-          /* Fix 1: when inputs sidebar is open on tablet, hide tab content so only inputs show */
-          .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
+          .cpf-tab-content { overflow-y: visible !important; padding: 10px 8px !important; }
           /* Fix M-KPI-1 (tablet): collapse sidebar-wrap to 0 when inputs are hidden —
              eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
           .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
@@ -11921,8 +11932,7 @@ ${milestoneSnapshotHtml}
           .cpf-gear-mobile-share { display: contents !important; }
           /* cpf-tabs-hamburger intentionally not shown — tab strip is horizontally scrollable */
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
-          .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
-          /* Fix 1: when inputs sidebar is open on mobile, hide tab content so only inputs show */
+          .cpf-tab-content { overflow-y: visible !important; padding: 10px 8px !important; }
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
           /* Fix M-KPI-1 (mobile): collapse sidebar-wrap to 0 when inputs are hidden —
              eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
