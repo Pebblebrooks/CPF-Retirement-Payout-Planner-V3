@@ -4547,22 +4547,26 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ReadinessTab — Phase 1+2 implementation
+// ReadinessTab — Phase 1+2+3 implementation
 // Pure display component: reads computed data via props, writes back via existing
 // App.jsx handlers. Zero engine changes, zero new state in App.jsx.
+// Phase 3 additions: P10 downside KPI, income waterfall, 4 sub-scores in gauge,
+//                   life stage timeline, action priority queue.
 // ─────────────────────────────────────────────────────────────────────────────
 function ReadinessTab({
   inputs, displayAccumulation, accumulationByAge, nominalAccumulationByAge, lifePlans, milestones,
   highlightPlan, setHighlightPlan, payoutAge65, isDark, setActiveTab,
   setSidebarOpen, basicPremiumPct, isRealDollars, applyInflation,
+  // Phase 3: already-computed in App — zero additional engine cost
+  monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
 }) {
-  const pa          = payoutAge65;
-  const ca          = Number(inputs.currentAge) || 35;
-  const cy          = Number(inputs.currentYear) || 2026;
-  const isMale      = inputs.isMale !== false;
-  const target      = Number(inputs.targetMonthlyIncome) || 0;
-  const rsGrowth    = (Number(inputs.retirementSumGrowth) || 3) / 100;
-  const yearsToPA   = Math.max(0, pa - ca);
+  const pa           = payoutAge65;
+  const ca           = Number(inputs.currentAge) || 35;
+  const cy           = Number(inputs.currentYear) || 2026;
+  const isMale       = inputs.isMale !== false;
+  const target       = Number(inputs.targetMonthlyIncome) || 0;
+  const rsGrowth     = (Number(inputs.retirementSumGrowth) || 3) / 100;
+  const yearsToPA    = Math.max(0, pa - ca);
   const yearsFromNow = Math.max(0, (cy + yearsToPA) - 2026);
 
   // ── Readiness score ──────────────────────────────────────────────────────
@@ -4571,9 +4575,9 @@ function ReadinessTab({
   // isRealDollars=true). The score compares RA against FRS — both are nominal future values.
   // Mixing real RA with nominal FRS would produce a spuriously low ratio (e.g. 55% vs 100%).
   const { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color: scoreColor, label: scoreLabel } = useMemo(() => {
-    const nomMap   = nominalAccumulationByAge || accumulationByAge; // fallback for safety
-    const raAtPA   = nomMap.get(pa)?.ra || 0;  // always nominal
-    const projFRS  = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const nomMap  = nominalAccumulationByAge || accumulationByAge;
+    const raAtPA  = nomMap.get(pa)?.ra || 0;  // always nominal
+    const projFRS = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
     const frsRatio = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
 
     const activePlanObj = lifePlans?.[highlightPlan || "standard"];
@@ -4583,6 +4587,7 @@ function ReadinessTab({
       : rawPayout;
 
     const incomeRatio = target > 0 ? Math.min(1, stdMonthly / target) : frsRatio;
+    // Score formula unchanged from Phase 1/2 — new sub-scores are additive info only
     const score = Math.round((frsRatio * 0.5 + incomeRatio * 0.5) * 100);
 
     const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
@@ -4591,18 +4596,18 @@ function ReadinessTab({
   }, [nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow, lifePlans, highlightPlan, isMale, basicPremiumPct, target]);
 
   // ── Derived metrics ──────────────────────────────────────────────────────
-  const payoutData    = accumulationByAge.get(pa) || {};           // display values — respects Nom/Real toggle
-  const totalCPF      = (payoutData.oa || 0) + (payoutData.sa || 0) + (payoutData.ma || 0) + (payoutData.ra || 0);
-  const currentOA     = Number(inputs.oaBalance) || 0;
-  const currentSA     = Number(inputs.saBalance) || 0;
-  const currentMA     = Number(inputs.maBalance) || 0;
-  const currentTotal  = currentOA + currentSA + currentMA;
-  const projBRS       = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
-  const projERS       = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + rsGrowth, yearsFromNow));
-  // Bar percentages compare nominal RA vs nominal retirement sums — always use raAtPA (nominal from score block)
-  const frsBarPct     = projFRS > 0 ? Math.min(100, Math.round((raAtPA / projFRS) * 100)) : 0;
-  const brsBarPct     = projBRS > 0 ? Math.min(100, Math.round((raAtPA / projBRS) * 100)) : 0;
-  const ersBarPct     = projERS > 0 ? Math.min(100, Math.round((raAtPA / projERS) * 100)) : 0;
+  const payoutData   = accumulationByAge.get(pa) || {};  // display values — respects Nom/Real toggle
+  const totalCPF     = (payoutData.oa || 0) + (payoutData.sa || 0) + (payoutData.ma || 0) + (payoutData.ra || 0);
+  const currentOA    = Number(inputs.oaBalance) || 0;
+  const currentSA    = Number(inputs.saBalance) || 0;
+  const currentMA    = Number(inputs.maBalance) || 0;
+  const currentTotal = currentOA + currentSA + currentMA;
+  const projBRS      = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
+  const projERS      = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + rsGrowth, yearsFromNow));
+  // Bar percentages compare nominal RA vs nominal retirement sums
+  const frsBarPct    = projFRS > 0 ? Math.min(100, Math.round((raAtPA / projFRS) * 100)) : 0;
+  const brsBarPct    = projBRS > 0 ? Math.min(100, Math.round((raAtPA / projBRS) * 100)) : 0;
+  const ersBarPct    = projERS > 0 ? Math.min(100, Math.round((raAtPA / projERS) * 100)) : 0;
 
   // Income coverage for the hero tile
   const displayPayout = isRealDollars ? applyInflation(stdMonthly, pa) : stdMonthly;
@@ -4619,13 +4624,180 @@ function ReadinessTab({
   const escPay = scenarioPlan("escalating");
   const basPay = scenarioPlan("basic");
 
-  // Donut geometry (OA / SA+RA / MA)
+  // ── Phase 3: P10 downside & probability of sufficiency ──────────────────
+  // monteCarloData is null when MC toggle is off — all P10 fields degrade gracefully to null/—
+  const nomMap         = nominalAccumulationByAge || accumulationByAge;
+  const nomPayoutData  = nomMap.get(pa) || {};
+  const totalCPFNom    = (nomPayoutData.oa || 0) + (nomPayoutData.sa || 0) + (nomPayoutData.ma || 0) + (nomPayoutData.ra || 0);
+  const p10RowAtPA     = monteCarloData?.rows?.find(r => r.age === pa);
+  const p10TotalAtPA   = p10RowAtPA?.p10 || 0;
+  const p10DropPct     = (monteCarloData && totalCPFNom > 0 && p10TotalAtPA > 0)
+    ? Math.round((1 - p10TotalAtPA / totalCPFNom) * 100)
+    : null;
+  const probSufficiency = monteCarloData?.probSufficiency ?? null;
+  // P10 sub-score: p10 total as a fraction of base-case total (how much of base survives bad luck)
+  const p10SubScore    = (monteCarloData && totalCPFNom > 0 && p10TotalAtPA > 0)
+    ? Math.min(100, Math.round((p10TotalAtPA / totalCPFNom) * 100))
+    : null;
+
+  // ── Phase 3: OA depletion age (sourced from milestones computed in App) ──
+  // The milestones array already contains an "OA Drawdown exhausted" entry when applicable,
+  // so there is no new computation here — just a lookup.
+  const oaDepletionMilestone = milestones.find(m =>
+    m.label?.toLowerCase().includes('drawdown exhaust') || m.label?.toLowerCase().includes('oa depletion')
+  );
+  const oaDepletionAge   = oaDepletionMilestone?.age || null;
+  const lifeExpectancy   = isMale ? 85 : 88;
+  const planningHorizon  = Math.max(pa + 25, 90);
+  const oaIncomeGapYrs   = oaDepletionAge ? Math.max(0, lifeExpectancy - oaDepletionAge) : 0;
+
+  // Longevity sub-score: years of OA draw coverage vs expected retirement years.
+  // If there is no OA draw active, CPF LIFE is a lifelong annuity → longevity fully covered.
+  const oaDrawActive      = (effectiveOaDrawMonthly || 0) > 0 && (effectiveOaDrawStartAge || 0) > 0;
+  const retirementYears   = Math.max(1, lifeExpectancy - pa);
+  const longevitySubScore = (!oaDrawActive || !oaDepletionAge)
+    ? 100
+    : Math.min(100, Math.round(((oaDepletionAge - pa) / retirementYears) * 100));
+
+  // ── Phase 3: Income waterfall — mirrors strategyChartData logic exactly ──
+  // SRS: replicate the PMT formula from strategyChartData so display matches projection.
+  // accumulationByAge rows carry srsBalance from the engine (line ~2090 in runProjectionEngine).
+  const srsDrawStart   = Math.max(Number(inputs.srsDrawdownStartAge) || 63, 63);
+  const srsDrawYears   = Math.min(Math.max(Number(inputs.srsDrawdownYears) || 10, 1), 10);
+  const srsRateDisp    = (Number(inputs.srsReturnRate) || 0) / 100;
+  const srsBalAtStart  = accumulationByAge.get(srsDrawStart)?.srsBalance || 0;
+  const srsAnnualDraw  = srsBalAtStart > 0 && srsDrawYears > 0
+    ? (srsRateDisp > 0
+        ? Math.round(srsBalAtStart * srsRateDisp / (1 - Math.pow(1 + srsRateDisp, -srsDrawYears)))
+        : Math.round(srsBalAtStart / srsDrawYears))
+    : 0;
+  const srsMonthlyRaw  = Math.round(srsAnnualDraw / 12);
+  // SRS is active at payout age only if pa falls within the drawdown window
+  const srsActiveAtPA  = srsMonthlyRaw > 0 && pa >= srsDrawStart && pa < srsDrawStart + srsDrawYears;
+
+  // Private assets: month-over-month delta in projection at payout age
+  const privAtPA       = accumulationByAge.get(pa)?.privateAssets || 0;
+  const privAtPAp1     = accumulationByAge.get(pa + 1)?.privateAssets ?? privAtPA;
+  const privMonthlyRaw = Math.max(0, Math.round((privAtPA - privAtPAp1) / 12));
+
+  // Deflate to real dollars when toggle is on — same applyInflation helper App uses everywhere
+  const cpfLifeDisplay = Math.round(displayPayout || 0);
+  const oaDrawDisplay  = (oaDrawActive && (effectiveOaDrawStartAge || 0) <= pa)
+    ? Math.round(isRealDollars ? applyInflation(effectiveOaDrawMonthly, pa) : effectiveOaDrawMonthly)
+    : 0;
+  const srsDisplay     = srsActiveAtPA
+    ? Math.round(isRealDollars ? applyInflation(srsMonthlyRaw, pa) : srsMonthlyRaw)
+    : 0;
+  const privDisplay    = privMonthlyRaw > 0
+    ? Math.round(isRealDollars ? applyInflation(privMonthlyRaw, pa) : privMonthlyRaw)
+    : 0;
+
+  const waterfallTotal  = cpfLifeDisplay + oaDrawDisplay + srsDisplay + privDisplay;
+  const waterfallCovPct = target > 0 ? Math.min(999, Math.round((waterfallTotal / target) * 100)) : null;
+  // Only show sources that have a non-zero amount at payout age
+  const waterfallItems  = [
+    { key: "cpfLife", label: "CPF LIFE", amount: cpfLifeDisplay, color: "var(--clr-green)"  },
+    { key: "oaDraw",  label: "OA Draw",  amount: oaDrawDisplay,  color: "var(--clr-blue)"   },
+    { key: "srs",     label: "SRS",      amount: srsDisplay,     color: "var(--clr-purple)" },
+    { key: "priv",    label: "Private",  amount: privDisplay,    color: "var(--clr-cyan)"   },
+  ].filter(i => i.amount > 0);
+
+  // ── Phase 3: Life stage timeline ─────────────────────────────────────────
+  const timelineEvents = useMemo(() => {
+    const events = [];
+    events.push({ age: ca,             label: "Today",       sub: `Age ${ca}`,             type: "current"   });
+    if (ca < 50 && pa > 55)
+      events.push({ age: 50,           label: "SA Lock-in",  sub: "OA→SA closes at 55",    type: "info"      });
+    if (ca < 55 && pa >= 55)
+      events.push({ age: 55,           label: "RA Forms",    sub: "SA/OA → RA",            type: "milestone" });
+    events.push({ age: pa,             label: "LIFE Starts", sub: stdPay > 0 ? `${formatCurrency(Math.round(stdPay))}/mo` : "payout begins", type: "success" });
+    if (oaDrawActive && oaDepletionAge && oaDepletionAge < planningHorizon)
+      events.push({ age: oaDepletionAge, label: "OA Depletes", sub: oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}yr gap risk` : "at horizon", type: "danger" });
+    events.push({ age: lifeExpectancy, label: "Life Exp.",   sub: isMale ? "Male median" : "Female median",  type: "info"      });
+    if (planningHorizon > lifeExpectancy + 1)
+      events.push({ age: planningHorizon, label: "Horizon",  sub: "Planning end",          type: "muted"     });
+    // Deduplicate by age (keep first occurrence), sort ascending
+    const seen = new Set();
+    return events
+      .filter(e => { if (seen.has(e.age)) return false; seen.add(e.age); return true; })
+      .sort((a, b) => a.age - b.age);
+  }, [ca, pa, oaDepletionAge, oaDrawActive, lifeExpectancy, planningHorizon, stdPay, oaIncomeGapYrs, isMale]);
+
+  const tlMinAge = timelineEvents.length ? timelineEvents[0].age - 2 : ca - 2;
+  const tlMaxAge = timelineEvents.length ? timelineEvents[timelineEvents.length - 1].age + 2 : planningHorizon + 2;
+  const tlPct    = (age) => ((age - tlMinAge) / Math.max(1, tlMaxAge - tlMinAge)) * 100;
+  const tlColor  = (type) => ({
+    current: "var(--clr-blue)", milestone: "var(--clr-emerald)", success: "var(--clr-green)",
+    danger: "var(--clr-red)", info: "var(--clr-cyan)", muted: "var(--text-subtle)",
+  })[type] || "var(--clr-blue)";
+
+  // ── Phase 3: Action priority queue ───────────────────────────────────────
+  // All items derived from already-computed values — no new state, no engine calls.
+  // CTA buttons navigate to the relevant tab (and open sidebar where applicable).
+  const actionItems = useMemo(() => {
+    const items = [];
+    // 1. FRS gap
+    if (frsBarPct < 100) {
+      const gap = Math.max(0, projFRS - raAtPA);
+      items.push({
+        id: "frs", urgent: frsBarPct < 60,
+        impact: Math.min(20, Math.round((1 - frsBarPct / 100) * 20)),
+        label: `Top up SA/RA — ${Math.round(100 - frsBarPct)}% FRS gap remaining`,
+        desc: `RA at ${pa}: ${formatCurrency(raAtPA)} vs projected FRS ${formatCurrency(projFRS)} · gap: ${formatCurrency(gap)}`,
+        cta: "Inflows ↗", tab: "summary", openSidebar: true,
+      });
+    }
+    // 2. Sub-optimal CPF LIFE plan
+    if ((highlightPlan || "standard") === "basic" && stdPay > 0 && basPay > 0 && stdPay > basPay) {
+      items.push({
+        id: "life", urgent: true,
+        impact: 5,
+        label: "Consider switching from Basic to Standard CPF LIFE",
+        desc: `Standard: ${formatCurrency(Math.round(stdPay))}/mo vs Basic: ${formatCurrency(Math.round(basPay))}/mo · +${formatCurrency(Math.round(stdPay - basPay))}/mo`,
+        cta: "LIFE tab ↗", tab: "life", openSidebar: false,
+      });
+    }
+    // 3. Income gap (waterfall doesn't cover target)
+    if (target > 0 && waterfallCovPct != null && waterfallCovPct < 90 && waterfallItems.length > 0) {
+      const gap = Math.max(0, target - waterfallTotal);
+      items.push({
+        id: "income", urgent: waterfallCovPct < 70,
+        impact: Math.min(15, Math.round((1 - waterfallCovPct / 100) * 15)),
+        label: `Close ${formatCurrency(Math.round(gap))}/mo retirement income gap`,
+        desc: `${formatCurrency(waterfallTotal)}/mo covers ${waterfallCovPct}% of ${formatCurrency(target)}/mo target · increase OA draw or SRS`,
+        cta: "Strategy ↗", tab: "strategy", openSidebar: false,
+      });
+    }
+    // 4. OA depletion risk
+    if (oaDrawActive && oaDepletionAge && oaIncomeGapYrs > 3) {
+      items.push({
+        id: "oaDep", urgent: oaIncomeGapYrs >= 8,
+        impact: 8,
+        label: `OA drawdown exhausts at age ${oaDepletionAge} — ${oaIncomeGapYrs}-year gap`,
+        desc: `Reduce monthly OA draw or lower the bequest floor to extend coverage to life expectancy (${lifeExpectancy})`,
+        cta: "Strategy ↗", tab: "strategy", openSidebar: false,
+      });
+    }
+    // 5. SRS not set up (no balance, no annual contribution)
+    if ((Number(inputs.srsBalance) || 0) === 0 && (Number(inputs.srsAnnualContribution) || 0) === 0) {
+      items.push({
+        id: "srs", urgent: false,
+        impact: 4,
+        label: "Set up SRS for tax savings + retirement buffer",
+        desc: "SC/PR max $15,300/yr — contributions tax-deductible; 50% of withdrawals taxable from age 63",
+        cta: "SRS panel ↗", tab: "summary", openSidebar: true,
+      });
+    }
+    return items.slice(0, 5);
+  }, [frsBarPct, projFRS, raAtPA, pa, highlightPlan, stdPay, basPay, target, waterfallCovPct, waterfallTotal, waterfallItems.length, oaDrawActive, oaDepletionAge, oaIncomeGapYrs, lifeExpectancy, inputs.srsBalance, inputs.srsAnnualContribution]);
+
+  // ── Donut geometry (unchanged from Phase 1/2) ────────────────────────────
   const donutParts = useMemo(() => {
     if (currentTotal === 0) return [];
     const slices = [
-      { key: "oa",   label: "OA",    value: currentOA,            color: "var(--clr-blue2)" },
-      { key: "sara", label: "SA/RA", value: currentSA,            color: "var(--clr-emerald)" },
-      { key: "ma",   label: "MA",    value: currentMA,            color: "var(--clr-purple)" },
+      { key: "oa",   label: "OA",    value: currentOA, color: "var(--clr-blue2)"  },
+      { key: "sara", label: "SA/RA", value: currentSA, color: "var(--clr-emerald)"},
+      { key: "ma",   label: "MA",    value: currentMA, color: "var(--clr-purple)" },
     ];
     const total = slices.reduce((s, p) => s + p.value, 0);
     if (total === 0) return [];
@@ -4649,82 +4821,89 @@ function ReadinessTab({
     });
   }, [currentOA, currentSA, currentMA, currentTotal]);
 
-  // Gauge arc path (semi-circle: left = 0%, right = 100%)
+  // ── Gauge arc path (unchanged from Phase 1/2) ────────────────────────────
   const gaugeArc = (pct) => {
-    // Upper speedometer gauge: arc sweeps clockwise from LEFT(180°) through TOP(270°) to RIGHT(360°).
-    // SVG y-axis points DOWN, so clockwise on screen = INCREASING angle.
-    // Angle map: 0°=right(182,90)  90°=BOTTOM(110,162)  180°=left(38,90)  270°=TOP(110,18)
-    //
-    // Correct parametrisation for pct% of the upper arc:
-    //   startAngle = π (left, fixed)
-    //   endAngle   = π + π*pct  → at 50%: 3π/2 = TOP(110,18); at 100%: 2π = right(182,90)
-    //
-    // WRONG formula (old): endAngle = π*(1-pct) → at 50% gives 90° = BOTTOM(110,162), not TOP.
-    // That contradiction (sweep=1 wants 261° arc but large-arc=0 wants 99° arc) made SVG pick a
-    // different circle centre entirely, producing the garbled arc in the screenshot.
     const cx = 110, cy2 = 90, r = 72;
     const clampedPct = Math.min(1, Math.max(0, pct / 100));
     if (clampedPct <= 0) return '';
     const startAngle = Math.PI;
-    const endAngle   = Math.PI + Math.PI * clampedPct; // ← FIXED (was: Math.PI * (1 - clampedPct))
+    const endAngle   = Math.PI + Math.PI * clampedPct;
     const x1 = cx + r * Math.cos(startAngle);
     const y1 = cy2 + r * Math.sin(startAngle);
     const x2 = cx + r * Math.cos(endAngle);
     const y2 = cy2 + r * Math.sin(endAngle);
-    // Arc span = π*clampedPct ≤ π (180°) → large-arc-flag always 0. sweep=1 = clockwise = upper arc.
     return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
   };
 
-  const cardStyle = {
-    background: "var(--bg-panel)",
-    border: "1px solid var(--border-subtle)",
-    borderRadius: 16,
-    padding: "18px 20px",
-  };
-  const labelStyle = { fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 };
-  const bigNumStyle = { fontSize: 26, fontWeight: 700, color: "var(--text-bright)", letterSpacing: "-0.02em", lineHeight: 1.1 };
+  const cardStyle    = { background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, padding: "18px 20px" };
+  const labelStyle   = { fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 };
+  const bigNumStyle  = { fontSize: 26, fontWeight: 700, color: "var(--text-bright)", letterSpacing: "-0.02em", lineHeight: 1.1 };
+  const subBarColor  = (pct) => pct == null ? "var(--border-subtle)" : pct >= 75 ? "var(--clr-green)" : pct >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
 
   return (
     <div className="readiness-tab-outer" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* ── ROW 1: Gauge + 3-col KPI hero ── */}
+      {/* ── ROW 1: Gauge (4 sub-scores) + 5-col KPI hero ── */}
       <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
 
-        {/* Gauge card */}
+        {/* Gauge card — Phase 3: 2 new sub-score bars added below existing 2 */}
         <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
           <p style={{ ...labelStyle, marginBottom: 8 }}>Retirement Readiness</p>
           <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible" }}>
-            {/* Track */}
             <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
-            {/* Fill */}
             <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
-            {/* Score */}
             <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
             <text x="110" y="94" textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--text-muted)", letterSpacing: "0.05em" }}>/ 100 · {scoreLabel}</text>
           </svg>
-          {/* Sub-scores */}
           <div style={{ width: "100%", marginTop: 4, display: "flex", flexDirection: "column", gap: 6 }}>
             {[
-              { label: "FRS Coverage", pct: Math.round(frsRatio * 100), tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}` },
-              { label: "Income Coverage", pct: target > 0 ? Math.round(incomeRatio * 100) : null, tip: target > 0 ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target` : "Set a Target Monthly Income in the sidebar to enable" },
+              {
+                label: "FRS Coverage",
+                pct: Math.round(frsRatio * 100),
+                tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}`,
+              },
+              {
+                label: "Income Coverage",
+                pct: target > 0 ? Math.round(incomeRatio * 100) : null,
+                tip: target > 0
+                  ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target`
+                  : "Set a Target Monthly Income in the sidebar to enable",
+              },
+              {
+                label: "Downside (P10)",
+                pct: p10SubScore,
+                tip: p10SubScore != null
+                  ? `P10 bad-luck scenario total CPF at ${pa}: ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)}`
+                  : "Enable Monte Carlo in the Accumulation tab for live P10 downside figures",
+              },
+              {
+                label: "Longevity Cover",
+                pct: longevitySubScore,
+                tip: oaDrawActive
+                  ? (oaDepletionAge
+                      ? `OA drawdown covers to age ${oaDepletionAge} vs ${isMale ? "male" : "female"} life expectancy ${lifeExpectancy}`
+                      : "OA drawdown sustained to planning horizon")
+                  : "CPF LIFE is a lifelong annuity — income continues regardless of longevity",
+              },
             ].map(({ label, pct, tip }) => (
               <div key={label} title={tip}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
                   <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: pct == null ? "var(--text-subtle)" : pct >= 75 ? "var(--clr-green)" : pct >= 50 ? "var(--clr-amber)" : "var(--clr-red)" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: subBarColor(pct) }}>
                     {pct == null ? "—" : `${pct}%`}
                   </span>
                 </div>
                 <div style={{ height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: pct == null ? "var(--border-subtle)" : pct >= 75 ? "var(--clr-green)" : pct >= 50 ? "var(--clr-amber)" : "var(--clr-red)", transition: "width 0.5s ease" }} />
+                  <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: subBarColor(pct), transition: "width 0.5s ease" }} />
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* 3-col KPI hero */}
-        <div className="rd-kpi-hero" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        {/* 5-col KPI hero — Phase 3: P10 Downside + OA Depletes added */}
+        <div className="rd-kpi-hero" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}>
+          {/* Existing 3 KPI tiles */}
           {[
             {
               label: `Total CPF at ${pa}`,
@@ -4732,6 +4911,7 @@ function ReadinessTab({
               value: formatCurrency(totalCPF),
               color: "var(--clr-blue)",
               tip: `OA + SA/RA + MA at payout age ${pa}`,
+              extraBorder: null,
             },
             {
               label: `${highlightPlan === "basic" ? "Basic" : highlightPlan === "escalating" ? "Escalating" : "Standard"} plan payout`,
@@ -4739,6 +4919,7 @@ function ReadinessTab({
               value: displayPayout > 0 ? `${formatCurrency(Math.round(displayPayout))}/mo` : "—",
               color: "var(--clr-green)",
               tip: `${highlightPlan} plan monthly payout${isRealDollars ? " in today's dollars" : ""}`,
+              extraBorder: null,
             },
             {
               label: "Income coverage",
@@ -4746,21 +4927,78 @@ function ReadinessTab({
               value: coveragePct != null ? `${coveragePct}%` : "—",
               color: coveragePct == null ? "var(--text-muted)" : coveragePct >= 100 ? "var(--clr-green)" : coveragePct >= 70 ? "var(--clr-amber)" : "var(--clr-red)",
               tip: target > 0 ? `CPF LIFE payout covers ${coveragePct}% of your ${formatCurrency(target)}/mo target` : "Enter Target Monthly Income in the Decumulation section",
+              extraBorder: null,
             },
-          ].map(({ label, sublabel, value, color, tip }) => (
-            <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          ].map(({ label, sublabel, value, color, tip, extraBorder }) => (
+            <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center", ...(extraBorder ? { borderColor: extraBorder } : {}) }}>
               <p style={labelStyle}>{label}</p>
               <p style={{ ...bigNumStyle, color }}>{value}</p>
               {sublabel && <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>{sublabel}</p>}
             </div>
           ))}
+
+          {/* P10 Downside tile */}
+          <div
+            title={p10DropPct != null
+              ? `Bad-luck (P10) scenario: total CPF at ${pa} = ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} · −${p10DropPct}%. Enable Monte Carlo in the Accumulation tab.`
+              : "Enable Monte Carlo in the Accumulation tab to see the P10 downside scenario"}
+            style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <p style={labelStyle}>P10 downside</p>
+            {p10TotalAtPA > 0 ? (
+              <>
+                <p style={{ ...bigNumStyle, color: "var(--clr-amber)" }}>{formatCurrency(p10TotalAtPA)}</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>bad-luck scenario</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-red)", marginTop: 4 }}>−{p10DropPct}% vs base</p>
+              </>
+            ) : (
+              <>
+                <p style={{ ...bigNumStyle, color: "var(--text-subtle)" }}>—</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>enable Monte Carlo<br />in Accumulation tab</p>
+              </>
+            )}
+            {probSufficiency != null && (
+              <p style={{ fontSize: 10, fontWeight: 700, marginTop: 6,
+                color: probSufficiency >= 80 ? "var(--clr-green)" : probSufficiency >= 60 ? "var(--clr-amber)" : "var(--clr-red)" }}>
+                {probSufficiency}% chance hits FRS
+              </p>
+            )}
+          </div>
+
+          {/* OA Depletes tile */}
+          <div
+            title={oaDepletionAge
+              ? `OA drawdown exhausts at age ${oaDepletionAge}. ${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy}. ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk.` : ""}`
+              : "No OA drawdown active, or OA is sustained to the planning horizon"}
+            style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center",
+              borderColor: oaDepletionAge && oaIncomeGapYrs > 0 ? "rgba(239,68,68,0.4)" : "var(--border-subtle)" }}>
+            <p style={labelStyle}>OA depletes</p>
+            {oaDepletionAge ? (
+              <>
+                <p style={{ ...bigNumStyle, color: "var(--clr-red)" }}>Age {oaDepletionAge}</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>drawdown exhausted</p>
+                {oaIncomeGapYrs > 0 && (
+                  <div style={{ marginTop: 5, padding: "3px 8px", borderRadius: 5, display: "inline-block",
+                    background: "rgba(239,68,68,0.12)", fontSize: 10, fontWeight: 700, color: "var(--clr-red)" }}>
+                    ⚠ {oaIncomeGapYrs}-yr gap risk
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <p style={{ ...bigNumStyle, color: "var(--clr-green)" }}>—</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>
+                  {oaDrawActive ? "OA sustained to horizon" : "no drawdown active"}
+                </p>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── ROW 2: Scenario strip + Retirement sums bars ── */}
-      <div className="rd-row2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      {/* ── ROW 2: Scenario strip + RS bars + Income waterfall ── */}
+      <div className="rd-row2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
 
-        {/* Scenario strip */}
+        {/* Scenario strip — unchanged + longevity note appended */}
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <p style={labelStyle}>CPF LIFE plan comparison</p>
@@ -4792,15 +5030,28 @@ function ReadinessTab({
               );
             })}
           </div>
+          {/* Longevity risk note */}
+          {stdPay > 0 && escPay > 0 && (
+            <div style={{ marginTop: 10, padding: "7px 10px", borderRadius: 8,
+              background: "rgba(6,182,212,0.07)", border: "1px solid rgba(6,182,212,0.22)",
+              fontSize: 11, color: "var(--clr-cyan)", lineHeight: 1.5 }}>
+              <strong>Longevity note:</strong>{" "}
+              <span style={{ color: "var(--text-muted)" }}>
+                Escalating payouts overtake Standard after its break-even age.
+                {" "}{isMale ? "Male" : "Female"} median life expectancy:{" "}
+                <strong style={{ color: "var(--clr-cyan)" }}>{lifeExpectancy}</strong>.
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Retirement sums progress bars */}
+        {/* Retirement sums progress bars — unchanged */}
         <div style={cardStyle}>
           <p style={{ ...labelStyle, marginBottom: 14 }}>RA vs retirement sums at age {pa}</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {[
-              { label: "BRS", pct: brsBarPct, target: projBRS, desc: "Basic Retirement Sum" },
-              { label: "FRS", pct: frsBarPct, target: projFRS, desc: "Full Retirement Sum" },
+              { label: "BRS", pct: brsBarPct, target: projBRS, desc: "Basic Retirement Sum"    },
+              { label: "FRS", pct: frsBarPct, target: projFRS, desc: "Full Retirement Sum"     },
               { label: "ERS", pct: ersBarPct, target: projERS, desc: "Enhanced Retirement Sum" },
             ].map(({ label, pct, target: t, desc }) => {
               const barColor = pct >= 100 ? "var(--clr-green)" : pct >= 60 ? "var(--clr-amber)" : "var(--clr-red)";
@@ -4822,9 +5073,79 @@ function ReadinessTab({
             </p>
           </div>
         </div>
+
+        {/* Income waterfall — Phase 3: new card */}
+        <div style={cardStyle}>
+          <p style={{ ...labelStyle, marginBottom: 2 }}>Retirement income waterfall</p>
+          <p style={{ fontSize: 11, color: "var(--text-subtle)", marginBottom: 12 }}>
+            All sources at age {pa}{isRealDollars ? " · today's dollars" : ""}
+          </p>
+          {waterfallItems.length > 0 ? (
+            <>
+              {target > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                  <span style={{ fontSize: 22, fontWeight: 800,
+                    color: waterfallCovPct == null ? "var(--text-muted)"
+                         : waterfallCovPct >= 100 ? "var(--clr-green)"
+                         : waterfallCovPct >= 70  ? "var(--clr-amber)" : "var(--clr-red)" }}>
+                    {waterfallCovPct != null ? `${Math.min(waterfallCovPct, 999)}%` : "—"}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>of {formatCurrency(target)}/mo target</span>
+                </div>
+              )}
+              {/* Stacked bar */}
+              <div style={{ height: 18, borderRadius: 6, display: "flex", overflow: "hidden", marginBottom: 12, background: "var(--border-subtle)" }}>
+                {waterfallItems.map(item => (
+                  <div key={item.key}
+                    title={`${item.label}: ${formatCurrency(item.amount)}/mo`}
+                    style={{
+                      width: target > 0
+                        ? `${Math.min((item.amount / target) * 100, 100)}%`
+                        : `${(item.amount / Math.max(1, waterfallTotal)) * 100}%`,
+                      background: item.color,
+                      borderRight: "1px solid rgba(0,0,0,0.15)",
+                      transition: "width 0.5s ease", flexShrink: 0,
+                    }} />
+                ))}
+                {target > 0 && waterfallTotal < target && (
+                  <div style={{ flex: 1,
+                    background: "repeating-linear-gradient(45deg, var(--bg-input), var(--bg-input) 3px, var(--border-subtle) 3px, var(--border-subtle) 6px)" }} />
+                )}
+              </div>
+              {/* Source legend */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {waterfallItems.map(item => (
+                  <div key={item.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "4px 8px", borderRadius: 6, background: "var(--bg-input)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: item.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{item.label}</span>
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>
+                      {formatCurrency(item.amount)}/mo
+                    </span>
+                  </div>
+                ))}
+                {target > 0 && waterfallTotal < target && (
+                  <div style={{ padding: "5px 8px", borderRadius: 6, marginTop: 2,
+                    background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.28)",
+                    fontSize: 11, color: "var(--clr-amber)" }}>
+                    ⚠ Gap: <strong>{formatCurrency(Math.round(target - waterfallTotal))}/mo</strong>
+                    {" — "}increase OA draw or SRS in Strategy tab
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <p style={{ fontSize: 12, color: "var(--text-subtle)", marginTop: 8 }}>
+              No active income sources at age {pa}. Add OA drawdown, SRS, or private assets
+              in the Strategy and SRS sections.
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* ── ROW 3: Allocation donut + Milestones ── */}
+      {/* ── ROW 3: Allocation donut + Milestones (unchanged) ── */}
       <div className="rd-row3" style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16 }}>
 
         {/* Allocation donut */}
@@ -4887,6 +5208,105 @@ function ReadinessTab({
           )}
         </div>
       </div>
+
+      {/* ── ROW 4: Life stage timeline (full-width) — Phase 3 ── */}
+      {timelineEvents.length >= 3 && (
+        <div style={cardStyle}>
+          <p style={{ ...labelStyle, marginBottom: 20 }}>Life stage timeline</p>
+          <div style={{ position: "relative", paddingBottom: 44, paddingTop: 32, minHeight: 110 }}>
+            {/* Axis */}
+            <div style={{ position: "absolute", top: 46, left: 0, right: 0, height: 2,
+              background: "linear-gradient(to right, var(--border-subtle), var(--border-strong), var(--border-subtle))",
+              borderRadius: 99 }} />
+            {timelineEvents.map((e, i) => {
+              const left    = `${tlPct(e.age)}%`;
+              const above   = i % 2 === 0;
+              const color   = tlColor(e.type);
+              const nodeIcon = e.type === "danger" ? "!" : e.type === "success" ? "✓" : e.type === "current" ? "●" : "○";
+              return (
+                <div key={e.age} style={{ position: "absolute", left, transform: "translateX(-50%)" }}>
+                  {/* Label above axis */}
+                  {above && (
+                    <div style={{ textAlign: "center", marginBottom: 2, whiteSpace: "nowrap", position: "absolute", bottom: 58, left: "50%", transform: "translateX(-50%)" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color }}>{e.label}</div>
+                      <div style={{ fontSize: 9, color: "var(--text-subtle)" }}>{e.sub}</div>
+                    </div>
+                  )}
+                  {/* Node on axis */}
+                  <div style={{
+                    position: "absolute", top: 35, left: "50%", transform: "translateX(-50%)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 22, height: 22, borderRadius: "50%",
+                    background: e.type === "current" ? color : "var(--bg-panel)",
+                    border: `2px solid ${color}`,
+                    boxShadow: e.type !== "muted" ? `0 0 7px ${color}55` : "none",
+                    fontSize: 9, color, fontWeight: 800, zIndex: 1,
+                  }}>{nodeIcon}</div>
+                  {/* Age below node */}
+                  <div style={{ position: "absolute", top: 62, left: "50%", transform: "translateX(-50%)",
+                    textAlign: "center", fontSize: 9, fontWeight: 700, whiteSpace: "nowrap",
+                    color: e.type === "current" ? "var(--text-main)" : "var(--text-subtle)" }}>
+                    {e.age}
+                  </div>
+                  {/* Label below axis */}
+                  {!above && (
+                    <div style={{ textAlign: "center", whiteSpace: "nowrap", position: "absolute", top: 76, left: "50%", transform: "translateX(-50%)" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color }}>{e.label}</div>
+                      <div style={{ fontSize: 9, color: "var(--text-subtle)" }}>{e.sub}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── ROW 5: Action priority queue (full-width) — Phase 3 ── */}
+      {actionItems.length > 0 && (
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <p style={labelStyle}>Action priority queue</p>
+            <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>
+              {actionItems.length} action{actionItems.length !== 1 ? "s" : ""} · highest impact first
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {actionItems.map((a, i) => (
+              <div key={a.id} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "10px 14px", borderRadius: 10,
+                background: a.urgent ? "rgba(245,158,11,0.06)" : "var(--bg-input)",
+                border: `1px solid ${a.urgent ? "rgba(245,158,11,0.25)" : "var(--border-subtle)"}`,
+              }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                  background: "var(--bg-panel)", border: "1.5px solid var(--border-strong)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, fontWeight: 800, color: "var(--text-muted)" }}>
+                  {i + 1}
+                </div>
+                <div style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 6,
+                  background: "rgba(16,185,129,0.1)", fontSize: 10, fontWeight: 800, color: "var(--clr-green)", whiteSpace: "nowrap" }}>
+                  +{a.impact} pts
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>{a.label}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.desc}</div>
+                </div>
+                <button
+                  onClick={() => { setActiveTab(a.tab); if (a.openSidebar) setSidebarOpen(true); }}
+                  style={{ flexShrink: 0, padding: "5px 12px", borderRadius: 7, cursor: "pointer",
+                    background: a.urgent ? "rgba(245,158,11,0.14)" : "rgba(59,130,246,0.14)",
+                    border: `1px solid ${a.urgent ? "rgba(245,158,11,0.4)" : "rgba(59,130,246,0.4)"}`,
+                    color: a.urgent ? "var(--clr-amber)" : "var(--clr-blue)",
+                    fontSize: 11, fontWeight: 700 }}>
+                  {a.cta}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
   );
@@ -7748,16 +8168,12 @@ export default function App() {
     // When OFF, use full pre-transfer RA for both members (consistent with lifePlans useMemo).
     const pRaBase = debouncedInputs.applyRaOaTransfer ? raAfterTransfer : raAtPayout;
     const sRaBase = debouncedInputs.applyRaOaTransfer ? sRaForLife    : sRaAtPA;
-    // Bug fix: 'pa' was undefined inside this useMemo factory — it is the for-loop iterator
-    // declared ~7 lines below (let age = startAge), not in scope here. The correct payout-age
-    // argument for interpolateCpfLife is primaryPa (primary) and spousePa (spouse),
-    // both computed at the top of this factory from debouncedInputs / debouncedSpouseInputs.
-    const pLifeStdAtPA = Math.round(interpolateCpfLife(pRaBase, 'std', pIsMale, primaryPa));
-    const pLifeEscAtPA = Math.round(interpolateCpfLife(pRaBase, 'esc', pIsMale, primaryPa));
-    const pLifeBasAtPA = Math.round(interpolateCpfLife(pRaBase, 'bas', pIsMale, primaryPa) * (1 - basicPremiumPct / 100) / 0.90);
-    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaBase, 'std', sIsMale, spousePa));
-    const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaBase, 'esc', sIsMale, spousePa));
-    const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaBase, 'bas', sIsMale, spousePa) * (1 - sBasPct / 100) / 0.90);
+    const pLifeStdAtPA = Math.round(interpolateCpfLife(pRaBase, 'std', pIsMale, pa));
+    const pLifeEscAtPA = Math.round(interpolateCpfLife(pRaBase, 'esc', pIsMale, pa));
+    const pLifeBasAtPA = Math.round(interpolateCpfLife(pRaBase, 'bas', pIsMale, pa) * (1 - basicPremiumPct / 100) / 0.90);
+    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaBase, 'std', sIsMale, pa));
+    const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaBase, 'esc', sIsMale, pa));
+    const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaBase, 'bas', sIsMale, pa) * (1 - sBasPct / 100) / 0.90);
     const rows = [];
     for (let age = startAge; age <= 95; age++) {
       const pRow = projectionByAge.get(age) || {};
@@ -10873,8 +11289,6 @@ ${milestoneSnapshotHtml}
             /* Opaque bg: same bleed fix for desktop */
             background: var(--bg-panel) !important;
             border-bottom: 1px solid var(--border-subtle);
-            /* Shadow: visually separates sticky subnav from scrolling content on FHD/HD */
-            box-shadow: 0 2px 8px rgba(0,0,0,0.18);
           }
         }
 
@@ -11056,11 +11470,10 @@ ${milestoneSnapshotHtml}
           overflow-x: clip;
           scrollbar-width: thin;
           scrollbar-color: var(--border-strong) transparent;
-          padding: 12px 8px;
+          padding: 12px 4px;
           display: flex;
           flex-direction: column;
           gap: 16px;
-          background: var(--bg-base); /* opaque scroll container — prevents strategy-subnav sticky bleed-through */
         }
         .cpf-tab-content::-webkit-scrollbar { width: 5px; }
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
@@ -11069,16 +11482,6 @@ ${milestoneSnapshotHtml}
         .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 16px; }
         @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 16px; } }
         @media (max-width: 1439px) and (min-width: 1025px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 16px; } }
-        /* ─── NON-STANDARD DESKTOP VIEWPORT PADDING FIX (1025–1439px) ────────────
-           At sub-HD desktop widths the cpf-layout grid padding is only 16px, but
-           cpf-tab-content base padding is 8px horizontal. This gap causes card
-           borders and box-shadows to be clipped at the right edge on non-standard
-           viewport widths (e.g. 1100px, 1280px) in HD/auto mode regardless of
-           sidebar state. clamp() scales the horizontal padding proportionally so
-           content always has breathing room without over-padding at 1440px+.       */
-        @media (min-width: 1025px) and (max-width: 1439px) {
-          .cpf-tab-content { padding: 12px clamp(16px, 2vw, 24px) !important; }
-        }
         /* ─── DESKTOP SIDEBAR COLLAPSE (≥ 1025px) ──────────────────────────────────
            On tablet/mobile the sidebar is toggled via display:none on
            .cpf-sidebar-inner.sidebar-collapsed (inside their own @media blocks).
@@ -11788,7 +12191,7 @@ ${milestoneSnapshotHtml}
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
           overflow-y: auto;
           overflow-x: hidden;
-          padding: 8px clamp(8px, 1.5vw, 24px);
+          padding: 8px 0;
         }
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-tab-inner {
           display: flex;
@@ -11807,7 +12210,7 @@ ${milestoneSnapshotHtml}
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .cpf-tab-content:not([data-exec="true"]) {
             overflow-y: auto;
             overflow-x: hidden;
-            padding: 8px clamp(8px, 1.5vw, 24px);
+            padding: 8px 0;
           }
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-tab-inner {
             display: flex;
@@ -11835,9 +12238,9 @@ ${milestoneSnapshotHtml}
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
-          /* overflow-x must be reset: base rule sets clip which clips fhd-tab-inner right border/radius.
-             Horizontal padding is 0 here — cpf-main-wrap already provides 14px each side. */
-          .cpf-tab-content { overflow-y: visible !important; overflow-x: visible !important; padding: 10px 0 !important; }
+          .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
+          /* Fix 1: when inputs sidebar is open on tablet, hide tab content so only inputs show */
+          .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
           /* Fix M-KPI-1 (tablet): collapse sidebar-wrap to 0 when inputs are hidden —
              eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
           .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
@@ -11888,8 +12291,8 @@ ${milestoneSnapshotHtml}
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
           /* Readiness tab responsive — tablet */
           .rd-row1 { grid-template-columns: 1fr !important; }
-          .rd-kpi-hero { grid-template-columns: 1fr 1fr 1fr !important; }
-          .rd-row2 { grid-template-columns: 1fr !important; }
+          .rd-kpi-hero { grid-template-columns: repeat(3, 1fr) !important; }
+          .rd-row2 { grid-template-columns: 1fr 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr !important; }
           /* Tablet sticky bottom action bar — always shown on tablet, hidden elsewhere */
           .tablet-action-bar { display: flex !important; }
@@ -11938,9 +12341,8 @@ ${milestoneSnapshotHtml}
           .cpf-gear-mobile-share { display: contents !important; }
           /* cpf-tabs-hamburger intentionally not shown — tab strip is horizontally scrollable */
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
-          /* overflow-x must be reset: base rule sets clip which clips fhd-tab-inner right border/radius.
-             Horizontal padding is 0 here — cpf-main-wrap already provides 10px each side. */
-          .cpf-tab-content { overflow-y: visible !important; overflow-x: visible !important; padding: 10px 0 !important; }
+          .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
+          /* Fix 1: when inputs sidebar is open on mobile, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
           /* Fix M-KPI-1 (mobile): collapse sidebar-wrap to 0 when inputs are hidden —
              eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
@@ -16400,6 +16802,9 @@ ${milestoneSnapshotHtml}
                 basicPremiumPct={basicPremiumPct}
                 isRealDollars={isRealDollars}
                 applyInflation={applyInflation}
+                monteCarloData={monteCarloData}
+                effectiveOaDrawMonthly={effectiveOaDrawMonthly}
+                effectiveOaDrawStartAge={effectiveOaDrawStartAge}
               />
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
