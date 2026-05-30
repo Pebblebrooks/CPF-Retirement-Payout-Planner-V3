@@ -7748,12 +7748,16 @@ export default function App() {
     // When OFF, use full pre-transfer RA for both members (consistent with lifePlans useMemo).
     const pRaBase = debouncedInputs.applyRaOaTransfer ? raAfterTransfer : raAtPayout;
     const sRaBase = debouncedInputs.applyRaOaTransfer ? sRaForLife    : sRaAtPA;
-    const pLifeStdAtPA = Math.round(interpolateCpfLife(pRaBase, 'std', pIsMale, pa));
-    const pLifeEscAtPA = Math.round(interpolateCpfLife(pRaBase, 'esc', pIsMale, pa));
-    const pLifeBasAtPA = Math.round(interpolateCpfLife(pRaBase, 'bas', pIsMale, pa) * (1 - basicPremiumPct / 100) / 0.90);
-    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaBase, 'std', sIsMale, pa));
-    const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaBase, 'esc', sIsMale, pa));
-    const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaBase, 'bas', sIsMale, pa) * (1 - sBasPct / 100) / 0.90);
+    // Bug fix: 'pa' was undefined inside this useMemo factory — it is the for-loop iterator
+    // declared ~7 lines below (let age = startAge), not in scope here. The correct payout-age
+    // argument for interpolateCpfLife is primaryPa (primary) and spousePa (spouse),
+    // both computed at the top of this factory from debouncedInputs / debouncedSpouseInputs.
+    const pLifeStdAtPA = Math.round(interpolateCpfLife(pRaBase, 'std', pIsMale, primaryPa));
+    const pLifeEscAtPA = Math.round(interpolateCpfLife(pRaBase, 'esc', pIsMale, primaryPa));
+    const pLifeBasAtPA = Math.round(interpolateCpfLife(pRaBase, 'bas', pIsMale, primaryPa) * (1 - basicPremiumPct / 100) / 0.90);
+    const sLifeStdAtPA = Math.round(interpolateCpfLife(sRaBase, 'std', sIsMale, spousePa));
+    const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaBase, 'esc', sIsMale, spousePa));
+    const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaBase, 'bas', sIsMale, spousePa) * (1 - sBasPct / 100) / 0.90);
     const rows = [];
     for (let age = startAge; age <= 95; age++) {
       const pRow = projectionByAge.get(age) || {};
