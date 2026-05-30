@@ -11073,7 +11073,7 @@ ${milestoneSnapshotHtml}
            sidebar state. clamp() scales the horizontal padding proportionally so
            content always has breathing room without over-padding at 1440px+.       */
         @media (min-width: 1025px) and (max-width: 1439px) {
-          .cpf-tab-content { padding: 12px clamp(8px, 1.2vw, 16px) !important; }
+          .cpf-tab-content { padding: 12px clamp(16px, 2vw, 24px) !important; }
         }
         /* ─── DESKTOP SIDEBAR COLLAPSE (≥ 1025px) ──────────────────────────────────
            On tablet/mobile the sidebar is toggled via display:none on
@@ -11831,7 +11831,9 @@ ${milestoneSnapshotHtml}
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
-          .cpf-tab-content { overflow-y: visible !important; padding: 10px 8px !important; }
+          /* overflow-x must be reset: base rule sets clip which clips fhd-tab-inner right border/radius.
+             Horizontal padding is 0 here — cpf-main-wrap already provides 14px each side. */
+          .cpf-tab-content { overflow-y: visible !important; overflow-x: visible !important; padding: 10px 0 !important; }
           /* Fix M-KPI-1 (tablet): collapse sidebar-wrap to 0 when inputs are hidden —
              eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
           .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
@@ -11932,7 +11934,9 @@ ${milestoneSnapshotHtml}
           .cpf-gear-mobile-share { display: contents !important; }
           /* cpf-tabs-hamburger intentionally not shown — tab strip is horizontally scrollable */
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
-          .cpf-tab-content { overflow-y: visible !important; padding: 10px 8px !important; }
+          /* overflow-x must be reset: base rule sets clip which clips fhd-tab-inner right border/radius.
+             Horizontal padding is 0 here — cpf-main-wrap already provides 10px each side. */
+          .cpf-tab-content { overflow-y: visible !important; overflow-x: visible !important; padding: 10px 0 !important; }
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
           /* Fix M-KPI-1 (mobile): collapse sidebar-wrap to 0 when inputs are hidden —
              eliminates the 44px padding-top dead zone left by sidebar-inner display:none */
