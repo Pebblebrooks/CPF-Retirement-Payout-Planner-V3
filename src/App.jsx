@@ -5569,6 +5569,7 @@ export default function App() {
   // Welcome Modal, Share Modal & Toast State
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeStep, setWelcomeStep] = useState(0);
+  const [showDecisionCard, setShowDecisionCard] = useState(false);
   // UX-9: Toast queue — replaces single toastMessage. Each entry: { id, msg }.
   // showToast() pushes to the queue; each toast auto-removes after 3.5s.
   // Multiple rapid actions (Auto-Calc → Apply Top-Up) each show their message sequentially.
@@ -6382,16 +6383,20 @@ export default function App() {
   }, []);
 
   const closeWelcome = () => {
-    // First-run: closing via X or mid-flow Skip = "Skip to App"
+    // First-run: closing via X or mid-flow Skip = "Skip to App" (bypasses decision card)
     if (launchMode) {
       try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
       setLaunchMode(false);
+      readinessSidebarUserPref.current = false;
+      setSidebarOpen(false);
+      setActiveTab('readiness');
     }
     setShowWelcome(false);
   };
 
   const handleLaunchWizard = () => {
     setLaunchMode(false);
+    setShowDecisionCard(false);
     setShowWelcome(false);
     setShowWizard(true);
   };
@@ -6399,6 +6404,7 @@ export default function App() {
   const handleLaunchSkip = () => {
     try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
     setLaunchMode(false);
+    setShowDecisionCard(false);
     setShowWelcome(false);
     // Land on the Readiness dashboard with the sidebar closed so stats are front-and-centre.
     // readinessSidebarUserPref is set so the auto-collapse effect respects this explicit choice.
@@ -13121,7 +13127,6 @@ ${milestoneSnapshotHtml}
                   {welcomeStep === 1 && <User style={{ width: 24, height: 24, color: "var(--clr-blue2)" }} />}
                   {welcomeStep === 2 && <LayoutDashboard style={{ width: 24, height: 24, color: "var(--clr-purple)" }} />}
                   {welcomeStep === 3 && <Lightbulb style={{ width: 24, height: 24, color: "var(--clr-amber)" }} />}
-                  {welcomeStep === 4 && <Target style={{ width: 24, height: 24, color: "var(--clr-emerald)" }} />}
                 </div>
                 <div>
                   <h2 style={{ fontSize: 17, fontWeight: 800, color: "var(--text-bright)", marginBottom: 2 }}>
@@ -13129,14 +13134,12 @@ ${milestoneSnapshotHtml}
                     {welcomeStep === 1 && "Setting Up Your Profile"}
                     {welcomeStep === 2 && "Exploring the Dashboard"}
                     {welcomeStep === 3 && "Advanced Features & Disclaimer"}
-                    {welcomeStep === 4 && "How would you like to begin?"}
                   </h2>
                   <p style={{ color: "var(--text-subtle)", fontSize: 13, margin: 0 }}>
                     {welcomeStep === 0 && "Your end-to-end Singapore retirement simulation engine"}
                     {welcomeStep === 1 && "Step 1 of 3 — The Input Engine (left panel)"}
                     {welcomeStep === 2 && "Step 2 of 3 — The right panel tabs"}
                     {welcomeStep === 3 && "Step 3 of 3 — Power tools and legal notice"}
-                    {welcomeStep === 4 && "Choose your onboarding path"}
                   </p>
                 </div>
               </div>
@@ -13261,70 +13264,79 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
               )}
-              {/* Step 4 — Decision card (first-time users only; launchMode=true) */}
-              {welcomeStep === 4 && launchMode && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6, textAlign: "center", margin: 0 }}>
-                    Your CPF projection engine is ready. Choose how you'd like to set up your profile:
-                  </p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <button onClick={handleLaunchWizard} style={{
-                      padding: "20px 16px", borderRadius: 14, cursor: "pointer", textAlign: "center",
-                      background: "rgba(16,185,129,0.10)", border: "1.5px solid rgba(16,185,129,0.45)",
-                      color: "var(--text-bright)", transition: "all 0.15s",
-                    }}>
-                      <div style={{ fontSize: 28, marginBottom: 8 }}>🧭</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-emerald)", marginBottom: 6 }}>Setup Wizard</div>
-                      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                        Guided 3-step setup.<br />Enter your profile, balances &amp; income.<br /><span style={{ fontSize: 12, color: "var(--text-subtle)" }}>Recommended for new users.</span>
-                      </div>
-                    </button>
-                    <button onClick={handleLaunchSkip} style={{
-                      padding: "20px 16px", borderRadius: 14, cursor: "pointer", textAlign: "center",
-                      background: "rgba(59,130,246,0.10)", border: "1.5px solid rgba(59,130,246,0.35)",
-                      color: "var(--text-bright)", transition: "all 0.15s",
-                    }}>
-                      <div style={{ fontSize: 28, marginBottom: 8 }}>⚡</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-blue2)", marginBottom: 6 }}>Skip to App</div>
-                      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                        Jump straight in.<br />Edit every field directly in the sidebar.<br /><span style={{ fontSize: 12, color: "var(--text-subtle)" }}>Readiness dashboard loads instantly.</span>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Footer */}
             <div className="cpf-welcome-footer" style={{ padding: "20px 32px", borderTop: "1px solid var(--border-subtle)", background: "var(--bg-base)" }}>
-              {/* Progress dots — 5 when in launchMode (step 4 = decision card), 4 otherwise */}
+              {/* Progress dots — always 4 steps (0–3); decision card is a separate modal */}
               <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-                {(launchMode ? [0, 1, 2, 3, 4] : [0, 1, 2, 3]).map(i => (
+                {[0, 1, 2, 3].map(i => (
                   <div key={i} style={{ width: i === welcomeStep ? 24 : 8, height: 8, borderRadius: 4, background: i === welcomeStep ? "var(--clr-emerald)" : "var(--border-strong)", transition: "all 0.3s" }} />
                 ))}
               </div>
-              {/* Step 4 footer: just a Back button; choice cards are in the body */}
-              {welcomeStep === 4 ? (
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>← Back</button>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div />
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {welcomeStep > 0 && <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Back</button>}
+                  {welcomeStep < 3 ? (
+                    <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Next &rarr;</button>
+                  ) : launchMode ? (
+                    <button onClick={() => { setShowWelcome(false); setShowDecisionCard(true); }} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Choose Setup &rarr;</button>
+                  ) : (
+                    <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
+                  )}
+                  {welcomeStep < 3 && <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip</button>}
                 </div>
-              ) : (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div />
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    {welcomeStep > 0 && <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Back</button>}
-                    {/* Steps 0–2: always Next. Step 3: advance to decision card (launchMode) or finish (returning user). */}
-                    {welcomeStep < 3 ? (
-                      <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Next &rarr;</button>
-                    ) : launchMode ? (
-                      <button onClick={() => setWelcomeStep(4)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Choose Setup &rarr;</button>
-                    ) : (
-                      <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
-                    )}
-                    {welcomeStep < 3 && <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip</button>}
-                  </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DECISION CARD — separate modal, appears after welcome pages complete ── */}
+      {showDecisionCard && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.88)", backdropFilter: "blur(10px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, overflow: "hidden", boxShadow: "var(--shadow-modal)", width: "100%", maxWidth: 480 }}>
+            {/* Header */}
+            <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ background: "#10b98122", padding: 10, borderRadius: 12, flexShrink: 0 }}>
+                <Target style={{ width: 24, height: 24, color: "var(--clr-emerald)" }} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-bright)", margin: 0, marginBottom: 2 }}>How would you like to begin?</h2>
+                <p style={{ color: "var(--text-subtle)", fontSize: 13, margin: 0 }}>Your CPF projection engine is ready — choose your path</p>
+              </div>
+            </div>
+            {/* Choice cards */}
+            <div style={{ padding: "20px 24px 24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <button onClick={handleLaunchWizard} style={{
+                padding: "22px 16px", borderRadius: 16, cursor: "pointer", textAlign: "center",
+                background: "rgba(16,185,129,0.10)", border: "2px solid rgba(16,185,129,0.45)",
+                color: "var(--text-bright)", transition: "all 0.15s",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(16,185,129,0.18)"; e.currentTarget.style.borderColor = "rgba(16,185,129,0.7)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(16,185,129,0.10)"; e.currentTarget.style.borderColor = "rgba(16,185,129,0.45)"; }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>🧭</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-emerald)", marginBottom: 6 }}>Setup Wizard</div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  Guided 3-step setup.<br />Enter your profile, balances &amp; income.
                 </div>
-              )}
+                <div style={{ marginTop: 10, fontSize: 12, fontWeight: 700, color: "var(--clr-emerald)", background: "rgba(16,185,129,0.12)", padding: "4px 10px", borderRadius: 20, display: "inline-block" }}>✓ Recommended for new users</div>
+              </button>
+              <button onClick={handleLaunchSkip} style={{
+                padding: "22px 16px", borderRadius: 16, cursor: "pointer", textAlign: "center",
+                background: "rgba(59,130,246,0.08)", border: "2px solid rgba(59,130,246,0.35)",
+                color: "var(--text-bright)", transition: "all 0.15s",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.16)"; e.currentTarget.style.borderColor = "rgba(59,130,246,0.6)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(59,130,246,0.08)"; e.currentTarget.style.borderColor = "rgba(59,130,246,0.35)"; }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>⚡</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-blue2)", marginBottom: 6 }}>Skip to App</div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  Jump straight in.<br />Edit every field in the sidebar.
+                </div>
+                <div style={{ marginTop: 10, fontSize: 12, fontWeight: 700, color: "var(--clr-blue2)", background: "rgba(59,130,246,0.10)", padding: "4px 10px", borderRadius: 20, display: "inline-block" }}>Readiness dashboard loads instantly</div>
+              </button>
             </div>
           </div>
         </div>
@@ -17100,10 +17112,10 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
             {activeTab === "guide" && guideView === 'quickstart' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, boxSizing: "border-box", overflow: "hidden" }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
-                {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
-                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
+                {/* ── Sticky banner: sits as natural first child (no padding on parent, no negative margins needed) ── */}
+                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)" }}>
                   {/* Title row + QS/Reference toggle */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
@@ -17169,6 +17181,8 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
 
+                {/* Padded content area — replaces the removed padding:28 on fhd-tab-inner */}
+                <div style={{ padding: "20px 28px 28px" }}>
                 {/* ── Quick Start view — 4 onboarding cards ── */}
                 {guideView === 'quickstart' && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -21046,6 +21060,7 @@ ${milestoneSnapshotHtml}
                     </table>
                 </div>
                 </>)}
+                </div>{/* end padded content wrapper */}
               </div>
             )}
             {/* ── GUIDE TAB — Reference view ── */}
@@ -21055,10 +21070,9 @@ ${milestoneSnapshotHtml}
                 When guideView==='reference' the Quick Start block renders null so this block is the
                 sole child of the tab content div. */}
             {activeTab === "guide" && guideView === 'reference' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
-                {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
-                    and Quick Start/Reference buttons do not scroll away when reading docs. */}
-                <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, boxSizing: "border-box", overflow: "hidden" }}>
+                {/* Sticky header: natural first child — no padding on parent, no negative margins needed */}
+                <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)" }}>
                   {/* Sub-tab toggle — inside sticky unit so title + buttons always visible */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border-subtle)" }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
@@ -21176,6 +21190,8 @@ ${milestoneSnapshotHtml}
                   ))}
                   </div>
                 </div>{/* end sticky wrapper */}
+                {/* Padded content area — replaces the removed padding:28 on fhd-tab-inner */}
+                <div style={{ padding: "20px 28px 28px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 32, fontSize: 14, lineHeight: 1.7, color: "var(--text-muted)" }}>
 
                   {/* User Guide */}
@@ -21941,6 +21957,7 @@ ${milestoneSnapshotHtml}
                     <ChevronUp style={{ width: 13, height: 13 }} />Back to top
                   </button>
                 </div>
+                </div>{/* end padded content wrapper */}
               </div>
             )}
             {/* ── STRATEGY TAB ── */}
