@@ -5629,6 +5629,7 @@ export default function App() {
   // true/false = user has deliberately toggled; honour that choice on re-entry.
   // Set inside handleSidebarToggle when activeTab === 'readiness'.
   const readinessSidebarUserPref = useRef(null);
+  const welcomeBodyRef = useRef(null); // scroll-reset target for welcome modal body
   useEffect(() => {
     if (activeTab === "readiness") {
       sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Readiness
@@ -6381,16 +6382,31 @@ export default function App() {
     }
   }, []);
 
+  // Reset welcome modal body scroll position whenever the step changes.
+  // Without this, navigating from the content-heavy step 3 (25 feature tiles) to
+  // the short step 4 decision card leaves the user staring at blank space because
+  // the body was scrolled to the bottom of step 3.
+  useEffect(() => { if (welcomeBodyRef.current) welcomeBodyRef.current.scrollTop = 0; }, [welcomeStep]);
+
   const closeWelcome = () => {
-    // First-run: closing via X or mid-flow Skip = "Skip to App"
+    // In launchMode (first-time user), the X button and "Skip" should redirect to
+    // the decision card (step 4) rather than bypassing it. The only way launchMode
+    // ends is when the user explicitly clicks "Setup Wizard" or "Skip to App" in step 4.
+    // Exception: if they press X while already ON step 4, treat it as "Skip to App".
     if (launchMode) {
-      try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
-      setLaunchMode(false);
+      if (welcomeStep < 4) {
+        setWelcomeStep(4);
+        return; // Stay in modal — let the user make their choice
+      }
+      // Pressed X on the decision card itself → treat as "Skip to App"
+      handleLaunchSkip();
+      return;
     }
     setShowWelcome(false);
   };
 
   const handleLaunchWizard = () => {
+    try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
     setLaunchMode(false);
     setShowWelcome(false);
     setShowWizard(true);
@@ -13144,7 +13160,7 @@ ${milestoneSnapshotHtml}
             </div>
 
             {/* Body */}
-            <div className="cpf-welcome-body" style={{ padding: "18px 20px", flex: "1 1 0", minHeight: 0, overflowY: "auto" }}>
+            <div className="cpf-welcome-body" ref={welcomeBodyRef} style={{ padding: "18px 20px", flex: "1 1 0", minHeight: 0, overflowY: "auto" }}>
               {welcomeStep === 0 && (
                 <>
                   <p style={{ color: "var(--text-main)", fontSize: 15, lineHeight: 1.6, marginBottom: 24 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
@@ -13321,7 +13337,7 @@ ${milestoneSnapshotHtml}
                     ) : (
                       <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
                     )}
-                    {welcomeStep < 3 && <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip</button>}
+                    {welcomeStep < 3 && <button onClick={launchMode ? () => setWelcomeStep(4) : closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip {launchMode ? "→" : ""}</button>}
                   </div>
                 </div>
               )}
@@ -17103,7 +17119,7 @@ ${milestoneSnapshotHtml}
               <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
                 {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
-                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
+                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: 0, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
                   {/* Title row + QS/Reference toggle */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
@@ -21058,7 +21074,7 @@ ${milestoneSnapshotHtml}
               <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
                 {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
                     and Quick Start/Reference buttons do not scroll away when reading docs. */}
-                <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
+                <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: 0, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
                   {/* Sub-tab toggle — inside sticky unit so title + buttons always visible */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border-subtle)" }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
