@@ -17279,7 +17279,6 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
                 )} {/* end quickstart view */}
-                </div>{/* end padded content wrapper */}
               </div>
             )}
             {/* ── SUMMARY TAB ── */}
@@ -21061,6 +21060,7 @@ ${milestoneSnapshotHtml}
                     </table>
                 </div>
                 </>)}
+                </div>{/* end padded content wrapper */}
               </div>
             )}
             {/* ── GUIDE TAB — Reference view ── */}
