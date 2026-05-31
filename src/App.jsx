@@ -5346,7 +5346,8 @@ function findScrollContainer(el) {
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
-  const kpiHeaderRef = useRef(null); // strategy subnav: measures KPI strip height → --kpi-header-h
+  const kpiHeaderRef     = useRef(null); // measures cpf-tabs-kpi-header height → --kpi-header-h
+  const strategySubnavRef = useRef(null); // measures strategy-subnav height → --strategy-subnav-h
   const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
   // Stable refs for keyboard shortcut handler — avoids stale closures in the
   // useEffect (which uses [] deps so the listener is only registered once).
@@ -6414,6 +6415,23 @@ export default function App() {
     if (!el) return;
     const update = () => {
       document.documentElement.style.setProperty('--kpi-header-h', el.offsetHeight + 'px');
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // ── Strategy subnav height → CSS custom property ─────────────────────────
+  // Measures the "Goal Simulator | Income Roadmap" subnav height on every resize
+  // and writes --strategy-subnav-h to :root. On <=640px the subnav is
+  // position:fixed, so the strategy-tab-inner card needs padding-top equal to
+  // this height to keep Goal Simulator / Income Roadmap content visible below it.
+  useLayoutEffect(() => {
+    const el = strategySubnavRef.current;
+    if (!el) return;
+    const update = () => {
+      document.documentElement.style.setProperty('--strategy-subnav-h', el.offsetHeight + 'px');
     };
     update();
     const ro = new ResizeObserver(update);
@@ -11285,12 +11303,36 @@ ${milestoneSnapshotHtml}
            forces a fully opaque background on the sticky element so nothing shows through. */
         @media (max-width: 1024px) {
           .strategy-subnav {
+            position: -webkit-sticky;
             position: sticky;
-            top: calc(136px + var(--kpi-header-h, 135px));
+            top: calc(136px + var(--kpi-header-h, 48px));
             z-index: 30;
             /* Opaque bg: prevent scroll-through bleed in dark and light mode */
             background: var(--bg-panel) !important;
             border-bottom: 1px solid var(--border-subtle);
+          }
+        }
+        /* ≤640px override: subnav moves from sticky → fixed to match header/tabstrip/params/KPI.
+           Sticky elements inside a scrolling card create a blank gap inside the card as the card
+           scrolls up but the subnav stays pinned — fixed avoids this entirely.
+           top = fixed bars (header48 + tabstrip44 + params44 = 136px) + measured KPI height.
+           strategy-tab-inner needs padding-top = subnav height so content isn't hidden behind it. */
+        @media (max-width: 640px) {
+          .strategy-subnav {
+            position: fixed !important;
+            top: calc(136px + var(--kpi-header-h, 48px)) !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            z-index: 30 !important;
+            border-radius: 0 !important;
+          }
+          /* Push card content below the fixed subnav so Goal Simulator / Income Roadmap
+             form fields are never hidden behind it. Uses the measured --strategy-subnav-h
+             variable (set by ResizeObserver) with a 48px fallback. */
+          .strategy-tab-inner {
+            padding-top: var(--strategy-subnav-h, 48px) !important;
           }
         }
         @media (min-width: 1025px) {
@@ -21890,7 +21932,7 @@ ${milestoneSnapshotHtml}
               const shortfall = target > 0 ? target - totalCombined : 0;
 
               return (
-                <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
+                <div className="fhd-tab-inner strategy-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
 
                   {/* ── Sub-navigation: Goal Simulator | Income Roadmap ── */}
                   {/* strategy-subnav: CSS class handles sticky + opaque bg on all viewports.
@@ -21898,7 +21940,7 @@ ${milestoneSnapshotHtml}
                       value to prevent scroll-bleed content showing through. overflow:clip (not
                       hidden) preserves border-radius without creating a new stacking context
                       that would break position:sticky inside the scroll container. */}
-                  <div className="strategy-subnav" style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "clip" }}>
+                  <div ref={strategySubnavRef} className="strategy-subnav" style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "clip" }}>
                     {[
                       { id: "goal",    label: "🎯 Goal Simulator"  },
                       { id: "roadmap", label: "📅 Income Roadmap"  },
