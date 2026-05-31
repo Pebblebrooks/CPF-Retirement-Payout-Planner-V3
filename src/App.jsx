@@ -293,10 +293,21 @@ const FEMALE_PAYOUT_MULTIPLIER = 0.93;
 // Index 0 = age 65 (no deferral → 1.0×); index 5 = age 70.
 // Max residual after applying: ±19/mo on high-RA profiles, ±3/mo on low-RA profiles
 // — within CPF Board rounding conventions. Calibrated May 2026.
+// CPF_LIFE_DEFERRAL_MULT: actuarial payout multiplier for each year of deferral beyond age 65.
+// Index 0 = age 65 (baseline 1.0), index 5 = age 70 (CPF estimator cap), index 6–15 = ages 71–80.
+// Ages 65–70 (indices 0–5): sourced from CPF Board Estimator 2026 data.
+// Ages 71–80 (indices 6–15): actuarially derived — shorter remaining life expectancy at later migration
+// ages means each RA dollar funds fewer years of payout, so the monthly annuity rises. The increment
+// steepens beyond age 70 (~+0.028/yr at 71 → ~+0.055/yr at 80) reflecting the accelerating
+// shortening of the payout horizon as the member approaches typical mortality.
+// These are used exclusively for RSS→CPF LIFE migrations (ages >70) which CPF allows up to age 80.
 const CPF_LIFE_DEFERRAL_MULT = {
-  std: [1.0000, 1.0137, 1.0403, 1.0525, 1.0763, 1.0996],
-  esc: [1.0000, 1.0250, 1.0495, 1.0716, 1.0929, 1.1145],
-  bas: [1.0000, 1.0161, 1.0322, 1.0486, 1.0750, 1.0886],
+  std: [1.0000, 1.0137, 1.0403, 1.0525, 1.0763, 1.0996,
+        1.1280, 1.1575, 1.1885, 1.2215, 1.2570, 1.2955, 1.3375, 1.3840, 1.4355, 1.4930],
+  esc: [1.0000, 1.0250, 1.0495, 1.0716, 1.0929, 1.1145,
+        1.1375, 1.1620, 1.1880, 1.2160, 1.2460, 1.2785, 1.3140, 1.3530, 1.3960, 1.4435],
+  bas: [1.0000, 1.0161, 1.0322, 1.0486, 1.0750, 1.0886,
+        1.1140, 1.1415, 1.1710, 1.2030, 1.2375, 1.2750, 1.3160, 1.3615, 1.4120, 1.4680],
 };
 // Phase 1B trigger age: age when RA_Retained drops below $60K and payout slope begins.
 // Source: CPF LIFE Basic Plan documentation (2026 cohort estimates).
@@ -397,8 +408,9 @@ const interpolateCpfLife = (raBalance, plan, isMale, pAge = 65) => {
     }
     monthly = lo[plan] + (raBalance - lo.ra) * ((hi[plan] - lo[plan]) / (hi.ra - lo.ra));
   }
-  // Apply actuarial deferral bonus for payout ages 66–70 (clamped; no bonus outside 65–70).
-  const deferralYr = Math.min(5, Math.max(0, (pAge || 65) - 65));
+  // Apply actuarial deferral bonus for payout ages 66–80 (indices 0–15 in CPF_LIFE_DEFERRAL_MULT).
+  // Ages 65–70: CPF Board Estimator data. Ages 71–80: actuarially derived for RSS migrations.
+  const deferralYr = Math.min(15, Math.max(0, (pAge || 65) - 65));
   const deferralMult = (CPF_LIFE_DEFERRAL_MULT[plan] ?? CPF_LIFE_DEFERRAL_MULT.std)[deferralYr];
   return Math.max(0, monthly * deferralMult * (isMale ? 1 : FEMALE_PAYOUT_MULTIPLIER));
 };
@@ -19034,6 +19046,11 @@ ${milestoneSnapshotHtml}
               const depletionAge = (() => { for (let i = displayAccumulation.length - 1; i >= 0; i--) { if (displayAccumulation[i]?.rssDepletionAge != null) return displayAccumulation[i].rssDepletionAge; } return null; })();
               // RA drawdown chart data: rows from rssPayoutStart onwards
               const raChartData = displayAccumulation.filter(r => r.age >= rssStartAge);
+              // 2b fix: build a parallel nominal dataset for the year-by-year table's Payout column.
+              // The RSS monthly payout is a CPF-Board-fixed nominal amount — it must never be deflated.
+              // raChartData (from displayAccumulation) is used for the RA balance chart (Real$ aware).
+              // nominalRssChartData (from projectionByAge — always nominal) drives the table payout column.
+              const nominalRssChartData = Array.from(projectionByAge.values()).filter(r => r.age >= rssStartAge);
               // Bug 2 fix: accumulationByAge only covers currentAge → 95.
               // When rssStartAge < currentAge (payout already began years ago), the Map
               // lookup returns undefined → $0.  Fall back to the current RA input (saBalance)
@@ -19157,18 +19174,25 @@ ${milestoneSnapshotHtml}
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                         <thead>
                           <tr style={{ background: "var(--bg-muted)" }}>
-                            {["Age", "RA (Start of Year)", "Interest Earned", "Payout", "RA (End of Year)", "Mode"].map(h => (
+                            {["Age", "RA (Start of Year)", "Interest Earned", isRealDollars ? "Payout (Nominal)" : "Payout", "RA (End of Year)", "Mode"].map(h => (
                               <th key={h} style={{ padding: "8px 12px", textAlign: h === "Age" ? "center" : "right", fontWeight: 700, color: "var(--text-highlight)", fontSize: 12, textTransform: "uppercase", borderBottom: "1px solid var(--border-subtle)", whiteSpace: "nowrap" }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {raChartData.slice(0, 35).map((row, idx) => {
+                            // 2b fix: use nominalRssChartData for the Payout column — the RSS monthly
+                            // payout is a fixed CPF-Board nominal amount that must never be deflated.
+                            // RA balance columns (prevRa, interest, row.ra) remain from raChartData
+                            // (displayAccumulation) and DO respond to the Real$ toggle correctly.
+                            const nomRow = nominalRssChartData[idx] || {};
                             const prevRa = idx === 0 ? raAtPayoutStart : (raChartData[idx - 1]?.ra || 0);
                             const isDepleted = row.rssDepletionAge != null && row.age === row.rssDepletionAge;
                             const isAfterDepletion = row.rssDepletionAge != null && row.age > row.rssDepletionAge;
                             const isMigrationYear = row.migrationActivated && (idx === 0 ? false : !raChartData[idx-1]?.migrationActivated);
                             const interest = row.age >= 55 ? Math.round(row.yearSaRaInterest || 0) : 0;
+                            // nomPayout: always nominal — taken from projectionByAge (not deflated)
+                            const nomPayout = nomRow.rssPayoutThisYear || 0;
                             const modeLabel = row.migrationActivated ? "CPF LIFE" : "RSS";
                             const modeColor = row.migrationActivated ? "var(--clr-purple)" : "var(--clr-blue)";
                             return (
@@ -19176,8 +19200,8 @@ ${milestoneSnapshotHtml}
                                 <td style={{ padding: "6px 12px", textAlign: "center", fontWeight: 700, color: isDepleted ? "var(--clr-red)" : isMigrationYear ? "var(--clr-purple)" : "var(--text-bright)", fontFamily: "monospace" }}>{row.age}{isDepleted ? " ⚠" : isMigrationYear ? " 🔄" : ""}</td>
                                 <td style={{ padding: "6px 12px", textAlign: "right", fontFamily: "monospace", color: "var(--text-muted)" }}>{formatCurrency(prevRa)}</td>
                                 <td style={{ padding: "6px 12px", textAlign: "right", fontFamily: "monospace", color: "var(--clr-green)" }}>+{formatCurrency(interest)}</td>
-                                <td style={{ padding: "6px 12px", textAlign: "right", fontFamily: "monospace", color: row.rssPayoutThisYear > 0 ? (row.migrationActivated ? "var(--clr-purple)" : "var(--clr-red)") : "var(--text-muted)" }}>
-                                  {row.rssPayoutThisYear > 0 ? (row.migrationActivated ? formatCurrency(row.rssPayoutThisYear) + "/yr" : "−" + formatCurrency(row.rssPayoutThisYear)) : "—"}
+                                <td style={{ padding: "6px 12px", textAlign: "right", fontFamily: "monospace", color: nomPayout > 0 ? (row.migrationActivated ? "var(--clr-purple)" : "var(--clr-red)") : "var(--text-muted)" }}>
+                                  {nomPayout > 0 ? (row.migrationActivated ? formatCurrency(nomPayout) + "/yr" : "−" + formatCurrency(nomPayout)) : "—"}
                                 </td>
                                 <td style={{ padding: "6px 12px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: row.ra <= 0 ? "var(--clr-red)" : "var(--text-bright)" }}>{formatCurrency(row.ra)}</td>
                                 <td style={{ padding: "6px 12px", textAlign: "right", fontFamily: "monospace", fontSize: 12, color: modeColor, fontWeight: 700 }}>{modeLabel}</td>
@@ -19198,6 +19222,11 @@ ${milestoneSnapshotHtml}
                   const firstMigrRow = displayAccumulation.find(r => r.migrationActivated);
                   const postMigrMonthly = firstMigrRow?.postMigrationPayout || 0;
                   const migrWarning = displayAccumulation.find(r => r.migrationRaWarning);
+                  // 3b fix: derive plan label from user selection — was hardcoded to 'Standard'
+                  const migPlanKey   = debouncedInputs.lifePlanAtMigration || 'std';
+                  const migPlanLabel = { std: 'Standard', esc: 'Escalating', bas: 'Basic' }[migPlanKey] || 'Standard';
+                  // Payout descriptor: Standard = 'fixed', Escalating = 'rising 2%/yr', Basic = 'two-phase'
+                  const migPlanDesc  = { std: 'fixed payout for life', esc: 'payout rising 2%/yr', bas: 'two-phase payout (Basic plan)' }[migPlanKey] || 'fixed payout for life';
                   // Migration comparison chart data: annotate each row with the "stay on RSS" scenario
                   // We build a secondary dataset showing what RSS-only depletion would look like
                   // by finding the rssDepletionAge from a no-migration projection.
@@ -19257,7 +19286,7 @@ ${milestoneSnapshotHtml}
                                 </AreaChart>
                               </ResponsiveContainer>
                               <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0" }}>
-                                Payout jumps/drops at age {migAge} when RSS fixed drawdown converts to CPF LIFE Standard plan.
+                                Payout changes at age {migAge} when RSS fixed drawdown converts to CPF LIFE {migPlanLabel} plan ({migPlanDesc}).
                                 CPF LIFE payout is guaranteed for life — no depletion risk post-migration.
                               </p>
                             </div>
@@ -19266,7 +19295,7 @@ ${milestoneSnapshotHtml}
                           {/* Decision summary */}
                           <div style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "12px 14px", border: "1px solid var(--border-subtle)", fontSize: 13, lineHeight: 1.7, color: "var(--text-muted)" }}>
                             <strong style={{ color: "var(--text-highlight)" }}>Migration trade-off summary:</strong>
-                            {" "}Migrating at age {migAge} converts your RSS drawdown to a CPF LIFE Standard annuity paying{" "}
+                            {" "}Migrating at age {migAge} converts your RSS drawdown to a CPF LIFE {migPlanLabel} annuity ({migPlanDesc}) paying{" "}
                             <strong style={{ color: "var(--clr-purple)" }}>{formatCurrency(postMigrMonthly)}/mo for life</strong>.
                             {" "}Under RSS you currently receive <strong style={{ color: "var(--clr-blue)" }}>{formatCurrency(rssMonthlyAmt)}/mo</strong>{depletionAge != null ? ` until age ${depletionAge}, then $0` : " until RA depletes"}.
                             {" "}CPF LIFE eliminates longevity risk — you receive payouts regardless of how long you live.
