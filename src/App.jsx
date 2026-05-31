@@ -11684,6 +11684,12 @@ ${milestoneSnapshotHtml}
         @media (min-width: 769px) and (max-width: 1024px) {
           .kpi-strip-wrap::after { width: 20px; }
         }
+        /* On desktop with sidebar hidden, the KPI strip fills the full content width and
+           all cards are visible without scrolling — suppress the right-edge fade so it
+           doesn't visually clip the rightmost card's content. */
+        @media (min-width: 1025px) {
+          .cpf-layout[data-sidebar-open="false"] .kpi-strip-wrap::after { display: none; }
+        }
 
         /* FHD kpi-strip: cap at 974px and centre so it stays edge-aligned
            with the two hero cards below it. */
@@ -16828,7 +16834,7 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
             {activeTab === "guide" && guideView === 'quickstart' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
                 {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
                 <div id="qs-sticky-banner" style={{ position: "sticky", top: -28, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
@@ -18556,7 +18562,7 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── ACCUMULATION TAB ── */}
             {activeTab === "accumulation" && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, boxSizing: "border-box" }}>
                 {/* ── Context banners (RSS / Foreigner) ── */}
                 {(() => {
                   const isRSSGrowth = debouncedInputs.cpfScheme === 'rss';
@@ -19061,7 +19067,7 @@ ${milestoneSnapshotHtml}
                 ? (Number(debouncedInputs.saBalance) || 0)
                 : (accumulationByAge.get(rssStartAge)?.ra || 0);
               return (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(var(--clr-blue-rgb),0.06)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", fontSize: 12, color: "var(--text-muted)" }}>
                     {[
                       ["🏛 Eligibility", "SC & PR born before 1958"],
@@ -19319,7 +19325,7 @@ ${milestoneSnapshotHtml}
                 activeTab state can be "life" momentarily (the switch useEffect also calls
                 setActiveTab to redirect, but this guard is the belt-and-suspenders defence). */}
             {activeTab === "life" && debouncedInputs.cpfScheme !== 'rss' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box" }}>
                 <div className="life-chart-header" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
                   {/* B6: CPF LIFE eligibility info bar */}
@@ -19624,7 +19630,7 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── COMPARE TAB ── */}
             {activeTab === "compare" && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box" }}>
 
                 {/* ── SECTION 2: Scenario Comparison ── */}
                 <div>
@@ -19807,7 +19813,7 @@ ${milestoneSnapshotHtml}
               if (!householdEnabled || !spouseProjection.length) {
                 return (
                   <div className="fhd-tab-inner" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                    gap: 14, padding: 60, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20 }}>
+                    gap: 14, padding: 60, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, boxSizing: "border-box" }}>
                     <Users style={{ width: 48, height: 48, color: "var(--text-muted)", opacity: 0.4 }} />
                     <p style={{ fontSize: 14, color: "var(--text-muted)", textAlign: "center", maxWidth: 340, lineHeight: 1.5, margin: 0 }}>
                       Enable <strong>Household Mode</strong> in the sidebar to add a spouse or partner and view combined projections.
@@ -20790,7 +20796,7 @@ ${milestoneSnapshotHtml}
                 When guideView==='reference' the Quick Start block renders null so this block is the
                 sole child of the tab content div. */}
             {activeTab === "guide" && guideView === 'reference' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
                 {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
                     and Quick Start/Reference buttons do not scroll away when reading docs. */}
                 <div id="docs-sticky-nav" style={{ position: "sticky", top: -20, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
