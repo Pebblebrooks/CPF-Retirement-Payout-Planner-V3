@@ -5369,6 +5369,10 @@ export default function App() {
   const isForeignerRef      = useRef(false);        // stable ref so keyboard nav can read current citizenship
   const cpfSchemeRef        = useRef('cpf_life');   // stable ref so keyboard nav can read current scheme
   const householdEnabledRef = useRef(false);        // stable ref so keyboard nav can read current household state
+  // tabsStripRef: ref to the scrollable cpf-tabs container. Used to scroll the strip back to
+  // position 0 when switching to the Readiness tab on mobile so "Readiness" (first tab) is
+  // always visible — not buried by a previous rightward scroll (Issue 2b fix).
+  const tabsStripRef = useRef(null);
   // Guard flag: set to true by applyStrategy before it writes vcSaTopup/vc3aCash so the
   // lever-change useEffect can distinguish a programmatic apply from a manual sidebar edit.
   // Without this flag, the useEffect fires after every applyStrategy call and immediately
@@ -5449,15 +5453,21 @@ export default function App() {
   // Launch sequence (new):
   //   1. Welcome modal auto-opens for ALL fresh loads (existing useEffect at ~line 6337).
   //   2. launchMode = true when setup has never been done — first-time users only.
-  //   3. In launchMode, the welcome modal's last step shows a CHOICE CARD instead of
-  //      "I Understand — Start Planning": user picks "Setup Wizard" or "Skip to App".
-  //   4. showWizard is NEVER set from localStorage — it only activates from the choice card.
+  //   3. When launchMode is true, closing/skipping the welcome modal (steps 0–3) fires
+  //      setShowDecisionCard(true) instead of just dismissing — the decision card is a
+  //      SEPARATE, INDEPENDENT overlay (not a 5th step inside the modal carousel).
+  //   4. showDecisionCard renders its own full-screen overlay with "Setup Wizard" and
+  //      "Skip to App" cards. It is NOT part of showWelcome and survives welcome close.
+  //   5. showWizard is NEVER set from localStorage — it only activates from the decision card.
   //      This prevents the wizard from racing the welcome modal on first load.
   const [launchMode, setLaunchMode] = useState(() => {
     try { return !localStorage.getItem('cpf_planner_setup_done'); }
     catch { return false; }
   });
-  const [showWizard, setShowWizard] = useState(false); // only fires from choice card
+  // showDecisionCard: independent overlay shown after welcome is dismissed in launchMode.
+  // Completely separate from showWelcome — persists even after the modal closes.
+  const [showDecisionCard, setShowDecisionCard] = useState(false);
+  const [showWizard, setShowWizard] = useState(false); // only fires from decision card
   const [postWizardTipDismissed, setPostWizardTipDismissed] = useState(() => {
     try { return !!localStorage.getItem('cpf_planner_wizard_tip_done'); }
     catch { return true; }
@@ -5653,6 +5663,28 @@ export default function App() {
     prevTabRef.current = activeTab;
     // sidebarOpen intentionally omitted from deps — we only want to fire on tab transitions
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // ── Scroll-to-top on every tab change (Issue 2a) ───────────────────────────
+  // On mobile (≤640px) the body is the scroll container (cpf-main-wrap uses overflow:visible).
+  // Switching tabs without resetting scroll leaves the user mid-page from a previous tab,
+  // which means the Readiness gauge chart is cut off on launch and other tabs open mid-scroll.
+  // 'instant' behaviour matches the tab-switch immediacy — no jarring smooth scroll.
+  // On desktop the scroll is contained in cpf-tab-content, which React unmounts/remounts
+  // via conditional rendering, so it resets automatically; this effect is a no-op there.
+  //
+  // Additionally (Issue 2b): when switching to the Readiness tab, scroll the tab strip
+  // back to the start so "Readiness" (the first tab) is always fully visible — not hidden
+  // behind a previous rightward swipe. On other tabs the strip stays at its current position
+  // so the user's last scroll position is preserved.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0; // Safari fallback
+    // Scroll the tab strip to position 0 when landing on Readiness (first tab).
+    if (activeTab === 'readiness' && tabsStripRef.current) {
+      tabsStripRef.current.scrollTo({ left: 0, behavior: 'instant' });
+    }
   }, [activeTab]);
 
   // Goal Simulator — clear "Applied" badge and snapshot when user manually edits the levers after applying a strategy.
@@ -6389,17 +6421,12 @@ export default function App() {
   useEffect(() => { if (welcomeBodyRef.current) welcomeBodyRef.current.scrollTop = 0; }, [welcomeStep]);
 
   const closeWelcome = () => {
-    // In launchMode (first-time user), the X button and "Skip" should redirect to
-    // the decision card (step 4) rather than bypassing it. The only way launchMode
-    // ends is when the user explicitly clicks "Setup Wizard" or "Skip to App" in step 4.
-    // Exception: if they press X while already ON step 4, treat it as "Skip to App".
+    // In launchMode (first-time user), closing or skipping the welcome modal opens the
+    // STANDALONE decision card instead of bypassing onboarding entirely.
+    // The decision card is independent — it persists even after showWelcome = false.
     if (launchMode) {
-      if (welcomeStep < 4) {
-        setWelcomeStep(4);
-        return; // Stay in modal — let the user make their choice
-      }
-      // Pressed X on the decision card itself → treat as "Skip to App"
-      handleLaunchSkip();
+      setShowWelcome(false);
+      setShowDecisionCard(true);
       return;
     }
     setShowWelcome(false);
@@ -6408,6 +6435,7 @@ export default function App() {
   const handleLaunchWizard = () => {
     try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
     setLaunchMode(false);
+    setShowDecisionCard(false);
     setShowWelcome(false);
     setShowWizard(true);
   };
@@ -6415,6 +6443,7 @@ export default function App() {
   const handleLaunchSkip = () => {
     try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
     setLaunchMode(false);
+    setShowDecisionCard(false);
     setShowWelcome(false);
     // Land on the Readiness dashboard with the sidebar closed so stats are front-and-centre.
     // readinessSidebarUserPref is set so the auto-collapse effect respects this explicit choice.
@@ -12050,11 +12079,13 @@ ${milestoneSnapshotHtml}
           justify-content: space-between;
         }
         .desktop-only { display: flex; }
-        .cpf-tabs { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; touch-action: pan-x; }
+        .cpf-tabs { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; touch-action: pan-x; overscroll-behavior-x: contain; }
         .cpf-tabs::-webkit-scrollbar { display: none; }
-        /* Ensure active tab scrolls into view on mobile */
-        .cpf-tabs button[aria-selected="true"] { scroll-snap-align: center; }
-        .cpf-tabs { scroll-snap-type: x proximity; scroll-padding: 0 20px; }
+        /* scroll-snap removed: scroll-snap-type on the container + snap-align only on the active tab
+           caused the strip to rubber-band back to the active tab when swiping to reach other tabs
+           (e.g. Docs). Without snap, native momentum scroll lands exactly where the finger stops —
+           which is the expected behaviour on both tablet and mobile. The active tab is already
+           scrolled into view programmatically via scrollIntoView on tab click. */
 
         .rg-6 { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
         .rg-5 { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
@@ -12590,7 +12621,10 @@ ${milestoneSnapshotHtml}
           .nw-mini-chart { width: 100% !important; height: 160px !important; }
           .nw-mini-legend { flex-direction: row !important; flex-wrap: wrap !important; gap: 6px !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
-          .cpf-tabs { overflow-x: auto !important; flex-wrap: nowrap !important; }
+          /* cpf-tabs mobile: base rule already sets overflow-x:auto and flex-wrap:nowrap.
+             Add overscroll-behavior-x:contain so swiping the tab strip doesn't trigger
+             body-level pull-to-refresh or page bounce on iOS Safari. */
+          .cpf-tabs { overscroll-behavior-x: contain !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
           .kpi-strip { grid-template-columns: 1fr 1fr !important; }
           .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
@@ -13277,70 +13311,97 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
               )}
-              {/* Step 4 — Decision card (first-time users only; launchMode=true) */}
-              {welcomeStep === 4 && launchMode && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6, textAlign: "center", margin: 0 }}>
-                    Your CPF projection engine is ready. Choose how you'd like to set up your profile:
-                  </p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <button onClick={handleLaunchWizard} style={{
-                      padding: "20px 16px", borderRadius: 14, cursor: "pointer", textAlign: "center",
-                      background: "rgba(16,185,129,0.10)", border: "1.5px solid rgba(16,185,129,0.45)",
-                      color: "var(--text-bright)", transition: "all 0.15s",
-                    }}>
-                      <div style={{ fontSize: 28, marginBottom: 8 }}>🧭</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-emerald)", marginBottom: 6 }}>Setup Wizard</div>
-                      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                        Guided 3-step setup.<br />Enter your profile, balances &amp; income.<br /><span style={{ fontSize: 12, color: "var(--text-subtle)" }}>Recommended for new users.</span>
-                      </div>
-                    </button>
-                    <button onClick={handleLaunchSkip} style={{
-                      padding: "20px 16px", borderRadius: 14, cursor: "pointer", textAlign: "center",
-                      background: "rgba(59,130,246,0.10)", border: "1.5px solid rgba(59,130,246,0.35)",
-                      color: "var(--text-bright)", transition: "all 0.15s",
-                    }}>
-                      <div style={{ fontSize: 28, marginBottom: 8 }}>⚡</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-blue2)", marginBottom: 6 }}>Skip to App</div>
-                      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                        Jump straight in.<br />Edit every field directly in the sidebar.<br /><span style={{ fontSize: 12, color: "var(--text-subtle)" }}>Readiness dashboard loads instantly.</span>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* Step 4 removed — decision card is now a separate standalone overlay (showDecisionCard).
+                  The welcome modal is always steps 0–3 only. */}
             </div>
 
             {/* Footer */}
             <div className="cpf-welcome-footer" style={{ padding: "20px 32px", borderTop: "1px solid var(--border-subtle)", background: "var(--bg-base)" }}>
-              {/* Progress dots — 5 when in launchMode (step 4 = decision card), 4 otherwise */}
+              {/* Progress dots — always 4 steps (0–3); step 4 decision card is a separate overlay */}
               <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-                {(launchMode ? [0, 1, 2, 3, 4] : [0, 1, 2, 3]).map(i => (
+                {[0, 1, 2, 3].map(i => (
                   <div key={i} style={{ width: i === welcomeStep ? 24 : 8, height: 8, borderRadius: 4, background: i === welcomeStep ? "var(--clr-emerald)" : "var(--border-strong)", transition: "all 0.3s" }} />
                 ))}
               </div>
-              {/* Step 4 footer: just a Back button; choice cards are in the body */}
-              {welcomeStep === 4 ? (
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>← Back</button>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div />
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {welcomeStep > 0 && <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Back</button>}
+                  {/* Steps 0–2: always Next. Step 3: launchMode → close modal & open standalone decision card; returning user → finish. */}
+                  {welcomeStep < 3 ? (
+                    <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Next &rarr;</button>
+                  ) : launchMode ? (
+                    <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Choose Setup &rarr;</button>
+                  ) : (
+                    <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
+                  )}
+                  {/* Skip on steps 0–2: launchMode → open standalone decision card; returning user → dismiss modal */}
+                  {welcomeStep < 3 && <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip {launchMode ? "→" : ""}</button>}
                 </div>
-              ) : (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div />
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    {welcomeStep > 0 && <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Back</button>}
-                    {/* Steps 0–2: always Next. Step 3: advance to decision card (launchMode) or finish (returning user). */}
-                    {welcomeStep < 3 ? (
-                      <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Next &rarr;</button>
-                    ) : launchMode ? (
-                      <button onClick={() => setWelcomeStep(4)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Choose Setup &rarr;</button>
-                    ) : (
-                      <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
-                    )}
-                    {welcomeStep < 3 && <button onClick={launchMode ? () => setWelcomeStep(4) : closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip {launchMode ? "→" : ""}</button>}
-                  </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STANDALONE DECISION CARD ─────────────────────────────────────────
+          Shown after the welcome modal closes in launchMode (first-time users only).
+          This is a completely independent overlay — NOT part of the welcome modal.
+          It renders at a lower z-index than the welcome modal so both can't overlap.
+          The user MUST make a choice: Setup Wizard or Skip to App. There is no X
+          button or dismiss path — pressing outside the card does nothing.
+          Once chosen, setShowDecisionCard(false) is called inside handleLaunchWizard
+          and handleLaunchSkip respectively. */}
+      {showDecisionCard && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.9)", backdropFilter: "blur(10px)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, boxShadow: "var(--shadow-modal)", width: "100%", maxWidth: 520, overflow: "hidden" }}>
+            {/* Card header */}
+            <div style={{ padding: "22px 28px 18px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ background: "rgba(16,185,129,0.15)", padding: 10, borderRadius: 12, border: "1px solid rgba(16,185,129,0.3)", flexShrink: 0 }}>
+                <Target style={{ width: 24, height: 24, color: "var(--clr-emerald)" }} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 900, color: "var(--text-bright)", margin: 0, marginBottom: 3 }}>How would you like to begin?</h2>
+                <p style={{ fontSize: 13, color: "var(--text-subtle)", margin: 0 }}>Your CPF projection engine is ready — choose your onboarding path</p>
+              </div>
+            </div>
+            {/* Card body — two choice buttons */}
+            <div style={{ padding: "20px 28px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <button
+                onClick={handleLaunchWizard}
+                style={{ padding: "22px 16px", borderRadius: 16, cursor: "pointer", textAlign: "center", background: "rgba(16,185,129,0.10)", border: "1.5px solid rgba(16,185,129,0.45)", color: "var(--text-bright)", transition: "all 0.15s", outline: "none" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(16,185,129,0.18)"; e.currentTarget.style.borderColor = "rgba(16,185,129,0.7)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(16,185,129,0.10)"; e.currentTarget.style.borderColor = "rgba(16,185,129,0.45)"; }}
+              >
+                <div style={{ fontSize: 32, marginBottom: 10 }}>🧭</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-emerald)", marginBottom: 8 }}>Setup Wizard</div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.55 }}>
+                  Guided 3-step setup.<br />Enter your profile, balances &amp; income.
                 </div>
-              )}
+                <div style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 700, marginTop: 10, padding: "4px 10px", background: "rgba(16,185,129,0.12)", borderRadius: 20, display: "inline-block" }}>Recommended for new users</div>
+              </button>
+              <button
+                onClick={handleLaunchSkip}
+                style={{ padding: "22px 16px", borderRadius: 16, cursor: "pointer", textAlign: "center", background: "rgba(59,130,246,0.10)", border: "1.5px solid rgba(59,130,246,0.35)", color: "var(--text-bright)", transition: "all 0.15s", outline: "none" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.18)"; e.currentTarget.style.borderColor = "rgba(59,130,246,0.65)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(59,130,246,0.10)"; e.currentTarget.style.borderColor = "rgba(59,130,246,0.35)"; }}
+              >
+                <div style={{ fontSize: 32, marginBottom: 10 }}>⚡</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-blue2)", marginBottom: 8 }}>Skip to App</div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.55 }}>
+                  Jump straight in.<br />Edit every field directly in the sidebar.
+                </div>
+                <div style={{ fontSize: 12, color: "var(--clr-blue2)", fontWeight: 700, marginTop: 10, padding: "4px 10px", background: "rgba(59,130,246,0.12)", borderRadius: 20, display: "inline-block" }}>Readiness dashboard loads instantly</div>
+              </button>
+            </div>
+            {/* Card footer — re-open welcome guide link */}
+            <div style={{ padding: "0 28px 20px", textAlign: "center" }}>
+              <button
+                onClick={() => { setShowDecisionCard(false); setShowWelcome(true); setWelcomeStep(0); }}
+                style={{ fontSize: 13, color: "var(--text-subtle)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: "4px 8px" }}
+              >
+                ← View the Welcome Guide again
+              </button>
             </div>
           </div>
         </div>
@@ -13591,7 +13652,7 @@ ${milestoneSnapshotHtml}
       <nav className="cpf-tabs-full-width" aria-label="Dashboard sections">
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0, display: "flex", alignItems: "stretch" }}>
           {/* Scrollable tab buttons */}
-          <div className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", flex: "1 1 auto", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+          <div ref={tabsStripRef} className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", flex: "1 1 auto", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
             {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
               const isLifeLocked = id === "life" && isForeigner;
               return (
@@ -21216,6 +21277,16 @@ ${milestoneSnapshotHtml}
                           "The Goal Simulator / Income Roadmap sub-navigation bar inside the Strategy tab now sticks to the top of the scroll area on mobile and tablet (viewport ≤ 1024px). Scrolling through long strategy results no longer loses the tab switcher."],
                         [CheckCircle2, "isMet preset pills: green & non-clickable", "var(--clr-emerald)",
                           "In the Goal Simulator, preset target pills that your current projection already exceeds now render in green (border, text, and background) and are non-clickable — pointerEvents: none prevents accidental selection of a target you've already surpassed. The separate '✅ met' badge that previously appeared below each pill has been removed; the green pill itself communicates the same status more cleanly."],
+                        [Bell, "RA Contribution Gap alert fixed (A1)", "var(--clr-emerald)",
+                          "The 'Apply Top-Up' button in the Post-55 RA Builder profile no longer leaves the contribution gap alert persistently visible after clicking. Root cause: the alert was checking inputs.saBalance (the static current RA balance) instead of the projected RA at payout age from displayAccumulation. Now reads the correct projected RA so the alert disappears as soon as the top-up closes the gap."],
+                        [AlertTriangle, "OA transfer balance validation (A2)", "var(--clr-amber)",
+                          "The OA→SA/RA transfer field now shows a validation warning when the entered annual transfer amount exceeds your current OA balance. Previously the engine silently auto-capped to the available OA each year with no user feedback. A new warning reads: 'Exceeds current OA balance ($X). Engine will transfer up to available OA each year.'"],
+                        [Upload, "Profile import error handling improved (A3)", "var(--clr-blue2)",
+                          "Profile import now validates that the JSON contains a required inputs object before applying any state. Each state setter is wrapped in an individual try/catch so a single bad field cannot block the whole load. The error alert now shows the specific technical error message to help diagnose which field caused the failure, and the scenario slot check now requires both .inputs and valid .projection arrays."],
+                        [Target, "Standalone decision card after welcome", "var(--clr-emerald)",
+                          "First-time users now see the Setup Wizard / Skip to App choice as a separate, independent card that appears after the welcome modal closes — not embedded as a 5th step inside the modal carousel. The decision card has its own full-screen overlay, a 'View the Welcome Guide again' link, and no dismiss path — users must make an explicit choice. The welcome modal itself is always 4 steps (0–3) for all users."],
+                        [Smartphone, "Mobile scroll & tab strip fixes", "var(--clr-blue)",
+                          "Switching tabs on mobile now scrolls the page to the top instantly, ensuring the Readiness gauge chart is always fully visible on launch. The Readiness tab also resets the tab strip scroll position to show 'Readiness' as the first visible tab. Tablet tab strip bounce-back is fixed: scroll-snap was removed from the tab strip so swiping to reach tabs like Docs lands where your finger stops instead of snapping back to the active tab."],
                       ].map(([WNIcon, title, color, desc]) => (
                         <div key={title} style={{ display: "flex", gap: 14, padding: "14px 16px", borderRadius: 12,
                           border: `1px solid ${color}33`, background: `${color}08` }}>
