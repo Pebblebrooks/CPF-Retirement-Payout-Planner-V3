@@ -5373,6 +5373,12 @@ export default function App() {
   // position 0 when switching to the Readiness tab on mobile so "Readiness" (first tab) is
   // always visible — not buried by a previous rightward scroll (Issue 2b fix).
   const tabsStripRef = useRef(null);
+  // tabContentRef: ref to the cpf-tab-content scroll container on desktop.
+  // cpf-tab-content is ALWAYS mounted (never conditionally rendered) — only the child
+  // tab panels inside it are swapped. This means its scrollTop persists across tab
+  // switches and must be explicitly reset to 0 on every activeTab change.
+  // On mobile/tablet cpf-tab-content has overflow-y:visible so scrollTop=0 is a no-op.
+  const tabContentRef = useRef(null);
   // Guard flag: set to true by applyStrategy before it writes vcSaTopup/vc3aCash so the
   // lever-change useEffect can distinguish a programmatic apply from a manual sidebar edit.
   // Without this flag, the useEffect fires after every applyStrategy call and immediately
@@ -5666,12 +5672,17 @@ export default function App() {
   }, [activeTab]);
 
   // ── Scroll-to-top on every tab change (Issue 2a) ───────────────────────────
-  // On mobile (≤640px) the body is the scroll container (cpf-main-wrap uses overflow:visible).
+  // On mobile (<=640px) the body is the scroll container (cpf-main-wrap uses overflow:visible).
   // Switching tabs without resetting scroll leaves the user mid-page from a previous tab,
   // which means the Readiness gauge chart is cut off on launch and other tabs open mid-scroll.
   // 'instant' behaviour matches the tab-switch immediacy — no jarring smooth scroll.
-  // On desktop the scroll is contained in cpf-tab-content, which React unmounts/remounts
-  // via conditional rendering, so it resets automatically; this effect is a no-op there.
+  //
+  // On desktop the scroll container is cpf-tab-content (overflow-y: auto). IMPORTANT: the
+  // cpf-tab-content div itself is always mounted — only the child tab panels are swapped.
+  // This means cpf-tab-content.scrollTop persists across tab switches and must be explicitly
+  // reset here via tabContentRef. Without this reset, switching to the Docs tab with a stale
+  // scrollTop leaves a gap between the KPI strip and the sticky banner (#qs-sticky-banner or
+  // #docs-sticky-nav both use position:sticky;top:0 and only stick after ~40px of scroll).
   //
   // Additionally (Issue 2b): when switching to the Readiness tab, scroll the tab strip
   // back to the start so "Readiness" (the first tab) is always fully visible — not hidden
@@ -5681,6 +5692,8 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'instant' });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0; // Safari fallback
+    // Desktop: reset cpf-tab-content scroll position (on mobile this is overflow-y:visible so no-op).
+    if (tabContentRef.current) tabContentRef.current.scrollTop = 0;
     // Scroll the tab strip to position 0 when landing on Readiness (first tab).
     if (activeTab === 'readiness' && tabsStripRef.current) {
       tabsStripRef.current.scrollTo({ left: 0, behavior: 'instant' });
@@ -6421,15 +6434,12 @@ export default function App() {
   useEffect(() => { if (welcomeBodyRef.current) welcomeBodyRef.current.scrollTop = 0; }, [welcomeStep]);
 
   const closeWelcome = () => {
-    // In launchMode (first-time user), closing or skipping the welcome modal opens the
-    // STANDALONE decision card instead of bypassing onboarding entirely.
-    // The decision card is independent — it persists even after showWelcome = false.
-    if (launchMode) {
-      setShowWelcome(false);
-      setShowDecisionCard(true);
-      return;
-    }
+    // Decision card is MANDATORY for ALL users on every app startup — not just first-timers.
+    // Every time the welcome modal is dismissed (step 3 "Choose Setup" button, or any "Skip"
+    // button on steps 0–2), the standalone decision card overlay opens immediately.
+    // The decision card is independent of showWelcome — it persists after the modal closes.
     setShowWelcome(false);
+    setShowDecisionCard(true);
   };
 
   const handleLaunchWizard = () => {
@@ -12775,7 +12785,17 @@ ${milestoneSnapshotHtml}
           .cpf-mobile-top-spacer { display: none !important; }
           /* Tab strip spacer only needed at <=640px where strip is position:fixed */
           .cpf-mobile-tabstrip-spacer { display: none !important; }
-          /* Desktop/tablet docs nav: hide <select>, show pill buttons */
+        }
+        /* Tablet + large-phone (641–1024px): docs nav uses compact <select> dropdown.
+           20 pill buttons in the reference section wrap to 3–4 rows on tablet, consuming
+           too much sticky nav real estate. Dropdown collapses all anchors into 1 row.
+           This overrides the inline style default (pills: flex) for this entire range. */
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .docs-nav-select { display: block !important; }
+          .docs-nav-pills  { display: none  !important; }
+        }
+        /* Desktop-only docs nav: hide <select>, show pill buttons (≥1025px only) */
+        @media (min-width: 1025px) {
           .docs-nav-select { display: none  !important; }
           .docs-nav-pills  { display: flex  !important; }
         }
@@ -13327,16 +13347,14 @@ ${milestoneSnapshotHtml}
                 <div />
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {welcomeStep > 0 && <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Back</button>}
-                  {/* Steps 0–2: always Next. Step 3: launchMode → close modal & open standalone decision card; returning user → finish. */}
+                  {/* Steps 0–2: always Next. Step 3: always "Choose Setup" — decision card now mandatory for all users. */}
                   {welcomeStep < 3 ? (
                     <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Next &rarr;</button>
-                  ) : launchMode ? (
-                    <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Choose Setup &rarr;</button>
                   ) : (
-                    <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
+                    <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Choose Setup &rarr;</button>
                   )}
-                  {/* Skip on steps 0–2: launchMode → open standalone decision card; returning user → dismiss modal */}
-                  {welcomeStep < 3 && <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip {launchMode ? "→" : ""}</button>}
+                  {/* Skip on steps 0–2: always opens standalone decision card (mandatory for all users) */}
+                  {welcomeStep < 3 && <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip &rarr;</button>}
                 </div>
               </div>
             </div>
@@ -13345,8 +13363,10 @@ ${milestoneSnapshotHtml}
       )}
 
       {/* ── STANDALONE DECISION CARD ─────────────────────────────────────────
-          Shown after the welcome modal closes in launchMode (first-time users only).
-          This is a completely independent overlay — NOT part of the welcome modal.
+          MANDATORY for ALL users on every app startup — not just first-timers.
+          Shown after the welcome modal closes (via any button: "Choose Setup",
+          "Skip" on steps 0–2, or X close). This is a completely independent
+          overlay — NOT part of the welcome modal.
           It renders at a lower z-index than the welcome modal so both can't overlap.
           The user MUST make a choice: Setup Wizard or Skip to App. There is no X
           button or dismiss path — pressing outside the card does nothing.
@@ -17151,7 +17171,7 @@ ${milestoneSnapshotHtml}
             )}
           </div>
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
-          <div className="cpf-tab-content" data-exec={execDashMode ? "true" : undefined}>
+          <div ref={tabContentRef} className="cpf-tab-content" data-exec={execDashMode ? "true" : undefined}>
             {/* ── READINESS TAB ── */}
             {activeTab === "readiness" && (
               <ReadinessTab
