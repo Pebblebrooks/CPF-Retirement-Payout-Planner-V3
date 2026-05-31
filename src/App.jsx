@@ -7045,6 +7045,65 @@ export default function App() {
   };
   handleResetRef.current = handleReset; // keep ref current for keyboard shortcut handler
 
+  // ── Clear All Inputs — loads the Blank Slate preset without opening the Samples modal ──
+  // Mirrors the preset-loader logic (lines ~12902–12953) exactly, so all derived state
+  // (scenarios, What-If, household, goal simulator, life events form, gap alert, chart
+  // view toggles) is cleared in the same way as a fresh preset load.
+  const handleClearInputs = () => {
+    setConfirmModal({
+      message: "Clear all inputs to a blank slate (age 30, all balances and amounts zeroed)?",
+      onConfirm: () => {
+        const blankPreset = PRESET_PROFILES.find(p => p.id === "blank");
+        const merged = { ...DEFAULT_INPUTS, ...(blankPreset?.inputs || {}) };
+        // Stamp lastSavedRef so the beforeunload "unsaved changes" guard doesn't fire
+        // immediately after clearing — the profile was just set to a known state.
+        lastSavedRef.current = JSON.stringify(merged);
+        setInputs(merged);
+        setInputErrors({});
+        // Clear scenario comparison — stale scenarios are meaningless against a blank profile.
+        setScenarioA(null);
+        setScenarioB(null);
+        setScenarioLabelA("");
+        setScenarioLabelB("");
+        // Clear What-If overrides — old values are meaningless against blank inputs.
+        setWhatIfPayoutAge(null);
+        setWhatIfSaTopup(null);
+        setWhatIfHousing(null);
+        setWhatIfSalaryBump(null);
+        setWhatIfContribStop(null);
+        setWhatIfOaDrawdown(null);
+        setWhatIfSrsContrib(null);
+        setWhatIfPrivGrowth(null);
+        // Reset household to single-member mode.
+        setHouseholdEnabled(false);
+        setSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
+        setDebouncedSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
+        setHousingSharePct(50);
+        setHouseholdChildren([]);
+        // Clear Goal Simulator — stale solver output must not show against a blank profile.
+        setGoalResult(null);
+        setGoalStratTab("goal");
+        setGoalSolving(false);
+        setGoalApplied(null);
+        setPreApplySnapshot(null);
+        // Clear Life Events form state — prevents ghost form appearing over empty events list.
+        setLeFormState({});
+        // Re-enable gap alert so it evaluates fresh against the new blank profile.
+        setGapAlertDismissed(false);
+        // Reset chart view state to clean defaults.
+        setHighlightPlan("standard");
+        setPrimaryLifePlan("standard");
+        setSpouseLifePlan("standard");
+        setViewMode("bequest");
+        setIsRealDollars(false);
+        setShowMonteCarlo(false);
+        setShowBaseline(false);
+        setActiveTab("readiness");
+        showToast("✓ All inputs cleared to blank slate.");
+      }
+    });
+  };
+
   // ── RSS switch: decoupled useEffect so we always read latest inputs state ──────────
   // The modal's onSecondary/onConfirm now just set a string flag (rssActionPending).
   // This effect fires AFTER React has committed all state, guaranteeing inputs is fresh.
@@ -13270,6 +13329,13 @@ ${milestoneSnapshotHtml}
               )}
             </div>
 
+            {/* 6b. Clear — desktop only, before Reset; zeroes all inputs to blank slate */}
+            <button className="cpf-nav-d-only" onClick={handleClearInputs}
+              style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", padding: "6px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+              title="Clear all inputs to a blank slate">
+              <Eraser style={{ width: 13, height: 13 }} />Clear
+            </button>
+
             {/* 7. Reset — desktop only, moved to end (destructive action goes last) */}
             <button className="cpf-nav-d-only" onClick={handleReset}
               style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.08)", color: "var(--clr-red)", padding: "6px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px solid rgba(239,68,68,0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
@@ -13332,6 +13398,7 @@ ${milestoneSnapshotHtml}
                   <div className="cpf-nav-dd-hdr">Actions</div>
                   {[
                     { icon: <Users style={{ width: 13, height: 13 }} />, label: "Load Sample", color: "var(--clr-amber)", action: () => { setShowPresets(true); setShowSettingsMenu(false); } },
+                    { icon: <Eraser style={{ width: 13, height: 13 }} />, label: "Clear All Inputs", color: "var(--clr-amber)", action: () => { handleClearInputs(); setShowSettingsMenu(false); } },
                     { icon: <RotateCcw style={{ width: 13, height: 13 }} />, label: "Reset All Inputs", color: "var(--clr-red)", action: () => { handleReset(); setShowSettingsMenu(false); } },
                     { icon: <Lightbulb style={{ width: 13, height: 13 }} />, label: "Setup Wizard", color: "#22d3ee", action: () => { setShowWizard(true); setShowSettingsMenu(false); } },
                   ].map(({ icon, label, color, action }) => (
@@ -18820,7 +18887,9 @@ ${milestoneSnapshotHtml}
                             ...prev,
                             age: 54.999,
                             sa: prev.sa || 0,
-                            ra: null, // RA does not yet exist at 54.999
+                            ra: 0, // ra:0 (not null) so Recharts draws a near-vertical connector
+                                   // rising from 0 up to the real RA value at age 55, rather than
+                                   // having the purple line appear out of nowhere mid-chart.
                           });
                         }
                         base.push({
