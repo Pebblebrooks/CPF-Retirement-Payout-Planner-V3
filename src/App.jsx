@@ -12379,6 +12379,7 @@ ${milestoneSnapshotHtml}
              (header 48 + tab strip 44 + input-params-bar 44 = 136px) when inputs closed */
           .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
           .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
+            position: -webkit-sticky !important;
             position: sticky !important; top: 136px !important; z-index: 40 !important;
           }
           .desktop-only { display: none !important; }
@@ -12487,29 +12488,45 @@ ${milestoneSnapshotHtml}
             height: 0 !important; padding: 0 !important; overflow: hidden !important;
             border: none !important; min-height: 0 !important;
           }
-          /* KPI strip: hidden when inputs open, sticky below stacked bars when closed */
+          /* KPI strip: hidden when inputs open, fixed below stacked bars when closed.
+             Fixed (not sticky) eliminates the sticky-context/iOS-Safari scroll issues.
+             The KPI is now always pinned at top:136px regardless of scroll position.
+             left:0/right:0/width:100% needed because position:fixed exits normal flow.
+             box-sizing:border-box prevents the border from creating extra width. */
           .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
           .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
-            position: sticky !important; top: 136px !important; z-index: 40 !important;
+            position: fixed !important;
+            top: 136px !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            z-index: 40 !important;
           }
-          /* Fix KPI sticky (≤640px): cpf-input-params-bar is position:fixed here, so it
-             takes zero document-flow space. Without this, cpf-main-wrap (and the KPI inside
-             it) starts at document-Y ≈ 92px (spacer:48 + tab-strip:44). The KPI's sticky
-             threshold is top:136px — but 92px is already ABOVE 136px from viewport top, so
-             sticky never activates and KPI just scrolls away.
-             Adding padding-top:44px compensates for the fixed bar's missing flow height,
-             pushing main-wrap content to start at Y = 136px. The KPI is now exactly at its
-             sticky threshold and correctly locks on first scroll.
-             Secondary benefit: previously the first 44px of every tab's content was invisible
-             behind the fixed input-params-bar; this padding reveals that content on all tabs. */
+          /* ≤640px: All three bars (header, tab strip, params-bar) are position:fixed →
+             they take zero document-flow space. cpf-main-wrap padding-top:44px compensates
+             for the fixed params-bar only; the KPI (also now fixed) is compensated by
+             adding padding-top to cpf-tab-content using the measured --kpi-header-h var.
+             When KPI is display:none (summary/readiness/guide tabs), ResizeObserver fires
+             with height=0 → padding collapses to 0 automatically. */
           .cpf-layout[data-sidebar-open="false"] .cpf-main-wrap {
             padding-top: 44px !important;
+          }
+          /* KPI is fixed → pad tab content down by KPI height so content isn't hidden behind it */
+          .cpf-layout[data-sidebar-open="false"] .cpf-tab-content {
+            padding-top: var(--kpi-header-h, 48px) !important;
           }
           /* Shrink logo on tiny screens */
           .cpf-logo-text { font-size: 14px !important; }
           .cpf-logo-sub  { display: none !important; }
-          /* Full-width tab strip: fixed header → sticky at top:48px */
-          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; }
+          /* Full-width tab strip: fixed below fixed header (top:48px).
+             Fixed (not sticky) so it cannot rubber-band during iOS overscroll — sticky
+             elements travel with the bounce animation; fixed elements do not.
+             left:0/right:0 needed because position:fixed exits normal flow. */
+          .cpf-tabs-full-width { position: fixed !important; top: 48px !important; left: 0 !important; right: 0 !important; z-index: 42 !important; min-height: 44px; background: var(--bg-panel); box-shadow: 0 1px 0 var(--border-subtle); }
+          /* Compensating spacer: tab strip is now fixed → takes zero flow space.
+             cpf-mobile-tabstrip-spacer fills that gap so content below starts at Y=92px. */
+          .cpf-mobile-tabstrip-spacer { display: block !important; height: 44px; flex-shrink: 0; }
           .desktop-only { display: none !important; }
           .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; }
           #docs-sticky-nav { top: 136px !important; }
@@ -12517,9 +12534,16 @@ ${milestoneSnapshotHtml}
           /* Mobile docs nav: show compact <select> dropdown, hide pill buttons */
           .docs-nav-select { display: block !important; }
           .docs-nav-pills  { display: none  !important; }
+          /* Prevent iOS Safari pull-to-refresh / rubber-band overscroll bounce.
+             When body is the scroll container (as it is on mobile), iOS treats
+             overscroll as a native gesture — pulling past the top refreshes the page.
+             overscroll-behavior:none disables this without affecting normal scrolling. */
+          body { overscroll-behavior: none; }
         }
         @media (min-width: 641px) {
           .cpf-mobile-top-spacer { display: none !important; }
+          /* Tab strip spacer only needed at <=640px where strip is position:fixed */
+          .cpf-mobile-tabstrip-spacer { display: none !important; }
           /* Desktop/tablet docs nav: hide <select>, show pill buttons */
           .docs-nav-select { display: none  !important; }
           .docs-nav-pills  { display: flex  !important; }
@@ -13299,6 +13323,10 @@ ${milestoneSnapshotHtml}
 
       {/* Mobile fixed-header spacer — hidden on desktop via CSS */}
       <div className="cpf-mobile-top-spacer" style={{ display: "none" }} />
+      {/* Mobile tab-strip spacer — compensates for cpf-tabs-full-width being position:fixed at <=640px.
+          Fixed elements take zero document-flow space; this 44px block fills that gap so content
+          below the tab strip doesn't slide under it. Hidden at >=641px where strip is sticky. */}
+      <div className="cpf-mobile-tabstrip-spacer" style={{ display: "none" }} />
       {isVcOverLimit && (
         <div style={{ background: "rgba(234,88,12,0.2)", borderBottom: "1px solid rgba(234,88,12,0.5)", padding: "8px 20px", textAlign: "center", color: "#fdba74", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <AlertTriangle style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />VC Exceeds Available Limit ({formatCurrency(maxAllowableVC)})
