@@ -4229,7 +4229,11 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
     const e = {};
     if (step === 1) {
       // Age validation: if birthYear is set, derive age; otherwise require manual entry
-      const derivedAge = w.birthYear > 0 ? ((new Date().getFullYear()) - w.birthYear) : Number(w.currentAge);
+      // Subtract 1 if the user's birthday hasn't occurred yet this calendar year
+      const _today = new Date();
+      const derivedAge = w.birthYear > 0
+        ? (_today.getFullYear() - w.birthYear - (((_today.getMonth() + 1) < w.birthMonth) ? 1 : 0))
+        : Number(w.currentAge);
       const pa  = Number(w.payoutAge);
       if (w.birthYear <= 0 && (!w.currentAge || isNaN(Number(w.currentAge)) || Number(w.currentAge) < 16 || Number(w.currentAge) > 99)) e.currentAge = "Enter a valid age (16–99)";
       if (w.birthYear > 0 && (derivedAge < 0 || derivedAge > 99)) e.birthYear = "Birth year gives an invalid age";
@@ -4253,7 +4257,11 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
   const finish = () => {
     const merged = {
       ...(w.name          && { name:             w.name }),
-      ...(w.birthYear > 0 ? { birthYear: w.birthYear, birthMonth: w.birthMonth, currentAge: (new Date().getFullYear()) - w.birthYear }
+      ...(w.birthYear > 0 ? (() => {
+            const _t = new Date();
+            const _age = _t.getFullYear() - w.birthYear - (((_t.getMonth() + 1) < w.birthMonth) ? 1 : 0);
+            return { birthYear: w.birthYear, birthMonth: w.birthMonth, currentAge: _age };
+          })()
                           : (w.currentAge && { currentAge: w.currentAge })),
       ...(w.birthYear <= 0 && w.birthMonth && { birthMonth: w.birthMonth }),
       ...(w.payoutAge     && { payoutAge:         w.payoutAge }),
@@ -4262,8 +4270,8 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
       ...(w.oaBalance     && { oaBalance:         w.oaBalance }),
       ...(w.saBalance     && { saBalance:         w.saBalance }),
       ...(w.maBalance     && { maBalance:         w.maBalance }),
-      ...(w.monthlyGross  && { monthlyGross:      w.monthlyGross }),
-      ...(w.annualBonus   && { annualBonus:       w.annualBonus }),
+      ...(w.monthlyGross  && { salaryGross:       w.monthlyGross }),
+      ...(w.annualBonus   && { salaryBonus:       w.annualBonus }),
       ...(w.retirementIncome && { targetMonthlyIncome: w.retirementIncome }),
     };
     onComplete(merged);
@@ -4313,7 +4321,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
               <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Current age {w.birthYear > 0 && <span style={{ fontSize: 12, color: "#22d3ee" }}>(auto)</span>}</label>
               {w.birthYear > 0 ? (
                 <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 10, padding: "10px 14px", fontSize: 14, color: "var(--text-muted)" }}>
-                  {new Date().getFullYear() - w.birthYear}
+                  {(() => { const _t = new Date(); return _t.getFullYear() - w.birthYear - (((_t.getMonth() + 1) < w.birthMonth) ? 1 : 0); })()}
                 </div>
               ) : inp("currentAge", "e.g. 35", "number")}
             </div>
@@ -6193,10 +6201,29 @@ export default function App() {
 
   // P3-T12: Wizard handlers
   const handleWizardComplete = (mergedInputs) => {
+    // Use a blank financial base so sample DEFAULT_INPUTS values (oaBalance: 50000,
+    // salaryGross: 6000, housingOutflow: 12000, etc.) never bleed into a new user's
+    // profile. All structural/config fields (contributionStopAge, retirementSumGrowth,
+    // rates, flags) are kept from DEFAULT_INPUTS; only user financial data is zeroed.
+    const WIZARD_BLANK = {
+      ...DEFAULT_INPUTS,
+      oaBalance: 0, saBalance: 0, maBalance: 0,
+      salaryGross: 0, salaryBonus: 0,
+      empOaCont: 0, empSaCont: 0, empMaCont: 0,
+      housingOutflow: 0,
+      medicalUsage: 0, medishieldIP: 0, elderCareShield: 0,
+      propertyValue: 0,
+      annualGovGrant: 0,
+      targetMonthlyIncome: 0,
+    };
+    // Map wizard gender field → isMale boolean expected by the engine
+    const genderMapped = mergedInputs.gender !== undefined
+      ? { isMale: mergedInputs.gender === 'male' }
+      : {};
     // BUG-2 fix: run through buildSafeInputs so boolean fields are correctly coerced
     // (e.g. "true" → true) and lifeEvents is always a valid array — matching the
     // safety processing applied by every other profile-loading path (import, URL share, presets).
-    const safeInputs = buildSafeInputs({ ...DEFAULT_INPUTS, ...mergedInputs });
+    const safeInputs = buildSafeInputs({ ...WIZARD_BLANK, ...mergedInputs, ...genderMapped });
     // BUG-1 fix: update debouncedInputs immediately alongside inputs so engineKey
     // evaluates against the wizard profile from the first render, not the stale
     // DEFAULT_INPUTS that the 180ms debounce would otherwise leave in place.
@@ -6373,6 +6400,11 @@ export default function App() {
     try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
     setLaunchMode(false);
     setShowWelcome(false);
+    // Land on the Readiness dashboard with the sidebar closed so stats are front-and-centre.
+    // readinessSidebarUserPref is set so the auto-collapse effect respects this explicit choice.
+    readinessSidebarUserPref.current = false;
+    setSidebarOpen(false);
+    setActiveTab('readiness');
   };
 
   useEffect(() => {
@@ -13089,6 +13121,7 @@ ${milestoneSnapshotHtml}
                   {welcomeStep === 1 && <User style={{ width: 24, height: 24, color: "var(--clr-blue2)" }} />}
                   {welcomeStep === 2 && <LayoutDashboard style={{ width: 24, height: 24, color: "var(--clr-purple)" }} />}
                   {welcomeStep === 3 && <Lightbulb style={{ width: 24, height: 24, color: "var(--clr-amber)" }} />}
+                  {welcomeStep === 4 && <Target style={{ width: 24, height: 24, color: "var(--clr-emerald)" }} />}
                 </div>
                 <div>
                   <h2 style={{ fontSize: 17, fontWeight: 800, color: "var(--text-bright)", marginBottom: 2 }}>
@@ -13096,12 +13129,14 @@ ${milestoneSnapshotHtml}
                     {welcomeStep === 1 && "Setting Up Your Profile"}
                     {welcomeStep === 2 && "Exploring the Dashboard"}
                     {welcomeStep === 3 && "Advanced Features & Disclaimer"}
+                    {welcomeStep === 4 && "How would you like to begin?"}
                   </h2>
                   <p style={{ color: "var(--text-subtle)", fontSize: 13, margin: 0 }}>
                     {welcomeStep === 0 && "Your end-to-end Singapore retirement simulation engine"}
                     {welcomeStep === 1 && "Step 1 of 3 — The Input Engine (left panel)"}
                     {welcomeStep === 2 && "Step 2 of 3 — The right panel tabs"}
                     {welcomeStep === 3 && "Step 3 of 3 — Power tools and legal notice"}
+                    {welcomeStep === 4 && "Choose your onboarding path"}
                   </p>
                 </div>
               </div>
@@ -13226,59 +13261,67 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
               )}
+              {/* Step 4 — Decision card (first-time users only; launchMode=true) */}
+              {welcomeStep === 4 && launchMode && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6, textAlign: "center", margin: 0 }}>
+                    Your CPF projection engine is ready. Choose how you'd like to set up your profile:
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <button onClick={handleLaunchWizard} style={{
+                      padding: "20px 16px", borderRadius: 14, cursor: "pointer", textAlign: "center",
+                      background: "rgba(16,185,129,0.10)", border: "1.5px solid rgba(16,185,129,0.45)",
+                      color: "var(--text-bright)", transition: "all 0.15s",
+                    }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>🧭</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-emerald)", marginBottom: 6 }}>Setup Wizard</div>
+                      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        Guided 3-step setup.<br />Enter your profile, balances &amp; income.<br /><span style={{ fontSize: 12, color: "var(--text-subtle)" }}>Recommended for new users.</span>
+                      </div>
+                    </button>
+                    <button onClick={handleLaunchSkip} style={{
+                      padding: "20px 16px", borderRadius: 14, cursor: "pointer", textAlign: "center",
+                      background: "rgba(59,130,246,0.10)", border: "1.5px solid rgba(59,130,246,0.35)",
+                      color: "var(--text-bright)", transition: "all 0.15s",
+                    }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>⚡</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-blue2)", marginBottom: 6 }}>Skip to App</div>
+                      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        Jump straight in.<br />Edit every field directly in the sidebar.<br /><span style={{ fontSize: 12, color: "var(--text-subtle)" }}>Readiness dashboard loads instantly.</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}
             <div className="cpf-welcome-footer" style={{ padding: "20px 32px", borderTop: "1px solid var(--border-subtle)", background: "var(--bg-base)" }}>
-              <div style={{ display: "flex", gap: 6, marginBottom: welcomeStep === 3 && launchMode ? 16 : 0 }}>
-                {[0, 1, 2, 3].map(i => (
+              {/* Progress dots — 5 when in launchMode (step 4 = decision card), 4 otherwise */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+                {(launchMode ? [0, 1, 2, 3, 4] : [0, 1, 2, 3]).map(i => (
                   <div key={i} style={{ width: i === welcomeStep ? 24 : 8, height: 8, borderRadius: 4, background: i === welcomeStep ? "var(--clr-emerald)" : "var(--border-strong)", transition: "all 0.3s" }} />
                 ))}
               </div>
-              {welcomeStep === 3 && launchMode ? (
-                <div style={{ marginTop: 4 }}>
-                  <p style={{ fontSize: 13, color: "var(--text-subtle)", marginBottom: 12, textAlign: "center" }}>
-                    How would you like to set up your profile?
-                  </p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    <button onClick={handleLaunchWizard} style={{
-                      padding: "14px 12px", borderRadius: 12, cursor: "pointer", textAlign: "center",
-                      background: "rgba(16,185,129,0.10)", border: "1.5px solid rgba(16,185,129,0.45)",
-                      color: "var(--text-bright)",
-                    }}>
-                      <div style={{ fontSize: 22, marginBottom: 6 }}>🧭</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--clr-emerald)", marginBottom: 4 }}>Setup Wizard</div>
-                      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
-                        Guided 3-step setup.<br />Enter your profile, balances &amp; income.
-                      </div>
-                    </button>
-                    <button onClick={handleLaunchSkip} style={{
-                      padding: "14px 12px", borderRadius: 12, cursor: "pointer", textAlign: "center",
-                      background: "rgba(59,130,246,0.10)", border: "1.5px solid rgba(59,130,246,0.35)",
-                      color: "var(--text-bright)",
-                    }}>
-                      <div style={{ fontSize: 22, marginBottom: 6 }}>⚡</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--clr-blue2)", marginBottom: 4 }}>Skip to App</div>
-                      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
-                        Jump straight in.<br />Edit every field directly in the sidebar.
-                      </div>
-                    </button>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
-                    <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, background: "transparent", color: "var(--text-subtle)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>← Back</button>
-                  </div>
+              {/* Step 4 footer: just a Back button; choice cards are in the body */}
+              {welcomeStep === 4 ? (
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>← Back</button>
                 </div>
               ) : (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div />
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     {welcomeStep > 0 && <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Back</button>}
+                    {/* Steps 0–2: always Next. Step 3: advance to decision card (launchMode) or finish (returning user). */}
                     {welcomeStep < 3 ? (
                       <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Next &rarr;</button>
+                    ) : launchMode ? (
+                      <button onClick={() => setWelcomeStep(4)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Choose Setup &rarr;</button>
                     ) : (
                       <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
                     )}
-                    <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip</button>
+                    {welcomeStep < 3 && <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip</button>}
                   </div>
                 </div>
               )}
@@ -17060,7 +17103,7 @@ ${milestoneSnapshotHtml}
               <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
                 {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
-                <div id="qs-sticky-banner" style={{ position: "sticky", top: -28, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
+                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
                   {/* Title row + QS/Reference toggle */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
@@ -21015,7 +21058,7 @@ ${milestoneSnapshotHtml}
               <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
                 {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
                     and Quick Start/Reference buttons do not scroll away when reading docs. */}
-                <div id="docs-sticky-nav" style={{ position: "sticky", top: -20, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
+                <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
                   {/* Sub-tab toggle — inside sticky unit so title + buttons always visible */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border-subtle)" }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
