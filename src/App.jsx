@@ -11662,9 +11662,15 @@ ${milestoneSnapshotHtml}
         }
         /* On mobile the kpi-strip switches to a 2-column grid that fills the full width —
            no horizontal overflow, so the right-edge fade overlay is not needed and would
-           visually clip the rightmost KPI card content by 36px. Hide it on mobile. */
+           visually clip the rightmost KPI card content. Hide it on mobile.
+           On tablet (769-1024px) the strip can still overflow (3+ items with 1fr 1fr CSS),
+           so the fade hint is kept but narrowed from 36px to 20px so it no longer obscures
+           the rightmost card's value. */
         @media (max-width: 768px) {
           .kpi-strip-wrap::after { display: none; }
+        }
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .kpi-strip-wrap::after { width: 20px; }
         }
 
         /* FHD kpi-strip: cap at 974px and centre so it stays edge-aligned
@@ -12340,7 +12346,7 @@ ${milestoneSnapshotHtml}
           /* Show Share/Report/etc in the gear dropdown on mobile */
           .cpf-gear-mobile-share { display: contents !important; }
           /* cpf-tabs-hamburger intentionally not shown — tab strip is horizontally scrollable */
-          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 10px; }
+          .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 0 12px; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           /* Fix 1: when inputs sidebar is open on mobile, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
@@ -12426,9 +12432,9 @@ ${milestoneSnapshotHtml}
         /* ─── SMALL PHONE  ≤ 480 px ─────────────────────────────────── */
         @media (max-width: 480px) {
           /* W1 fix: cpf-main-wrap provides 6px horizontal inset; override cpf-tab-content
-             horizontal padding (set to 10px in the 768px rule above) back to 0 so both
-             the tab header and content area sit at the same 6px inset from the screen edge. */
-          .cpf-main-wrap { padding: 6px 6px; }
+             horizontal padding (set to 12px in the 768px rule above) back to 0 so both
+             the tab header and content area sit at the same 12px inset from the screen edge. */
+          .cpf-main-wrap { padding: 6px 12px; }
           .cpf-tab-content { padding: 10px 0 !important; }
           .rg-6, .rg-5, .rg-4, .rg-3 { grid-template-columns: 1fr 1fr !important; gap: 5px !important; }
           .summary-row2 { grid-template-columns: 1fr !important; }
@@ -12842,6 +12848,7 @@ ${milestoneSnapshotHtml}
                     setDebouncedSpouseInputs(mergedSpouse);
                     setHousingSharePct(p.housingSharePct ?? 50);
                     if (p.children) setHouseholdChildren(p.children);
+                    if (window.innerWidth <= 1024) setSidebarOpen(false);
                     setActiveTab("household");
                   } else {
                     setHouseholdEnabled(false);
@@ -13993,7 +14000,7 @@ ${milestoneSnapshotHtml}
                     <span style={{ fontSize: 13, fontWeight: 700, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }}>Household Mode</span>
                     {householdEnabled && <span style={{ fontSize: 11, padding: "1px 5px", borderRadius: 4, background: "rgba(139,92,246,0.15)", color: "#8b5cf6", fontWeight: 700, border: "1px solid rgba(139,92,246,0.3)" }}>ON</span>}
                   </div>
-                  <button onClick={() => { const next = !householdEnabled; setHouseholdEnabled(next); if (next) setActiveTab("household"); }}
+                  <button onClick={() => { const next = !householdEnabled; setHouseholdEnabled(next); if (next) { if (window.innerWidth <= 1024) setSidebarOpen(false); setActiveTab("household"); } }}
                     style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", background: householdEnabled ? "rgba(139,92,246,0.15)" : "rgba(100,116,139,0.12)", color: householdEnabled ? "#8b5cf6" : "var(--text-muted)", border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
                     {householdEnabled ? "Disable" : "Enable"}
                   </button>
