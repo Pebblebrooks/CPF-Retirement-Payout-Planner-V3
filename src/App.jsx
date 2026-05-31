@@ -4210,7 +4210,7 @@ function StatusDot({ active }) {
 // Writes only to inputs via setInputs — same path as every other field.
 // Props: onComplete(mergedInputs) | onSkip()
 // ─────────────────────────────────────────────────────────────────────────────
-function SetupWizard({ onComplete, onSkip }) {
+function SetupWizard({ onComplete, onSkip, isDark }) {
   const [step, setStep]   = useState(1);
   const TOTAL_STEPS       = 3;
   const [w, setW]         = useState({
@@ -4411,8 +4411,10 @@ function SetupWizard({ onComplete, onSkip }) {
   const current = steps[step - 1];
 
   return (
-    /* Overlay */
-    <div style={{
+    /* Overlay — className applies the theme so var(--bg-panel) etc. resolve correctly.
+       SetupWizard renders outside the theme-dark/light root div; without the class every
+       CSS variable falls back to the CSS initial value (transparent/unset). */
+    <div className={isDark ? "theme-dark" : "theme-light"} style={{
       position: "fixed", inset: 0, zIndex: 9999,
       background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)",
       display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
@@ -5402,6 +5404,8 @@ export default function App() {
   const [showMonteCarlo, setShowMonteCarlo] = useState(false);
   const [showBaseline, setShowBaseline] = useState(false);
   const [showLifeEventMarkers, setShowLifeEventMarkers] = useState(true); // Rev #D2: default ON so events are visible immediately
+  // accumChartMode: 'stacked' = AreaChart (wealth composition); 'lines' = LineChart (individual accounts, no MA stacking artifact)
+  const [accumChartMode, setAccumChartMode] = useState('stacked');
   const [whatIfPayoutAge, setWhatIfPayoutAge] = useState(null);
   const [whatIfSaTopup, setWhatIfSaTopup] = useState(null);
   const [whatIfHousing, setWhatIfHousing] = useState(null);
@@ -5433,10 +5437,19 @@ export default function App() {
   // P3-T11: First-run detection — show wizard once, then never again.
   // localStorage key 'cpf_planner_setup_done' is set on wizard complete OR skip.
   // 'cpf_planner_wizard_tip_done' suppresses the post-wizard onboarding tip.
-  const [showWizard, setShowWizard] = useState(() => {
+  //
+  // Launch sequence (new):
+  //   1. Welcome modal auto-opens for ALL fresh loads (existing useEffect at ~line 6337).
+  //   2. launchMode = true when setup has never been done — first-time users only.
+  //   3. In launchMode, the welcome modal's last step shows a CHOICE CARD instead of
+  //      "I Understand — Start Planning": user picks "Setup Wizard" or "Skip to App".
+  //   4. showWizard is NEVER set from localStorage — it only activates from the choice card.
+  //      This prevents the wizard from racing the welcome modal on first load.
+  const [launchMode, setLaunchMode] = useState(() => {
     try { return !localStorage.getItem('cpf_planner_setup_done'); }
-    catch { return false; } // private-browsing / storage blocked → skip wizard
+    catch { return false; }
   });
+  const [showWizard, setShowWizard] = useState(false); // only fires from choice card
   const [postWizardTipDismissed, setPostWizardTipDismissed] = useState(() => {
     try { return !!localStorage.getItem('cpf_planner_wizard_tip_done'); }
     catch { return true; }
@@ -6342,6 +6355,23 @@ export default function App() {
   }, []);
 
   const closeWelcome = () => {
+    // First-run: closing via X or mid-flow Skip = "Skip to App"
+    if (launchMode) {
+      try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
+      setLaunchMode(false);
+    }
+    setShowWelcome(false);
+  };
+
+  const handleLaunchWizard = () => {
+    setLaunchMode(false);
+    setShowWelcome(false);
+    setShowWizard(true);
+  };
+
+  const handleLaunchSkip = () => {
+    try { localStorage.setItem('cpf_planner_setup_done', '1'); } catch {}
+    setLaunchMode(false);
     setShowWelcome(false);
   };
 
@@ -8535,6 +8565,24 @@ export default function App() {
   const accumulationByAge = useMemo(
     () => new Map((displayAccumulation || []).map(r => [r.age, r])),
     [displayAccumulation]);
+
+  // Pre-computed data for Lines chart mode — each account independent (no stacking).
+  // sa: null post-55; ra: null pre-55; total = sum of all active accounts.
+  const accumLineChartData = useMemo(() => {
+    const isRSSChart = debouncedInputs.cpfScheme === 'rss';
+    const ageLimit = isRSSChart ? 95 : payoutAge65;
+    return (displayAccumulation || [])
+      .filter(d => d.age <= ageLimit)
+      .map(row => ({
+        age:   row.age,
+        oa:    row.oa || 0,
+        ma:    row.ma || 0,
+        sa:    row.age >= 55 ? null : (row.sa || 0),
+        ra:    row.age <  55 ? null : (row.ra || 0),
+        total: (row.oa || 0) + (row.ma || 0) + (row.sa || 0) + (row.ra || 0),
+      }));
+  }, [displayAccumulation, debouncedInputs, payoutAge65]);
+
   const payoutByAge = useMemo(
     () => new Map((payoutProjection || []).map(r => [r.age, r])),
     [payoutProjection]);
@@ -13181,21 +13229,59 @@ ${milestoneSnapshotHtml}
             </div>
 
             {/* Footer */}
-            <div className="cpf-welcome-footer" style={{ padding: "20px 32px", borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-base)" }}>
-              <div style={{ display: "flex", gap: 6 }}>
+            <div className="cpf-welcome-footer" style={{ padding: "20px 32px", borderTop: "1px solid var(--border-subtle)", background: "var(--bg-base)" }}>
+              <div style={{ display: "flex", gap: 6, marginBottom: welcomeStep === 3 && launchMode ? 16 : 0 }}>
                 {[0, 1, 2, 3].map(i => (
                   <div key={i} style={{ width: i === welcomeStep ? 24 : 8, height: 8, borderRadius: 4, background: i === welcomeStep ? "var(--clr-emerald)" : "var(--border-strong)", transition: "all 0.3s" }} />
                 ))}
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {welcomeStep > 0 && <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Back</button>}
-                {welcomeStep < 3 ? (
-                  <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Next &rarr;</button>
-                ) : (
-                  <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
-                )}
-                <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip</button>
-              </div>
+              {welcomeStep === 3 && launchMode ? (
+                <div style={{ marginTop: 4 }}>
+                  <p style={{ fontSize: 13, color: "var(--text-subtle)", marginBottom: 12, textAlign: "center" }}>
+                    How would you like to set up your profile?
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <button onClick={handleLaunchWizard} style={{
+                      padding: "14px 12px", borderRadius: 12, cursor: "pointer", textAlign: "center",
+                      background: "rgba(16,185,129,0.10)", border: "1.5px solid rgba(16,185,129,0.45)",
+                      color: "var(--text-bright)",
+                    }}>
+                      <div style={{ fontSize: 22, marginBottom: 6 }}>🧭</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--clr-emerald)", marginBottom: 4 }}>Setup Wizard</div>
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
+                        Guided 3-step setup.<br />Enter your profile, balances &amp; income.
+                      </div>
+                    </button>
+                    <button onClick={handleLaunchSkip} style={{
+                      padding: "14px 12px", borderRadius: 12, cursor: "pointer", textAlign: "center",
+                      background: "rgba(59,130,246,0.10)", border: "1.5px solid rgba(59,130,246,0.35)",
+                      color: "var(--text-bright)",
+                    }}>
+                      <div style={{ fontSize: 22, marginBottom: 6 }}>⚡</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--clr-blue2)", marginBottom: 4 }}>Skip to App</div>
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
+                        Jump straight in.<br />Edit every field directly in the sidebar.
+                      </div>
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
+                    <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, background: "transparent", color: "var(--text-subtle)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>← Back</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div />
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {welcomeStep > 0 && <button onClick={() => setWelcomeStep(s => s - 1)} style={{ padding: "8px 16px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "var(--bg-panel)", color: "var(--text-highlight)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Back</button>}
+                    {welcomeStep < 3 ? (
+                      <button onClick={() => setWelcomeStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>Next &rarr;</button>
+                    ) : (
+                      <button onClick={closeWelcome} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 700, background: "var(--clr-emerald)", color: "#ffffff", border: "none", cursor: "pointer" }}>I Understand &mdash; Start Planning</button>
+                    )}
+                    <button onClick={closeWelcome} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer" }}>Skip</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -18738,10 +18824,17 @@ ${milestoneSnapshotHtml}
                     <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
                       {debouncedInputs.cpfScheme === 'rss'
                         ? "Stacked area chart: RA drawn down each month — OA and MA continue accumulating."
-                        : `Stacked area chart: how your CPF grows year by year until CPF LIFE payouts begin at age ${inputs.payoutAge}.`}
+                        : accumChartMode === 'stacked'
+                          ? `Stacked — wealth composition by account until CPF LIFE begins at age ${inputs.payoutAge}.`
+                          : `Lines — individual account balances. SA terminates at 55; RA starts at 55.`}
                     </p>
                   </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {/* Chart mode toggle */}
+                    <div style={{ display: "flex", background: "var(--bg-input)", borderRadius: 10, border: "1px solid var(--border-strong)", padding: 3, gap: 2 }}>
+                      <button onClick={() => setAccumChartMode('stacked')} style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'stacked' ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'stacked' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Stacked area — total CPF wealth composition">⊞ Stacked</button>
+                      <button onClick={() => setAccumChartMode('lines')}   style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'lines'   ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'lines'   ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Lines — independent account curves, eliminates MA stacking artifact">∿ Lines</button>
+                    </div>
                     <button onClick={() => setShowBaseline(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showBaseline ? "rgba(148,163,184,0.5)" : "var(--border-strong)"}`, background: showBaseline ? "rgba(148,163,184,0.12)" : "var(--bg-input)", color: showBaseline ? "var(--clr-slate)" : "var(--text-muted)", cursor: "pointer" }}>
                       <MinusCircle style={{ width: 13, height: 13 }} />{showBaseline ? "Hide" : "Show"} Baseline
                     </button>
@@ -18853,169 +18946,153 @@ ${milestoneSnapshotHtml}
                 })()}
                 <div className="fhd-chart-grow" style={{ height: 380, minHeight: 220 }}>
                   <ResponsiveContainer width="99%" height="100%">
-                    <AreaChart data={(() => {
-                      // S1 fix: for RSS members, payoutAge65 (= 65) < currentAge (= 68), so the old
-                      // filter `d.age <= payoutAge65` returns zero rows → blank chart.
-                      // RSS members see the full projection window (currentAge → 95).
-                      // CPF LIFE members keep the existing filter (accumulation up to payout age).
+                    {/* Conditional: 'stacked' = AreaChart; 'lines' = LineChart.
+                        Shared internals (axes, markers, reference lines) are in sharedInternals
+                        so the two modes never drift out of sync. */}
+                    {(() => {
+                      // ── Stacked data (bridging row at 54.999 + null SA/RA) ─────────
                       const isRSSChart = debouncedInputs.cpfScheme === 'rss';
                       const ageLimit = isRSSChart ? 95 : payoutAge65;
-                      // Build chart data with a bridging row at the age-55 SA-closure transition.
-                      // Four visual bugs fixed here:
-                      //   1. RA ghost stroke pre-55: use null (not 0) so Recharts breaks the stroke
-                      //      path and the purple RA line does not bleed across the pre-55 chart.
-                      //   2. SA gradual monotone curve into 55: inject a row at 54.999 holding the
-                      //      age-54 SA value so the monotone interpolation stays flat right up to
-                      //      age 55, then drops nearly vertically — a cliff, not a slope.
-                      //   3. MA visual drop at 55: fixed by reordering <Area> components below
-                      //      (OA→MA→SA→RA) so MA sits above only OA, not OA+SA, making it immune
-                      //      to SA's disappearance from the stack.
-                      //   4. OA near-zero at 55: genuine engine behaviour (housing outflow drains OA
-                      //      for 20 years; drain stops at housingStopAge 55 and OA recovers). No fix
-                      //      needed — the bridging row ensures any remaining OA drop looks like a
-                      //      discrete event rather than a smooth monotone curve.
                       const filtered55 = displayAccumulation.filter(d => d.age <= ageLimit);
                       const base = [];
                       for (let i = 0; i < filtered55.length; i++) {
                         const row = filtered55[i];
                         const prev = filtered55[i - 1];
-                        // Inject bridging row just before age-55 only when the simulation spans
-                        // the boundary (prev row is pre-55). The bridging row holds the age-54
-                        // values so monotone interpolation stays flat until the cliff at age 55.
                         if (row.age === 55 && prev && prev.age < 55) {
-                          base.push({
-                            ...prev,
-                            age: 54.999,
-                            sa: prev.sa || 0,
-                            ra: 0, // ra:0 (not null) so Recharts draws a near-vertical connector
-                                   // rising from 0 up to the real RA value at age 55, rather than
-                                   // having the purple line appear out of nowhere mid-chart.
-                          });
+                          base.push({ ...prev, age: 54.999, sa: prev.sa || 0, ra: 0 });
                         }
                         base.push({
                           ...row,
-                          // SA is closed at 55 — zero it out post-55 so the area ends cleanly.
-                          sa: row.age >= 55 ? 0 : (row.sa || 0),
-                          // RA only exists post-55 — use null pre-55 (not 0) to break the Recharts
-                          // stroke path and prevent a ghost purple line running across the pre-55 chart.
-                          ra: row.age < 55 ? null : (row.ra || 0),
+                          sa: row.age >= 55 ? null : (row.sa || 0),
+                          ra: row.age <  55 ? null : (row.ra || 0),
                         });
                       }
-                      let merged = base;
+                      let stackedData = base;
                       if (showMonteCarlo && monteCarloData) {
-                        // O(1) Map lookup — replaces O(n²) .find(m => m.age === row.age) inside .map()
                         const mcByAge = new Map((monteCarloData.rows || []).map(m => [m.age, m]));
-                        merged = merged.map(row => { const mc = mcByAge.get(row.age); return mc ? { ...row, mcP10: mc.p10, mcP90: mc.p90, mcP50: mc.p50 } : row; });
+                        stackedData = stackedData.map(row => { const mc = mcByAge.get(row.age); return mc ? { ...row, mcP10: mc.p10, mcP90: mc.p90, mcP50: mc.p50 } : row; });
                       }
                       if (showBaseline && baselineProjection) {
-                        // O(1) Map lookup — replaces O(n²) .find(b => b.age === row.age) inside .map()
                         const blByAge = new Map((baselineProjection.rows || baselineProjection).map ? (baselineProjection.rows || baselineProjection).map(b => [b.age, b]) : []);
-                        merged = merged.map(row => { const bl = blByAge.get(row.age); return bl ? { ...row, baselineTotal: bl.baselineTotal } : row; });
+                        stackedData = stackedData.map(row => { const bl = blByAge.get(row.age); return bl ? { ...row, baselineTotal: bl.baselineTotal } : row; });
                       }
-                      return merged;
-                    })()}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                      <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} tickFormatter={v => Number.isInteger(Number(v)) ? v : ''} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 11 }} />
-                      <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "CPF Balance ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 11, style: { textAnchor: "middle" } }} />
-                      <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={(v, n) => { if (n === "MC Band") return null; return [formatCurrency(v), n]; }} labelFormatter={v => `Age ${Math.round(Number(v))}`} wrapperStyle={STYLES.chartTooltipWrapper} />
-                      <Legend verticalAlign="top" height={28} iconSize={8} wrapperStyle={STYLES.chartLegend} />
-                      {milestones.filter(m => m.age <= (debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)).map((m, idx) => { // S1: RSS shows milestones to 95
-                        const sc = m.type === "success" ? "var(--clr-emerald)" : m.type === "gold" ? "var(--clr-amber3)" : m.type === "warning" ? "#f97316" : "#ef4444";
-                        return <ReferenceLine key={idx} x={m.age} stroke={sc} strokeWidth={1.5} strokeDasharray="3 3" label={{ position: "insideTopRight", value: `Age ${m.age}`, fill: sc, fontSize: 10, fontWeight: "bold" }} />;
-                      })}
-                      {/* Rev #D2: Life event markers — bands for range events, lines for point events */}
-                      {showLifeEventMarkers && (inputs.lifeEvents || []).filter(e => e.enabled !== false).map((ev, idx) => {
-                        const meta = LIFE_EVENT_TYPES[ev.type] || {};
-                        const color = meta.color || "#ef4444";
-                        const sa = Number(ev.startAge);
-                        const ea = Number(ev.endAge);
-                        const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement' || sa === ea;
-                        const labelVal = `${ev.label || meta.label}`;
-                        if (isPoint) {
-                          return <ReferenceLine key={`le-${idx}`} x={sa} stroke={color} strokeWidth={2} strokeDasharray="5 3"
-                            label={{ position: "insideTopLeft", value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
-                        }
-                        return <ReferenceArea key={`le-${idx}`} x1={sa} x2={Math.min(ea, debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)} fill={color} fillOpacity={0.08}
-                          stroke={color} strokeOpacity={0.4} strokeWidth={1}
-                          label={{ position: "insideTop", value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
-                      })}
-                      {/* Q2: Milestone Age markers — teal dashed vertical lines for up to 3 ages */}
-                      {(() => {
-                        // BUG-M4 fix: ca_m and slot ages from debouncedInputs to match chart data source
-                        const ca_m = Number(debouncedInputs.currentAge) || 0;
-                        const slots = [
-                          { age: Number(debouncedInputs.milestoneAge)  || 0, stroke: "#22d3ee" },
-                          { age: Number(debouncedInputs.milestoneAge2) || 0, stroke: "#67e8f9" },
-                          { age: Number(debouncedInputs.milestoneAge3) || 0, stroke: "#a5f3fc" },
-                          { age: Number(debouncedInputs.milestoneAge4) || 0, stroke: "#cffafe" },
-                          { age: Number(debouncedInputs.milestoneAge5) || 0, stroke: "#e0f2fe" },
-                        ];
-                        return slots
-                          .filter(s => s.age > 0 && s.age > ca_m)
-                          .map((s, i) => (
-                            <ReferenceLine
-                              key={`milestone-marker-${i}`}
-                              x={s.age}
-                              stroke={s.stroke}
-                              strokeWidth={2}
-                              strokeDasharray="6 3"
-                              label={{ position: "insideTopLeft", value: `🎯 Age ${s.age}`, fill: s.stroke, fontSize: 11, fontWeight: "bold" }}
+
+                      // ── Lines data (accumLineChartData memo + MC/Baseline overlay) ──
+                      let linesData = accumLineChartData;
+                      if (showMonteCarlo && monteCarloData) {
+                        const mcByAge = new Map((monteCarloData.rows || []).map(m => [m.age, m]));
+                        linesData = linesData.map(row => { const mc = mcByAge.get(row.age); return mc ? { ...row, mcP10: mc.p10, mcP90: mc.p90, mcP50: mc.p50 } : row; });
+                      }
+                      if (showBaseline && baselineProjection) {
+                        const blByAge = new Map((baselineProjection.rows || baselineProjection).map ? (baselineProjection.rows || baselineProjection).map(b => [b.age, b]) : []);
+                        linesData = linesData.map(row => { const bl = blByAge.get(row.age); return bl ? { ...row, baselineTotal: bl.baselineTotal } : row; });
+                      }
+
+                      // ── Shared internals ──────────────────────────────────────────
+                      const sharedInternals = (
+                        <>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                          <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} tickFormatter={v => Number.isInteger(Number(v)) ? v : ''} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 11 }} />
+                          <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "CPF Balance ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 11, style: { textAnchor: "middle" } }} />
+                          <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={(v, n) => { if (n === "MC Band" || v === null || v === undefined) return null; return [formatCurrency(v), n]; }} labelFormatter={v => `Age ${Math.round(Number(v))}`} wrapperStyle={STYLES.chartTooltipWrapper} />
+                          <Legend verticalAlign="top" height={28} iconSize={8} wrapperStyle={STYLES.chartLegend} />
+                          {/* S5: SA->RA transition marker */}
+                          {Number(debouncedInputs.currentAge) < 55 && (
+                            <ReferenceLine x={55} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 3"
+                              label={{ position: "insideTopLeft", value: "SA\u2192RA", fill: "#f59e0b", fontSize: 10, fontWeight: "bold" }} />
+                          )}
+                          {milestones.filter(m => m.age <= (debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)).map((m, idx) => {
+                            const sc = m.type === "success" ? "var(--clr-emerald)" : m.type === "gold" ? "var(--clr-amber3)" : m.type === "warning" ? "#f97316" : "#ef4444";
+                            return <ReferenceLine key={idx} x={m.age} stroke={sc} strokeWidth={1.5} strokeDasharray="3 3" label={{ position: "insideTopRight", value: `Age ${m.age}`, fill: sc, fontSize: 10, fontWeight: "bold" }} />;
+                          })}
+                          {showLifeEventMarkers && (inputs.lifeEvents || []).filter(e => e.enabled !== false).map((ev, idx) => {
+                            const meta = LIFE_EVENT_TYPES[ev.type] || {};
+                            const color = meta.color || "#ef4444";
+                            const sa = Number(ev.startAge);
+                            const ea = Number(ev.endAge);
+                            const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement' || sa === ea;
+                            const labelVal = `${ev.label || meta.label}`;
+                            if (isPoint) return <ReferenceLine key={`le-${idx}`} x={sa} stroke={color} strokeWidth={2} strokeDasharray="5 3" label={{ position: "insideTopLeft", value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
+                            return <ReferenceArea key={`le-${idx}`} x1={sa} x2={Math.min(ea, debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)} fill={color} fillOpacity={0.08} stroke={color} strokeOpacity={0.4} strokeWidth={1} label={{ position: "insideTop", value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
+                          })}
+                          {(() => {
+                            const ca_m = Number(debouncedInputs.currentAge) || 0;
+                            const slots = [
+                              { age: Number(debouncedInputs.milestoneAge)  || 0, stroke: "#22d3ee" },
+                              { age: Number(debouncedInputs.milestoneAge2) || 0, stroke: "#67e8f9" },
+                              { age: Number(debouncedInputs.milestoneAge3) || 0, stroke: "#a5f3fc" },
+                              { age: Number(debouncedInputs.milestoneAge4) || 0, stroke: "#cffafe" },
+                              { age: Number(debouncedInputs.milestoneAge5) || 0, stroke: "#e0f2fe" },
+                            ];
+                            return slots.filter(s => s.age > 0 && s.age > ca_m).map((s, i) => (
+                              <ReferenceLine key={`milestone-marker-${i}`} x={s.age} stroke={s.stroke} strokeWidth={2} strokeDasharray="6 3"
+                                label={{ position: "insideTopLeft", value: `\uD83C\uDFAF Age ${s.age}`, fill: s.stroke, fontSize: 11, fontWeight: "bold" }} />
+                            ));
+                          })()}
+                          {showLifeEventMarkers && (() => {
+                            const p2Age = debouncedInputs.salaryPhaseAge !== "" && debouncedInputs.salaryPhaseAge != null && Number(debouncedInputs.salaryPhaseAge) !== 0
+                              ? Number(debouncedInputs.salaryPhaseAge) : null;
+                            const p2Rate = debouncedInputs.salaryGrowthRate2 ?? 0;
+                            if (p2Age === null || isNaN(p2Age)) return null;
+                            return <ReferenceLine key="phase2-marker" x={p2Age} stroke="var(--clr-lime)" strokeWidth={1.5} strokeDasharray="6 3"
+                              label={{ position: "insideTopRight", value: `\uD83D\uDCC8 P2: ${p2Rate}%/yr`, fill: "var(--clr-lime)", fontSize: 10, fontWeight: "bold" }} />;
+                          })()}
+                          {Number(debouncedInputs.goalTargetCPF) > 0 && (
+                            <ReferenceLine y={Number(debouncedInputs.goalTargetCPF)} stroke="#f43f5e" strokeWidth={2} strokeDasharray="8 4"
+                              label={{ value: `\uD83C\uDFAF ${Number(debouncedInputs.goalTargetCPF) >= 1e6 ? `$${(Number(debouncedInputs.goalTargetCPF)/1e6).toFixed(1)}M` : `$${Math.round(Number(debouncedInputs.goalTargetCPF)/1e3)}k`} Goal`, position: "insideTopLeft", fill: "#f43f5e", fontSize: 11, fontWeight: "bold" }}
                             />
-                          ));
-                      })()}
-                      {/* Phase 2 salary marker — shown alongside life event markers when salaryPhaseAge is set */}
-                      {showLifeEventMarkers && (() => {
-                        const p2Age = debouncedInputs.salaryPhaseAge !== "" && debouncedInputs.salaryPhaseAge != null && Number(debouncedInputs.salaryPhaseAge) !== 0
-                          ? Number(debouncedInputs.salaryPhaseAge) : null;
-                        const p2Rate = debouncedInputs.salaryGrowthRate2 ?? 0;
-                        if (p2Age === null || isNaN(p2Age)) return null;
-                        return <ReferenceLine key="phase2-marker" x={p2Age} stroke="var(--clr-lime)"
-                          strokeWidth={1.5} strokeDasharray="6 3"
-                          label={{ position: "insideTopRight", value: `📈 P2: ${p2Rate}%/yr`, fill: "var(--clr-lime)", fontSize: 10, fontWeight: "bold" }} />;
-                      })()}
-                      {/* Goal Simulator — target line (horizontal dashed) */}
-                      {Number(debouncedInputs.goalTargetCPF) > 0 && (
-                        <ReferenceLine
-                          y={Number(debouncedInputs.goalTargetCPF)}
-                          stroke="#f43f5e"
-                          strokeWidth={2}
-                          strokeDasharray="8 4"
-                          label={{ value: `🎯 ${Number(debouncedInputs.goalTargetCPF) >= 1e6 ? `$${(Number(debouncedInputs.goalTargetCPF)/1e6).toFixed(1)}M` : `$${Math.round(Number(debouncedInputs.goalTargetCPF)/1e3)}k`} Goal`, position: "insideTopLeft", fill: "#f43f5e", fontSize: 11, fontWeight: "bold" }}
-                        />
-                      )}
-                      <defs>
-                        <linearGradient id="accOaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#1d4ed8" stopOpacity={0.30} />
-                          <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0.06} />
-                        </linearGradient>
-                        <linearGradient id="accSaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.30} />
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.06} />
-                        </linearGradient>
-                        <linearGradient id="accMaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#059669" stopOpacity={0.30} />
-                          <stop offset="95%" stopColor="#059669" stopOpacity={0.06} />
-                        </linearGradient>
-                        <linearGradient id="accRaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.30} />
-                          <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.06} />
-                        </linearGradient>
-                      </defs>
-                      <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" strokeWidth={2} fill="url(#accOaGrad)" name="OA" />
-                      {/* MA placed above OA (not above OA+SA) so its stroke position is unaffected
-                          when SA closes at 55 — fixes the visual MA drop artifact at age 55. */}
-                      <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="url(#accMaGrad)" name="MA" />
-                      <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" stroke="#f59e0b" strokeWidth={2} fill="url(#accSaGrad)" name="SA (pre-55)" />
-                      {/* connectNulls={false} (default, stated explicitly) ensures the purple stroke
-                          does not draw pre-55 where ra=null — fixes the ghost RA line across the chart. */}
-                      <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" connectNulls={false} stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
-                      {/* MC band rendered AFTER stacked areas so it overlays on top without
-                          hiding the account breakdown. P90 = semi-transparent upper bound fill;
-                          no bg-base "eraser" (the old eraser covered the stacked areas entirely).
-                          P50 dashed median line sits on top of everything. */}
-                      {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="var(--clr-violet2)" strokeWidth={0.5} strokeDasharray="2 2" fill="var(--clr-purple2)" fillOpacity={0.18} name="MC Band (P10–P90)" legendType="square" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
-                      {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
-                    </AreaChart>
+                          )}
+                        </>
+                      );
+
+                      // ── STACKED AREA CHART ─────────────────────────────────────────
+                      if (accumChartMode === 'stacked') return (
+                        <AreaChart data={stackedData}>
+                          {sharedInternals}
+                          <defs>
+                            <linearGradient id="accOaGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#1d4ed8" stopOpacity={0.30} />
+                              <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0.06} />
+                            </linearGradient>
+                            <linearGradient id="accSaGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.30} />
+                              <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.06} />
+                            </linearGradient>
+                            <linearGradient id="accMaGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#059669" stopOpacity={0.30} />
+                              <stop offset="95%" stopColor="#059669" stopOpacity={0.06} />
+                            </linearGradient>
+                            <linearGradient id="accRaGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.30} />
+                              <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.06} />
+                            </linearGradient>
+                          </defs>
+                          {/* Stack: OA->MA->SA->RA. MA above OA only, immune to SA closing at 55. */}
+                          <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" strokeWidth={2} fill="url(#accOaGrad)" name="OA" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="url(#accMaGrad)" name="MA" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" connectNulls={false} stroke="#f59e0b" strokeWidth={2} fill="url(#accSaGrad)" name="SA (pre-55)" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" connectNulls={false} stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
+                          {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="var(--clr-violet2)" strokeWidth={0.5} strokeDasharray="2 2" fill="var(--clr-purple2)" fillOpacity={0.18} name="MC Band (P10-P90)" legendType="square" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
+                          {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
+                        </AreaChart>
+                      );
+
+                      // ── LINES CHART ────────────────────────────────────────────────
+                      // Each account = independent line. MA y-pos = actual balance, not stacked.
+                      // Dashed Total line shows overall CPF wealth.
+                      return (
+                        <LineChart data={linesData}>
+                          {sharedInternals}
+                          <Line isAnimationActive={false} type="monotone" dataKey="oa"    stroke="#1d4ed8"            strokeWidth={2}   dot={false} connectNulls={false} name="OA" />
+                          <Line isAnimationActive={false} type="monotone" dataKey="ma"    stroke="#059669"            strokeWidth={2}   dot={false} connectNulls={false} name="MA" />
+                          <Line isAnimationActive={false} type="monotone" dataKey="sa"    stroke="#f59e0b"            strokeWidth={2}   dot={false} connectNulls={false} name="SA (pre-55)" />
+                          <Line isAnimationActive={false} type="monotone" dataKey="ra"    stroke="var(--clr-purple2)" strokeWidth={2}   dot={false} connectNulls={false} name="RA (from 55)" />
+                          <Line isAnimationActive={false} type="monotone" dataKey="total" stroke="var(--clr-slate)"  strokeWidth={1.5} dot={false} connectNulls={false} name="Total CPF" strokeDasharray="6 3" />
+                          {showMonteCarlo && monteCarloData && <Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" />}
+                          {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
+                        </LineChart>
+                      );
+                    })()}
                   </ResponsiveContainer>
                 </div>
                 {showBaseline && baselineProjection && (() => {
@@ -22761,6 +22838,7 @@ ${milestoneSnapshotHtml}
         <SetupWizard
           onComplete={handleWizardComplete}
           onSkip={handleWizardSkip}
+          isDark={isDark}
         />
       )}
 
