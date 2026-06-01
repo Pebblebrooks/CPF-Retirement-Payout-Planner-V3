@@ -5648,17 +5648,20 @@ export default function App() {
   const welcomeBodyRef = useRef(null); // scroll-reset target for welcome modal body
   useEffect(() => {
     if (activeTab === "readiness") {
-      sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Readiness
-      // If the user has previously made an explicit show/hide choice on this tab, honour it.
-      // Otherwise default to auto-collapse so the dashboard gets maximum width on first entry.
-      if (readinessSidebarUserPref.current !== null) {
+      sidebarWasOpenRef.current = sidebarOpen; // snapshot state before entering Readiness
+      if (window.innerWidth > 1024) {
+        // Issue 2 fix: Desktop — always open sidebar on Readiness, same as every other tab.
+        // Previously used readinessSidebarUserPref + desktopDefault logic, which could
+        // collapse the sidebar on launch at boundary viewports (e.g. exactly 1024px CSS px).
+        // sidebarWasOpenRef is set to true above so leaving Readiness also restores to open.
+        setSidebarOpen(true);
+      } else if (readinessSidebarUserPref.current !== null) {
+        // Mobile/tablet: honour any explicit show/hide choice the user made on this tab.
         setSidebarOpen(readinessSidebarUserPref.current);
       } else {
-        // First-entry default: open on desktop (>1024px), collapse on mobile/tablet.
-        // Also record this as the explicit pref so re-entries honour the same choice.
-        const desktopDefault = window.innerWidth > 1024;
-        readinessSidebarUserPref.current = desktopDefault;
-        setSidebarOpen(desktopDefault);
+        // Mobile/tablet first-entry: collapse by default so dashboard gets full width.
+        readinessSidebarUserPref.current = false;
+        setSidebarOpen(false);
       }
     } else if (window.innerWidth <= 1024) {
       setSidebarOpen(false);                   // mobile/tablet: always hide inputs on tab switch
@@ -5688,7 +5691,12 @@ export default function App() {
   // back to the start so "Readiness" (the first tab) is always fully visible — not hidden
   // behind a previous rightward swipe. On other tabs the strip stays at its current position
   // so the user's last scroll position is preserved.
-  useEffect(() => {
+  // Issue 1 fix: changed useEffect → useLayoutEffect so the scroll reset fires
+  // synchronously after DOM mutations but BEFORE the browser paints the new tab content.
+  // With useEffect, the stale cpf-tab-content.scrollTop was visible for one frame when
+  // switching to the Docs tab (showing mid-page content in the gap between the tab strip
+  // and the #docs-sticky-nav banner). useLayoutEffect eliminates that paint entirely.
+  useLayoutEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0; // Safari fallback
