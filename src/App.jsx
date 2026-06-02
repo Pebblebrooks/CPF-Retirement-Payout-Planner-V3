@@ -4215,6 +4215,12 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
   const [step, setStep]     = useState(1);
   const [advMode, setAdvMode] = useState(false);
   const TOTAL_STEPS           = advMode ? 7 : 3;
+  const scrollRef             = useRef(null);
+
+  // Reset scroll to top whenever step changes so form fields are never hidden above fold
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [step]);
 
   const [w, setW] = useState({
     // Step 1 — Profile
@@ -4544,7 +4550,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
       }}>
 
         {/* Scrollable content — header, step indicator, form body */}
-        <div style={{ flex: "1 1 0", overflowY: "auto", padding: "28px 32px 8px" }}>
+        <div ref={scrollRef} style={{ flex: "1 1 0", overflowY: "auto", padding: "22px 28px 8px" }}>
 
         {/* App logo + skip */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
@@ -4613,7 +4619,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
         </div>{/* end scrollable content */}
 
         {/* Pinned footer — navigation always visible regardless of body height */}
-        <div style={{ flexShrink: 0, padding: "12px 32px 20px", borderTop: "1px solid var(--border-subtle)" }}>
+        <div style={{ flexShrink: 0, padding: "10px 28px 18px", borderTop: "1px solid var(--border-subtle)" }}>
         {/* Navigation */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", gap: 10 }}>
@@ -6619,10 +6625,9 @@ export default function App() {
     setLaunchMode(false);
     setShowDecisionCard(false);
     setShowWelcome(false);
-    // Land on the Readiness dashboard with the sidebar closed so stats are front-and-centre.
-    // readinessSidebarUserPref is set so the auto-collapse effect respects this explicit choice.
-    readinessSidebarUserPref.current = false;
-    setSidebarOpen(false);
+    // Open sidebar so user can see and edit inputs immediately on first landing.
+    readinessSidebarUserPref.current = true;
+    setSidebarOpen(true);
     setActiveTab('readiness');
   };
 
@@ -17378,11 +17383,11 @@ ${milestoneSnapshotHtml}
               <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
                 {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
-                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: 0, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
+                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 20, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
                   {/* Title row + QS/Reference toggle */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
+                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />Docs
                     </h3>
                     <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
                       <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'quickstart' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'quickstart' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
@@ -21337,7 +21342,7 @@ ${milestoneSnapshotHtml}
                   {/* Sub-tab toggle — inside sticky unit so title + buttons always visible */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border-subtle)" }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
+                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />Docs
                     </h3>
                     <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
                       <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all 0.15s" }}>
