@@ -16,7 +16,8 @@ import {
   ArrowRightLeft, LogOut, Users, ExternalLink, Home, Upload,
   RefreshCw, Share2, Settings,
   Eraser, UserCheck, Building2, Baby,
-  TrendingDown, Pause, HeartPulse, DollarSign, Sunset, Star, Smartphone, Zap
+  TrendingDown, Pause, HeartPulse, DollarSign, Sunset, Star, Smartphone, Zap,
+  Circle
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
@@ -4537,10 +4538,13 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
     }}>
       <div style={{
         background: "var(--bg-panel)", border: "1px solid var(--border-subtle)",
-        borderRadius: 20, padding: "32px 32px 24px", width: "100%", maxWidth: 480,
+        borderRadius: 20, width: "100%", maxWidth: 480,
         boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-        maxHeight: "90vh", overflowY: "auto",
+        maxHeight: "92vh", display: "flex", flexDirection: "column",
       }}>
+
+        {/* Scrollable content — header, step indicator, form body */}
+        <div style={{ flex: "1 1 0", overflowY: "auto", padding: "28px 32px 8px" }}>
 
         {/* App logo + skip */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
@@ -4606,8 +4610,12 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
         {/* Step body */}
         {current.body}
 
+        </div>{/* end scrollable content */}
+
+        {/* Pinned footer — navigation always visible regardless of body height */}
+        <div style={{ flexShrink: 0, padding: "12px 32px 20px", borderTop: "1px solid var(--border-subtle)" }}>
         {/* Navigation */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 22 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", gap: 10 }}>
             {step > 1 && (
               <button type="button" onClick={back}
@@ -4637,7 +4645,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
         </div>
 
         {/* Progress dots */}
-        <div style={{ display: "flex", justifyContent: "center", gap: 5, marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 5, marginTop: 14 }}>
           {visibleSteps.map((_, i) => {
             const n = i + 1;
             const isAdv = n > 3;
@@ -4652,6 +4660,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
             );
           })}
         </div>
+        </div>{/* end pinned footer */}
       </div>
     </div>
   );
@@ -7324,6 +7333,7 @@ export default function App() {
   const handleClearInputs = () => {
     setConfirmModal({
       message: "Clear all inputs to a blank slate (age 30, all balances and amounts zeroed)?",
+      confirmLabel: "Clear",
       onConfirm: () => {
         const blankPreset = PRESET_PROFILES.find(p => p.id === "blank");
         const merged = { ...DEFAULT_INPUTS, ...(blankPreset?.inputs || {}) };
@@ -13710,13 +13720,6 @@ ${milestoneSnapshotHtml}
               )}
             </div>
 
-            {/* 6b. Clear — desktop only, before Reset; zeroes all inputs to blank slate */}
-            <button className="cpf-nav-d-only" onClick={handleClearInputs}
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", padding: "6px 10px", borderRadius: 8, border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", flexShrink: 0 }}
-              title="Clear all inputs to a blank slate" aria-label="Clear all inputs">
-              <Eraser style={{ width: 14, height: 14 }} />
-            </button>
-
             {/* 7. Reset — desktop only, moved to end (destructive action goes last) */}
             <button className="cpf-nav-d-only" onClick={handleReset}
               style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.08)", color: "var(--clr-red)", padding: "6px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px solid rgba(239,68,68,0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
@@ -13895,20 +13898,20 @@ ${milestoneSnapshotHtml}
             {/* 4 icon-only action buttons — always visible, same row as label */}
             <div style={{ display: "flex", gap: 4, alignItems: "center" }} onClick={e => e.stopPropagation()}>
               <button onClick={expandAllSections} title="Expand all sections" aria-label="Expand all sections"
-                style={{ padding: "4px 7px", borderRadius: 6, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                <ChevronDown style={{ width: 13, height: 13 }} />
+                style={{ padding: "4px 7px", borderRadius: 6, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                <ChevronDown style={{ width: 13, height: 13, strokeWidth: 3 }} />
               </button>
               <button onClick={collapseAllSections} title="Collapse all sections" aria-label="Collapse all sections"
-                style={{ padding: "4px 7px", borderRadius: 6, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                <ChevronUp style={{ width: 13, height: 13 }} />
+                style={{ padding: "4px 7px", borderRadius: 6, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                <ChevronUp style={{ width: 13, height: 13, strokeWidth: 3 }} />
               </button>
               <button onClick={() => setShowAdvanced(v => !v)} title={showAdvanced ? "Hide advanced settings" : "Show advanced settings"} aria-label="Toggle advanced settings"
-                style={{ padding: "4px 7px", borderRadius: 6, background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)", color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)", border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", display: "flex", alignItems: "center" }}>
-                <SlidersHorizontal style={{ width: 13, height: 13 }} />
+                style={{ padding: "4px 7px", borderRadius: 6, background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)", color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)", border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", display: "flex", alignItems: "center", fontSize: 11, fontWeight: 900, letterSpacing: "-0.5px" }}>
+                ++
               </button>
               <button onClick={handleClearInputs} title="Clear all inputs to blank slate" aria-label="Clear all inputs"
                 style={{ padding: "4px 7px", borderRadius: 6, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                <Eraser style={{ width: 13, height: 13 }} />
+                <Circle style={{ width: 13, height: 13, strokeWidth: 2.5 }} />
               </button>
             </div>
           </div>
@@ -13932,14 +13935,14 @@ ${milestoneSnapshotHtml}
           {/* Sticky bar — FHD: 3 dual-function column buttons; HD/smaller: Expand/Collapse All */}
           <div className="sidebar-sticky-bar" style={{ display: "flex", gap: 6, padding: "6px 0", position: "sticky", top: 0, zIndex: 10, background: "var(--bg-base)", borderBottom: "1px solid var(--border-subtle)", backdropFilter: "blur(6px)" }}>
             {/* HD and below: plain Expand All / Collapse All (hidden at ≥1920px via CSS) */}
-            <button className="hd-only-btn" onClick={expandAllSections} title="Expand all sections" aria-label="Expand all sections" style={{ flex: 1, padding: "5px 0", borderRadius: 8, background: "rgba(var(--clr-emerald-rgb),0.1)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <ChevronDown style={{ width: 14, height: 14 }} />
+            <button className="hd-only-btn" onClick={expandAllSections} title="Expand all sections" aria-label="Expand all sections" style={{ flex: 1, padding: "5px 0", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <ChevronDown style={{ width: 14, height: 14, strokeWidth: 3 }} />
             </button>
-            <button className="hd-only-btn" onClick={collapseAllSections} title="Collapse all sections" aria-label="Collapse all sections" style={{ flex: 1, padding: "5px 0", borderRadius: 8, background: "rgba(100,116,139,0.1)", color: "var(--text-muted)", border: "1px solid var(--border-strong)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <ChevronUp style={{ width: 14, height: 14 }} />
+            <button className="hd-only-btn" onClick={collapseAllSections} title="Collapse all sections" aria-label="Collapse all sections" style={{ flex: 1, padding: "5px 0", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <ChevronUp style={{ width: 14, height: 14, strokeWidth: 3 }} />
             </button>
             <button className="hd-only-btn" onClick={handleClearInputs} title="Clear all inputs to blank slate" aria-label="Clear all inputs" style={{ flex: "none", padding: "5px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Eraser style={{ width: 14, height: 14 }} />
+              <Circle style={{ width: 14, height: 14, strokeWidth: 2.5 }} />
             </button>
             {/* FHD: 3 dual-function column header buttons (hidden at ≤1919px via CSS).
                 Each button toggles ALL sections within that column open/closed.
@@ -14005,8 +14008,7 @@ ${milestoneSnapshotHtml}
                         color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
                         fontSize: 11, fontWeight: 800, letterSpacing: "0.02em", transition: "all 0.15s",
                       }}>
-                      <Settings style={{ width: 10, height: 10, flexShrink: 0 }} />
-                      <span>Adv</span>
+                      <span style={{ fontWeight: 900, fontSize: 12, letterSpacing: "-0.5px" }}>++</span>
                       <ChevronDown className={`sidebar-chevron${showAdvanced ? " open" : ""}`} style={{ width: 10, height: 10 }} />
                     </button>
                   );
