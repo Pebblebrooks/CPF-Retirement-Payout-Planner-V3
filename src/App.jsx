@@ -4386,9 +4386,11 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
           {inp("name", "Your name (optional)")}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
-              <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Current age {w.birthYear > 0 && <span style={{ fontSize: 12, color: "#22d3ee" }}>(auto)</span>}</label>
+              <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>
+                Current age {w.birthYear > 0 && <span style={{ fontSize: 12, color: "#22d3ee" }}>(auto-computed)</span>}
+              </label>
               {w.birthYear > 0 ? (
-                <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 10, padding: "10px 14px", fontSize: 14, color: "var(--text-muted)" }}>
+                <div style={{ background: "var(--bg-muted)", border: "1px solid rgba(34,211,238,0.3)", borderRadius: 10, padding: "10px 14px", fontSize: 14, color: "#22d3ee", fontWeight: 700 }}>
                   {(() => { const _t = new Date(); return _t.getFullYear() - w.birthYear - (((_t.getMonth() + 1) < w.birthMonth) ? 1 : 0); })()}
                 </div>
               ) : inp("currentAge", "e.g. 35", "number")}
@@ -4401,7 +4403,19 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
               <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Birth month</label>
-              <select value={w.birthMonth} onChange={e => set("birthMonth", Number(e.target.value))}
+              <select value={w.birthMonth} onChange={e => {
+                const mo = Number(e.target.value);
+                setW(p => {
+                  const updated = { ...p, birthMonth: mo };
+                  if (p.birthYear > 0) {
+                    const _t = new Date();
+                    const derived = _t.getFullYear() - p.birthYear - ((_t.getMonth() + 1) < mo ? 1 : 0);
+                    if (derived >= 16 && derived <= 99) updated.currentAge = String(derived);
+                  }
+                  return updated;
+                });
+                setErrors(p => ({ ...p, birthMonth: "", currentAge: "" }));
+              }}
                 style={{ background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 10, padding: "10px 14px", fontSize: 14, color: "var(--text-bright)", outline: "none", width: "100%", appearance: "none", WebkitAppearance: "none" }}>
                 {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m,i) => (
                   <option key={i+1} value={i+1}>{m}</option>
@@ -4411,7 +4425,19 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
             <div>
               <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Birth year</label>
               <select value={w.birthYear || (Number(w.currentAge) > 0 ? (new Date().getFullYear() - Number(w.currentAge)) : 0)}
-                onChange={e => set("birthYear", Number(e.target.value))}
+                onChange={e => {
+                  const yr = Number(e.target.value);
+                  setW(p => {
+                    const updated = { ...p, birthYear: yr };
+                    if (yr > 0) {
+                      const _t = new Date();
+                      const derived = _t.getFullYear() - yr - ((_t.getMonth() + 1) < p.birthMonth ? 1 : 0);
+                      if (derived >= 16 && derived <= 99) updated.currentAge = String(derived);
+                    }
+                    return updated;
+                  });
+                  setErrors(p => ({ ...p, birthYear: "", currentAge: "" }));
+                }}
                 style={{ background: "var(--bg-input)", border: `1px solid ${w.birthYear > 0 ? "rgba(34,211,238,0.5)" : "var(--border-strong)"}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, color: w.birthYear > 0 ? "var(--text-bright)" : "var(--text-muted)", outline: "none", width: "100%", appearance: "none", WebkitAppearance: "none" }}>
                 <option value={0}>— manual age entry —</option>
                 {Array.from({ length: 100 }, (_, i) => { const yr = new Date().getFullYear() - i; return <option key={yr} value={yr}>{yr}</option>; })}
@@ -4623,6 +4649,17 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
         <div style={{ flexShrink: 0, padding: "10px 28px 18px", borderTop: "1px solid var(--border-subtle)" }}>
         {/* Navigation */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+
+          {/* Advanced CTA — above Finish at step 3; full-width prominent purple button */}
+          {step === 3 && !advMode && (
+            <button type="button" onClick={goAdvanced}
+              style={{ width: "100%", padding: "12px 0", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
+                border: "1.5px solid rgba(168,85,247,0.6)", background: "rgba(168,85,247,0.15)", color: "#a855f7",
+                transition: "all 0.12s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              ⚙ Continue to Advanced Setup →
+            </button>
+          )}
+
           <div style={{ display: "flex", gap: 10 }}>
             {step > 1 && (
               <button type="button" onClick={back}
@@ -4639,16 +4676,6 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
               {step < TOTAL_STEPS ? `Next → Step ${step + 1} of ${TOTAL_STEPS}` : "✓ Finish setup"}
             </button>
           </div>
-
-          {/* Advanced CTA — only show at end of basic (step 3, not yet in advMode) */}
-          {step === 3 && !advMode && (
-            <button type="button" onClick={goAdvanced}
-              style={{ width: "100%", padding: "9px 0", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                border: "1px solid rgba(168,85,247,0.35)", background: "rgba(168,85,247,0.06)", color: "#a855f7",
-                transition: "all 0.12s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              ⚙ Also set up advanced features → <span style={{ fontSize: 12, color: "var(--text-subtle)" }}>top-ups · housing · SRS · drawdown</span>
-            </button>
-          )}
         </div>
 
         {/* Progress dots */}
