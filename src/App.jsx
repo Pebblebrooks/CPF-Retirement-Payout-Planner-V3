@@ -4533,7 +4533,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
   return (
     <div className={isDark ? "theme-dark" : "theme-light"} style={{
       position: "fixed", inset: 0, zIndex: 9999,
-      background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)",
+      background: "rgba(2,6,23,0.97)", backdropFilter: "blur(16px)",
       display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
     }}>
       <div style={{
@@ -13346,7 +13346,7 @@ ${milestoneSnapshotHtml}
         </div>
       )}
       {showWelcome && (
-        <div className="cpf-welcome-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.85)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div className="cpf-welcome-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.97)", backdropFilter: "blur(16px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div className="cpf-welcome-modal" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, overflow: "hidden", boxShadow: "var(--shadow-modal)", display: "flex", flexDirection: "column" }}>
             {/* Header */}
             <div className="cpf-welcome-header" style={{ padding: "12px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -13538,54 +13538,50 @@ ${milestoneSnapshotHtml}
           Once chosen, setShowDecisionCard(false) is called inside handleLaunchWizard
           and handleLaunchSkip respectively. */}
       {showDecisionCard && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.9)", backdropFilter: "blur(10px)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(2,6,23,0.97)", backdropFilter: "blur(16px)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 24, boxShadow: "var(--shadow-modal)", width: "100%", maxWidth: 520, overflow: "hidden" }}>
             {/* Card header */}
-            <div style={{ padding: "22px 28px 18px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{ background: "rgba(16,185,129,0.15)", padding: 10, borderRadius: 12, border: "1px solid rgba(16,185,129,0.3)", flexShrink: 0 }}>
-                <Target style={{ width: 24, height: 24, color: "var(--clr-emerald)" }} />
+            <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ background: "rgba(16,185,129,0.15)", padding: 9, borderRadius: 10, border: "1px solid rgba(16,185,129,0.3)", flexShrink: 0 }}>
+                <Target style={{ width: 20, height: 20, color: "var(--clr-emerald)" }} />
               </div>
               <div>
-                <h2 style={{ fontSize: 18, fontWeight: 900, color: "var(--text-bright)", margin: 0, marginBottom: 3 }}>How would you like to begin?</h2>
-                <p style={{ fontSize: 13, color: "var(--text-subtle)", margin: 0 }}>Your CPF projection engine is ready — choose your onboarding path</p>
+                <h2 style={{ fontSize: 16, fontWeight: 900, color: "var(--text-bright)", margin: 0, marginBottom: 2 }}>How would you like to begin?</h2>
+                <p style={{ fontSize: 12, color: "var(--text-subtle)", margin: 0 }}>CPF Planner Pro is ready</p>
               </div>
             </div>
             {/* Card body — two choice buttons */}
-            <div style={{ padding: "20px 28px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <button
                 onClick={handleLaunchWizard}
-                style={{ padding: "22px 16px", borderRadius: 16, cursor: "pointer", textAlign: "center", background: "rgba(16,185,129,0.10)", border: "1.5px solid rgba(16,185,129,0.45)", color: "var(--text-bright)", transition: "all 0.15s", outline: "none" }}
+                style={{ padding: "18px 12px", borderRadius: 14, cursor: "pointer", textAlign: "center", background: "rgba(16,185,129,0.10)", border: "1.5px solid rgba(16,185,129,0.45)", color: "var(--text-bright)", transition: "all 0.15s", outline: "none" }}
                 onMouseEnter={e => { e.currentTarget.style.background = "rgba(16,185,129,0.18)"; e.currentTarget.style.borderColor = "rgba(16,185,129,0.7)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "rgba(16,185,129,0.10)"; e.currentTarget.style.borderColor = "rgba(16,185,129,0.45)"; }}
               >
-                <div style={{ fontSize: 32, marginBottom: 10 }}>🧭</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-emerald)", marginBottom: 8 }}>Setup Wizard</div>
-                <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.55 }}>
-                  Guided 3-step setup.<br />Enter your profile, balances &amp; income.
-                </div>
-                <div style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 700, marginTop: 10, padding: "4px 10px", background: "rgba(16,185,129,0.12)", borderRadius: 20, display: "inline-block" }}>Recommended for new users</div>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🧭</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: "var(--clr-emerald)", marginBottom: 6 }}>Setup Wizard</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>3-step guided setup</div>
+                <div style={{ fontSize: 11, color: "var(--clr-emerald)", fontWeight: 700, marginTop: 8, padding: "3px 8px", background: "rgba(16,185,129,0.12)", borderRadius: 20, display: "inline-block" }}>Recommended</div>
               </button>
               <button
                 onClick={handleLaunchSkip}
-                style={{ padding: "22px 16px", borderRadius: 16, cursor: "pointer", textAlign: "center", background: "rgba(59,130,246,0.10)", border: "1.5px solid rgba(59,130,246,0.35)", color: "var(--text-bright)", transition: "all 0.15s", outline: "none" }}
+                style={{ padding: "18px 12px", borderRadius: 14, cursor: "pointer", textAlign: "center", background: "rgba(59,130,246,0.10)", border: "1.5px solid rgba(59,130,246,0.35)", color: "var(--text-bright)", transition: "all 0.15s", outline: "none" }}
                 onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.18)"; e.currentTarget.style.borderColor = "rgba(59,130,246,0.65)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "rgba(59,130,246,0.10)"; e.currentTarget.style.borderColor = "rgba(59,130,246,0.35)"; }}
               >
-                <div style={{ fontSize: 32, marginBottom: 10 }}>⚡</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-blue2)", marginBottom: 8 }}>Skip to App</div>
-                <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.55 }}>
-                  Jump straight in.<br />Edit every field directly in the sidebar.
-                </div>
-                <div style={{ fontSize: 12, color: "var(--clr-blue2)", fontWeight: 700, marginTop: 10, padding: "4px 10px", background: "rgba(59,130,246,0.12)", borderRadius: 20, display: "inline-block" }}>Readiness dashboard loads instantly</div>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>⚡</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: "var(--clr-blue2)", marginBottom: 6 }}>Skip to App</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>Use sample data, edit later</div>
+                <div style={{ fontSize: 11, color: "var(--clr-blue2)", fontWeight: 700, marginTop: 8, padding: "3px 8px", background: "rgba(59,130,246,0.12)", borderRadius: 20, display: "inline-block" }}>Instant load</div>
               </button>
             </div>
-            {/* Card footer — re-open welcome guide link */}
-            <div style={{ padding: "0 28px 20px", textAlign: "center" }}>
+            {/* Card footer */}
+            <div style={{ padding: "0 20px 16px", textAlign: "center" }}>
               <button
                 onClick={() => { setShowDecisionCard(false); setShowWelcome(true); setWelcomeStep(0); }}
-                style={{ fontSize: 13, color: "var(--text-subtle)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: "4px 8px" }}
+                style={{ fontSize: 12, color: "var(--text-subtle)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: "4px 8px" }}
               >
-                ← View the Welcome Guide again
+                ← View Welcome Guide
               </button>
             </div>
           </div>
@@ -13906,8 +13902,8 @@ ${milestoneSnapshotHtml}
                 <ChevronUp style={{ width: 13, height: 13, strokeWidth: 3 }} />
               </button>
               <button onClick={() => setShowAdvanced(v => !v)} title={showAdvanced ? "Hide advanced settings" : "Show advanced settings"} aria-label="Toggle advanced settings"
-                style={{ padding: "4px 7px", borderRadius: 6, background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)", color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)", border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", display: "flex", alignItems: "center", fontSize: 11, fontWeight: 900, letterSpacing: "-0.5px" }}>
-                ++
+                style={{ padding: "4px 7px", borderRadius: 6, background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)", color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)", border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer", display: "flex", alignItems: "center", fontSize: 14, fontWeight: 900, lineHeight: 1 }}>
+                {showAdvanced ? "−" : "+"}
               </button>
               <button onClick={handleClearInputs} title="Clear all inputs to blank slate" aria-label="Clear all inputs"
                 style={{ padding: "4px 7px", borderRadius: 6, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center" }}>
@@ -14008,7 +14004,7 @@ ${milestoneSnapshotHtml}
                         color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
                         fontSize: 11, fontWeight: 800, letterSpacing: "0.02em", transition: "all 0.15s",
                       }}>
-                      <span style={{ fontWeight: 900, fontSize: 12, letterSpacing: "-0.5px" }}>++</span>
+                      <span style={{ fontWeight: 900, fontSize: 14, lineHeight: 1 }}>{showAdvanced ? "−" : "+"}</span>
                       <ChevronDown className={`sidebar-chevron${showAdvanced ? " open" : ""}`} style={{ width: 10, height: 10 }} />
                     </button>
                   );
