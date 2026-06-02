@@ -12756,9 +12756,10 @@ ${milestoneSnapshotHtml}
           .rd-row3 { grid-template-columns: 1fr !important; }
           /* Tablet sticky bottom action bar — always shown on tablet, hidden elsewhere */
           .tablet-action-bar { display: flex !important; }
-          /* Docs/QS sticky nav: tablet header IS sticky (top:0, z-index:50) so the nav must
-             sit below the full sticky stack: header 48 + tab strip 44 + input-params-bar 44 = 136px.
-             top:0 was wrong — it made the nav compete/overlap with the sticky header. */
+          /* Docs/QS sticky nav: parent fhd-tab-inner now has padding:0, so banners sit at the
+             container's top edge. On tablet the page scrolls so we need top:136px to clear the
+             fixed header stack: navbar 48 + tab strip 44 + input-params-bar 44 = 136px.
+             On desktop the scroll container is cpf-tab-content so top:0 is correct (below). */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
           #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
         }
@@ -17408,10 +17409,9 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
             {activeTab === "guide" && guideView === 'quickstart' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
-                {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
-                {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
-                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: -28, paddingLeft: 28, paddingRight: 28, paddingTop: 20, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, boxSizing: "border-box" }}>
+                {/* Sticky banner — sits at padding:0 parent top, no negative margins needed */}
+                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", borderRadius: "24px 24px 0 0", padding: "20px 28px 12px", borderBottom: "1px solid var(--border-subtle)" }}>
                   {/* Title row + QS/Reference toggle */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
@@ -17475,7 +17475,10 @@ ${milestoneSnapshotHtml}
                       </button>
                     ))}
                   </div>
-                </div>
+                </div>{/* /qs-sticky-banner */}
+
+                {/* Content area — own padding so banner needs no negative margins */}
+                <div style={{ padding: "20px 28px 28px" }}>
 
                 {/* ── Quick Start view — 4 onboarding cards ── */}
                 {guideView === 'quickstart' && (
@@ -17573,6 +17576,7 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
                 )} {/* end quickstart view */}
+                </div>{/* /content-wrapper */}
               </div>
             )}
             {/* ── SUMMARY TAB ── */}
@@ -21363,10 +21367,9 @@ ${milestoneSnapshotHtml}
                 When guideView==='reference' the Quick Start block renders null so this block is the
                 sole child of the tab content div. */}
             {activeTab === "guide" && guideView === 'reference' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
-                {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
-                    and Quick Start/Reference buttons do not scroll away when reading docs. */}
-                <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: 0, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, boxSizing: "border-box" }}>
+                {/* Sticky banner — sits at padding:0 parent top, no negative margins needed */}
+                <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", borderRadius: "24px 24px 0 0", padding: "16px 28px 16px", borderBottom: "1px solid var(--border-subtle)" }}>
                   {/* Sub-tab toggle — inside sticky unit so title + buttons always visible */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border-subtle)" }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
@@ -21483,7 +21486,10 @@ ${milestoneSnapshotHtml}
                     </a>
                   ))}
                   </div>
-                </div>{/* end sticky wrapper */}
+                </div>
+
+                {/* Content area — own padding so docs-sticky-nav needs no negative margins */}
+                <div style={{ padding: "20px 28px 28px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 32, fontSize: 14, lineHeight: 1.7, color: "var(--text-muted)" }}>
 
                   {/* User Guide */}
@@ -22258,6 +22264,7 @@ ${milestoneSnapshotHtml}
                     style={{ pointerEvents: "all", display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 700, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
                     <ChevronUp style={{ width: 13, height: 13 }} />Back to top
                   </button>
+                </div>
                 </div>
               </div>
             )}
