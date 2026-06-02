@@ -4546,7 +4546,8 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
         background: "var(--bg-panel)", border: "1px solid var(--border-subtle)",
         borderRadius: 20, width: "100%", maxWidth: 480,
         boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-        maxHeight: "92vh", display: "flex", flexDirection: "column",
+        height: "clamp(480px, 88vh, 700px)",
+        display: "flex", flexDirection: "column",
       }}>
 
         {/* Scrollable content — header, step indicator, form body */}
