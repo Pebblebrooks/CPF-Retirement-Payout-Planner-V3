@@ -6455,10 +6455,9 @@ export default function App() {
     setLaunchMode(false);
     setShowDecisionCard(false);
     setShowWelcome(false);
-    // Land on the Readiness dashboard with the sidebar closed so stats are front-and-centre.
-    // readinessSidebarUserPref is set so the auto-collapse effect respects this explicit choice.
-    readinessSidebarUserPref.current = false;
-    setSidebarOpen(false);
+    // Option B: open sidebar on Readiness — consistent with all other KPI tabs.
+    // readinessSidebarUserPref is NOT pre-set here, so the tab-change effect applies its
+    // standard desktop default (open on >1024px, collapsed on mobile/tablet).
     setActiveTab('readiness');
   };
 
@@ -17197,14 +17196,17 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
             {activeTab === "guide" && guideView === 'quickstart' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: "0 28px 28px 28px", borderRadius: 24, boxSizing: "border-box" }}>
                 {/* Sub-tab toggle — switches between Quick Start cards and full Reference manual */}
-                {/* ── Sticky banner — same negative-margin escape trick as #docs-sticky-nav ── */}
-                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", marginLeft: -28, marginRight: -28, marginTop: 0, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20 }}>
+                {/* ── Sticky banner — top padding removed from fhd-tab-inner so banner aligns
+                    flush with the card's top border edge. borderRadius matches card corners so
+                    no gap is visible when the banner sticks. backdropFilter removed (was causing
+                    compositor repaint jitter on scroll; fully opaque bg makes it unnecessary). ── */}
+                <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", marginLeft: -28, marginRight: -28, marginTop: 0, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-subtle)", marginBottom: 20, borderRadius: "23px 23px 0 0" }}>
                   {/* Title row + QS/Reference toggle */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
+                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />Docs
                     </h3>
                     <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
                       <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'quickstart' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'quickstart' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
@@ -21152,14 +21154,17 @@ ${milestoneSnapshotHtml}
                 When guideView==='reference' the Quick Start block renders null so this block is the
                 sole child of the tab content div. */}
             {activeTab === "guide" && guideView === 'reference' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 28, borderRadius: 24, boxSizing: "border-box" }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: "0 28px 28px 28px", borderRadius: 24, boxSizing: "border-box" }}>
                 {/* Fix 2: banner + anchor nav merged into one sticky unit so the title row
-                    and Quick Start/Reference buttons do not scroll away when reading docs. */}
-                <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", marginLeft: -28, marginRight: -28, marginTop: 0, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16 }}>
+                    and Quick Start/Reference buttons do not scroll away when reading docs.
+                    Top padding removed from fhd-tab-inner so banner aligns flush with the
+                    card's top border. borderRadius matches card corners (no gap on scroll).
+                    backdropFilter removed — opaque bg is sufficient and avoids scroll jitter. */}
+                <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", marginLeft: -28, marginRight: -28, marginTop: 0, paddingLeft: 28, paddingRight: 28, paddingTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border-subtle)", marginBottom: 16, borderRadius: "23px 23px 0 0" }}>
                   {/* Sub-tab toggle — inside sticky unit so title + buttons always visible */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border-subtle)" }}>
                     <h3 style={{ fontSize: 20, fontWeight: 900, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />CPF Planner Pro — Docs
+                      <BookOpen style={{ width: 22, height: 22, color: "var(--clr-blue)" }} />Docs
                     </h3>
                     <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
                       <button onClick={() => setGuideView('quickstart')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all 0.15s" }}>
