@@ -11938,6 +11938,12 @@ ${milestoneSnapshotHtml}
         .cpf-tab-content::-webkit-scrollbar { width: 5px; }
         .cpf-tab-content::-webkit-scrollbar-track { background: transparent; }
         .cpf-tab-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+        /* Guide tab (Docs): remove top padding so fhd-tab-inner sits flush at the scroll
+           container's top edge. Eliminates the gap where --bg-base bleeds through behind
+           the sticky banner when it lifts off and pins to top:0. Desktop only — on
+           mobile/tablet the scroll container is the body (overflow:visible), so padding
+           has no sticky-gap effect there. */
+        .cpf-tab-content[data-tab="guide"] { padding-top: 0 !important; }
         /* ─── DESKTOP VIEWPORT MODES (HD and below — unchanged) ─────── */
         .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 16px; }
         @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 16px; } }
@@ -12776,6 +12782,14 @@ ${milestoneSnapshotHtml}
              On desktop the scroll container is cpf-tab-content so top:0 is correct (below). */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
           #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
+          /* Hide the "JUMP TO SECTION" label — on mobile/tablet the <select> placeholder
+             already reads "↓ Jump to section…", making the label above it redundant.
+             On desktop (≥1025px) the label introduces the pill-button grid and stays visible. */
+          .docs-nav-label { display: none !important; }
+          /* Docs nav <select>: set font-size to 16px to prevent iOS Safari auto-zoom on
+             focus (browser zooms the page when font-size < 16px on inputs). Reduce padding
+             to compensate so the element doesn't appear oversized vs surrounding text. */
+          .docs-nav-select { font-size: 16px !important; padding: 7px 10px !important; }
         }
 
         /* ─── MOBILE  ≤ 768 px ───────────────────────────────────────── */
@@ -17413,7 +17427,7 @@ ${milestoneSnapshotHtml}
             )}
           </div>
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
-          <div ref={tabContentRef} className="cpf-tab-content" data-exec={execDashMode ? "true" : undefined}>
+          <div ref={tabContentRef} className="cpf-tab-content" data-exec={execDashMode ? "true" : undefined} data-tab={activeTab}>
             {/* ── READINESS TAB ── */}
             {activeTab === "readiness" && (
               <ReadinessTab
@@ -17440,7 +17454,7 @@ ${milestoneSnapshotHtml}
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
             {activeTab === "guide" && guideView === 'quickstart' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, boxSizing: "border-box" }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, boxSizing: "border-box", overflow: "clip" }}>
                 {/* Sticky banner — sits at padding:0 parent top, no negative margins needed */}
                 <div id="qs-sticky-banner" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(10px)", borderRadius: "24px 24px 0 0", padding: "20px 28px 12px", borderBottom: "1px solid var(--border-subtle)" }}>
                   {/* Title row + QS/Reference toggle */}
@@ -21398,7 +21412,7 @@ ${milestoneSnapshotHtml}
                 When guideView==='reference' the Quick Start block renders null so this block is the
                 sole child of the tab content div. */}
             {activeTab === "guide" && guideView === 'reference' && (
-              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, boxSizing: "border-box" }}>
+              <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, boxSizing: "border-box", overflow: "clip" }}>
                 {/* Sticky banner — sits at padding:0 parent top, no negative margins needed */}
                 <div id="docs-sticky-nav" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg-panel)", backdropFilter: "blur(8px)", borderRadius: "24px 24px 0 0", padding: "16px 28px 16px", borderBottom: "1px solid var(--border-subtle)" }}>
                   {/* Sub-tab toggle — inside sticky unit so title + buttons always visible */}
@@ -21415,7 +21429,7 @@ ${milestoneSnapshotHtml}
                       </button>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Jump to section</div>
+                  <div className="docs-nav-label" style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Jump to section</div>
                   {/* Mobile (≤640px): native <select> picker — collapses 20 anchor buttons to 1 compact row.
                       resets to placeholder after selection so the label always reads "Jump to section…" */}
                   <select className="docs-nav-select" defaultValue=""
