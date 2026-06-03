@@ -12057,15 +12057,17 @@ ${milestoneSnapshotHtml}
           /* default: normal block */
         }
 
-        /* ── FHD mode: hide colored column bars, show same amber HD controls ──
-           Per UX request: FHD shows the identical expand/collapse/clear bar as HD
-           mode (hd-only-btn). The fhd-col-btn colored column headers are removed. */
-        .cpf-layout[data-mode="fhd"] .fhd-col-btn  { display: none   !important; }
-        .cpf-layout[data-mode="fhd"] .hd-only-btn  { display: flex   !important; }
+        /* ── FHD mode: show per-column toggle buttons, hide global HD expand/collapse.
+           fhd-always-btn class pins the clear button regardless of mode so it remains
+           visible in FHD alongside the per-column fhd-col-btn controls. */
+        .cpf-layout[data-mode="fhd"] .fhd-col-btn    { display: flex !important; }
+        .cpf-layout[data-mode="fhd"] .hd-only-btn    { display: none !important; }
+        .cpf-layout[data-mode="fhd"] .fhd-always-btn { display: flex !important; }
         .cpf-layout[data-mode="fhd"] .sidebar-gap-alert { grid-column: 1 / -1; }
         @media (min-width: 1920px) {
-          .cpf-layout[data-mode="auto"] .fhd-col-btn  { display: none   !important; }
-          .cpf-layout[data-mode="auto"] .hd-only-btn  { display: flex   !important; }
+          .cpf-layout[data-mode="auto"] .fhd-col-btn    { display: flex !important; }
+          .cpf-layout[data-mode="auto"] .hd-only-btn    { display: none !important; }
+          .cpf-layout[data-mode="auto"] .fhd-always-btn { display: flex !important; }
           .cpf-layout[data-mode="auto"] .sidebar-gap-alert { grid-column: 1 / -1; }
         }
         /* ═══════════════════════════════════════════════════════════════
@@ -14022,7 +14024,7 @@ ${milestoneSnapshotHtml}
                 fontSize: 14, fontWeight: 900, lineHeight: 1 }}>
               {showAdvanced ? "−" : "+"}
             </button>
-            <button className="hd-only-btn" onClick={handleClearInputs} title="Clear all inputs to blank slate" aria-label="Clear all inputs" style={{ flex: "none", padding: "5px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <button className="hd-only-btn fhd-always-btn" onClick={handleClearInputs} title="Clear all inputs to blank slate" aria-label="Clear all inputs" style={{ flex: "none", padding: "5px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Circle style={{ width: 14, height: 14, strokeWidth: 2.5 }} />
             </button>
             {/* FHD: 3 dual-function column header buttons (hidden at ≤1919px via CSS).
@@ -14035,9 +14037,9 @@ ${milestoneSnapshotHtml}
                 3: ["investments", "property", "privateAssets", "lifeevents"],
               };
               const colMeta = [
-                { n: 1, label: "Profile & Contributions", clr: "var(--clr-sky)",  bg: "rgba(56,189,248,0.08)",           bdr: "rgba(56,189,248,0.5)",         solid: "rgba(56,189,248,0.55)"           },
-                { n: 2, label: "Outflows & Transfers",    clr: "var(--clr-lime)", bg: "rgba(163,230,53,0.08)",           bdr: "rgba(163,230,53,0.5)",         solid: "rgba(163,230,53,0.55)"           },
-                { n: 3, label: "Assets & Goals",          clr: "var(--clr-blue)", bg: "rgba(var(--clr-blue-rgb),0.08)", bdr: "rgba(var(--clr-blue-rgb),0.5)", solid: "rgba(var(--clr-blue-rgb),0.55)" },
+                { n: 1, label: "Profile & Contributions", clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
+                { n: 2, label: "Outflows & Transfers",    clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
+                { n: 3, label: "Assets & Goals",          clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
               ];
               return colMeta.map(({ n, label, clr, bg, bdr, solid }) => {
                 const ids = colSections[n];
