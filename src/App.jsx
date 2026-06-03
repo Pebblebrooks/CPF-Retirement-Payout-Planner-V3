@@ -12057,13 +12057,15 @@ ${milestoneSnapshotHtml}
           /* default: normal block */
         }
 
-        /* ── FHD mode: show column buttons, hide HD-only buttons ── */
-        .cpf-layout[data-mode="fhd"] .fhd-col-btn  { display: flex !important; }
-        .cpf-layout[data-mode="fhd"] .hd-only-btn  { display: none !important; }
+        /* ── FHD mode: hide colored column bars, show same amber HD controls ──
+           Per UX request: FHD shows the identical expand/collapse/clear bar as HD
+           mode (hd-only-btn). The fhd-col-btn colored column headers are removed. */
+        .cpf-layout[data-mode="fhd"] .fhd-col-btn  { display: none   !important; }
+        .cpf-layout[data-mode="fhd"] .hd-only-btn  { display: flex   !important; }
         .cpf-layout[data-mode="fhd"] .sidebar-gap-alert { grid-column: 1 / -1; }
         @media (min-width: 1920px) {
-          .cpf-layout[data-mode="auto"] .fhd-col-btn  { display: flex !important; }
-          .cpf-layout[data-mode="auto"] .hd-only-btn  { display: none !important; }
+          .cpf-layout[data-mode="auto"] .fhd-col-btn  { display: none   !important; }
+          .cpf-layout[data-mode="auto"] .hd-only-btn  { display: flex   !important; }
           .cpf-layout[data-mode="auto"] .sidebar-gap-alert { grid-column: 1 / -1; }
         }
         /* ═══════════════════════════════════════════════════════════════
@@ -12905,6 +12907,11 @@ ${milestoneSnapshotHtml}
              Full stack: header 48 + tab strip 44 + input-params-bar 44 = 136px. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
           #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
+          /* Hide "JUMP TO SECTION" label — already shown as placeholder inside the <select> */
+          .docs-nav-label { display: none !important; }
+          /* Docs nav <select>: 16px prevents iOS Safari auto-zoom on focus; reduced padding
+             keeps the element compact. !important overrides the fontSize:13 inline style. */
+          .docs-nav-select { font-size: 16px !important; padding: 7px 10px !important; }
         }
 
         /* ── Nom/Real responsive label helpers ─────────────────────────── */
@@ -13000,8 +13007,10 @@ ${milestoneSnapshotHtml}
           #docs-sticky-nav { top: 136px !important; }
           #qs-sticky-banner  { top: 136px !important; }
           /* Mobile docs nav: show compact <select> dropdown, hide pill buttons */
-          .docs-nav-select { display: block !important; }
+          .docs-nav-select { display: block !important; font-size: 16px !important; padding: 7px 10px !important; }
           .docs-nav-pills  { display: none  !important; }
+          /* Hide "JUMP TO SECTION" label — already shown as placeholder inside <select> */
+          .docs-nav-label  { display: none  !important; }
           /* Prevent iOS Safari pull-to-refresh / rubber-band overscroll bounce.
              When body is the scroll container (as it is on mobile), iOS treats
              overscroll as a native gesture — pulling past the top refreshes the page.
