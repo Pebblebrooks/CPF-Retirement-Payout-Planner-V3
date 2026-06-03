@@ -5847,16 +5847,18 @@ export default function App() {
   useEffect(() => {
     if (activeTab === "readiness") {
       sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Readiness
-      // If the user has previously made an explicit show/hide choice on this tab, honour it.
-      // Otherwise default to auto-collapse so the dashboard gets maximum width on first entry.
-      if (readinessSidebarUserPref.current !== null) {
+      if (window.innerWidth <= 1024) {
+        // Mobile/tablet: ALWAYS close sidebar on Readiness entry regardless of any saved pref.
+        // readinessSidebarUserPref may have been set to `true` by a sidebar open action on
+        // another tab (handleSidebarToggle always writes the pref), so we cannot trust it here.
+        setSidebarOpen(false);
+      } else if (readinessSidebarUserPref.current !== null) {
+        // Desktop: honour the user's explicit show/hide choice from a previous Readiness visit.
         setSidebarOpen(readinessSidebarUserPref.current);
       } else {
-        // First-entry default: open on desktop (>1024px), collapse on mobile/tablet.
-        // Also record this as the explicit pref so re-entries honour the same choice.
-        const desktopDefault = window.innerWidth > 1024;
-        readinessSidebarUserPref.current = desktopDefault;
-        setSidebarOpen(desktopDefault);
+        // Desktop first-entry default: open sidebar so profile is immediately visible.
+        readinessSidebarUserPref.current = true;
+        setSidebarOpen(true);
       }
     } else if (window.innerWidth <= 1024) {
       setSidebarOpen(false);                   // mobile/tablet: always hide inputs on tab switch
@@ -14024,12 +14026,11 @@ ${milestoneSnapshotHtml}
                 fontSize: 14, fontWeight: 900, lineHeight: 1 }}>
               {showAdvanced ? "−" : "+"}
             </button>
-            <button className="hd-only-btn fhd-always-btn" onClick={handleClearInputs} title="Clear all inputs to blank slate" aria-label="Clear all inputs" style={{ flex: "none", padding: "5px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Circle style={{ width: 14, height: 14, strokeWidth: 2.5 }} />
-            </button>
-            {/* FHD: 3 dual-function column header buttons (hidden at ≤1919px via CSS).
-                Each button toggles ALL sections within that column open/closed.
-                State: if any section in col is open → clicking collapses all; if all closed → expands all. */}
+            {/* FHD: 3 uniform per-column toggle buttons + standalone adv± button.
+                Clear button moved AFTER this block so FHD flex order is:
+                [col1 flex:1][col2 flex:1][col3 flex:1][adv flex:none][clear flex:none].
+                All three col buttons are identical flex:1 with no nested elements,
+                so each button matches its panel column width exactly.                */}
             {(() => {
               const colSections = {
                 1: ["profile", "cpfBalances", "contribs"],
@@ -14041,84 +14042,71 @@ ${milestoneSnapshotHtml}
                 { n: 2, label: "Outflows & Transfers",    clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
                 { n: 3, label: "Assets & Goals",          clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
               ];
-              return colMeta.map(({ n, label, clr, bg, bdr, solid }) => {
-                const ids = colSections[n];
-                const anyOpen = ids.some(id => openSections.has(id));
-                const handleColToggle = () => {
-                  setOpenSections(prev => {
-                    const next = new Set(prev);
-                    if (anyOpen) { ids.forEach(id => next.delete(id)); }
-                    else         { ids.forEach(id => next.add(id)); }
-                    try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([...next])); } catch {}
-                    return next;
-                  });
-                };
-                /* ── Col 3 wrapper: col3 toggle + Adv button share the same flex:1 slot
-                   so their combined width equals col 3's column width exactly.            */
-                if (n === 3) {
-                  const col3Btn = !showAdvanced ? (
-                    <button className="fhd-col-btn" onClick={() => setShowAdvanced(true)}
-                      title="Enable Advanced Settings to unlock: Investments · Property · Private Assets · Life Events"
-                      style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                        gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer", minWidth: 0,
-                        border: "1px dashed rgba(var(--clr-amber-rgb),0.35)",
-                        background: "rgba(var(--clr-amber-rgb),0.04)",
-                        transition: "all 0.15s ease" }}>
-                      <Settings style={{ width: 10, height: 10, color: "var(--clr-amber)", opacity: 0.6, flexShrink: 0 }} />
-                      <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-amber)", opacity: 0.6, letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>ADV</span>
-                    </button>
-                  ) : (
-                    <button className="fhd-col-btn" onClick={handleColToggle}
-                      title={anyOpen ? `Collapse: ${label}` : `Expand: ${label}`}
-                      style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                        gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer", minWidth: 0,
-                        border: `1px solid ${anyOpen ? bdr : "rgba(100,116,139,0.2)"}`,
-                        background: anyOpen ? solid : "rgba(100,116,139,0.05)",
-                        transition: "all 0.15s ease" }}>
-                      <span style={{ fontSize: 13, fontWeight: 900, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65, flexShrink: 0, transition: "all 0.15s", lineHeight: 1 }}>
-                        <ChevronDown className={`sidebar-chevron${anyOpen ? " open" : ""}`} style={{ width: 12, height: 12 }} />
-                      </span>
-                    </button>
-                  );
-                  const advBtn = (
-                    <button onClick={() => setShowAdvanced(v => !v)}
-                      title={showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings: Property · CPFIS · Investments · Private Assets · SRS · Life Events"}
-                      style={{
-                        flex: "none", height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                        gap: 4, padding: "0 10px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
-                        background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.18)" : "rgba(100,116,139,0.07)",
-                        border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.55)" : "rgba(100,116,139,0.22)"}`,
-                        color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
-                        fontSize: 11, fontWeight: 800, letterSpacing: "0.02em", transition: "all 0.15s",
-                      }}>
-                      {/* 1c-fix: ChevronDown removed — user requested text-only toggle */}
-                      <span style={{ fontWeight: 900, fontSize: 14, lineHeight: 1 }}>{showAdvanced ? "−" : "+"}</span>
-                    </button>
-                  );
-                  return (
-                    /* 1b-fix: fhd-col-btn added so entire col3 group (col3btn + advBtn) is hidden
-                       in HD mode (display:none) and shown in FHD (display:flex !important).
-                       Without this the advBtn had no class and leaked into HD layout. */
-                    <div key={n} className="fhd-col-btn" style={{ flex: 1, display: "flex", gap: 4, minWidth: 0, justifyContent: "flex-end" }}>
-                      {col3Btn}
-                      {advBtn}
-                    </div>
-                  );
-                }
-                return (
-                  <button key={n} className="fhd-col-btn" onClick={handleColToggle}
-                    title={anyOpen ? `Collapse: ${label}` : `Expand: ${label}`}
-                    style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer",
-                      border: `1px solid ${anyOpen ? bdr : "rgba(100,116,139,0.2)"}`,
-                      background: anyOpen ? solid : "rgba(100,116,139,0.05)",
-                      transition: "all 0.15s ease" }}>
-                    <span style={{ fontSize: 13, fontWeight: 900, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65, flexShrink: 0, transition: "all 0.15s", lineHeight: 1, display: "flex", alignItems: "center" }}>
-                      <ChevronDown className={`sidebar-chevron${anyOpen ? " open" : ""}`} style={{ width: 12, height: 12 }} />
-                    </span>
+              return (
+                <>
+                  {colMeta.map(({ n, label, clr, bg, bdr, solid }) => {
+                    const ids = colSections[n];
+                    const anyOpen = ids.some(id => openSections.has(id));
+                    const handleColToggle = () => {
+                      setOpenSections(prev => {
+                        const next = new Set(prev);
+                        if (anyOpen) { ids.forEach(id => next.delete(id)); }
+                        else         { ids.forEach(id => next.add(id)); }
+                        try { localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify([...next])); } catch {}
+                        return next;
+                      });
+                    };
+                    /* col3 when Advanced is OFF: show dashed ADV enable button instead
+                       of the chevron toggle (nothing to toggle — col3 is hidden).    */
+                    if (n === 3 && !showAdvanced) {
+                      return (
+                        <button key={n} className="fhd-col-btn" onClick={() => setShowAdvanced(true)}
+                          title="Enable Advanced Settings to unlock: Investments · Property · Private Assets · Life Events"
+                          style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                            gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer", minWidth: 0,
+                            border: "1px dashed rgba(var(--clr-amber-rgb),0.35)",
+                            background: "rgba(var(--clr-amber-rgb),0.04)",
+                            transition: "all 0.15s ease" }}>
+                          <Settings style={{ width: 10, height: 10, color: "var(--clr-amber)", opacity: 0.6, flexShrink: 0 }} />
+                          <span style={{ fontSize: 10, fontWeight: 800, color: "var(--clr-amber)", opacity: 0.6, letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>ADV</span>
+                        </button>
+                      );
+                    }
+                    /* col1, col2, col3 (Advanced ON): uniform amber chevron toggle */
+                    return (
+                      <button key={n} className="fhd-col-btn" onClick={handleColToggle}
+                        title={anyOpen ? `Collapse: ${label}` : `Expand: ${label}`}
+                        style={{ flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                          gap: 5, padding: "0 10px", borderRadius: 7, cursor: "pointer", minWidth: 0,
+                          border: `1px solid ${anyOpen ? bdr : "rgba(100,116,139,0.2)"}`,
+                          background: anyOpen ? solid : "rgba(100,116,139,0.05)",
+                          transition: "all 0.15s ease" }}>
+                        <ChevronDown className={`sidebar-chevron${anyOpen ? " open" : ""}`}
+                          style={{ width: 12, height: 12, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65 }} />
+                      </button>
+                    );
+                  })}
+                  {/* Standalone adv± button — flex:none, always after the 3 col buttons.
+                      Uses fhd-col-btn so it hides in HD (the hd-only-btn version handles HD). */}
+                  <button className="fhd-col-btn" onClick={() => setShowAdvanced(v => !v)}
+                    title={showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings: Property · CPFIS · Investments · Private Assets · SRS · Life Events"}
+                    style={{
+                      flex: "none", height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                      gap: 4, padding: "0 10px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
+                      background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.18)" : "rgba(100,116,139,0.07)",
+                      border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.55)" : "rgba(100,116,139,0.22)"}`,
+                      color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
+                      fontSize: 11, fontWeight: 800, letterSpacing: "0.02em", transition: "all 0.15s",
+                    }}>
+                    <span style={{ fontWeight: 900, fontSize: 14, lineHeight: 1 }}>{showAdvanced ? "−" : "+"}</span>
                   </button>
-                );
-              });
+                </>
+              );
             })()}
+            {/* Clear button — rightmost in both HD (hd-only-btn) and FHD (fhd-always-btn) */}
+            <button className="hd-only-btn fhd-always-btn" onClick={handleClearInputs} title="Clear all inputs to blank slate" aria-label="Clear all inputs" style={{ flex: "none", padding: "5px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Circle style={{ width: 14, height: 14, strokeWidth: 2.5 }} />
+            </button>
 
           </div>
           <div className={`cpf-sidebar-inner${sidebarOpen ? "" : " sidebar-collapsed"}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
