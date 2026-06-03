@@ -4654,7 +4654,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
           {step === 3 && !advMode && (
             <button type="button" onClick={goAdvanced}
               style={{ width: "100%", padding: "12px 0", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer",
-                border: "1.5px solid rgba(168,85,247,0.6)", background: "rgba(168,85,247,0.15)", color: "#a855f7",
+                border: "1.5px solid rgba(168,85,247,0.85)", background: "rgba(168,85,247,0.15)", color: "#d8b4fe",
                 transition: "all 0.12s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               ⚙ Continue to Advanced Setup →
             </button>
@@ -5898,7 +5898,21 @@ export default function App() {
     }
   }, [activeTab]);
 
-  // Goal Simulator — clear "Applied" badge and snapshot when user manually edits the levers after applying a strategy.
+  // Issue-3 fix: Docs tab has two internal sub-views (quickstart / reference) toggled by
+  // guideView state. Switching between them does NOT change activeTab (stays "guide"), so
+  // the activeTab useEffect above never fires and the scroll position is preserved from the
+  // previous sub-view — causing content to appear above the sticky banner (#qs-sticky-banner
+  // / #docs-sticky-nav). This dedicated effect resets all scroll containers whenever
+  // guideView changes while the guide tab is active.
+  useEffect(() => {
+    if (activeTab !== 'guide') return;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0; // Safari fallback
+    if (tabContentRef.current) tabContentRef.current.scrollTop = 0;
+  }, [guideView]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
   // The isApplyingStrategyRef guard prevents this from firing when applyStrategy itself writes
   // vcSaTopup/vc3aCash — without it, the useEffect nulls goalApplied + preApplySnapshot on the
   // same render cycle as the apply, so the "Applied" badge and ↩ Revert button never appear.
@@ -13971,6 +13985,20 @@ ${milestoneSnapshotHtml}
             <button className="hd-only-btn" onClick={collapseAllSections} title="Collapse all sections" aria-label="Collapse all sections" style={{ flex: 1, padding: "5px 0", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <ChevronUp style={{ width: 14, height: 14, strokeWidth: 3 }} />
             </button>
+            {/* 1a-fix: HD advanced toggle — text-only +/−, no chevron icon, positioned after
+                the two expand/collapse chevrons and before the clear circle. Hidden at FHD
+                via hd-only-btn CSS rule; FHD uses the advBtn inside the col3 wrapper. */}
+            <button className="hd-only-btn" onClick={() => setShowAdvanced(v => !v)}
+              title={showAdvanced ? "Hide advanced settings" : "Show advanced settings"}
+              aria-label="Toggle advanced settings"
+              style={{ flex: "none", padding: "5px 10px", borderRadius: 8,
+                background: showAdvanced ? "rgba(var(--clr-amber-rgb),0.15)" : "rgba(100,116,139,0.08)",
+                color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
+                border: `1px solid ${showAdvanced ? "rgba(var(--clr-amber-rgb),0.4)" : "var(--border-strong)"}`,
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 14, fontWeight: 900, lineHeight: 1 }}>
+              {showAdvanced ? "−" : "+"}
+            </button>
             <button className="hd-only-btn" onClick={handleClearInputs} title="Clear all inputs to blank slate" aria-label="Clear all inputs" style={{ flex: "none", padding: "5px 10px", borderRadius: 8, background: "rgba(var(--clr-amber-rgb),0.08)", color: "var(--clr-amber)", border: "1px solid rgba(var(--clr-amber-rgb),0.28)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Circle style={{ width: 14, height: 14, strokeWidth: 2.5 }} />
             </button>
@@ -14038,12 +14066,15 @@ ${milestoneSnapshotHtml}
                         color: showAdvanced ? "var(--clr-amber)" : "var(--text-subtle)",
                         fontSize: 11, fontWeight: 800, letterSpacing: "0.02em", transition: "all 0.15s",
                       }}>
+                      {/* 1c-fix: ChevronDown removed — user requested text-only toggle */}
                       <span style={{ fontWeight: 900, fontSize: 14, lineHeight: 1 }}>{showAdvanced ? "−" : "+"}</span>
-                      <ChevronDown className={`sidebar-chevron${showAdvanced ? " open" : ""}`} style={{ width: 10, height: 10 }} />
                     </button>
                   );
                   return (
-                    <div key={n} style={{ flex: 1, display: "flex", gap: 4, minWidth: 0, justifyContent: "flex-end" }}>
+                    /* 1b-fix: fhd-col-btn added so entire col3 group (col3btn + advBtn) is hidden
+                       in HD mode (display:none) and shown in FHD (display:flex !important).
+                       Without this the advBtn had no class and leaked into HD layout. */
+                    <div key={n} className="fhd-col-btn" style={{ flex: 1, display: "flex", gap: 4, minWidth: 0, justifyContent: "flex-end" }}>
                       {col3Btn}
                       {advBtn}
                     </div>
