@@ -4750,86 +4750,6 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ─── TiltCard — hover-lift card wrapper ─────────────────────────────────────
-// Replicates the landing-page .card:hover effect:
-//   translateY(-8px) lift on mouseenter, smooth drop back on mouseleave.
-//   Shadow deepens on enter and fades on leave.
-//   No border changes — cards render exactly as styled by the caller.
-//
-// Why JS instead of pure CSS?
-//   cardStyle is applied as an inline style attribute. CSS :hover rules cannot
-//   override inline styles (inline specificity > class). We use mouseenter /
-//   mouseleave with setProperty() to mutate the DOM directly.
-//
-// Drop-back animation:
-//   onLeave sets transform to translateY(0px) explicitly (NOT removeProperty).
-//   This guarantees the browser sees a defined FROM → TO transition and always
-//   animates the card dropping back. After the 0.3s transition completes a
-//   small timeout clears the inline override so the element is fully pristine.
-//
-// Guards: touch / coarse-pointer devices and prefers-reduced-motion both skip
-//   the effect entirely at effect-mount time.
-// ─────────────────────────────────────────────────────────────────────────────
-function TiltCard({ children, style, className = "", ...rest }) {
-  const cardRef    = useRef(null);
-  const cleanupRef = useRef(null); // holds the post-leave timeout id
-
-  useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-
-    // Skip on touch / coarse-pointer devices and for reduced-motion preference
-    const noHover  = window.matchMedia("(hover: none)").matches;
-    const noMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (noHover || noMotion) return;
-
-    const onEnter = () => {
-      // Cancel any in-progress leave cleanup so rapid re-entry is clean
-      if (cleanupRef.current) { clearTimeout(cleanupRef.current); cleanupRef.current = null; }
-      card.style.setProperty("transform",  "translateY(-8px)");
-      card.style.setProperty("box-shadow", "0 10px 25px rgba(0,0,0,0.30), 0 4px 8px rgba(0,0,0,0.15)");
-    };
-
-    const onLeave = () => {
-      // Explicit target value → browser always animates the drop-back (0.3s ease)
-      card.style.setProperty("transform",  "translateY(0px)");
-      card.style.removeProperty("box-shadow");
-      // After transition completes, remove the inline transform so the element
-      // is completely pristine and no stale override lingers
-      cleanupRef.current = setTimeout(() => {
-        card.style.removeProperty("transform");
-        cleanupRef.current = null;
-      }, 350); // 350ms > 300ms transition duration
-    };
-
-    card.addEventListener("mouseenter", onEnter);
-    card.addEventListener("mouseleave", onLeave);
-    return () => {
-      if (cleanupRef.current) clearTimeout(cleanupRef.current);
-      card.removeEventListener("mouseenter", onEnter);
-      card.removeEventListener("mouseleave", onLeave);
-    };
-  }, []);
-
-  return (
-    <div
-      ref={cardRef}
-      className={`cpf-tilt-card${className ? " " + className : ""}`}
-      style={{
-        ...style,
-        // Transition enrolled only for transform and box-shadow.
-        // Set inline so it survives React re-renders without creating a CSS
-        // class specificity conflict. No border properties are touched.
-        transition: "transform 0.3s ease, box-shadow 0.3s ease",
-      }}
-      {...rest}
-    >
-      {children}
-    </div>
-  );
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
 // ReadinessTab — Phase 1+2+3 implementation
 // Pure display component: reads computed data via props, writes back via existing
 // App.jsx handlers. Zero engine changes, zero new state in App.jsx.
@@ -5132,7 +5052,7 @@ function ReadinessTab({
       <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
 
         {/* Gauge card — Phase 3: 2 new sub-score bars added below existing 2 */}
-        <TiltCard style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
           <p style={{ ...labelStyle, marginBottom: 8 }}>Retirement Readiness</p>
           <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible" }}>
             <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
@@ -5184,7 +5104,7 @@ function ReadinessTab({
               </div>
             ))}
           </div>
-        </TiltCard>
+        </div>
 
         {/* 5-col KPI hero — Phase 3: P10 Downside + OA Depletes added */}
         <div className="rd-kpi-hero" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}>
@@ -5218,7 +5138,7 @@ function ReadinessTab({
               extraBorder: null,
             },
           ].map(({ label, sublabel, value, placeholder, color, tip, extraBorder }) => (
-            <TiltCard key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center", ...(extraBorder ? { borderColor: extraBorder } : {}) }}>
+            <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center", ...(extraBorder ? { borderColor: extraBorder } : {}) }}>
               <p style={labelStyle}>{label}</p>
               {placeholder ? (
                 <>
@@ -5234,11 +5154,11 @@ function ReadinessTab({
                   {sublabel && <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>{sublabel}</p>}
                 </>
               )}
-            </TiltCard>
+            </div>
           ))}
 
           {/* P10 Downside tile */}
-          <TiltCard
+          <div
             title={p10DropPct != null
               ? `Bad-luck (P10) scenario: total CPF at ${pa} = ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} · −${p10DropPct}%. Enable Monte Carlo in the Accumulation tab.`
               : "Enable Monte Carlo in the Accumulation tab to see the P10 downside scenario"}
@@ -5262,10 +5182,10 @@ function ReadinessTab({
                 {probSufficiency}% chance hits FRS
               </p>
             )}
-          </TiltCard>
+          </div>
 
           {/* OA Depletes tile */}
-          <TiltCard
+          <div
             title={oaDepletionAge
               ? `OA drawdown exhausts at age ${oaDepletionAge}. ${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy}. ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk.` : ""}`
               : "No OA drawdown active, or OA is sustained to the planning horizon"}
@@ -5291,7 +5211,7 @@ function ReadinessTab({
                 </p>
               </>
             )}
-          </TiltCard>
+          </div>
         </div>
       </div>
 
@@ -5299,7 +5219,7 @@ function ReadinessTab({
       <div className="rd-row2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
 
         {/* Scenario strip — unchanged + longevity note appended */}
-        <TiltCard style={cardStyle}>
+        <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <p style={labelStyle}>CPF LIFE plan comparison</p>
             <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>click to select</span>
@@ -5343,10 +5263,10 @@ function ReadinessTab({
               </span>
             </div>
           )}
-        </TiltCard>
+        </div>
 
         {/* Retirement sums progress bars — unchanged */}
-        <TiltCard style={cardStyle}>
+        <div style={cardStyle}>
           <p style={{ ...labelStyle, marginBottom: 14 }}>RA vs retirement sums at age {pa}</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {[
@@ -5372,10 +5292,10 @@ function ReadinessTab({
               {` · `}FRS growth: {(Number(inputs.retirementSumGrowth) || 3)}%/yr
             </p>
           </div>
-        </TiltCard>
+        </div>
 
         {/* Income waterfall — Phase 3: new card */}
-        <TiltCard style={cardStyle}>
+        <div style={cardStyle}>
           <p style={{ ...labelStyle, marginBottom: 2 }}>Retirement income waterfall</p>
           <p style={{ fontSize: 11, color: "var(--text-subtle)", marginBottom: 12 }}>
             All sources at age {pa}{isRealDollars ? " · today's dollars" : ""}
@@ -5442,14 +5362,14 @@ function ReadinessTab({
               in the Strategy and SRS sections.
             </p>
           )}
-        </TiltCard>
+        </div>
       </div>
 
       {/* ── ROW 3: Allocation donut + Milestones (unchanged) ── */}
       <div className="rd-row3" style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16 }}>
 
         {/* Allocation donut */}
-        <TiltCard style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <p style={{ ...labelStyle, marginBottom: 10 }}>Current allocation</p>
           {currentTotal > 0 ? (
             <>
@@ -5476,10 +5396,10 @@ function ReadinessTab({
           ) : (
             <p style={{ fontSize: 12, color: "var(--text-subtle)", textAlign: "center", marginTop: 20 }}>Enter CPF balances in the sidebar to see allocation</p>
           )}
-        </TiltCard>
+        </div>
 
         {/* Milestone alerts */}
-        <TiltCard style={cardStyle}>
+        <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <p style={labelStyle}>Milestone alerts ({milestones.length})</p>
             <button onClick={() => { setActiveTab("summary"); setSidebarOpen(true); }}
@@ -5506,12 +5426,12 @@ function ReadinessTab({
               })}
             </div>
           )}
-        </TiltCard>
+        </div>
       </div>
 
       {/* ── ROW 4: Life stage timeline (full-width) — Phase 3 ── */}
       {timelineEvents.length >= 3 && (
-        <TiltCard style={cardStyle}>
+        <div style={cardStyle}>
           <p style={{ ...labelStyle, marginBottom: 20 }}>Life stage timeline</p>
           <div style={{ position: "relative", paddingBottom: 44, paddingTop: 32, minHeight: 110 }}>
             {/* Axis */}
@@ -5559,12 +5479,12 @@ function ReadinessTab({
               );
             })}
           </div>
-        </TiltCard>
+        </div>
       )}
 
       {/* ── ROW 5: Action priority queue (full-width) — Phase 3 ── */}
       {actionItems.length > 0 && (
-        <TiltCard style={cardStyle}>
+        <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <p style={labelStyle}>Action priority queue</p>
             <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>
@@ -5605,7 +5525,7 @@ function ReadinessTab({
               </div>
             ))}
           </div>
-        </TiltCard>
+        </div>
       )}
 
     </div>
@@ -5801,6 +5721,17 @@ export default function App() {
   const [goalSolving,  setGoalSolving]  = useState(false);            // spinner while computing
   const [goalApplied,  setGoalApplied]  = useState(null);             // "A"|"B"|"C"|null last-applied strategy
   const [preApplySnapshot, setPreApplySnapshot] = useState(null);    // { vcSaTopup, vc3aCash } captured before last Apply — enables per-strategy Revert without touching other inputs
+  // ── Goal Simulator extension: Spouse + Combined views + Strategy D ────────
+  const [goalSimView,           setGoalSimView]           = useState("primary"); // "primary"|"spouse"|"combined"
+  const [goalTargetCombined,    setGoalTargetCombined]    = useState(0);         // separate combined household CPF target
+  const [spouseGoalResult,      setSpouseGoalResult]      = useState(null);      // solver output for spouse view
+  const [spouseGoalSolving,     setSpouseGoalSolving]     = useState(false);
+  const [combinedGoalResult,    setCombinedGoalResult]    = useState(null);      // combined household solver output
+  const [combinedGoalSolving,   setCombinedGoalSolving]   = useState(false);
+  const [spouseGoalApplied,     setSpouseGoalApplied]     = useState(null);      // "A"|"B"|"C"|null
+  const [spousePreApplySnapshot,setSpousePreApplySnapshot]= useState(null);      // { vcSaTopup, vc3aCash } for spouse revert
+  const [marginalTaxRate,       setMarginalTaxRate]       = useState(15);        // % marginal income tax rate for Strategy D
+  const isApplyingSpouseStratRef = useRef(false);                                // guards spouse lever-change useEffect
   // BUG-2 fix: Life Events panel state hoisted from IIFE to top-level useState.
   // Calling React.useState inside an IIFE embedded in JSX violates Rules of Hooks:
   // the hook call count changes when the IIFE is conditionally skipped, React's
@@ -6006,6 +5937,18 @@ export default function App() {
     setGoalApplied(null);
     setPreApplySnapshot(null);
   }, [inputs.vcSaTopup, inputs.vc3aCash]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Parallel guard for spouse strategy apply — mirrors the primary guard above.
+  // Prevents the spouse "Applied" badge and ↩ Revert from vanishing on the same
+  // render cycle as applyStrategy writes to spouseInputs.
+  useEffect(() => {
+    if (isApplyingSpouseStratRef.current) {
+      isApplyingSpouseStratRef.current = false;
+      return;
+    }
+    setSpouseGoalApplied(null);
+    setSpousePreApplySnapshot(null);
+  }, [spouseInputs.vcSaTopup, spouseInputs.vc3aCash]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Advanced Settings gate — auto-expand if imported/shared profile has advanced data
   useEffect(() => {
@@ -7299,94 +7242,196 @@ export default function App() {
   };
 
   // ─── Goal Simulator Solver ────────────────────────────────────────────────
-  // Binary-searches runProjectionEngine for the minimum annual contribution
-  // required via each lever (RSTU, VC3A, blended) to hit inputs.goalTargetCPF
-  // at the member's payout age.  Called only on button click — never reactive.
-  // CPFIS excluded: engine models CPFIS as an OA outflow only; returns are not
-  // modelled, so CPFIS cannot increase CPF totals.
+  // Three entry points, one per view (Primary / Spouse / Combined).
+  // All use binary search over runProjectionEngine — called only on button
+  // click, never reactive.  CPFIS excluded: modelled as OA outflow only.
+  //
+  // Shared constants
+  const GS_RSTU_CAP = 8000;
+  const GS_VC3A_CAP = 37740;
+  const GS_ITER     = 30;  // iterations → precision ~$0.008 on any range
+
+  // ── Shared binary-search helper ──────────────────────────────────────────
+  // getTotalFn: (overrides) => number  |  targetForMember: CPF total to reach
+  const gsBsearch = (getTotalFn, key, lo, hi, targetForMember, extraOverrides = {}) => {
+    let L = lo, H = hi;
+    if (getTotalFn({ ...extraOverrides, [key]: H }) < targetForMember) return null;
+    for (let i = 0; i < GS_ITER; i++) {
+      const mid = (L + H) / 2;
+      getTotalFn({ ...extraOverrides, [key]: mid }) >= targetForMember ? (H = mid) : (L = mid);
+    }
+    return Math.ceil(H / 100) * 100;
+  };
+
+  // ── Shared three-strategy solver for a single member ─────────────────────
+  const gsSolveSingle = (baseInp, pa, targetAmt) => {
+    const getTotal = (overrides) => {
+      const rows = runProjectionEngine({ ...baseInp, ...overrides });
+      const row  = rows.find(r => r.age === pa) || {};
+      return (row.oa || 0) + (row.sa || 0) + (row.ra || 0) + (row.ma || 0);
+    };
+    const baseline      = getTotal({});
+    const curRSTU       = Number(baseInp.vcSaTopup) || 0;
+    const curVC3A       = Number(baseInp.vc3aCash)  || 0;
+    const sensitivityRSTU = getTotal({ vcSaTopup: curRSTU + 1000 }) - baseline;
+    const sensitivityVC3A = getTotal({ vc3aCash:  curVC3A + 1000 }) - baseline;
+
+    const rstuNeeded = gsBsearch(getTotal, "vcSaTopup", curRSTU, GS_RSTU_CAP, targetAmt);
+    const stratA = { lever: "vcSaTopup", cap: GS_RSTU_CAP, maxTotal: getTotal({ vcSaTopup: GS_RSTU_CAP }),
+      needed: rstuNeeded, feasible: rstuNeeded !== null, totalCash: rstuNeeded };
+
+    const vc3aNeeded = gsBsearch(getTotal, "vc3aCash", curVC3A, GS_VC3A_CAP, targetAmt);
+    const stratB = { lever: "vc3aCash", cap: GS_VC3A_CAP, maxTotal: getTotal({ vc3aCash: GS_VC3A_CAP }),
+      needed: vc3aNeeded, feasible: vc3aNeeded !== null, totalCash: vc3aNeeded };
+
+    const maxTotalC = getTotal({ vcSaTopup: GS_RSTU_CAP, vc3aCash: GS_VC3A_CAP });
+    const stratC = maxTotalC < targetAmt
+      ? { feasible: false, rstu: GS_RSTU_CAP, vc3a: GS_VC3A_CAP, totalCash: GS_RSTU_CAP + GS_VC3A_CAP, maxTotal: maxTotalC }
+      : (() => {
+          const vc3aForBlend = gsBsearch(getTotal, "vc3aCash", 0, GS_VC3A_CAP, targetAmt, { vcSaTopup: GS_RSTU_CAP }) || 0;
+          return { feasible: true, rstu: GS_RSTU_CAP, vc3a: vc3aForBlend, totalCash: GS_RSTU_CAP + vc3aForBlend };
+        })();
+
+    return { baseline, targetAmt, gap: targetAmt - baseline, stratA, stratB, stratC, sensitivityRSTU, sensitivityVC3A };
+  };
+
+  // ── Primary solver ────────────────────────────────────────────────────────
   const solveGoal = () => {
     const targetAmt = Number(inputs.goalTargetCPF) || 0;
     if (targetAmt <= 0) return;
     setGoalSolving(true);
     setGoalResult(null);
-
-    // Defer one tick so the spinner renders before the synchronous compute
     setTimeout(() => {
       try {
-        const pa        = Number(debouncedInputs.payoutAge) || 65;
-        const baseInp   = { ...debouncedInputs };
-        const RSTU_CAP  = 8000;
-        const VC3A_CAP  = 37740;
-        const ITER      = 30; // binary search iterations — precision ~$0.008 on any range
+        const result = gsSolveSingle({ ...debouncedInputs }, Number(debouncedInputs.payoutAge) || 65, targetAmt);
+        setGoalResult(result);
+      } finally { setGoalSolving(false); }
+    }, 20);
+  };
 
-        // Helper: run engine; return total CPF (OA+SA/RA+MA) at payout age
-        const getTotal = (overrides) => {
-          const rows = runProjectionEngine({ ...baseInp, ...overrides });
-          const row  = rows.find(r => r.age === pa) || {};
-          return (row.oa || 0) + (row.sa || 0) + (row.ra || 0) + (row.ma || 0);
-        };
+  // ── Spouse solver ─────────────────────────────────────────────────────────
+  const solveGoalSpouse = () => {
+    const targetAmt = Number(inputs.goalTargetCPF) || 0;
+    if (targetAmt <= 0) return;
+    setSpouseGoalSolving(true);
+    setSpouseGoalResult(null);
+    setTimeout(() => {
+      try {
+        const result = gsSolveSingle({ ...debouncedSpouseInputs }, Number(debouncedSpouseInputs.payoutAge) || 65, targetAmt);
+        setSpouseGoalResult(result);
+      } finally { setSpouseGoalSolving(false); }
+    }, 20);
+  };
 
-        const baseline = getTotal({});
+  // ── Combined household solver ─────────────────────────────────────────────
+  // Strategies allocate each member's contribution PROPORTIONALLY to their
+  // CPF-growth sensitivity ($ CPF gained per $ invested). The member whose
+  // dollar buys more CPF growth bears a larger proportional share of the gap.
+  // When a member hits their lever cap before achieving their allocated portion,
+  // the residual gap overflows to the other member.
+  const solveGoalCombined = () => {
+    const targetAmt = goalTargetCombined;
+    if (targetAmt <= 0) return;
+    setCombinedGoalSolving(true);
+    setCombinedGoalResult(null);
+    setTimeout(() => {
+      try {
+        const pPA = Number(debouncedInputs.payoutAge)       || 65;
+        const sPA = Number(debouncedSpouseInputs.payoutAge) || 65;
+        const baseP = { ...debouncedInputs };
+        const baseS = { ...debouncedSpouseInputs };
 
-        // Binary search helper — finds minimum lever value so getTotal >= target
-        const bsearch = (key, lo, hi, extraOverrides = {}) => {
-          let L = lo, H = hi;
-          if (getTotal({ ...extraOverrides, [key]: H }) < targetAmt) return null; // infeasible
-          for (let i = 0; i < ITER; i++) {
-            const mid = (L + H) / 2;
-            if (getTotal({ ...extraOverrides, [key]: mid }) >= targetAmt) H = mid;
-            else L = mid;
+        const getTotalP = (ov) => { const rows = runProjectionEngine({ ...baseP, ...ov }); const r = rows.find(r => r.age === pPA) || {}; return (r.oa||0)+(r.sa||0)+(r.ra||0)+(r.ma||0); };
+        const getTotalS = (ov) => { const rows = runProjectionEngine({ ...baseS, ...ov }); const r = rows.find(r => r.age === sPA) || {}; return (r.oa||0)+(r.sa||0)+(r.ra||0)+(r.ma||0); };
+
+        const baselineP = getTotalP({});
+        const baselineS = getTotalS({});
+        const combinedBaseline = baselineP + baselineS;
+        const gap = targetAmt - combinedBaseline;
+
+        // Sensitivities: $ CPF gained per $1,000 invested via each lever
+        const sRSTU_P = getTotalP({ vcSaTopup: (Number(baseP.vcSaTopup)||0) + 1000 }) - baselineP;
+        const sRSTU_S = getTotalS({ vcSaTopup: (Number(baseS.vcSaTopup)||0) + 1000 }) - baselineS;
+        const sVC3A_P = getTotalP({ vc3aCash:  (Number(baseP.vc3aCash)||0)  + 1000 }) - baselineP;
+        const sVC3A_S = getTotalS({ vc3aCash:  (Number(baseS.vc3aCash)||0)  + 1000 }) - baselineS;
+
+        // Proportional share: member with higher sensitivity takes larger share
+        const wRSTU_P = (sRSTU_P + sRSTU_S) > 0 ? sRSTU_P / (sRSTU_P + sRSTU_S) : 0.5;
+        const wVC3A_P = (sVC3A_P + sVC3A_S) > 0 ? sVC3A_P / (sVC3A_P + sVC3A_S) : 0.5;
+
+        // Overflow helper: if member A is capped, give residual to member B
+        const solvePair = (getFnP, keyP, loP, capP, getFnS, keyS, loS, capS, shareP, extraP = {}, extraS = {}) => {
+          const tgtP = baselineP + gap * shareP;
+          const tgtS = baselineS + gap * (1 - shareP);
+          let pVal = gsBsearch(getFnP, keyP, loP, capP, tgtP, extraP);
+          let sVal = gsBsearch(getFnS, keyS, loS, capS, tgtS, extraS);
+          // Overflow primary cap → extra to spouse
+          if (pVal === null) {
+            pVal = capP;
+            const residual = targetAmt - getFnP({ ...extraP, [keyP]: capP }) - baselineS;
+            sVal = gsBsearch(getFnS, keyS, loS, capS, baselineS + residual, extraS);
           }
-          return Math.ceil(H / 100) * 100; // round up to nearest $100
+          // Overflow spouse cap → extra to primary
+          if (sVal === null) {
+            sVal = capS;
+            const residual = targetAmt - baselineP - getFnS({ ...extraS, [keyS]: capS });
+            pVal = gsBsearch(getFnP, keyP, loP, capP, baselineP + residual, extraP);
+          }
+          return { pVal, sVal, feasible: pVal !== null && sVal !== null };
         };
 
-        // ── Strategy A: RSTU alone ──────────────────────────────────────────
-        const curRSTU     = Number(baseInp.vcSaTopup) || 0;
-        const maxTotalA   = getTotal({ vcSaTopup: RSTU_CAP });
-        const rstuNeeded  = bsearch("vcSaTopup", curRSTU, RSTU_CAP);
-        const stratA = {
-          lever: "vcSaTopup", cap: RSTU_CAP, maxTotal: maxTotalA,
-          needed: rstuNeeded,
-          feasible: rstuNeeded !== null,
-          totalCash: rstuNeeded,
-        };
+        // Strategy A — RSTU only, proportional
+        const { pVal: pRSTU_A, sVal: sRSTU_A, feasible: feasA } = solvePair(
+          getTotalP, "vcSaTopup", Number(baseP.vcSaTopup)||0, GS_RSTU_CAP,
+          getTotalS, "vcSaTopup", Number(baseS.vcSaTopup)||0, GS_RSTU_CAP, wRSTU_P);
+        const stratA_C = { feasible: feasA, primRSTU: pRSTU_A || GS_RSTU_CAP, spsRSTU: sRSTU_A || GS_RSTU_CAP,
+          totalCash: (pRSTU_A||GS_RSTU_CAP) + (sRSTU_A||GS_RSTU_CAP),
+          maxTotal: getTotalP({ vcSaTopup: GS_RSTU_CAP }) + getTotalS({ vcSaTopup: GS_RSTU_CAP }) };
 
-        // ── Strategy B: VC3A alone ──────────────────────────────────────────
-        const curVC3A     = Number(baseInp.vc3aCash) || 0;
-        const maxTotalB   = getTotal({ vc3aCash: VC3A_CAP });
-        const vc3aNeeded  = bsearch("vc3aCash", curVC3A, VC3A_CAP);
-        const stratB = {
-          lever: "vc3aCash", cap: VC3A_CAP, maxTotal: maxTotalB,
-          needed: vc3aNeeded,
-          feasible: vc3aNeeded !== null,
-          totalCash: vc3aNeeded,
-        };
+        // Strategy B — VC3A only, proportional
+        const { pVal: pVC3A_B, sVal: sVC3A_B, feasible: feasB } = solvePair(
+          getTotalP, "vc3aCash", Number(baseP.vc3aCash)||0, GS_VC3A_CAP,
+          getTotalS, "vc3aCash", Number(baseS.vc3aCash)||0, GS_VC3A_CAP, wVC3A_P);
+        const stratB_C = { feasible: feasB, primVC3A: pVC3A_B || GS_VC3A_CAP, spsVC3A: sVC3A_B || GS_VC3A_CAP,
+          totalCash: (pVC3A_B||GS_VC3A_CAP) + (sVC3A_B||GS_VC3A_CAP),
+          maxTotal: getTotalP({ vc3aCash: GS_VC3A_CAP }) + getTotalS({ vc3aCash: GS_VC3A_CAP }) };
 
-        // ── Strategy C: Blended — max RSTU first, fill gap with VC3A ───────
-        const maxTotalC   = getTotal({ vcSaTopup: RSTU_CAP, vc3aCash: VC3A_CAP });
-        let stratC;
-        if (maxTotalC < targetAmt) {
-          // Even at full RSTU + full VC3A the target is unreachable
-          stratC = { feasible: false, rstu: RSTU_CAP, vc3a: VC3A_CAP, totalCash: RSTU_CAP + VC3A_CAP, maxTotal: maxTotalC };
+        // Strategy C — Blended: max RSTU first (proportional), then VC3A for residual
+        const maxAllC = getTotalP({ vcSaTopup: GS_RSTU_CAP, vc3aCash: GS_VC3A_CAP }) +
+                        getTotalS({ vcSaTopup: GS_RSTU_CAP, vc3aCash: GS_VC3A_CAP });
+        let stratC_C;
+        if (maxAllC < targetAmt) {
+          stratC_C = { feasible: false, primRSTU: GS_RSTU_CAP, spsRSTU: GS_RSTU_CAP, primVC3A: GS_VC3A_CAP, spsVC3A: GS_VC3A_CAP,
+            totalCash: 2 * GS_RSTU_CAP + 2 * GS_VC3A_CAP, maxTotal: maxAllC };
         } else {
-          // With full RSTU locked, binary search VC3A for the remainder
-          const vc3aForBlend = bsearch("vc3aCash", 0, VC3A_CAP, { vcSaTopup: RSTU_CAP }) || 0;
-          stratC = {
-            feasible: true,
-            rstu: RSTU_CAP,
-            vc3a: vc3aForBlend,
-            totalCash: RSTU_CAP + vc3aForBlend,
-          };
+          // Lock max RSTU for both, solve VC3A residual proportionally
+          const afterMaxRSTU_P = getTotalP({ vcSaTopup: GS_RSTU_CAP });
+          const afterMaxRSTU_S = getTotalS({ vcSaTopup: GS_RSTU_CAP });
+          const vc3aGap = targetAmt - afterMaxRSTU_P - afterMaxRSTU_S;
+          if (vc3aGap <= 0) {
+            // RSTU alone covers the gap — find minimum proportional RSTU
+            const { pVal: pR, sVal: sR, feasible: fR } = solvePair(
+              getTotalP, "vcSaTopup", Number(baseP.vcSaTopup)||0, GS_RSTU_CAP,
+              getTotalS, "vcSaTopup", Number(baseS.vcSaTopup)||0, GS_RSTU_CAP, wRSTU_P);
+            stratC_C = { feasible: fR, primRSTU: pR||0, spsRSTU: sR||0, primVC3A: 0, spsVC3A: 0, totalCash: (pR||0)+(sR||0) };
+          } else {
+            const wVC3AC_P = (sVC3A_P + sVC3A_S) > 0 ? sVC3A_P / (sVC3A_P + sVC3A_S) : 0.5;
+            const { pVal: pV, sVal: sV, feasible: fV } = solvePair(
+              (ov) => getTotalP({ vcSaTopup: GS_RSTU_CAP, ...ov }), "vc3aCash", 0, GS_VC3A_CAP,
+              (ov) => getTotalS({ vcSaTopup: GS_RSTU_CAP, ...ov }), "vc3aCash", 0, GS_VC3A_CAP,
+              wVC3AC_P,
+              { vcSaTopup: GS_RSTU_CAP }, { vcSaTopup: GS_RSTU_CAP });
+            stratC_C = { feasible: fV, primRSTU: GS_RSTU_CAP, spsRSTU: GS_RSTU_CAP, primVC3A: pV||0, spsVC3A: sV||0,
+              totalCash: 2*GS_RSTU_CAP + (pV||0) + (sV||0) };
+          }
         }
 
-        // ── Sensitivity: how much does $1,000/yr add via each lever? ────────
-        const sensitivityRSTU = getTotal({ vcSaTopup: curRSTU + 1000 }) - baseline;
-        const sensitivityVC3A = getTotal({ vc3aCash:  curVC3A + 1000 }) - baseline;
-
-        setGoalResult({ baseline, targetAmt, gap: targetAmt - baseline, stratA, stratB, stratC, sensitivityRSTU, sensitivityVC3A });
-      } finally {
-        setGoalSolving(false);
-      }
+        setCombinedGoalResult({
+          combinedBaseline, targetAmt, gap, baselineP, baselineS, pPA, sPA,
+          sRSTU_P, sRSTU_S, sVC3A_P, sVC3A_S,
+          stratA: stratA_C, stratB: stratB_C, stratC: stratC_C,
+        });
+      } finally { setCombinedGoalSolving(false); }
     }, 20);
   };
   // ─────────────────────────────────────────────────────────────────────────
@@ -7449,6 +7494,12 @@ export default function App() {
         setShowMonteCarlo(false);
         setShowBaseline(false);
         setActiveTab("readiness");
+        setGoalSimView("primary");
+        setGoalTargetCombined(0);
+        setSpouseGoalResult(null);
+        setCombinedGoalResult(null);
+        setSpouseGoalApplied(null);
+        setSpousePreApplySnapshot(null);
         showToast("All inputs, scenarios, and What-If data reset to defaults.");
       }
     });
@@ -7497,6 +7548,14 @@ export default function App() {
         setGoalSolving(false);
         setGoalApplied(null);
         setPreApplySnapshot(null);
+        setSpouseGoalResult(null);
+        setSpouseGoalSolving(false);
+        setCombinedGoalResult(null);
+        setCombinedGoalSolving(false);
+        setSpouseGoalApplied(null);
+        setSpousePreApplySnapshot(null);
+        setGoalSimView("primary");
+        setGoalTargetCombined(0);
         // Clear Life Events form state — prevents ghost form appearing over empty events list.
         setLeFormState({});
         // Re-enable gap alert so it evaluates fresh against the new blank profile.
@@ -12520,29 +12579,6 @@ ${milestoneSnapshotHtml}
           border: 1px solid var(--border-subtle);
           border-radius: 12px;
         }
-
-        /* ── Hover-lift card — matches landing-page .card:hover ────────────────────
-           JS (mouseenter/mouseleave via setProperty) drives the three changes:
-             transform: translateY(-8px)  |  box-shadow deepens  |  border-bottom-color → --clr-green
-           Inline specificity prevents CSS :hover from doing this directly.
-           This class provides position:relative (for z-index) and belt-and-
-           suspenders media-query guards for touch and reduced-motion users.   */
-        .cpf-tilt-card {
-          position: relative; /* enables z-index elevation above grid siblings */
-        }
-        /* Touch / coarse-pointer: JS guards already skip attachment,
-           !important here is a belt-and-suspenders fallback only              */
-        @media (hover: none), (pointer: coarse) {
-          .cpf-tilt-card { transform: none !important; }
-        }
-        /* Reduced-motion fallback (JS also guards at effect mount time)        */
-        @media (prefers-reduced-motion: reduce) {
-          .cpf-tilt-card {
-            transform:  none !important;
-            transition: none !important;
-          }
-        }
-
 
         /* Muted info / notice row */
         .cpf-info-row {
@@ -22652,224 +22688,472 @@ ${milestoneSnapshotHtml}
                   </div>
 
                   {/* ══ GOAL SIMULATOR ════════════════════════════════════════ */}
-                  {goalStratTab === "goal" && (
-                    <div style={{ padding: "24px 24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
+                  {goalStratTab === "goal" && (() => {
+                    // ── Derived values used across all views ────────────────
+                    const pa      = Number(debouncedInputs.payoutAge)       || 65;
+                    const spa     = Number(debouncedSpouseInputs.payoutAge) || 65;
+                    const projRow = accumulationByAge.get(pa);
+                    const baselinePrimary = projRow ? (projRow.oa||0)+(projRow.sa||0)+(projRow.ra||0)+(projRow.ma||0) : 0;
 
-                      {/* Target input row */}
-                      <div>
-                        <p style={{ margin: "0 0 12px", fontWeight: 700, fontSize: 15, color: "var(--text-highlight)" }}>Set your CPF target at payout age</p>
-                        {(() => {
-                          // ── Smart preset logic ──────────────────────────────────────────
-                          // Derive current projected CPF total at payout age from the already-
-                          // computed displayAccumulation (O(1) via accumulationByAge Map).
-                          // This avoids re-running the engine and stays in sync with the chart.
-                          const projRow = accumulationByAge.get(pa);
-                          const baselineCPF = projRow
-                            ? (projRow.oa || 0) + (projRow.sa || 0) + (projRow.ra || 0) + (projRow.ma || 0)
-                            : 0;
+                    // Spouse baseline via spouseProjection (already computed)
+                    const spouseRow      = spouseProjection.find(r => r.age === spa) || {};
+                    const baselineSpouse = (spouseRow.oa||0)+(spouseRow.sa||0)+(spouseRow.ra||0)+(spouseRow.ma||0);
 
-                          // Fixed anchors — always shown so users have recognisable reference points.
-                          // If baseline exceeds all anchors (>$10M), add one dynamic stretch above it.
-                          const FIXED_ANCHORS = [1e6, 2e6, 4e6, 1e7];
-                          const presets = baselineCPF > 1e7
-                            ? [...FIXED_ANCHORS, Math.ceil((baselineCPF + 1e6) / 1e6) * 1e6]
-                            : FIXED_ANCHORS;
+                    const spouseAvailable = householdEnabled && spouseProjection.length > 0;
 
-                          return (
-                            <>
+                    // Strategy D: tax-optimised — lowest effective after-tax annual cash outflow
+                    const SG_TAX_BRACKETS = [7, 11.5, 15, 19.5, 22];
+                    const taxRate = marginalTaxRate / 100;
+                    const computeStratD = (result) => {
+                      if (!result) return null;
+                      const { stratA, stratB, stratC } = result;
+                      const effA = stratA.feasible ? (stratA.needed || 0) * (1 - taxRate) : Infinity;
+                      const effB = stratB.feasible ? (stratB.needed || 0)                  : Infinity;
+                      const effC = stratC.feasible ? (GS_RSTU_CAP * (1 - taxRate)) + (stratC.vc3a || 0) : Infinity;
+                      const costs = { A: effA, B: effB, C: effC };
+                      const best  = Object.entries(costs).sort(([,a],[,b]) => a - b)[0];
+                      const bestLetter = best[0]; const bestEffCost = best[1];
+                      const rstuUsed = bestLetter === "A" ? (stratA.needed||0) : bestLetter === "C" ? GS_RSTU_CAP : 0;
+                      const taxSaving = rstuUsed * taxRate;
+                      const nominalCost = bestLetter === "A" ? (stratA.needed||0) : bestLetter === "B" ? (stratB.needed||0) : GS_RSTU_CAP + (stratC.vc3a||0);
+                      return { bestLetter, bestEffCost, costs, taxSaving, nominalCost, rstuUsed };
+                    };
+
+                    const activeResult  = goalSimView === "spouse" ? spouseGoalResult : goalSimView === "combined" ? combinedGoalResult : goalResult;
+                    const activeSolving = goalSimView === "spouse" ? spouseGoalSolving : goalSimView === "combined" ? combinedGoalSolving : goalSolving;
+                    const stratD        = goalSimView !== "combined" ? computeStratD(activeResult) : null;
+
+                    const currentTarget = goalSimView === "combined" ? goalTargetCombined : Number(inputs.goalTargetCPF) || 0;
+                    const fmtK = v => v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : `$${Math.round(v).toLocaleString()}`;
+                    const pctOfTarget   = activeResult ? Math.min(100, (activeResult.baseline || activeResult.combinedBaseline || 0) / (activeResult.targetAmt || 1) * 100) : 0;
+
+                    // ── Apply strategy helpers ──────────────────────────────
+                    const applyPrimaryStrategy = (overrides, letter) => {
+                      isApplyingStrategyRef.current = true;
+                      setPreApplySnapshot({ vcSaTopup: Number(inputs.vcSaTopup)||0, vc3aCash: Number(inputs.vc3aCash)||0 });
+                      setInputs(prev => ({ ...prev, ...overrides }));
+                      setGoalApplied(letter);
+                    };
+                    const applySpouseStrategy = (overrides, letter) => {
+                      isApplyingSpouseStratRef.current = true;
+                      setSpousePreApplySnapshot({ vcSaTopup: Number(spouseInputs.vcSaTopup)||0, vc3aCash: Number(spouseInputs.vc3aCash)||0 });
+                      setSpouseInputs(prev => ({ ...prev, ...overrides }));
+                      setSpouseGoalApplied(letter);
+                    };
+                    const applyCombinedStrategy = (primOverrides, spsOverrides, letter) => {
+                      isApplyingStrategyRef.current      = true;
+                      isApplyingSpouseStratRef.current   = true;
+                      setPreApplySnapshot({ vcSaTopup: Number(inputs.vcSaTopup)||0, vc3aCash: Number(inputs.vc3aCash)||0 });
+                      setSpousePreApplySnapshot({ vcSaTopup: Number(spouseInputs.vcSaTopup)||0, vc3aCash: Number(spouseInputs.vc3aCash)||0 });
+                      setInputs(prev => ({ ...prev, ...primOverrides }));
+                      setSpouseInputs(prev => ({ ...prev, ...spsOverrides }));
+                      setGoalApplied(letter);
+                      setSpouseGoalApplied(letter);
+                    };
+
+                    const CARD_COLORS = { A: "#6366f1", B: "#0ea5e9", C: "#10b981", D: "#f59e0b" };
+
+                    return (
+                      <div style={{ padding: "24px 24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
+
+                        {/* ── View toggle: Primary / Spouse / Combined ──── */}
+                        <div style={{ display: "flex", gap: 0, borderRadius: 10, overflow: "clip", border: "1px solid var(--border-subtle)", alignSelf: "flex-start" }}>
+                          {[
+                            { id: "primary",  label: "👤 Primary"  },
+                            { id: "spouse",   label: "👤 Spouse",   disabled: !spouseAvailable },
+                            { id: "combined", label: "👥 Combined", disabled: !spouseAvailable },
+                          ].map(({ id, label, disabled }) => (
+                            <button key={id} onClick={() => !disabled && setGoalSimView(id)}
+                              title={disabled ? "Enable Household Mode in the Profile section to add a spouse" : undefined}
+                              style={{ padding: "8px 16px", fontWeight: 700, fontSize: 12, border: "none",
+                                cursor: disabled ? "not-allowed" : "pointer",
+                                opacity: disabled ? 0.4 : 1,
+                                background: goalSimView === id ? "#f43f5e" : "var(--bg-input)",
+                                color:      goalSimView === id ? "#fff"    : "var(--text-muted)",
+                                transition: "all .15s" }}>
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* ── Target input ─────────────────────────────── */}
+                        <div>
+                          <p style={{ margin: "0 0 10px", fontWeight: 700, fontSize: 15, color: "var(--text-highlight)" }}>
+                            {goalSimView === "combined"
+                              ? "Set your combined household CPF target at payout ages"
+                              : goalSimView === "spouse"
+                              ? `Set your spouse's CPF target at their payout age (${spa})`
+                              : "Set your CPF target at payout age"}
+                          </p>
+                          {goalSimView === "combined" ? (
+                            /* Combined: separate target field + baseline display */
+                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                                {presets.map(preset => {
-                                  const isMet      = baselineCPF > 0 && preset <= baselineCPF;
-                                  const isSelected = Number(inputs.goalTargetCPF) === preset;
-                                  const isDynamic  = !FIXED_ANCHORS.includes(preset);
+                                {[2e6, 4e6, 6e6, 1e7].map(preset => {
+                                  const met = (baselinePrimary + baselineSpouse) >= preset;
+                                  const sel = goalTargetCombined === preset;
                                   return (
-                                    <div key={preset} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                                      <button
-                                        onClick={() => isMet ? null : setInputs(prev => ({ ...prev, goalTargetCPF: preset }))}
-                                        title={isMet ? `Your current projection ($${Math.round(baselineCPF).toLocaleString()}) already exceeds this target` : undefined}
-                                        style={{
-                                          padding: "7px 16px", borderRadius: 20, fontWeight: 700, fontSize: 13,
-                                          border: "2px solid", transition: "all .15s",
-                                          cursor: isMet ? "default" : "pointer",
-                                          pointerEvents: isMet ? "none" : "auto",
-                                          borderColor: isSelected ? (isDynamic ? "#0ea5e9" : "#f43f5e") : isMet ? "#22c55e" : "var(--border-strong)",
-                                          background:  isSelected ? (isDynamic ? "#0ea5e918" : "#f43f5e18") : isMet ? "#22c55e15" : "var(--bg-input)",
-                                          color:       isSelected ? (isDynamic ? "#0ea5e9"   : "#f43f5e")   : isMet ? "#22c55e"          : "var(--text-muted)",
-                                        }}>
-                                        {isDynamic ? "🎯 " : ""}
-                                        {preset >= 1e6
-                                          ? `${preset / 1e6 === Math.floor(preset / 1e6) ? preset / 1e6 : (preset / 1e6).toFixed(1)}M${pa}`
-                                          : `${preset / 1e3}k${pa}`}
-                                      </button>
-                                    </div>
+                                    <button key={preset} onClick={() => !met && setGoalTargetCombined(preset)}
+                                      style={{ padding: "7px 16px", borderRadius: 20, fontWeight: 700, fontSize: 13, border: "2px solid",
+                                        cursor: met ? "default" : "pointer", pointerEvents: met ? "none" : "auto",
+                                        borderColor: sel ? "#f43f5e" : met ? "#22c55e" : "var(--border-strong)",
+                                        background:  sel ? "#f43f5e18" : met ? "#22c55e15" : "var(--bg-input)",
+                                        color:       sel ? "#f43f5e"   : met ? "#22c55e"   : "var(--text-muted)" }}>
+                                      {preset >= 1e6 ? `${preset/1e6}M` : `${preset/1e3}k`}
+                                    </button>
                                   );
                                 })}
                                 <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "4px 10px" }}>
                                   <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
-                                  <input type="number" min={0} step={100000}
-                                    value={inputs.goalTargetCPF || ""}
-                                    onChange={e => setInputs(prev => ({ ...prev, goalTargetCPF: Number(e.target.value) || 0 }))}
-                                    placeholder="Custom amount"
-                                    style={{ width: 130, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 13, outline: "none" }} />
-                                </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                  <span style={{ fontSize: 13, color: "var(--text-muted)" }}>at age</span>
-                                  <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>{pa}</span>
-                                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>(payout age — set in sidebar)</span>
+                                  <input type="number" min={0} step={100000} value={goalTargetCombined || ""}
+                                    onChange={e => setGoalTargetCombined(Number(e.target.value) || 0)}
+                                    placeholder="Custom"
+                                    style={{ width: 120, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 13, outline: "none" }} />
                                 </div>
                               </div>
-                              {/* Contextual hint — only shown when at least one preset is already met */}
-                              {baselineCPF > 0 && presets.some(p => p <= baselineCPF) && (
-                                <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                                  💡 Your current projection is <strong style={{ color: "var(--text-bright)" }}>{(() => { const b = baselineCPF; return b >= 1e6 ? `$${(b/1e6).toFixed(2)}M` : `$${Math.round(b/1e3)}k`; })()}</strong> at age {pa} — green pills are already met. Select a higher target to find new strategies.
+                              <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                                Combined baseline: <strong style={{ color: "var(--text-bright)" }}>{fmtK(baselinePrimary + baselineSpouse)}</strong>
+                                {" "}(Primary {fmtK(baselinePrimary)} at {pa} + Spouse {fmtK(baselineSpouse)} at {spa})
+                              </p>
+                            </div>
+                          ) : (() => {
+                            /* Primary / Spouse: existing preset pill logic */
+                            const baseline = goalSimView === "spouse" ? baselineSpouse : baselinePrimary;
+                            const ageLbl   = goalSimView === "spouse" ? spa : pa;
+                            const FIXED_ANCHORS = [1e6, 2e6, 4e6, 1e7];
+                            const presets = baseline > 1e7 ? [...FIXED_ANCHORS, Math.ceil((baseline+1e6)/1e6)*1e6] : FIXED_ANCHORS;
+                            return (
+                              <>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                                  {presets.map(preset => {
+                                    const isMet = baseline > 0 && preset <= baseline;
+                                    const isSel = Number(inputs.goalTargetCPF) === preset;
+                                    const isDyn = !FIXED_ANCHORS.includes(preset);
+                                    return (
+                                      <button key={preset}
+                                        onClick={() => isMet ? null : setInputs(prev => ({ ...prev, goalTargetCPF: preset }))}
+                                        style={{ padding: "7px 16px", borderRadius: 20, fontWeight: 700, fontSize: 13, border: "2px solid", transition: "all .15s",
+                                          cursor: isMet ? "default" : "pointer", pointerEvents: isMet ? "none" : "auto",
+                                          borderColor: isSel ? (isDyn ? "#0ea5e9" : "#f43f5e") : isMet ? "#22c55e" : "var(--border-strong)",
+                                          background:  isSel ? (isDyn ? "#0ea5e918" : "#f43f5e18") : isMet ? "#22c55e15" : "var(--bg-input)",
+                                          color:       isSel ? (isDyn ? "#0ea5e9" : "#f43f5e")   : isMet ? "#22c55e"   : "var(--text-muted)" }}>
+                                        {isDyn ? "🎯 " : ""}{preset >= 1e6 ? `${preset/1e6 === Math.floor(preset/1e6) ? preset/1e6 : (preset/1e6).toFixed(1)}M${ageLbl}` : `${preset/1e3}k${ageLbl}`}
+                                      </button>
+                                    );
+                                  })}
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "4px 10px" }}>
+                                    <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
+                                    <input type="number" min={0} step={100000} value={inputs.goalTargetCPF || ""}
+                                      onChange={e => setInputs(prev => ({ ...prev, goalTargetCPF: Number(e.target.value)||0 }))}
+                                      placeholder="Custom amount"
+                                      style={{ width: 130, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 13, outline: "none" }} />
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                    <span style={{ fontSize: 13, color: "var(--text-muted)" }}>at age</span>
+                                    <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>{ageLbl}</span>
+                                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>(payout age — set in sidebar)</span>
+                                  </div>
+                                </div>
+                                {baseline > 0 && presets.some(p => p <= baseline) && (
+                                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                                    💡 {goalSimView === "spouse" ? "Spouse's" : "Your"} projection is <strong style={{ color: "var(--text-bright)" }}>{fmtK(baseline)}</strong> at age {ageLbl} — green pills already met.
+                                  </p>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        {/* ── Tax rate selector (Strategy D) ───────────── */}
+                        {goalSimView !== "combined" && (
+                          <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "12px 16px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>📊 Marginal tax rate (for Strategy D):</span>
+                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                              {[7, 11.5, 15, 19.5, 22].map(r => (
+                                <button key={r} onClick={() => setMarginalTaxRate(r)}
+                                  style={{ padding: "4px 10px", borderRadius: 6, fontWeight: 700, fontSize: 12, border: "1px solid",
+                                    borderColor: marginalTaxRate === r ? "#f59e0b" : "var(--border-strong)",
+                                    background:  marginalTaxRate === r ? "rgba(245,158,11,0.15)" : "var(--bg-panel)",
+                                    color:       marginalTaxRate === r ? "#f59e0b" : "var(--text-muted)",
+                                    cursor: "pointer", transition: "all .15s" }}>
+                                  {r}%
+                                </button>
+                              ))}
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "2px 8px" }}>
+                                <input type="number" min={0} max={30} step={0.5} value={marginalTaxRate}
+                                  onChange={e => setMarginalTaxRate(Math.min(30, Math.max(0, Number(e.target.value)||0)))}
+                                  style={{ width: 40, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 12, outline: "none", textAlign: "center" }} />
+                                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>%</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Action buttons ────────────────────────────── */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                          <button
+                            onClick={goalSimView === "spouse" ? solveGoalSpouse : goalSimView === "combined" ? solveGoalCombined : solveGoal}
+                            disabled={activeSolving || currentTarget <= 0}
+                            style={{ padding: "10px 26px", borderRadius: 10, fontWeight: 700, fontSize: 14, border: "none",
+                              cursor: activeSolving || currentTarget <= 0 ? "not-allowed" : "pointer",
+                              background: activeSolving || currentTarget <= 0 ? "var(--bg-input)" : "#f43f5e",
+                              color:      activeSolving || currentTarget <= 0 ? "var(--text-muted)" : "#fff",
+                              transition: "all .2s" }}>
+                            {activeSolving ? "⏳ Calculating…" : "⚡ Calculate Strategies"}
+                          </button>
+                          {/* Optimise button — triggers same solver but pre-selects Strategy D result */}
+                          {goalSimView !== "combined" && currentTarget > 0 && (
+                            <button
+                              onClick={goalSimView === "spouse" ? solveGoalSpouse : solveGoal}
+                              disabled={activeSolving}
+                              title="Calculate strategies then show the tax-optimised recommendation based on your marginal tax rate"
+                              style={{ padding: "10px 20px", borderRadius: 10, fontWeight: 700, fontSize: 13, border: "1px solid rgba(245,158,11,0.5)",
+                                cursor: activeSolving ? "not-allowed" : "pointer",
+                                background: "rgba(245,158,11,0.1)", color: "#f59e0b", transition: "all .2s" }}>
+                              🏆 Optimise (Tax-Efficient)
+                            </button>
+                          )}
+                          {(currentTarget > 0 || activeResult) && (
+                            <button
+                              onClick={() => {
+                                const hasApplied = goalSimView === "combined"
+                                  ? (goalApplied !== null && preApplySnapshot !== null) || (spouseGoalApplied !== null && spousePreApplySnapshot !== null)
+                                  : goalSimView === "spouse"
+                                  ? spouseGoalApplied !== null && spousePreApplySnapshot !== null
+                                  : goalApplied !== null && preApplySnapshot !== null;
+                                if (hasApplied) {
+                                  setConfirmModal({
+                                    title: "Clear Simulator",
+                                    message: "Clear the goal target and revert the applied lever values?",
+                                    onConfirm: () => {
+                                      isApplyingStrategyRef.current    = true;
+                                      isApplyingSpouseStratRef.current = true;
+                                      if (preApplySnapshot)       setInputs(prev => ({ ...prev, vcSaTopup: preApplySnapshot.vcSaTopup, vc3aCash: preApplySnapshot.vc3aCash }));
+                                      if (spousePreApplySnapshot) setSpouseInputs(prev => ({ ...prev, vcSaTopup: spousePreApplySnapshot.vcSaTopup, vc3aCash: spousePreApplySnapshot.vc3aCash }));
+                                      setInputs(prev => ({ ...prev, goalTargetCPF: 0 }));
+                                      setGoalTargetCombined(0);
+                                      setGoalResult(null); setSpouseGoalResult(null); setCombinedGoalResult(null);
+                                      setGoalApplied(null); setSpouseGoalApplied(null);
+                                      setPreApplySnapshot(null); setSpousePreApplySnapshot(null);
+                                      setConfirmModal(null);
+                                    },
+                                    confirmLabel: "Clear & Revert", confirmColor: "#f43f5e", cancelLabel: "Cancel",
+                                  });
+                                } else {
+                                  setInputs(prev => ({ ...prev, goalTargetCPF: 0 }));
+                                  setGoalTargetCombined(0);
+                                  setGoalResult(null); setSpouseGoalResult(null); setCombinedGoalResult(null);
+                                  setGoalApplied(null); setSpouseGoalApplied(null);
+                                  setPreApplySnapshot(null); setSpousePreApplySnapshot(null);
+                                }
+                              }}
+                              style={{ padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 13, border: "1px solid var(--border-strong)", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all .2s" }}>
+                              🗑 Clear Simulator
+                            </button>
+                          )}
+                        </div>
+
+                        {/* ── Results ───────────────────────────────────── */}
+                        {activeResult && (() => {
+                          const isCombo   = goalSimView === "combined";
+                          const baseline  = isCombo ? activeResult.combinedBaseline : activeResult.baseline;
+                          const gap       = activeResult.gap;
+                          const pct       = Math.min(100, baseline / (activeResult.targetAmt || 1) * 100);
+                          const appliedLetter = goalSimView === "spouse" ? spouseGoalApplied : goalApplied;
+                          const snapshot      = goalSimView === "spouse" ? spousePreApplySnapshot : preApplySnapshot;
+                          const applyFn       = goalSimView === "spouse" ? applySpouseStrategy : applyPrimaryStrategy;
+
+                          // Combined strategy card helper
+                          const CombinedStratCard = ({ letter, title, icon, color, strat, onApply }) => {
+                            if (!strat) return null;
+                            const lines = [];
+                            if (strat.primRSTU)  lines.push(`Primary RSTU: ${fmtK(strat.primRSTU)}/yr`);
+                            if (strat.spsRSTU)   lines.push(`Spouse RSTU: ${fmtK(strat.spsRSTU)}/yr`);
+                            if (strat.primVC3A)  lines.push(`Primary VC3A: ${fmtK(strat.primVC3A)}/yr`);
+                            if (strat.spsVC3A)   lines.push(`Spouse VC3A: ${fmtK(strat.spsVC3A)}/yr`);
+                            const totalApplied = goalApplied === letter && spouseGoalApplied === letter;
+                            return (
+                              <div style={{ background: "var(--bg-input)", border: `1px solid ${color}44`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <span style={{ fontWeight: 800, fontSize: 14, color }}>{icon} Strategy {letter}: {title}</span>
+                                  {totalApplied && <span style={{ fontSize: 11, fontWeight: 700, color, background: `${color}20`, borderRadius: 6, padding: "2px 8px" }}>✓ Applied</span>}
+                                </div>
+                                {!strat.feasible
+                                  ? <p style={{ margin: 0, fontSize: 13, color: "#ef4444" }}>❌ Target unreachable — max contributions across both members still fall short ({fmtK(strat.maxTotal || 0)} combined)</p>
+                                  : <>
+                                      {lines.map((l, i) => <p key={i} style={{ margin: 0, fontSize: 13, color: "var(--text-bright)" }}>{l}</p>)}
+                                      <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Combined cash: <strong style={{ color }}>{fmtK(strat.totalCash)}/yr</strong></p>
+                                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                        <button onClick={onApply}
+                                          style={{ padding: "8px 16px", borderRadius: 8, fontWeight: 700, fontSize: 12, border: "none", cursor: "pointer", background: color, color: "#fff" }}>
+                                          Apply to Both Profiles →
+                                        </button>
+                                        {totalApplied && preApplySnapshot && (
+                                          <button onClick={() => {
+                                            isApplyingStrategyRef.current = true; isApplyingSpouseStratRef.current = true;
+                                            setInputs(prev => ({ ...prev, vcSaTopup: preApplySnapshot.vcSaTopup, vc3aCash: preApplySnapshot.vc3aCash }));
+                                            if (spousePreApplySnapshot) setSpouseInputs(prev => ({ ...prev, vcSaTopup: spousePreApplySnapshot.vcSaTopup, vc3aCash: spousePreApplySnapshot.vc3aCash }));
+                                            setGoalApplied(null); setSpouseGoalApplied(null); setPreApplySnapshot(null); setSpousePreApplySnapshot(null);
+                                          }} style={{ padding: "8px 14px", borderRadius: 8, fontWeight: 700, fontSize: 12, border: `1px solid ${color}`, cursor: "pointer", background: "transparent", color }}>
+                                            ↩ Revert
+                                          </button>
+                                        )}
+                                      </div>
+                                    </>
+                                }
+                              </div>
+                            );
+                          };
+
+                          return (
+                            <>
+                              {/* Gap snapshot */}
+                              <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                                <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>
+                                  📊 Gap Snapshot{isCombo ? " — Combined Household" : goalSimView === "spouse" ? ` — Spouse (age ${spa})` : ` — age ${pa}`}
                                 </p>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px 20px" }}>
+                                  {isCombo && (
+                                    <>
+                                      <div style={{ fontSize: 12 }}><span style={{ color: "var(--text-muted)" }}>Primary at {pa}</span><br /><strong style={{ color: "var(--text-bright)" }}>{fmtK(activeResult.baselineP)}</strong></div>
+                                      <div style={{ fontSize: 12 }}><span style={{ color: "var(--text-muted)" }}>Spouse at {spa}</span><br /><strong style={{ color: "var(--text-bright)" }}>{fmtK(activeResult.baselineS)}</strong></div>
+                                    </>
+                                  )}
+                                  <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Combined projected</span><br /><strong style={{ color: "var(--text-bright)", fontSize: 16 }}>{fmtK(baseline)}</strong></div>
+                                  <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Target</span><br /><strong style={{ color: "#f43f5e", fontSize: 16 }}>{fmtK(activeResult.targetAmt)}</strong></div>
+                                  <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Gap to close</span><br /><strong style={{ color: gap > 0 ? "#f97316" : "#22c55e", fontSize: 16 }}>{gap > 0 ? fmtK(gap) : "✅ Already met!"}</strong></div>
+                                </div>
+                                <div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                                    <span>{pct.toFixed(1)}% of the way there</span>
+                                    <span>{fmtK(activeResult.targetAmt)}</span>
+                                  </div>
+                                  <div style={{ height: 8, borderRadius: 4, background: "var(--bg-panel)", overflow: "hidden" }}>
+                                    <div style={{ height: "100%", borderRadius: 4, width: `${pct}%`, background: pct >= 100 ? "#22c55e" : pct >= 60 ? "#f97316" : "#ef4444", transition: "width .4s" }} />
+                                  </div>
+                                </div>
+                                {isCombo && (
+                                  <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                                    ℹ️ Allocations are proportional to each member's CPF-growth sensitivity per dollar invested.
+                                    Primary sensitivity: RSTU +{fmtK(activeResult.sRSTU_P)} / VC3A +{fmtK(activeResult.sVC3A_P)} per $1k/yr.
+                                    Spouse: RSTU +{fmtK(activeResult.sRSTU_S)} / VC3A +{fmtK(activeResult.sVC3A_S)} per $1k/yr.
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Strategy cards */}
+                              {gap > 0 && (
+                                <>
+                                  <p style={{ margin: "4px 0 0", fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>💡 Strategies to reach your goal</p>
+
+                                  {isCombo ? (
+                                    <>
+                                      <CombinedStratCard letter="A" title="RSTU Top-Up (Both)" icon="📈" color={CARD_COLORS.A}
+                                        strat={activeResult.stratA}
+                                        onApply={() => applyCombinedStrategy({ vcSaTopup: activeResult.stratA.primRSTU }, { vcSaTopup: activeResult.stratA.spsRSTU }, "A")} />
+                                      <CombinedStratCard letter="B" title="VC3A Contribution (Both)" icon="💰" color={CARD_COLORS.B}
+                                        strat={activeResult.stratB}
+                                        onApply={() => applyCombinedStrategy({ vc3aCash: activeResult.stratB.primVC3A }, { vc3aCash: activeResult.stratB.spsVC3A }, "B")} />
+                                      <CombinedStratCard letter="C" title="Blended — RSTU + VC3A (Both)" icon="⚡" color={CARD_COLORS.C}
+                                        strat={activeResult.stratC}
+                                        onApply={() => applyCombinedStrategy({ vcSaTopup: activeResult.stratC.primRSTU, vc3aCash: activeResult.stratC.primVC3A }, { vcSaTopup: activeResult.stratC.spsRSTU, vc3aCash: activeResult.stratC.spsVC3A }, "C")} />
+                                    </>
+                                  ) : (
+                                    <>
+                                      <StrategyCard letter="A" title="RSTU Top-Up" icon="📈" color={CARD_COLORS.A}
+                                        strat={{ ...activeResult.stratA, rstu: null, vc3a: null }}
+                                        isApplied={appliedLetter === "A"}
+                                        onApply={() => applyFn({ vcSaTopup: activeResult.stratA.needed }, "A")}
+                                        onRevert={appliedLetter === "A" && snapshot ? () => { (goalSimView==="spouse"?isApplyingSpouseStratRef:isApplyingStrategyRef).current=true; (goalSimView==="spouse"?setSpouseInputs:setInputs)(prev=>({...prev,vcSaTopup:snapshot.vcSaTopup,vc3aCash:snapshot.vc3aCash})); (goalSimView==="spouse"?setSpouseGoalApplied:setGoalApplied)(null); (goalSimView==="spouse"?setSpousePreApplySnapshot:setPreApplySnapshot)(null); } : null} />
+                                      <StrategyCard letter="B" title="VC3A Contribution" icon="💰" color={CARD_COLORS.B}
+                                        strat={{ ...activeResult.stratB, rstu: null, vc3a: null }}
+                                        isApplied={appliedLetter === "B"}
+                                        onApply={() => applyFn({ vc3aCash: activeResult.stratB.needed }, "B")}
+                                        onRevert={appliedLetter === "B" && snapshot ? () => { (goalSimView==="spouse"?isApplyingSpouseStratRef:isApplyingStrategyRef).current=true; (goalSimView==="spouse"?setSpouseInputs:setInputs)(prev=>({...prev,vcSaTopup:snapshot.vcSaTopup,vc3aCash:snapshot.vc3aCash})); (goalSimView==="spouse"?setSpouseGoalApplied:setGoalApplied)(null); (goalSimView==="spouse"?setSpousePreApplySnapshot:setPreApplySnapshot)(null); } : null} />
+                                      <StrategyCard letter="C" title="Blended — RSTU + VC3A" icon="⚡" color={CARD_COLORS.C}
+                                        strat={{ ...activeResult.stratC, needed: null }}
+                                        isApplied={appliedLetter === "C"}
+                                        onApply={() => applyFn({ vcSaTopup: activeResult.stratC.rstu, vc3aCash: activeResult.stratC.vc3a }, "C")}
+                                        onRevert={appliedLetter === "C" && snapshot ? () => { (goalSimView==="spouse"?isApplyingSpouseStratRef:isApplyingStrategyRef).current=true; (goalSimView==="spouse"?setSpouseInputs:setInputs)(prev=>({...prev,vcSaTopup:snapshot.vcSaTopup,vc3aCash:snapshot.vc3aCash})); (goalSimView==="spouse"?setSpouseGoalApplied:setGoalApplied)(null); (goalSimView==="spouse"?setSpousePreApplySnapshot:setPreApplySnapshot)(null); } : null} />
+
+                                      {/* Strategy D — Tax-Optimised */}
+                                      {stratD && (
+                                        <div style={{ background: "var(--bg-input)", border: `2px solid ${CARD_COLORS.D}66`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                                            <span style={{ fontWeight: 800, fontSize: 14, color: CARD_COLORS.D }}>🏆 Strategy D: Tax-Optimised ({marginalTaxRate}% marginal rate)</span>
+                                            {appliedLetter === stratD.bestLetter && <span style={{ fontSize: 11, fontWeight: 700, color: CARD_COLORS.D, background: `${CARD_COLORS.D}20`, borderRadius: 6, padding: "2px 8px" }}>✓ Applied (via Strategy {stratD.bestLetter})</span>}
+                                          </div>
+                                          {stratD.bestEffCost === Infinity
+                                            ? <p style={{ margin: 0, fontSize: 13, color: "#ef4444" }}>❌ No feasible strategy found — target unreachable with current inputs.</p>
+                                            : <>
+                                                <p style={{ margin: 0, fontSize: 13, color: "var(--text-bright)", lineHeight: 1.6 }}>
+                                                  Lowest after-tax annual cost: <strong style={{ color: CARD_COLORS.D }}>Strategy {stratD.bestLetter}</strong>
+                                                  {" "}at <strong style={{ color: CARD_COLORS.D }}>{fmtK(Math.round(stratD.bestEffCost))}/yr effective</strong>
+                                                  {stratD.taxSaving > 0 && <> (saves <strong style={{ color: "#22c55e" }}>{fmtK(Math.round(stratD.taxSaving))}/yr</strong> in RSTU tax relief)</>}.
+                                                </p>
+                                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "4px 16px", fontSize: 12, color: "var(--text-muted)" }}>
+                                                  <div>Strategy A effective: <strong style={{ color: stratD.bestLetter==="A" ? CARD_COLORS.D : "var(--text-bright)" }}>{stratD.costs.A === Infinity ? "—" : fmtK(Math.round(stratD.costs.A))}/yr</strong></div>
+                                                  <div>Strategy B effective: <strong style={{ color: stratD.bestLetter==="B" ? CARD_COLORS.D : "var(--text-bright)" }}>{stratD.costs.B === Infinity ? "—" : fmtK(Math.round(stratD.costs.B))}/yr</strong></div>
+                                                  <div>Strategy C effective: <strong style={{ color: stratD.bestLetter==="C" ? CARD_COLORS.D : "var(--text-bright)" }}>{stratD.costs.C === Infinity ? "—" : fmtK(Math.round(stratD.costs.C))}/yr</strong></div>
+                                                </div>
+                                                <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                                                  ℹ️ RSTU qualifies for personal income tax relief up to $8,000/yr. At {marginalTaxRate}% marginal rate that saves up to {fmtK(Math.round(8000 * taxRate))} annually. VC3A has no tax relief. "Effective cost" = gross cash outflow minus expected tax saving.
+                                                </p>
+                                                <div style={{ display: "flex", gap: 8 }}>
+                                                  <button onClick={() => {
+                                                    const s = stratD.bestLetter;
+                                                    const ov = s === "A" ? { vcSaTopup: activeResult.stratA.needed } : s === "B" ? { vc3aCash: activeResult.stratB.needed } : { vcSaTopup: activeResult.stratC.rstu, vc3aCash: activeResult.stratC.vc3a };
+                                                    applyFn(ov, s);
+                                                  }} style={{ padding: "8px 16px", borderRadius: 8, fontWeight: 700, fontSize: 12, border: "none", cursor: "pointer", background: CARD_COLORS.D, color: "#fff" }}>
+                                                    Apply Strategy {stratD.bestLetter} →
+                                                  </button>
+                                                  {appliedLetter === stratD.bestLetter && snapshot && (
+                                                    <button onClick={() => {
+                                                      (goalSimView==="spouse"?isApplyingSpouseStratRef:isApplyingStrategyRef).current=true;
+                                                      (goalSimView==="spouse"?setSpouseInputs:setInputs)(prev=>({...prev,vcSaTopup:snapshot.vcSaTopup,vc3aCash:snapshot.vc3aCash}));
+                                                      (goalSimView==="spouse"?setSpouseGoalApplied:setGoalApplied)(null);
+                                                      (goalSimView==="spouse"?setSpousePreApplySnapshot:setPreApplySnapshot)(null);
+                                                    }} style={{ padding: "8px 14px", borderRadius: 8, fontWeight: 700, fontSize: 12, border: `1px solid ${CARD_COLORS.D}`, cursor: "pointer", background: "transparent", color: CARD_COLORS.D }}>
+                                                      ↩ Revert
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </>
+                                          }
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </>
+                              )}
+
+                              {/* Sensitivity */}
+                              {!isCombo && (
+                                <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: "14px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+                                  <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "var(--text-highlight)" }}>📐 Sensitivity — each extra $1,000/yr adds…</p>
+                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }}>
+                                    <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>via RSTU</span><br /><strong style={{ color: CARD_COLORS.A }}>+{fmtK(activeResult.sensitivityRSTU)}</strong> at age {goalSimView==="spouse"?spa:pa}</div>
+                                    <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>via VC3A</span><br /><strong style={{ color: CARD_COLORS.B }}>+{fmtK(activeResult.sensitivityVC3A)}</strong> at age {goalSimView==="spouse"?spa:pa}</div>
+                                  </div>
+                                  <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>ℹ️ CPFIS excluded — investment returns are not modelled; CPFIS is an OA outflow only and cannot increase projected CPF totals.</p>
+                                </div>
                               )}
                             </>
                           );
                         })()}
-                      </div>
 
-                      {/* Action buttons row: Calculate + Clear Simulator */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                        <button onClick={solveGoal} disabled={goalSolving || !Number(inputs.goalTargetCPF)}
-                          style={{ padding: "10px 26px", borderRadius: 10, fontWeight: 700, fontSize: 14, border: "none", cursor: goalSolving || !Number(inputs.goalTargetCPF) ? "not-allowed" : "pointer", background: goalSolving || !Number(inputs.goalTargetCPF) ? "var(--bg-input)" : "#f43f5e", color: goalSolving || !Number(inputs.goalTargetCPF) ? "var(--text-muted)" : "#fff", transition: "all .2s" }}>
-                          {goalSolving ? "⏳ Calculating…" : "⚡ Calculate Strategies"}
-                        </button>
-                        {/* Clear Simulator — resets only goal target + solver state. Does NOT revert
-                            any applied lever values (use "↩ Revert" on the strategy card for that). */}
-                        {(Number(inputs.goalTargetCPF) > 0 || goalResult) && (
-                          <button
-                            onClick={() => {
-                              // If a strategy was applied and the pre-apply snapshot is intact,
-                              // offer to also revert vcSaTopup/vc3aCash to their pre-apply values.
-                              // The snapshot is guaranteed to be present here (not null) because
-                              // the isApplyingStrategyRef fix prevents the lever-change useEffect
-                              // from wiping it on the same render cycle as the apply.
-                              if (goalApplied !== null && preApplySnapshot !== null) {
-                                const fmtAmt = v => v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : `$${Number(v).toLocaleString()}`;
-                                setConfirmModal({
-                                  title: "Clear Simulator",
-                                  message: `Clear the goal target and revert the applied lever values?\n\n• RSTU top-up → ${fmtAmt(preApplySnapshot.vcSaTopup)}/yr (was ${fmtAmt(Number(inputs.vcSaTopup) || 0)}/yr)\n• VC3A contribution → ${fmtAmt(preApplySnapshot.vc3aCash)}/yr (was ${fmtAmt(Number(inputs.vc3aCash) || 0)}/yr)\n\nThe goal target and solver results will also be cleared.`,
-                                  onConfirm: () => {
-                                    isApplyingStrategyRef.current = true; // suppress lever-change useEffect during revert write
-                                    setInputs(prev => ({
-                                      ...prev,
-                                      goalTargetCPF: 0,
-                                      vcSaTopup: preApplySnapshot.vcSaTopup,
-                                      vc3aCash:  preApplySnapshot.vc3aCash,
-                                    }));
-                                    setGoalResult(null);
-                                    setGoalApplied(null);
-                                    setPreApplySnapshot(null);
-                                    setConfirmModal(null);
-                                  },
-                                  confirmLabel: "Clear & Revert",
-                                  confirmColor: "#f43f5e",
-                                  cancelLabel: "Cancel",
-                                });
-                              } else {
-                                // No strategy applied (or snapshot already consumed by a manual edit) —
-                                // clear only the simulator UI state, leave lever values untouched.
-                                setInputs(prev => ({ ...prev, goalTargetCPF: 0 }));
-                                setGoalResult(null);
-                                setGoalApplied(null);
-                                setPreApplySnapshot(null);
-                              }
-                            }}
-                            title={goalApplied !== null && preApplySnapshot !== null
-                              ? "Clear goal target and revert applied RSTU / VC3A values — you will be asked to confirm"
-                              : "Clear the goal target and solver results"}
-                            style={{ padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 13, border: "1px solid var(--border-strong)", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all .2s" }}>
-                            🗑 Clear Simulator
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Results */}
-                      {goalResult && (
-                        <>
-                          {/* Gap Snapshot */}
-                          <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-                            <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>📊 Gap Snapshot — age {pa}</p>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "8px 20px" }}>
-                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Current projected</span><br /><strong style={{ color: "var(--text-bright)", fontSize: 16 }}>{fmtK(goalResult.baseline)}</strong></div>
-                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Your target</span><br /><strong style={{ color: "#f43f5e", fontSize: 16 }}>{fmtK(goalResult.targetAmt)}</strong></div>
-                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Gap to close</span><br /><strong style={{ color: goalResult.gap > 0 ? "#f97316" : "#22c55e", fontSize: 16 }}>{goalResult.gap > 0 ? fmtK(goalResult.gap) : "✅ Already met!"}</strong></div>
-                            </div>
-                            {/* Progress bar */}
-                            <div>
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
-                                <span>{pctOfTarget.toFixed(1)}% of the way there</span>
-                                <span>{fmtK(goalResult.targetAmt)}</span>
-                              </div>
-                              <div style={{ height: 8, borderRadius: 4, background: "var(--bg-panel)", overflow: "hidden" }}>
-                                <div style={{ height: "100%", borderRadius: 4, width: `${pctOfTarget}%`, background: pctOfTarget >= 100 ? "#22c55e" : pctOfTarget >= 60 ? "#f97316" : "#ef4444", transition: "width .4s" }} />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Strategy Cards */}
-                          {goalResult.gap > 0 && (
-                            <>
-                              <p style={{ margin: "4px 0 0", fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>💡 Strategies to reach your goal</p>
-                              <StrategyCard letter="A" title="RSTU Top-Up" icon="📈" color="#6366f1"
-                                strat={{ ...goalResult.stratA, rstu: null, vc3a: null }}
-                                onApply={() => applyStrategy({ vcSaTopup: goalResult.stratA.needed }, "A")} />
-                              <StrategyCard letter="B" title="VC3A Contribution" icon="💰" color="#0ea5e9"
-                                strat={{ ...goalResult.stratB, rstu: null, vc3a: null }}
-                                onApply={() => applyStrategy({ vc3aCash: goalResult.stratB.needed }, "B")} />
-                              <StrategyCard letter="C" title="Blended — RSTU + VC3A" icon="⚡" color="#10b981"
-                                strat={{ ...goalResult.stratC, needed: null }}
-                                onApply={() => applyStrategy({ vcSaTopup: goalResult.stratC.rstu, vc3aCash: goalResult.stratC.vc3a }, "C")} />
-                            </>
-                          )}
-
-                          {/* Sensitivity */}
-                          <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: "14px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-                            <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "var(--text-highlight)" }}>📐 Sensitivity — each extra $1,000/yr adds…</p>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }}>
-                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>via RSTU</span><br /><strong style={{ color: "#6366f1" }}>+{fmtK(goalResult.sensitivityRSTU)}</strong> at age {pa}</div>
-                              <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>via VC3A</span><br /><strong style={{ color: "#0ea5e9" }}>+{fmtK(goalResult.sensitivityVC3A)}</strong> at age {pa}</div>
-                            </div>
-                            <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>ℹ️ CPFIS excluded — investment returns are not modelled in the engine; CPFIS is an OA outflow only and cannot increase projected CPF totals.</p>
-                          </div>
-                        </>
-                      )}
-
-                      {!goalResult && !goalSolving && (() => {
-                        const hasTarget = Number(inputs.goalTargetCPF) > 0;
-                        return hasTarget ? (
-                          /* ── Shared-link / imported-profile case ──────────────────────────
-                             goalTargetCPF is already set (came in via inputs) but goalResult is
-                             null because solver output is never serialised into the share link
-                             (it's transient — always recomputable from inputs, and excluding it
-                             keeps URLs short and prevents stale-result confusion). This banner
-                             replaces the generic "set a target" prompt so the user understands
-                             their goal is loaded and one click is all that's needed.          */
+                        {!activeResult && !activeSolving && currentTarget > 0 && (
                           <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "rgba(14,165,233,0.08)", border: "1px solid rgba(14,165,233,0.35)", borderRadius: 10, padding: "14px 16px" }}>
                             <span style={{ fontSize: 20, lineHeight: 1 }}>💡</span>
                             <div style={{ fontSize: 13, color: "var(--text-bright)", lineHeight: 1.65 }}>
-                              <strong style={{ color: "#0ea5e9" }}>Goal target loaded from your profile</strong><br />
-                              Your target of{" "}
-                              <strong style={{ color: "#f43f5e" }}>
-                                {Number(inputs.goalTargetCPF) >= 1e6
-                                  ? `$${(Number(inputs.goalTargetCPF) / 1e6).toFixed(Number(inputs.goalTargetCPF) % 1e6 === 0 ? 0 : 2)}M`
-                                  : `$${Number(inputs.goalTargetCPF).toLocaleString()}`}
-                              </strong>{" "}
-                              at age <strong style={{ color: "var(--text-highlight)" }}>{pa}</strong> is already set.
-                              Click <strong>⚡ Calculate Strategies</strong> above to run the solver and see personalised RSTU / VC3A strategies for this profile.
+                              <strong style={{ color: "#0ea5e9" }}>Target set</strong> — click <strong>⚡ Calculate Strategies</strong> to run the solver.
                             </div>
                           </div>
-                        ) : (
-                          /* ── Fresh session case — no target set yet ───────────────────── */
-                          <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                            Set a target above and click <strong>Calculate Strategies</strong> to see personalised top-up plans based on your current profile.<br />
-                            The solver computes the minimum annual contribution via RSTU, VC3A, and a blended approach to reach your goal by age {pa}.
-                          </p>
-                        );
-                      })()}
-                    </div>
-                  )}
+                        )}
+
+                      </div>
+                    );
+                  })()}
 
                   {/* ══ INCOME ROADMAP (original content) ════════════════════ */}
                   {goalStratTab === "roadmap" && (
