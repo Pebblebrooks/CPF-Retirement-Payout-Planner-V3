@@ -8973,6 +8973,8 @@ export default function App() {
         standardBequest: Math.round(stdBeq), escalatingBequest: Math.round(escBeq), basicBequest: Math.round(basBeq),
         standardRA: Math.round(stdRA), escalatingRA: Math.round(escRA), basicRA: Math.round(basRA),
         standardTotal: Math.round(cumPayoutStandard + stdBeq), escalatingTotal: Math.round(cumPayoutEscalating + escBeq), basicTotal: Math.round(cumPayoutBasic + basBeq),
+        // Q3: pure cumulative cash-in-hand (no bequest component) — used by the "Cumulative Payout" chart view
+        standardCumPayout: Math.round(cumPayoutStandard), escalatingCumPayout: Math.round(cumPayoutEscalating), basicCumPayout: Math.round(cumPayoutBasic),
         srsBalance: srsBal,
         standardNetWorth: Math.round(p.oa + p.sa + p.ma + stdBeq + propVal + privAsset + srsBal), escalatingNetWorth: Math.round(p.oa + p.sa + p.ma + escBeq + propVal + privAsset + srsBal), basicNetWorth: Math.round(p.oa + p.sa + p.ma + basBeq + propVal + privAsset + srsBal)
       });
@@ -9359,21 +9361,33 @@ export default function App() {
     intersectionStdVsBasic,
     intersectionEscVsBasic,
     intersectionEscPayVsStdPay,
+    // Q3: cumulative cash-in-hand crossovers (excludes bequest) — used by "Cumulative Payout" view
+    intersectionEscCumVsStdCum,
+    intersectionStdCumVsBasicCum,
+    intersectionEscCumVsBasicCum,
   } = useMemo(() => {
     let escVsStd = null, stdVsBasic = null, escVsBasic = null, escPayVsStdPay = null;
+    let escCumVsStdCum = null, stdCumVsBasicCum = null, escCumVsBasicCum = null;
     for (const d of payoutProjection) {
       if (d.age <= payoutAge65) continue; // all intersections are strictly after payout age
-      if (!escVsStd        && d.escalatingTotal   > d.standardTotal)   escVsStd        = d.age;
-      if (!stdVsBasic      && d.standardTotal      > d.basicTotal)      stdVsBasic      = d.age;
-      if (!escVsBasic      && d.escalatingTotal    > d.basicTotal)      escVsBasic      = d.age;
-      if (!escPayVsStdPay  && d.escalatingMonthly  > d.standardMonthly) escPayVsStdPay  = d.age;
-      if (escVsStd && stdVsBasic && escVsBasic && escPayVsStdPay) break; // early-exit once all 4 found
+      if (!escVsStd           && d.escalatingTotal      > d.standardTotal)      escVsStd           = d.age;
+      if (!stdVsBasic         && d.standardTotal         > d.basicTotal)         stdVsBasic         = d.age;
+      if (!escVsBasic         && d.escalatingTotal       > d.basicTotal)         escVsBasic         = d.age;
+      if (!escPayVsStdPay     && d.escalatingMonthly     > d.standardMonthly)    escPayVsStdPay     = d.age;
+      if (!escCumVsStdCum     && d.escalatingCumPayout   > d.standardCumPayout)  escCumVsStdCum     = d.age;
+      if (!stdCumVsBasicCum   && d.standardCumPayout     > d.basicCumPayout)     stdCumVsBasicCum   = d.age;
+      if (!escCumVsBasicCum   && d.escalatingCumPayout   > d.basicCumPayout)     escCumVsBasicCum   = d.age;
+      // early-exit once all 7 found
+      if (escVsStd && stdVsBasic && escVsBasic && escPayVsStdPay && escCumVsStdCum && stdCumVsBasicCum && escCumVsBasicCum) break;
     }
     return {
-      intersectionEscVsStd:      escVsStd,
-      intersectionStdVsBasic:    stdVsBasic,
-      intersectionEscVsBasic:    escVsBasic,
-      intersectionEscPayVsStdPay: escPayVsStdPay,
+      intersectionEscVsStd:        escVsStd,
+      intersectionStdVsBasic:      stdVsBasic,
+      intersectionEscVsBasic:      escVsBasic,
+      intersectionEscPayVsStdPay:  escPayVsStdPay,
+      intersectionEscCumVsStdCum:  escCumVsStdCum,
+      intersectionStdCumVsBasicCum: stdCumVsBasicCum,
+      intersectionEscCumVsBasicCum: escCumVsBasicCum,
     };
   }, [payoutProjection, payoutAge65]);
 
@@ -20246,7 +20260,7 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
                 <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2 }}>
-                  {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["bequest", "Bequest"], ["total", "Total Yield"]].map(([id, label]) => (
+                  {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ["cumPayout", "Cumulative Payout"]].map(([id, label]) => (
                     <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                       {label}
                     </button>
@@ -20260,24 +20274,56 @@ ${milestoneSnapshotHtml}
                       <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Amount ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 11, style: { textAnchor: "middle" } }} />
                       <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={v => formatCurrency(v)} wrapperStyle={STYLES.chartTooltipWrapper} />
                       <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={STYLES.chartLegend} />
-                      {viewMode === "total" && intersectionEscVsStd && <ReferenceLine x={intersectionEscVsStd} stroke="var(--clr-amber3)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Break-Even Age ${intersectionEscVsStd}`, fill: "var(--clr-amber3)", fontSize: 11, fontWeight: "bold" }} />}
-                      {viewMode === "total" && intersectionStdVsBasic && <ReferenceLine x={intersectionStdVsBasic} stroke="var(--clr-blue2)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideBottomRight", value: `Std>Basic Age ${intersectionStdVsBasic}`, fill: "var(--clr-blue2)", fontSize: 11, fontWeight: "bold" }} />}
-                      {viewMode === "payout" && intersectionEscPayVsStdPay && <ReferenceLine x={intersectionEscPayVsStdPay} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std Pay Age ${intersectionEscPayVsStdPay}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
-                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "standardMonthly" : viewMode === "annualPayout" ? "standardAnnual" : viewMode === "total" ? "standardTotal" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.35} dot={false} name="Standard" />
-                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "escalatingMonthly" : viewMode === "annualPayout" ? "escalatingAnnual" : viewMode === "total" ? "escalatingTotal" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.35} dot={false} name="Escalating" />
-                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "basicMonthly" : viewMode === "annualPayout" ? "basicAnnual" : viewMode === "total" ? "basicTotal" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.35} dot={false} name="Basic" />
+                      {/* Total Yield breakeven lines */}
+                      {viewMode === "total" && intersectionEscVsStd    && <ReferenceLine x={intersectionEscVsStd}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",     value: `Esc>Std Age ${intersectionEscVsStd}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "total" && intersectionStdVsBasic  && <ReferenceLine x={intersectionStdVsBasic}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideBottomRight", value: `Std>Basic Age ${intersectionStdVsBasic}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
+                      {/* Q3 FIX: intersectionEscVsBasic was computed but never rendered — now shown on total mode */}
+                      {viewMode === "total" && intersectionEscVsBasic  && <ReferenceLine x={intersectionEscVsBasic}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight",   value: `Esc>Basic Age ${intersectionEscVsBasic}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
+                      {/* Monthly payout crossover line */}
+                      {viewMode === "payout" && intersectionEscPayVsStdPay && <ReferenceLine x={intersectionEscPayVsStdPay} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std Monthly Age ${intersectionEscPayVsStdPay}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
+                      {/* Q3 NEW: Cumulative cash-in-hand breakeven lines (no bequest) */}
+                      {viewMode === "cumPayout" && intersectionEscCumVsStdCum    && <ReferenceLine x={intersectionEscCumVsStdCum}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",     value: `Esc>Std Cash Age ${intersectionEscCumVsStdCum}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "cumPayout" && intersectionStdCumVsBasicCum  && <ReferenceLine x={intersectionStdCumVsBasicCum}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideBottomRight", value: `Std>Basic Cash Age ${intersectionStdCumVsBasicCum}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "cumPayout" && intersectionEscCumVsBasicCum  && <ReferenceLine x={intersectionEscCumVsBasicCum}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight",   value: `Esc>Basic Cash Age ${intersectionEscCumVsBasicCum}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
+                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "standardMonthly" : viewMode === "annualPayout" ? "standardAnnual" : viewMode === "total" ? "standardTotal" : viewMode === "cumPayout" ? "standardCumPayout" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.35} dot={false} name="Standard" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "escalatingMonthly" : viewMode === "annualPayout" ? "escalatingAnnual" : viewMode === "total" ? "escalatingTotal" : viewMode === "cumPayout" ? "escalatingCumPayout" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.35} dot={false} name="Escalating" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "basicMonthly" : viewMode === "annualPayout" ? "basicAnnual" : viewMode === "total" ? "basicTotal" : viewMode === "cumPayout" ? "basicCumPayout" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.35} dot={false} name="Basic" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                {/* Info cards */}
-                <div className="rg-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                  {[["Standard/Escalating Bequest", "Beneficiaries receive total premium minus cumulative payouts. Interest not included.", "var(--clr-slate)"], ["Total Yield", "Cumulative payouts received plus remaining bequest. Switch to Total Yield to see breakeven lines.", "var(--clr-blue)"]].map(([title, text, color]) => (
-                    <div key={title} style={{ padding: 14, borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                {/* Info cards — one per view mode, highlighted when active */}
+                <div className="rg-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                  {[
+                    ["payout",      "Monthly Payout",     "var(--clr-slate)",   "Fixed or rising monthly income from CPF LIFE pool. Escalating starts ~20% lower than Standard then grows 2%/yr. Breakeven month shown by the dashed line."],
+                    ["annualPayout","Annual Payout",       "var(--clr-blue2)",   "Same as monthly × 12, useful for household budget planning. No breakeven line — refer to Monthly Payout or Total Yield for crossover ages."],
+                    ["bequest",     "Bequest",             "var(--clr-slate)",   "Amount returned to beneficiaries = premium paid minus cumulative payouts received. Drops to $0 once all premium is paid out (around age 80 for Standard)."],
+                    ["total",       "Total Yield",         "var(--clr-blue)",    "Cumulative payouts received + remaining bequest at each age. Shows 3 breakeven lines: Esc vs Std (amber), Std vs Basic (blue), Esc vs Basic (green). Best view for choosing between plans."],
+                    ["cumPayout",   "Cumulative Payout",   "var(--clr-emerald)", "Running total of cash actually paid out in hand — bequest excluded. Crossovers here answer: 'By this age, which plan has paid me more cash?' Conservative baseline for decision-making."],
+                  ].map(([mode, title, color, text]) => (
+                    <div key={mode} onClick={() => setViewMode(mode)} style={{ padding: 12, borderRadius: 12, cursor: "pointer", background: viewMode === mode ? `rgba(${color === "var(--clr-emerald)" ? "var(--clr-emerald-rgb)" : color === "var(--clr-amber3)" ? "var(--clr-amber3-rgb)" : "var(--clr-blue-rgb)"},0.08)` : "var(--bg-panel-muted)", border: `1.5px solid ${viewMode === mode ? color : "var(--border-subtle)"}`, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, transition: "all 0.2s" }}>
                       <strong style={{ color }}>{title}: </strong>{text}
                     </div>
                   ))}
-                  {/* Basic plan card with embedded slider */}
-                  <div style={{ padding: 14, borderRadius: 12, background: "rgba(var(--clr-amber3-rgb),0.06)", border: "2px solid rgba(var(--clr-amber3-rgb),0.3)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                </div>
+                {/* Breakeven summary strip — visible when there is at least one crossover age to show */}
+                {(intersectionEscVsStd || intersectionStdVsBasic || intersectionEscVsBasic) && (
+                  <div style={{ padding: "10px 14px", borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", display: "flex", flexWrap: "wrap", gap: "12px 24px", fontSize: 12 }}>
+                    <span style={{ color: "var(--text-muted)", fontWeight: 700, alignSelf: "center" }}>⚖️ Total Yield Breakeven:</span>
+                    {intersectionEscVsStd    && <span style={{ color: "var(--clr-amber3)" }}>Escalating overtakes Standard at age <strong>{intersectionEscVsStd}</strong></span>}
+                    {intersectionStdVsBasic  && <span style={{ color: "var(--clr-blue2)" }}>Standard overtakes Basic at age <strong>{intersectionStdVsBasic}</strong></span>}
+                    {intersectionEscVsBasic  && <span style={{ color: "var(--clr-emerald)" }}>Escalating overtakes Basic at age <strong>{intersectionEscVsBasic}</strong></span>}
+                  </div>
+                )}
+                {(intersectionEscCumVsStdCum || intersectionStdCumVsBasicCum || intersectionEscCumVsBasicCum) && (
+                  <div style={{ padding: "10px 14px", borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", display: "flex", flexWrap: "wrap", gap: "12px 24px", fontSize: 12 }}>
+                    <span style={{ color: "var(--text-muted)", fontWeight: 700, alignSelf: "center" }}>💵 Cash-in-Hand Breakeven:</span>
+                    {intersectionEscCumVsStdCum    && <span style={{ color: "var(--clr-amber3)" }}>Escalating cash exceeds Standard at age <strong>{intersectionEscCumVsStdCum}</strong></span>}
+                    {intersectionStdCumVsBasicCum  && <span style={{ color: "var(--clr-blue2)" }}>Standard cash exceeds Basic at age <strong>{intersectionStdCumVsBasicCum}</strong></span>}
+                    {intersectionEscCumVsBasicCum  && <span style={{ color: "var(--clr-emerald)" }}>Escalating cash exceeds Basic at age <strong>{intersectionEscCumVsBasicCum}</strong></span>}
+                  </div>
+                )}
+                {/* Basic plan card with embedded premium slider */}
+                <div style={{ padding: 14, borderRadius: 12, background: "rgba(var(--clr-amber3-rgb),0.06)", border: "2px solid rgba(var(--clr-amber3-rgb),0.3)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
                     <strong style={{ color: "var(--clr-amber3)" }}>Basic Bequest: </strong>Before age 90 (Phase 1): remaining personal RA balance <em>plus</em> a full refund of the premium paid — CPF policy returns the full premium if death occurs before the pool phase. After 90 (Phase 2): unused pool premium minus any payouts already drawn from the pool. Higher % → larger pool premium, smaller retained RA, lower Phase 1 payout.
                     <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(var(--clr-amber3-rgb),0.2)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -20294,11 +20340,10 @@ ${milestoneSnapshotHtml}
                       <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>CPF policy: 10% at age 65, +2% per year of deferral (12% at 66 → 20% at 70). Auto-set from your payout age. Drag to explore — resets on next payout age change.</p>
                     </div>
                   </div>
-                </div>
                 {/* Breakeven Analysis */}
                 <div style={{ background: "var(--bg-base)", border: "1px solid var(--border-strong)", borderRadius: 16, padding: 20 }}>
                   <h4 style={{ fontSize: 14, fontWeight: 900, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />Plan Breakeven &amp; Crossover Analysis</h4>
-                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>All crossover ages based on cumulative Total Yield. Switch to "Total Yield" view to see reference lines.</p>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>All crossover ages below are based on cumulative Total Yield (payouts + bequest). Switch to "Total Yield" or "Cumulative Payout" views to see the corresponding reference lines on the chart.</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     {[
                       ["Standard vs. Escalating", "Escalating Overtakes Standard", intersectionEscVsStd, "var(--clr-amber)", "rgba(var(--clr-amber3-rgb),0.1)", "rgba(var(--clr-amber3-rgb),0.2)", "Esc starts ~20% lower but grows 2%/yr. Takes decades for cumulative total yield to catch up. Break-Even Age shows when Escalating surpasses Standard."],
