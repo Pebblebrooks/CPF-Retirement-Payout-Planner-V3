@@ -4750,69 +4750,55 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ─── TiltCard — 3D mouse-tracking tilt wrapper ───────────────────────────────
-// Wraps any Readiness dashboard card with a GPU-accelerated 3D tilt effect that
-// follows the mouse cursor within the card boundary.
+// ─── TiltCard — hover-lift card wrapper ─────────────────────────────────────
+// Replicates the landing-page .card:hover effect:
+//   translateY(-8px) lift + deepened shadow + 4 px bottom accent border
+//   that flips to --clr-green, all with 0.3 s ease transitions.
 //
-// Design decisions:
-//   • Direct DOM mutation (ref.style.transform) — zero setState, zero re-renders
-//     on every mousemove. React reconciliation is never triggered during tracking.
-//   • requestAnimationFrame throttling — one rAF call per paint tick regardless
-//     of how fast mousemove fires (60–240 Hz on modern devices).
-//   • Spring-back on mouseleave — cubic-bezier easing returns the card to neutral
-//     with a satisfying 'settle' feel, matching the landing page aesthetic.
-//   • Touch / coarse-pointer guard — matchMedia("hover:none") check at effect
-//     mount time disables the handler on phones and tablets cleanly.
-//   • prefers-reduced-motion guard — users who opt out of motion see no tilt;
-//     the card still renders normally with no layout shift.
-//   • Transparent API — all props (style, className, title, key, onClick, etc.)
-//     pass through via spread so callers need only swap <div> → <TiltCard>.
+// Why JS instead of pure CSS?
+//   cardStyle is applied as an inline style attribute. CSS :hover rules cannot
+//   override inline styles (specificity: inline > class). We therefore use
+//   mouseenter / mouseleave with setProperty() to mutate the DOM directly,
+//   exactly matching how the landing page works but adapting for React's inline
+//   style API.
+//
+// The 4 px bottom border is always visible (set on the element's style in the
+// render). Only its colour and the lift/shadow change on hover.
+//
+// Guards: touch / coarse-pointer devices (matchMedia "hover:none") and users
+// who prefer reduced motion both skip the effect cleanly.
 // ─────────────────────────────────────────────────────────────────────────────
 function TiltCard({ children, style, className = "", ...rest }) {
   const cardRef = useRef(null);
-  const rafRef  = useRef(null);
 
   useEffect(() => {
     const card = cardRef.current;
     if (!card) return;
 
-    // Respect accessibility / device capabilities
+    // Skip on touch / coarse-pointer devices and for reduced-motion preference
     const noHover  = window.matchMedia("(hover: none)").matches;
     const noMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (noHover || noMotion) return;
 
-    const MAX_DEG = 8; // maximum tilt in either axis (degrees)
-
-    const onMove = (e) => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        const r  = card.getBoundingClientRect();
-        const nx = (e.clientX - r.left)  / r.width  - 0.5; // −0.5 → +0.5
-        const ny = (e.clientY - r.top)   / r.height - 0.5;
-        const rx = -(ny * MAX_DEG * 2);   // tilt toward cursor (top-edge tilts away)
-        const ry =  (nx * MAX_DEG * 2);
-        const d  = Math.sqrt(nx * nx + ny * ny); // distance from card centre
-        card.style.transition = "transform 0.05s linear, box-shadow 0.2s ease";
-        card.style.transform  = `perspective(900px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) scale3d(1.025,1.025,1.025)`;
-        card.style.boxShadow  = `0 ${10 + d * 14}px ${24 + d * 20}px rgba(0,0,0,0.30), 0 4px 8px rgba(0,0,0,0.12)`;
-        card.style.zIndex     = "2";
-      });
+    const onEnter = () => {
+      // setProperty() accepts CSS custom-property references (var(--…)) correctly
+      card.style.setProperty("transform",           "translateY(-8px)");
+      card.style.setProperty("box-shadow",          "0 10px 25px rgba(0,0,0,0.30), 0 4px 8px rgba(0,0,0,0.15)");
+      card.style.setProperty("border-bottom-color", "var(--clr-green)");
     };
 
     const onLeave = () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      // Spring-back: slow cubic-bezier gives a satisfying 'settle' feel
-      card.style.transition = "transform 0.45s cubic-bezier(0.23,1,0.32,1), box-shadow 0.4s ease";
-      card.style.transform  = "perspective(900px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)";
-      card.style.boxShadow  = "";
-      card.style.zIndex     = "";
+      // Removing the inline overrides lets the transition animate back to the
+      // render-time values (borderBottom: "4px solid var(--border-subtle)")
+      card.style.removeProperty("transform");
+      card.style.removeProperty("box-shadow");
+      card.style.removeProperty("border-bottom-color");
     };
 
-    card.addEventListener("mousemove",  onMove,  { passive: true });
+    card.addEventListener("mouseenter", onEnter);
     card.addEventListener("mouseleave", onLeave);
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      card.removeEventListener("mousemove",  onMove);
+      card.removeEventListener("mouseenter", onEnter);
       card.removeEventListener("mouseleave", onLeave);
     };
   }, []);
@@ -4821,7 +4807,17 @@ function TiltCard({ children, style, className = "", ...rest }) {
     <div
       ref={cardRef}
       className={`cpf-tilt-card${className ? " " + className : ""}`}
-      style={style}
+      style={{
+        ...style,
+        // 4 px bottom border: longhand (borderBottom) wins over any borderColor
+        // shorthand that callers pass in (e.g. OA-depletes alert tile).
+        // On hover, only border-bottom-color is mutated via JS — width stays 4px.
+        borderBottom: "4px solid var(--border-subtle)",
+        // Transition set inline so it survives React re-renders. Only the three
+        // properties we animate are enrolled — other React prop changes (display,
+        // flexDirection, borderColor, etc.) are unaffected.
+        transition: "transform 0.3s ease, box-shadow 0.3s ease, border-bottom-color 0.3s ease",
+      }}
       {...rest}
     >
       {children}
@@ -12521,29 +12517,25 @@ ${milestoneSnapshotHtml}
           border-radius: 12px;
         }
 
-        /* ── 3D Tilt Card — Readiness dashboard cards ──────────────────────────────
-           GPU-accelerated mouse-tracking tilt. The transform is driven by JS via
-           ref.style (zero React re-renders); this class adds will-change hinting
-           and sets up position:relative for z-index elevation during tilt.
-           Touch/reduced-motion users are excluded by JS guards in TiltCard;
-           the media queries below are belt-and-suspenders CSS fallbacks.        */
+        /* ── Hover-lift card — matches landing-page .card:hover ────────────────────
+           JS (mouseenter/mouseleave via setProperty) drives the three changes:
+             transform: translateY(-8px)  |  box-shadow deepens  |  border-bottom-color → --clr-green
+           Inline specificity prevents CSS :hover from doing this directly.
+           This class provides position:relative (for z-index) and belt-and-
+           suspenders media-query guards for touch and reduced-motion users.   */
         .cpf-tilt-card {
-          will-change: transform;
-          position: relative;
+          position: relative; /* enables z-index elevation above grid siblings */
         }
-        /* Touch / coarse-pointer: suppress any residual transform               */
+        /* Touch / coarse-pointer: JS guards already skip attachment,
+           !important here is a belt-and-suspenders fallback only              */
         @media (hover: none), (pointer: coarse) {
-          .cpf-tilt-card {
-            will-change: auto !important;
-            transform: none !important;
-          }
+          .cpf-tilt-card { transform: none !important; }
         }
-        /* Reduced-motion fallback                                                */
+        /* Reduced-motion fallback (JS also guards at effect mount time)        */
         @media (prefers-reduced-motion: reduce) {
           .cpf-tilt-card {
-            transform: none !important;
+            transform:  none !important;
             transition: none !important;
-            will-change: auto !important;
           }
         }
 
