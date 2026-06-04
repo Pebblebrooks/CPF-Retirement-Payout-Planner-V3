@@ -4752,24 +4752,27 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // ─── TiltCard — hover-lift card wrapper ─────────────────────────────────────
 // Replicates the landing-page .card:hover effect:
-//   translateY(-8px) lift + deepened shadow + 4 px bottom accent border
-//   that flips to --clr-green, all with 0.3 s ease transitions.
+//   translateY(-8px) lift on mouseenter, smooth drop back on mouseleave.
+//   Shadow deepens on enter and fades on leave.
+//   No border changes — cards render exactly as styled by the caller.
 //
 // Why JS instead of pure CSS?
 //   cardStyle is applied as an inline style attribute. CSS :hover rules cannot
-//   override inline styles (specificity: inline > class). We therefore use
-//   mouseenter / mouseleave with setProperty() to mutate the DOM directly,
-//   exactly matching how the landing page works but adapting for React's inline
-//   style API.
+//   override inline styles (inline specificity > class). We use mouseenter /
+//   mouseleave with setProperty() to mutate the DOM directly.
 //
-// The 4 px bottom border is always visible (set on the element's style in the
-// render). Only its colour and the lift/shadow change on hover.
+// Drop-back animation:
+//   onLeave sets transform to translateY(0px) explicitly (NOT removeProperty).
+//   This guarantees the browser sees a defined FROM → TO transition and always
+//   animates the card dropping back. After the 0.3s transition completes a
+//   small timeout clears the inline override so the element is fully pristine.
 //
-// Guards: touch / coarse-pointer devices (matchMedia "hover:none") and users
-// who prefer reduced motion both skip the effect cleanly.
+// Guards: touch / coarse-pointer devices and prefers-reduced-motion both skip
+//   the effect entirely at effect-mount time.
 // ─────────────────────────────────────────────────────────────────────────────
 function TiltCard({ children, style, className = "", ...rest }) {
-  const cardRef = useRef(null);
+  const cardRef    = useRef(null);
+  const cleanupRef = useRef(null); // holds the post-leave timeout id
 
   useEffect(() => {
     const card = cardRef.current;
@@ -4781,23 +4784,28 @@ function TiltCard({ children, style, className = "", ...rest }) {
     if (noHover || noMotion) return;
 
     const onEnter = () => {
-      // setProperty() accepts CSS custom-property references (var(--…)) correctly
-      card.style.setProperty("transform",           "translateY(-8px)");
-      card.style.setProperty("box-shadow",          "0 10px 25px rgba(0,0,0,0.30), 0 4px 8px rgba(0,0,0,0.15)");
-      card.style.setProperty("border-bottom-color", "var(--clr-green)");
+      // Cancel any in-progress leave cleanup so rapid re-entry is clean
+      if (cleanupRef.current) { clearTimeout(cleanupRef.current); cleanupRef.current = null; }
+      card.style.setProperty("transform",  "translateY(-8px)");
+      card.style.setProperty("box-shadow", "0 10px 25px rgba(0,0,0,0.30), 0 4px 8px rgba(0,0,0,0.15)");
     };
 
     const onLeave = () => {
-      // Removing the inline overrides lets the transition animate back to the
-      // render-time values (borderBottom: "4px solid var(--border-subtle)")
-      card.style.removeProperty("transform");
+      // Explicit target value → browser always animates the drop-back (0.3s ease)
+      card.style.setProperty("transform",  "translateY(0px)");
       card.style.removeProperty("box-shadow");
-      card.style.removeProperty("border-bottom-color");
+      // After transition completes, remove the inline transform so the element
+      // is completely pristine and no stale override lingers
+      cleanupRef.current = setTimeout(() => {
+        card.style.removeProperty("transform");
+        cleanupRef.current = null;
+      }, 350); // 350ms > 300ms transition duration
     };
 
     card.addEventListener("mouseenter", onEnter);
     card.addEventListener("mouseleave", onLeave);
     return () => {
+      if (cleanupRef.current) clearTimeout(cleanupRef.current);
       card.removeEventListener("mouseenter", onEnter);
       card.removeEventListener("mouseleave", onLeave);
     };
@@ -4809,14 +4817,10 @@ function TiltCard({ children, style, className = "", ...rest }) {
       className={`cpf-tilt-card${className ? " " + className : ""}`}
       style={{
         ...style,
-        // 4 px bottom border: longhand (borderBottom) wins over any borderColor
-        // shorthand that callers pass in (e.g. OA-depletes alert tile).
-        // On hover, only border-bottom-color is mutated via JS — width stays 4px.
-        borderBottom: "4px solid var(--border-subtle)",
-        // Transition set inline so it survives React re-renders. Only the three
-        // properties we animate are enrolled — other React prop changes (display,
-        // flexDirection, borderColor, etc.) are unaffected.
-        transition: "transform 0.3s ease, box-shadow 0.3s ease, border-bottom-color 0.3s ease",
+        // Transition enrolled only for transform and box-shadow.
+        // Set inline so it survives React re-renders without creating a CSS
+        // class specificity conflict. No border properties are touched.
+        transition: "transform 0.3s ease, box-shadow 0.3s ease",
       }}
       {...rest}
     >
