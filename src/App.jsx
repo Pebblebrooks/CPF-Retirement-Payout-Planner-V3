@@ -5122,7 +5122,7 @@ function ReadinessTab({
             {
               label: `${highlightPlan === "basic" ? "Basic" : highlightPlan === "escalating" ? "Escalating" : "Standard"} plan payout`,
               sublabel: "monthly CPF LIFE",
-              value: displayPayout > 0 ? `${formatCurrency(Math.round(displayPayout))}/mo` : (wizardCompleted ? "—" : null),
+              value: displayPayout > 0 ? `${formatCurrency(Math.round(displayPayout))}` : (wizardCompleted ? "—" : null),
               placeholder: displayPayout === 0 && !wizardCompleted ? "Add salary & balances" : null,
               color: "var(--clr-green)",
               tip: `${highlightPlan} plan monthly payout${isRealDollars ? " in today's dollars" : ""}`,
@@ -5244,7 +5244,7 @@ function ReadinessTab({
                     <span style={{ fontSize: 11, color: "var(--text-subtle)", marginLeft: 8 }}>{desc}</span>
                   </div>
                   <span style={{ fontSize: 15, fontWeight: 700, color: active ? "var(--clr-green)" : "var(--text-highlight)", whiteSpace: "nowrap" }}>
-                    {payout > 0 ? `${formatCurrency(Math.round(payout))}/mo` : "—"}
+                    {payout > 0 ? `${formatCurrency(Math.round(payout))}` : "—"}
                   </span>
                 </button>
               );
@@ -8728,6 +8728,18 @@ export default function App() {
     };
   }, [raAtPayout, raAfterTransfer, debouncedInputs.payoutAge, debouncedInputs.isMale, debouncedInputs.applyRaOaTransfer]); // dep: raAfterTransfer added for toggle
 
+  // Single source of truth for the Basic Plan Phase 1A scaled monthly payout.
+  // Previously duplicated verbatim in payoutProjection (useMemo) and generatePDF (async fn).
+  // The CPF LIFE lookup table 'bas' column is calibrated at a 10% premium at payout age 65.
+  // When basicPremiumPct differs the annuity pool changes from 90% → (100−P)% of RA, so
+  // the payout scales proportionally: tableValue × (1 − P/100) / 0.90.
+  // Both consumers below reference this memoised value — if the formula ever changes,
+  // updating here is sufficient; neither call-site can silently drift from the other.
+  const basicPhase1aMonthly = useMemo(
+    () => (lifePlans?.basic?.start || 0) * (1 - basicPremiumPct / 100) / 0.90,
+    [lifePlans, basicPremiumPct]
+  );
+
   const payoutProjection = useMemo(() => {
     let data = [];
     const pAge = Number(debouncedInputs.payoutAge) || 65; // NX10 fix: stay in sync with projection
@@ -8754,10 +8766,9 @@ export default function App() {
     //     dropPct interpolated from CPF document table (7.2% at $100K → 3.4% at $1M RA).
     //
     // Phase 1A monthly payout = lookup table value scaled by actual premium ratio.
-    // CPF_LIFE_TABLE 'bas' column is calibrated at the standard 10% premium (payout age 65).
-    // When basicPremiumPct differs, the RA entering the annuity pool changes from 90% to
-    // (100-P)% of RA, so the payout scales proportionally: payout × (1-P/100) / 0.90.
-    const basicPhase1aMonthly = lifePlans.basic.start * (1 - basicPremiumPct / 100) / 0.90;
+    // Uses the component-level basicPhase1aMonthly useMemo — single source of truth
+    // shared with generatePDF so both always produce the same scaled value.
+    // (Formula: lifePlans.basic.start × (1−P/100) / 0.90 — see comment above useMemo.)
     const { premium: basicPremium, pv: basicPV,
             phase1aAnnual: basicPhase1aAnnual, phase2Annual: basicPhase2Annual,
             phase1bTrigger: phase1bStartAge, effAnnualFactor: basicEffAnnualFactor
@@ -8828,7 +8839,7 @@ export default function App() {
       });
     }
     return data;
-  }, [projection, lifePlans, debouncedInputs.payoutAge, raAtPayout, raAfterTransfer, debouncedInputs.includeProperty, basicPremiumPct]);
+  }, [projection, lifePlans, debouncedInputs.payoutAge, raAtPayout, raAfterTransfer, debouncedInputs.includeProperty, basicPremiumPct, basicPhase1aMonthly]);
 
   // Bug 1 fix: accept optional memberCurrentAge so spouse payout values are deflated from
   // the spouse's own current age, not the primary member's. When omitted, falls back to
@@ -9596,8 +9607,8 @@ export default function App() {
       const dateStr = new Date().toLocaleDateString("en-SG", { day: "2-digit", month: "long", year: "numeric" });
       const stdMonthly = Math.round(lifePlans.standard.start);
       const escMonthly = Math.round(lifePlans.escalating.start);
-      // Apply same premium scaling as payoutProjection: table calibrated at 10% (age 65).
-      const basMonthly = Math.round(lifePlans.basic.start * (1 - basicPremiumPct / 100) / 0.90);
+      // Uses component-level basicPhase1aMonthly useMemo — same source as payoutProjection.
+      const basMonthly = Math.round(basicPhase1aMonthly);
       const memberType = isSelfEmployed ? "Self-Employed" : "Employed";
       const genderLabel = inputs.isMale !== false ? "Male" : "Female";
       const dollarMode = isRealDollars ? "Real Dollars" : "Nominal Dollars";
