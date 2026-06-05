@@ -5657,6 +5657,15 @@ export default function App() {
     const pa = Number(inputs.payoutAge) || 65;
     setBasicPremiumPct(Math.min(20, Math.max(10, 10 + (pa - 65) * 2)));
   }, [inputs.payoutAge]);
+  // Spouse Basic Plan premium % — independent slider, mirrors primary logic.
+  const [spouseBasicPremiumPct, setSpouseBasicPremiumPct] = useState(10);
+  useEffect(() => {
+    const spa = Number(spouseInputs.payoutAge) || 65;
+    setSpouseBasicPremiumPct(Math.min(20, Math.max(10, 10 + (spa - 65) * 2)));
+  }, [spouseInputs.payoutAge]);
+  // LIFE tab member toggle — "primary" | "spouse". Resets when household mode is disabled.
+  const [lifeTabMember, setLifeTabMember] = useState("primary");
+  useEffect(() => { if (!householdEnabled) setLifeTabMember("primary"); }, [householdEnabled]);
   const [pdfOrientation, setPdfOrientation] = useState("portrait");
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -8689,6 +8698,18 @@ export default function App() {
   // RA after birth-year-gated transfer (before CPF LIFE premium deduction)
   const raAfterTransfer = raAtPayout - raOaTransfer;
   // ── end of payoutAge65 / raAfterTransfer block ────────────────────────────
+  // ── Spouse raAtPayout / raAfterTransfer block ─────────────────────────────
+  const spouseRaAtPayout = spouseProjectionByAge.get(spousePayoutAge)?.ra || 0;
+  const _sBirthYearForTransfer = (Number(debouncedSpouseInputs.birthYear) > 0)
+    ? Number(debouncedSpouseInputs.birthYear)
+    : ((Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35));
+  const _sCumTopUpsForTransfer = spouseProjectionByAge.get(spousePayoutAge)?.cumRaCashTopUps ?? 0;
+  const _sTransferBase    = Math.max(0, spouseRaAtPayout - _sCumTopUpsForTransfer);
+  const _sTransferPct     = _sBirthYearForTransfer >= 1958 ? 0.20 : _sBirthYearForTransfer === 1957 ? 0.10 : 0;
+  const _sRaOaTransferRaw = Math.round(_sTransferBase * _sTransferPct);
+  const _sRaOaTransfer    = _sBirthYearForTransfer >= 1958 ? Math.max(0, _sRaOaTransferRaw - 5000) : _sRaOaTransferRaw;
+  const spouseRaAfterTransfer = spouseRaAtPayout - _sRaOaTransfer;
+  // ── end of spouse raAtPayout / raAfterTransfer block ──────────────────────
 
   // ── Unified RA→OA transfer card display vars (RSS + non-RSS) ─────────────
   // For non-RSS: transfer age = payoutAge65; source row = payoutRow65 (already computed above).
@@ -8884,6 +8905,26 @@ export default function App() {
     };
   }, [raAtPayout, raAfterTransfer, debouncedInputs.payoutAge, debouncedInputs.isMale, debouncedInputs.applyRaOaTransfer]); // dep: raAfterTransfer added for toggle
 
+  // Spouse CPF LIFE plan starting payouts — mirrors lifePlans using spouse data.
+  const spouseLifePlans = useMemo(() => {
+    if (!householdEnabled) return null;
+    const pAge  = spousePayoutAge;
+    const male  = debouncedSpouseInputs.isMale !== false;
+    const raBase = debouncedSpouseInputs.applyRaOaTransfer ? spouseRaAfterTransfer : spouseRaAtPayout;
+    const startM  = interpolateCpfLife(raBase, 'std', true,  pAge);
+    const startF  = interpolateCpfLife(raBase, 'std', false, pAge);
+    const escStartM = interpolateCpfLife(raBase, 'esc', true,  pAge);
+    const escStartF = interpolateCpfLife(raBase, 'esc', false, pAge);
+    const basStartM = interpolateCpfLife(raBase, 'bas', true,  pAge);
+    const basStartF = interpolateCpfLife(raBase, 'bas', false, pAge);
+    return {
+      standard:   { name: "Standard",   start: male ? startM    : startF,    startM,      startF      },
+      escalating: { name: "Escalating", start: male ? escStartM : escStartF, startM: escStartM, startF: escStartF },
+      basic:      { name: "Basic",      start: male ? basStartM : basStartF, startM: basStartM, startF: basStartF },
+    };
+  }, [householdEnabled, spouseRaAtPayout, spouseRaAfterTransfer, spousePayoutAge,
+      debouncedSpouseInputs.isMale, debouncedSpouseInputs.applyRaOaTransfer]);
+
   // Single source of truth for the Basic Plan Phase 1A scaled monthly payout.
   // Previously duplicated verbatim in payoutProjection (useMemo) and generatePDF (async fn).
   // The CPF LIFE lookup table 'bas' column is calibrated at a 10% premium at payout age 65.
@@ -8894,6 +8935,11 @@ export default function App() {
   const basicPhase1aMonthly = useMemo(
     () => (lifePlans?.basic?.start || 0) * (1 - basicPremiumPct / 100) / 0.90,
     [lifePlans, basicPremiumPct]
+  );
+  // Spouse equivalent — same formula, independent state.
+  const spouseBasicPhase1aMonthly = useMemo(
+    () => (spouseLifePlans?.basic?.start || 0) * (1 - spouseBasicPremiumPct / 100) / 0.90,
+    [spouseLifePlans, spouseBasicPremiumPct]
   );
 
   const payoutProjection = useMemo(() => {
@@ -8999,6 +9045,73 @@ export default function App() {
     return data;
   }, [projection, lifePlans, debouncedInputs.payoutAge, raAtPayout, raAfterTransfer, debouncedInputs.includeProperty, basicPremiumPct, basicPhase1aMonthly]);
 
+  // Spouse payout projection — structural mirror of payoutProjection using spouse data.
+  // Gated on householdEnabled so it adds zero cost for primary-only users.
+  const spousePayoutProjection = useMemo(() => {
+    if (!householdEnabled || !spouseLifePlans || !spouseProjection?.length) return [];
+    const pAge = spousePayoutAge;
+    const initialRA = debouncedSpouseInputs.applyRaOaTransfer ? spouseRaAfterTransfer : spouseRaAtPayout;
+    const includeProp = debouncedSpouseInputs.includeProperty ?? true;
+    let cumPayoutStandard = 0, cumPayoutEscalating = 0, cumPayoutBasic = 0;
+    const { premium: basicPremium, pv: basicPV,
+            phase1aAnnual: basicPhase1aAnnual, phase2Annual: basicPhase2Annual,
+            phase1bTrigger: phase1bStartAge, effAnnualFactor: basicEffAnnualFactor
+          } = computeBasicPlanParams(initialRA, pAge, spouseBasicPhase1aMonthly, spouseBasicPremiumPct);
+    let basicRaRemaining = basicPV;
+    let cumPayoutBasicPool = 0;
+    let effectivePremiumPool = basicPremium;
+    let phase1bActualStartAge = phase1bStartAge;
+    const data = [];
+    for (const p of spouseProjection) {
+      const age = p.age; const yearsElapsed = age - pAge;
+      let stdBeq = 0, escBeq = 0, basBeq = 0, stdPayY = 0, escPayY = 0, basPayY = 0, stdRA = 0, escRA = 0, basRA = 0;
+      if (age < pAge) {
+        stdRA = p.ra; escRA = p.ra; basRA = p.ra;
+        stdBeq = p.sa + p.ra; escBeq = p.sa + p.ra; basBeq = p.sa + p.ra;
+      } else {
+        stdPayY = spouseLifePlans.standard.start * 12; cumPayoutStandard += stdPayY;
+        stdBeq = Math.max(0, initialRA - cumPayoutStandard);
+        escPayY = (spouseLifePlans.escalating.start * Math.pow(1.02, yearsElapsed)) * 12; cumPayoutEscalating += escPayY;
+        escBeq = Math.max(0, initialRA - cumPayoutEscalating);
+        if (age < 90) {
+          if (basicRaRemaining < 60000 && age < phase1bActualStartAge) phase1bActualStartAge = age;
+          const { basPay, newRaRem } = computeBasicPlanYearPayout(
+            age, phase1bActualStartAge, basicPhase1aAnnual, basicPhase2Annual,
+            basicRaRemaining, basicEffAnnualFactor
+          );
+          basPayY = basPay; basicRaRemaining = newRaRem;
+          cumPayoutBasic += basPayY; basRA = basicRaRemaining;
+          basBeq = basRA + basicPremium;
+        } else {
+          const { basPay } = computeBasicPlanYearPayout(age, phase1bStartAge, basicPhase1aAnnual, basicPhase2Annual, 0, basicEffAnnualFactor);
+          if (basicRaRemaining > 0) { effectivePremiumPool += basicRaRemaining; basicRaRemaining = 0; }
+          basRA = 0; basPayY = basPay;
+          cumPayoutBasic += basPayY; cumPayoutBasicPool += basPayY;
+          basBeq = Math.max(0, effectivePremiumPool - cumPayoutBasicPool);
+        }
+      }
+      const propVal = includeProp ? (p.propertyValue || 0) : 0;
+      const privAsset = p.privateAssets || 0;
+      const srsBal = p.srsBalance || 0;
+      data.push({
+        age,
+        standardMonthly: Math.round(stdPayY / 12), escalatingMonthly: Math.round(escPayY / 12), basicMonthly: Math.round(basPayY / 12),
+        standardAnnual: Math.round(stdPayY), escalatingAnnual: Math.round(escPayY), basicAnnual: Math.round(basPayY),
+        standardBequest: Math.round(stdBeq), escalatingBequest: Math.round(escBeq), basicBequest: Math.round(basBeq),
+        standardRA: Math.round(stdRA), escalatingRA: Math.round(escRA), basicRA: Math.round(basRA),
+        standardTotal: Math.round(cumPayoutStandard + stdBeq), escalatingTotal: Math.round(cumPayoutEscalating + escBeq), basicTotal: Math.round(cumPayoutBasic + basBeq),
+        standardCumPayout: Math.round(cumPayoutStandard), escalatingCumPayout: Math.round(cumPayoutEscalating), basicCumPayout: Math.round(cumPayoutBasic),
+        srsBalance: srsBal,
+        standardNetWorth: Math.round(p.oa + p.sa + p.ma + stdBeq + propVal + privAsset + srsBal),
+        escalatingNetWorth: Math.round(p.oa + p.sa + p.ma + escBeq + propVal + privAsset + srsBal),
+        basicNetWorth: Math.round(p.oa + p.sa + p.ma + basBeq + propVal + privAsset + srsBal),
+      });
+    }
+    return data;
+  }, [householdEnabled, spouseProjection, spouseLifePlans, spousePayoutAge,
+      spouseRaAtPayout, spouseRaAfterTransfer, debouncedSpouseInputs.includeProperty,
+      debouncedSpouseInputs.applyRaOaTransfer, spouseBasicPremiumPct, spouseBasicPhase1aMonthly]);
+
   // Bug 1 fix: accept optional memberCurrentAge so spouse payout values are deflated from
   // the spouse's own current age, not the primary member's. When omitted, falls back to
   // debouncedInputs.currentAge (primary) — all existing call sites outside the Household
@@ -9022,6 +9135,16 @@ export default function App() {
     const deflate = (val, age) => isNaN(val) ? val : Math.round(val / Math.pow(1 + inflD, Math.max(0, age - caD)));
     return payoutProjection.map(row => { let n = { ...row }; Object.keys(n).forEach(k => { if (typeof n[k] === "number" && k !== "age") n[k] = deflate(n[k], row.age); }); return n; });
   }, [payoutProjection, isRealDollars, debouncedInputs.inflationRate, debouncedInputs.currentAge]);
+
+  // Spouse display projection — deflates spousePayoutProjection by spouse's own currentAge.
+  const spouseDisplayProjection = useMemo(() => {
+    if (!householdEnabled || !spousePayoutProjection?.length) return [];
+    if (!isRealDollars) return spousePayoutProjection;
+    const inflD = (Number(debouncedSpouseInputs.inflationRate) || 0) / 100;
+    const caD   = Number(debouncedSpouseInputs.currentAge) || 35;
+    const deflate = (val, age) => isNaN(val) ? val : Math.round(val / Math.pow(1 + inflD, Math.max(0, age - caD)));
+    return spousePayoutProjection.map(row => { let n = { ...row }; Object.keys(n).forEach(k => { if (typeof n[k] === "number" && k !== "age") n[k] = deflate(n[k], row.age); }); return n; });
+  }, [householdEnabled, spousePayoutProjection, isRealDollars, debouncedSpouseInputs.inflationRate, debouncedSpouseInputs.currentAge]);
 
   const displayAccumulation = useMemo(() => {
     if (!isRealDollars) return projection;
@@ -9056,6 +9179,10 @@ export default function App() {
   const payoutByAge = useMemo(
     () => new Map((payoutProjection || []).map(r => [r.age, r])),
     [payoutProjection]);
+  // Spouse O(1) Map — mirrors payoutByAge for spouse sensitivity tooltips.
+  const spousePayoutByAge = useMemo(
+    () => new Map((spousePayoutProjection || []).map(r => [r.age, r])),
+    [spousePayoutProjection]);
   // E6 fix: O(1) Map for displayProjection — used by KPI strip .find() double-scan
   const displayProjectionByAge = useMemo(
     () => new Map((displayProjection || []).map(r => [r.age, r])),
@@ -9408,6 +9535,33 @@ export default function App() {
     };
   }, [payoutProjection, payoutAge65]);
 
+  // Spouse intersections — structural mirror using spousePayoutProjection.
+  const spouseIntersections = useMemo(() => {
+    if (!householdEnabled || !spousePayoutProjection?.length) return {};
+    let escVsStd = null, stdVsBasic = null, escVsBasic = null, escPayVsStdPay = null;
+    let escCumVsStdCum = null, stdCumVsBasicCum = null, escCumVsBasicCum = null;
+    for (const d of spousePayoutProjection) {
+      if (d.age <= spousePayoutAge) continue;
+      if (!escVsStd         && d.escalatingTotal      > d.standardTotal)     escVsStd         = d.age;
+      if (!stdVsBasic       && d.standardTotal         > d.basicTotal)        stdVsBasic       = d.age;
+      if (!escVsBasic       && d.escalatingTotal       > d.basicTotal)        escVsBasic       = d.age;
+      if (!escPayVsStdPay   && d.escalatingMonthly     > d.standardMonthly)   escPayVsStdPay   = d.age;
+      if (!escCumVsStdCum   && d.escalatingCumPayout   > d.standardCumPayout) escCumVsStdCum   = d.age;
+      if (!stdCumVsBasicCum && d.standardCumPayout     > d.basicCumPayout)    stdCumVsBasicCum = d.age;
+      if (!escCumVsBasicCum && d.escalatingCumPayout   > d.basicCumPayout)    escCumVsBasicCum = d.age;
+      if (escVsStd && stdVsBasic && escVsBasic && escPayVsStdPay && escCumVsStdCum && stdCumVsBasicCum && escCumVsBasicCum) break;
+    }
+    return {
+      intersectionEscVsStd:         escVsStd,
+      intersectionStdVsBasic:       stdVsBasic,
+      intersectionEscVsBasic:       escVsBasic,
+      intersectionEscPayVsStdPay:   escPayVsStdPay,
+      intersectionEscCumVsStdCum:   escCumVsStdCum,
+      intersectionStdCumVsBasicCum: stdCumVsBasicCum,
+      intersectionEscCumVsBasicCum: escCumVsBasicCum,
+    };
+  }, [householdEnabled, spousePayoutProjection, spousePayoutAge]);
+
   const sensitivityData = useMemo(() => {
     // RSS isolation: for RSS members the CPF LIFE payout-age × RA sensitivity matrix is
     // meaningless. Return a depletion-age sensitivity grid instead:
@@ -9461,6 +9615,17 @@ export default function App() {
       debouncedInputs.cpfScheme, debouncedInputs.rssMonthlyPayout,
       debouncedInputs.rssPayoutStartAge, debouncedInputs.saBalance,
       debouncedInputs.currentYear, debouncedInputs.currentAge]);
+
+  // Spouse sensitivity table — same computeSensitivityRow helper, spouse projection data.
+  const spouseSensitivityData = useMemo(() => {
+    if (!householdEnabled || !spouseProjectionByAge?.size) return [];
+    const isMaleSens = debouncedSpouseInputs.isMale !== false;
+    return [65, 66, 67, 68, 69, 70].map(pAge => {
+      const raRow = spouseProjectionByAge.get(pAge);
+      if (!raRow) return { pAge, stdMonthly: 0, escMonthly: 0, basMonthly: 0, escVsStd: null, stdVsBasic: null, escVsBasic: null };
+      return computeSensitivityRow(pAge, raRow.ra || 0, isMaleSens);
+    });
+  }, [householdEnabled, spouseProjectionByAge, debouncedSpouseInputs.isMale]);
 
   // R7: formatCurrency hoisted to module level
 
@@ -20147,10 +20312,52 @@ ${milestoneSnapshotHtml}
                 but if the user was already on the LIFE tab before switching to RSS the
                 activeTab state can be "life" momentarily (the switch useEffect also calls
                 setActiveTab to redirect, but this guard is the belt-and-suspenders defence). */}
-            {activeTab === "life" && debouncedInputs.cpfScheme !== 'rss' && (
+            {activeTab === "life" && debouncedInputs.cpfScheme !== 'rss' && (() => {
+              // ── Active-member variable wiring ──────────────────────────────────────
+              const isSpouseLife       = lifeTabMember === "spouse" && householdEnabled;
+              const activeDisplayProj  = isSpouseLife ? spouseDisplayProjection  : displayProjection;
+              const activeLifePlans    = isSpouseLife ? spouseLifePlans          : lifePlans;
+              const activePayoutAge    = isSpouseLife ? spousePayoutAge          : payoutAge65;
+              const activeBasicPremPct = isSpouseLife ? spouseBasicPremiumPct    : basicPremiumPct;
+              const setActivePremPct   = isSpouseLife ? setSpouseBasicPremiumPct : setBasicPremiumPct;
+              const activeIx           = isSpouseLife ? spouseIntersections      : {
+                intersectionEscVsStd, intersectionStdVsBasic, intersectionEscVsBasic,
+                intersectionEscPayVsStdPay, intersectionEscCumVsStdCum,
+                intersectionStdCumVsBasicCum, intersectionEscCumVsBasicCum,
+              };
+              const activeSensData     = isSpouseLife ? spouseSensitivityData    : sensitivityData;
+              const activeInputsLife   = isSpouseLife ? debouncedSpouseInputs    : debouncedInputs;
+              // Destructure intersections into li* aliases so LIFE tab JSX references them without change
+              const {
+                intersectionEscVsStd:        liEscVsStd,
+                intersectionStdVsBasic:      liStdVsBasic,
+                intersectionEscVsBasic:      liEscVsBasic,
+                intersectionEscPayVsStdPay:  liEscPayVsStdPay,
+                intersectionEscCumVsStdCum:  liEscCumVsStdCum,
+                intersectionStdCumVsBasicCum: liStdCumVsBasicCum,
+                intersectionEscCumVsBasicCum: liEscCumVsBasicCum,
+              } = activeIx;
+              return (
               <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box" }}>
                 <div className="life-chart-header" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
+                  {/* Primary / Spouse member toggle — visible only in household mode */}
+                  {householdEnabled && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>Viewing:</span>
+                      {[["primary", "👤 Primary"], ["spouse", "👤 Spouse"]].map(([id, label]) => (
+                        <button key={id} onClick={() => setLifeTabMember(id)}
+                          style={{ padding: "5px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "1.5px solid", transition: "all 0.18s",
+                            background:  lifeTabMember === id ? "var(--clr-emerald)"  : "var(--bg-muted)",
+                            color:       lifeTabMember === id ? "#fff"                : "var(--text-muted)",
+                            borderColor: lifeTabMember === id ? "var(--clr-emerald)"  : "var(--border-subtle)",
+                          }}>{label}</button>
+                      ))}
+                      <span style={{ fontSize: 11, color: "var(--text-subtle)", marginLeft: 4 }}>
+                        {isSpouseLife ? "Showing spouse CPF LIFE projections" : "Showing primary member CPF LIFE projections"}
+                      </span>
+                    </div>
+                  )}
+                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {activePayoutAge} – 95)</h3>
                   {/* P1 fix: Foreigner gate — CPF LIFE is SC/PR only. Show a prominent warning when
                       citizenStatus === 'foreigner' so the user knows the payout estimates below do not apply.
                       The chart is not suppressed — foreigners may be exploring what-if SC/PR scenarios. */}
@@ -20282,13 +20489,13 @@ ${milestoneSnapshotHtml}
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-amber3)" }}>Basic Plan Premium</span>
                         <span style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>
-                          {basicPremiumPct}%
-                          {basicPremiumPct === Math.min(20, Math.max(10, 10 + ((Number(inputs.payoutAge) || 65) - 65) * 2)) && (
+                          {activeBasicPremPct}%
+                          {activeBasicPremPct === Math.min(20, Math.max(10, 10 + (activePayoutAge - 65) * 2)) && (
                             <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(var(--clr-amber3-rgb),0.2)", color: "var(--clr-amber3)", borderRadius: 4, padding: "1px 5px", marginLeft: 4 }}>AUTO</span>
                           )}
                         </span>
                       </div>
-                      <input type="range" min={10} max={20} step={1} value={basicPremiumPct} aria-label="CPF LIFE Basic Plan premium percentage" onChange={e => setBasicPremiumPct(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-amber3)", margin: "4px 0 6px" }} />
+                      <input type="range" min={10} max={20} step={1} value={activeBasicPremPct} aria-label="CPF LIFE Basic Plan premium percentage" onChange={e => setActivePremPct(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-amber3)", margin: "4px 0 6px" }} />
                       <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>Pool premium % of RA. Remainder retained as personal RA (4% interest, Phase 1 payout). CPF policy: 10% at 65, +2%/yr deferral (20% max at 70). Auto-set from payout age — drag to explore.</p>
                     </div>
                   </div>
@@ -20302,23 +20509,23 @@ ${milestoneSnapshotHtml}
                 </div>
                 <div className="fhd-chart-grow" style={{ height: 350, minHeight: 220 }}>
                   <ResponsiveContainer width="99%" height="100%">
-                    <LineChart data={displayProjection.filter(d => d.age >= payoutAge65)}> {/* BUG-51 fix: use debounced payoutAge65 */}
+                    <LineChart data={activeDisplayProj.filter(d => d.age >= activePayoutAge)}> {/* BUG-51 fix: use debounced payoutAge65 */}
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                       <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 11 }} />
                       <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Amount ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 11, style: { textAnchor: "middle" } }} />
                       <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={v => formatCurrency(v)} wrapperStyle={STYLES.chartTooltipWrapper} />
                       <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={STYLES.chartLegend} />
                       {/* Total Yield breakeven lines */}
-                      {viewMode === "total" && intersectionEscVsStd    && <ReferenceLine x={intersectionEscVsStd}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",     value: `Esc>Std Age ${intersectionEscVsStd}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
-                      {viewMode === "total" && intersectionStdVsBasic  && <ReferenceLine x={intersectionStdVsBasic}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideBottomRight", value: `Std>Basic Age ${intersectionStdVsBasic}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "total" && liEscVsStd    && <ReferenceLine x={liEscVsStd}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",     value: `Esc>Std Age ${liEscVsStd}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "total" && liStdVsBasic  && <ReferenceLine x={liStdVsBasic}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideBottomRight", value: `Std>Basic Age ${liStdVsBasic}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
                       {/* Q3 FIX: intersectionEscVsBasic was computed but never rendered — now shown on total mode */}
-                      {viewMode === "total" && intersectionEscVsBasic  && <ReferenceLine x={intersectionEscVsBasic}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight",   value: `Esc>Basic Age ${intersectionEscVsBasic}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "total" && liEscVsBasic  && <ReferenceLine x={liEscVsBasic}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight",   value: `Esc>Basic Age ${liEscVsBasic}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
                       {/* Monthly payout crossover line */}
-                      {viewMode === "payout" && intersectionEscPayVsStdPay && <ReferenceLine x={intersectionEscPayVsStdPay} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std Monthly Age ${intersectionEscPayVsStdPay}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
-                      {/* Q3 NEW: Cumulative cash-in-hand breakeven lines (no bequest) */}
-                      {viewMode === "cumPayout" && intersectionEscCumVsStdCum    && <ReferenceLine x={intersectionEscCumVsStdCum}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 0,  value: `Esc>Std Cash Age ${intersectionEscCumVsStdCum}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
-                      {viewMode === "cumPayout" && intersectionStdCumVsBasicCum  && <ReferenceLine x={intersectionStdCumVsBasicCum}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 18, value: `Std>Basic Cash Age ${intersectionStdCumVsBasicCum}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
-                      {viewMode === "cumPayout" && intersectionEscCumVsBasicCum  && <ReferenceLine x={intersectionEscCumVsBasicCum}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight", dy: 0,  value: `Esc>Basic Cash Age ${intersectionEscCumVsBasicCum}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "payout" && liEscPayVsStdPay && <ReferenceLine x={liEscPayVsStdPay} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std Monthly Age ${liEscPayVsStdPay}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
+                      {/* Q3 NEW: Cumulative Payout breakeven lines */}
+                      {viewMode === "cumPayout" && liEscCumVsStdCum    && <ReferenceLine x={liEscCumVsStdCum}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 0,  value: `Esc>Std Cash Age ${liEscCumVsStdCum}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "cumPayout" && liStdCumVsBasicCum  && <ReferenceLine x={liStdCumVsBasicCum}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 18, value: `Std>Basic Cash Age ${liStdCumVsBasicCum}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "cumPayout" && liEscCumVsBasicCum  && <ReferenceLine x={liEscCumVsBasicCum}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight", dy: 0,  value: `Esc>Basic Cash Age ${liEscCumVsBasicCum}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
                       <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "standardMonthly" : viewMode === "annualPayout" ? "standardAnnual" : viewMode === "total" ? "standardTotal" : viewMode === "cumPayout" ? "standardCumPayout" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.35} dot={false} name="Standard" />
                       <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "escalatingMonthly" : viewMode === "annualPayout" ? "escalatingAnnual" : viewMode === "total" ? "escalatingTotal" : viewMode === "cumPayout" ? "escalatingCumPayout" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.35} dot={false} name="Escalating" />
                       <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "basicMonthly" : viewMode === "annualPayout" ? "basicAnnual" : viewMode === "total" ? "basicTotal" : viewMode === "cumPayout" ? "basicCumPayout" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.35} dot={false} name="Basic" />
@@ -20421,8 +20628,8 @@ ${milestoneSnapshotHtml}
                         <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-blue)", fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>Std&gt;Bas</th>
                         <th style={{ padding: "8px", textAlign: "right", color: "var(--clr-violet2)", fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>Esc&gt;Bas</th>
                       </tr></thead>
-                      <tbody>{sensitivityData.map(row => {
-                        const isCurrent = row.pAge === (Number(inputs.payoutAge) || 65);
+                      <tbody>{activeSensData.map(row => {
+                        const isCurrent = row.pAge === activePayoutAge;
                         return (<tr key={row.pAge} style={{ borderBottom: "1px solid var(--border-subtle)", background: isCurrent ? "rgba(var(--clr-emerald-rgb),0.08)" : "" }}>
                           <td style={{ padding: "8px", fontWeight: 800, color: isCurrent ? "var(--clr-green)" : "var(--text-muted)" }}>Age {row.pAge}{isCurrent ? "  ◀ " : ""}</td>
                           <td style={{ padding: "8px", textAlign: "right", color: "var(--text-highlight)" }}>{row.stdMonthly > 0 ? `$${row.stdMonthly.toLocaleString()}` : "—"}</td>
@@ -20506,7 +20713,8 @@ ${milestoneSnapshotHtml}
                   );
                 })()}
               </div>
-            )}
+            );
+            })()}
             {/* ── COMPARE TAB ── */}
             {activeTab === "compare" && (
               <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box" }}>
