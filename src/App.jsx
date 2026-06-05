@@ -20134,23 +20134,6 @@ ${milestoneSnapshotHtml}
               <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box" }}>
                 <div className="life-chart-header" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {inputs.payoutAge} – 95)</h3>
-                  {/* B6: CPF LIFE eligibility info bar */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(var(--clr-purple-rgb),0.06)", border: "1px solid rgba(var(--clr-purple-rgb),0.2)", fontSize: 12, color: "var(--text-muted)" }}>
-                    {[
-                      ["🏛 Eligibility", "SC & PR only"],
-                      ["📅 Born", "1958 or after"],
-                      ["💰 RA threshold", "≥ $60,000 for auto-enrolment"],
-                      ["⏱ Payout start", "Age 65–70 (your choice)"],
-                      ["📈 Deferral bonus", "+7%/yr past 65"],
-                    ].map(([label, val]) => (
-                      <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ color: "var(--text-subtle)", fontSize: 11 }}>{label}:</span>
-                        <span style={{ fontWeight: 700, color: "var(--text-highlight)", fontSize: 12 }}>{val}</span>
-                        <span style={{ color: "rgba(var(--clr-purple-rgb),0.3)", marginLeft: 2, fontSize: 11 }}>|</span>
-                      </div>
-                    ))}
-                    <span style={{ fontSize: 11, color: "var(--text-subtle)", alignSelf: "center" }}>Projections assume enrolment. Members below $60k RA may not auto-enrol but can apply.</span>
-                  </div>
                   {/* P1 fix: Foreigner gate — CPF LIFE is SC/PR only. Show a prominent warning when
                       citizenStatus === 'foreigner' so the user knows the payout estimates below do not apply.
                       The chart is not suppressed — foreigners may be exploring what-if SC/PR scenarios. */}
@@ -20212,13 +20195,33 @@ ${milestoneSnapshotHtml}
                       <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)" }} />
                     </summary>
                     <div style={{ padding: "0 16px 12px", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                      {/* Eligibility quick-reference — moved here from chart header so it reads as guide content */}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "8px 12px", borderRadius: 10, background: "rgba(var(--clr-purple-rgb),0.06)", border: "1px solid rgba(var(--clr-purple-rgb),0.2)", fontSize: 12, marginBottom: 10 }}>
+                        {[
+                          ["🏛 Eligibility", "SC & PR only"],
+                          ["📅 Born", "1958 or after"],
+                          ["💰 RA threshold", "≥ $60,000 for auto-enrolment"],
+                          ["⏱ Payout start", "Age 65–70 (your choice)"],
+                          ["📈 Deferral bonus", "+~7%/yr past 65 (Standard plan, CPF Board approx.)"],
+                        ].map(([label, val]) => (
+                          <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ color: "var(--text-subtle)", fontSize: 11 }}>{label}:</span>
+                            <span style={{ fontWeight: 700, color: "var(--text-highlight)", fontSize: 12 }}>{val}</span>
+                            <span style={{ color: "rgba(var(--clr-purple-rgb),0.3)", marginLeft: 2, fontSize: 11 }}>|</span>
+                          </div>
+                        ))}
+                        <span style={{ fontSize: 11, color: "var(--text-subtle)", alignSelf: "center" }}>
+                          Projections assume enrolment. Members below $60k RA may not auto-enrol but can apply.
+                          The ~7% deferral figure is CPF Board guidance for Standard Plan only — the engine uses the actual CPF Estimator lookup table, not this multiplier.
+                        </span>
+                      </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8, marginBottom: 8 }}>
                         {[
-                          ["📈 The Line Chart", "Shows monthly payout, annual payout, bequest, or cumulative total yield from age " + inputs.payoutAge + " to 95 for all three LIFE plans simultaneously. Toggle view modes using the buttons above the chart."],
+                          ["📈 The Line Chart", "Five view modes from age " + inputs.payoutAge + " to 95: Monthly Payout, Annual Payout, Cumulative Payout (cash-in-hand running total), Bequest, and Total Yield (payouts + bequest). Click any mode card below the chart to switch, or use the buttons above it. Hover for exact values at any age."],
                           ["Standard Plan (grey)", "Level flat monthly payout for life. 100% of RA transferred as premium. Predictable income but no inflation protection."],
-                          ["Escalating Plan (green)", "Monthly payout starts ~20% lower than Standard but grows at 2%/yr. Surpasses Standard eventually — see the crossover age below."],
-                          ["Basic Plan (amber)", "RA is split: a % is premium (pool), the rest stays in your personal RA earning 4% and funds your own payouts until ~age 90. After 90, the pool takes over."],
-                          ["📐 Breakeven / Crossover", "The age where one plan's cumulative total yield overtakes another. Switch to 'Total Yield' view to see the dotted reference lines on the chart."],
+                          ["Escalating Plan (green)", "Monthly payout starts ~20% lower than Standard but grows at 2%/yr. Surpasses Standard eventually — see the crossover age in the analysis section."],
+                          ["Basic Plan (amber)", "RA is split: a % is premium (pool), the rest stays in your personal RA earning 4% and funds your own payouts until ~age 90. After 90, the pool takes over. Adjust the premium % in the Premium Structure block."],
+                          ["📐 Breakeven / Crossover", "Two types: Total Yield (payouts + bequest) and Cash-in-Hand (payouts only, no bequest). Switch to 'Total Yield' for yield crossover lines, or 'Cumulative Payout' for cash crossover lines. All ages shown in the Plan Analysis section below the chart."],
                           ["📋 Sensitivity Table", "Shows starting monthly payouts and all crossover ages for every payout age from 65 to 70. Green row = your current selection."],
                         ].map(([title, desc]) => (
                           <div key={title} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
@@ -20227,7 +20230,7 @@ ${milestoneSnapshotHtml}
                           </div>
                         ))}
                       </div>
-                      <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>💡 <strong>Tip:</strong> Use the plan selector (Standard / Escalating / Basic) to highlight one plan's line. The other two are dimmed for clarity. Hover over the chart to see exact values at any age.</p>
+                      <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>💡 <strong>Tip:</strong> Use the plan selector (Standard / Escalating / Basic) to highlight one plan's line. The other two are dimmed for clarity.</p>
                     </div>
                   </details>
                   <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 10, gap: 2, alignSelf: "flex-start" }}>
@@ -20237,10 +20240,10 @@ ${milestoneSnapshotHtml}
                       </button>
                     ))}
                   </div>
-                {/* Payout Premium Sliders - Standard & Escalating only (Basic has its own slider below) */}
+                {/* Payout Premium Structure — Standard, Escalating (fixed 100%) and Basic (variable slider) in one block */}
                 <div style={{ background: "var(--bg-base)", border: "1px solid var(--border-strong)", borderRadius: 14, padding: "14px 18px" }}>
                   <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><SlidersHorizontal style={{ width: 13, height: 13, color: "var(--clr-amber)" }} />CPF LIFE Premium Structure</h4>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-slate)" }}>Standard Plan Premium</span>
@@ -20257,10 +20260,24 @@ ${milestoneSnapshotHtml}
                       <div style={{ height: 6, borderRadius: 999, background: "var(--clr-emerald)", width: "100%", marginBottom: 4 }} />
                       <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Fixed at 100%. Full RA transferred to CPF Board as premium. Payout grows 2%/yr for life.</p>
                     </div>
+                    {/* Basic Plan — interactive premium slider lives here, co-located with Standard & Escalating for consistency */}
+                    <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(var(--clr-amber3-rgb),0.06)", border: "1.5px solid rgba(var(--clr-amber3-rgb),0.3)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-amber3)" }}>Basic Plan Premium</span>
+                        <span style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>
+                          {basicPremiumPct}%
+                          {basicPremiumPct === Math.min(20, Math.max(10, 10 + ((Number(inputs.payoutAge) || 65) - 65) * 2)) && (
+                            <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(var(--clr-amber3-rgb),0.2)", color: "var(--clr-amber3)", borderRadius: 4, padding: "1px 5px", marginLeft: 4 }}>AUTO</span>
+                          )}
+                        </span>
+                      </div>
+                      <input type="range" min={10} max={20} step={1} value={basicPremiumPct} aria-label="CPF LIFE Basic Plan premium percentage" onChange={e => setBasicPremiumPct(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-amber3)", margin: "4px 0 6px" }} />
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>Pool premium % of RA. Remainder retained as personal RA (4% interest, Phase 1 payout). CPF policy: 10% at 65, +2%/yr deferral (20% max at 70). Auto-set from payout age — drag to explore.</p>
+                    </div>
                   </div>
                 </div>
                 <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2 }}>
-                  {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ["cumPayout", "Cumulative Payout"]].map(([id, label]) => (
+                  {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"]].map(([id, label]) => (
                     <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                       {label}
                     </button>
@@ -20282,79 +20299,87 @@ ${milestoneSnapshotHtml}
                       {/* Monthly payout crossover line */}
                       {viewMode === "payout" && intersectionEscPayVsStdPay && <ReferenceLine x={intersectionEscPayVsStdPay} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std Monthly Age ${intersectionEscPayVsStdPay}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
                       {/* Q3 NEW: Cumulative cash-in-hand breakeven lines (no bequest) */}
-                      {viewMode === "cumPayout" && intersectionEscCumVsStdCum    && <ReferenceLine x={intersectionEscCumVsStdCum}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",     value: `Esc>Std Cash Age ${intersectionEscCumVsStdCum}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
-                      {viewMode === "cumPayout" && intersectionStdCumVsBasicCum  && <ReferenceLine x={intersectionStdCumVsBasicCum}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideBottomRight", value: `Std>Basic Cash Age ${intersectionStdCumVsBasicCum}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
-                      {viewMode === "cumPayout" && intersectionEscCumVsBasicCum  && <ReferenceLine x={intersectionEscCumVsBasicCum}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight",   value: `Esc>Basic Cash Age ${intersectionEscCumVsBasicCum}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "cumPayout" && intersectionEscCumVsStdCum    && <ReferenceLine x={intersectionEscCumVsStdCum}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 0,  value: `Esc>Std Cash Age ${intersectionEscCumVsStdCum}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "cumPayout" && intersectionStdCumVsBasicCum  && <ReferenceLine x={intersectionStdCumVsBasicCum}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 18, value: `Std>Basic Cash Age ${intersectionStdCumVsBasicCum}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "cumPayout" && intersectionEscCumVsBasicCum  && <ReferenceLine x={intersectionEscCumVsBasicCum}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight", dy: 0,  value: `Esc>Basic Cash Age ${intersectionEscCumVsBasicCum}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
                       <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "standardMonthly" : viewMode === "annualPayout" ? "standardAnnual" : viewMode === "total" ? "standardTotal" : viewMode === "cumPayout" ? "standardCumPayout" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.35} dot={false} name="Standard" />
                       <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "escalatingMonthly" : viewMode === "annualPayout" ? "escalatingAnnual" : viewMode === "total" ? "escalatingTotal" : viewMode === "cumPayout" ? "escalatingCumPayout" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.35} dot={false} name="Escalating" />
                       <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "basicMonthly" : viewMode === "annualPayout" ? "basicAnnual" : viewMode === "total" ? "basicTotal" : viewMode === "cumPayout" ? "basicCumPayout" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.35} dot={false} name="Basic" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                {/* Info cards — one per view mode, highlighted when active */}
-                <div className="rg-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                {/* Info cards — one per view mode, highlighted when active. Click to switch chart view. */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
                   {[
-                    ["payout",      "Monthly Payout",     "var(--clr-slate)",   "Fixed or rising monthly income from CPF LIFE pool. Escalating starts ~20% lower than Standard then grows 2%/yr. Breakeven month shown by the dashed line."],
-                    ["annualPayout","Annual Payout",       "var(--clr-blue2)",   "Same as monthly × 12, useful for household budget planning. No breakeven line — refer to Monthly Payout or Total Yield for crossover ages."],
-                    ["bequest",     "Bequest",             "var(--clr-slate)",   "Amount returned to beneficiaries = premium paid minus cumulative payouts received. Drops to $0 once all premium is paid out (around age 80 for Standard)."],
-                    ["total",       "Total Yield",         "var(--clr-blue)",    "Cumulative payouts received + remaining bequest at each age. Shows 3 breakeven lines: Esc vs Std (amber), Std vs Basic (blue), Esc vs Basic (green). Best view for choosing between plans."],
-                    ["cumPayout",   "Cumulative Payout",   "var(--clr-emerald)", "Running total of cash actually paid out in hand — bequest excluded. Crossovers here answer: 'By this age, which plan has paid me more cash?' Conservative baseline for decision-making."],
+                    ["payout",      "Monthly Payout",     "var(--clr-slate)",   "Fixed or rising monthly income. Escalating starts ~20% lower then grows 2%/yr. Dashed line shows the month Escalating exceeds Standard."],
+                    ["annualPayout","Annual Payout",       "var(--clr-blue2)",   "Monthly × 12. Useful for household budget planning. No breakeven line — refer to Monthly or Total Yield views."],
+                    ["cumPayout",   "Cumulative Payout",   "var(--clr-emerald)", "Running cash received in hand — bequest excluded. Answers: 'By this age, which plan has paid me more cash?'"],
+                    ["bequest",     "Bequest",             "var(--clr-slate)",   "Premium minus cumulative payouts at each age. Drops to $0 once the full premium is paid out (~age 80 for Standard)."],
+                    ["total",       "Total Yield",         "var(--clr-blue)",    "Cumulative payouts + remaining bequest. Shows all 3 Total Yield crossover lines. Best view for plan comparison."],
                   ].map(([mode, title, color, text]) => (
-                    <div key={mode} onClick={() => setViewMode(mode)} style={{ padding: 12, borderRadius: 12, cursor: "pointer", background: viewMode === mode ? `rgba(${color === "var(--clr-emerald)" ? "var(--clr-emerald-rgb)" : color === "var(--clr-amber3)" ? "var(--clr-amber3-rgb)" : "var(--clr-blue-rgb)"},0.08)` : "var(--bg-panel-muted)", border: `1.5px solid ${viewMode === mode ? color : "var(--border-subtle)"}`, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, transition: "all 0.2s" }}>
-                      <strong style={{ color }}>{title}: </strong>{text}
+                    <div key={mode} onClick={() => setViewMode(mode)} style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: viewMode === mode ? "rgba(var(--clr-emerald-rgb),0.06)" : "var(--bg-panel-muted)", border: `1.5px solid ${viewMode === mode ? color : "var(--border-subtle)"}`, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4, transition: "all 0.2s" }}>
+                      <strong style={{ color, display: "block", marginBottom: 3, fontSize: 12 }}>{title}</strong>{text}
                     </div>
                   ))}
                 </div>
-                {/* Breakeven summary strip — visible when there is at least one crossover age to show */}
-                {(intersectionEscVsStd || intersectionStdVsBasic || intersectionEscVsBasic) && (
-                  <div style={{ padding: "10px 14px", borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", display: "flex", flexWrap: "wrap", gap: "12px 24px", fontSize: 12 }}>
-                    <span style={{ color: "var(--text-muted)", fontWeight: 700, alignSelf: "center" }}>⚖️ Total Yield Breakeven:</span>
-                    {intersectionEscVsStd    && <span style={{ color: "var(--clr-amber3)" }}>Escalating overtakes Standard at age <strong>{intersectionEscVsStd}</strong></span>}
-                    {intersectionStdVsBasic  && <span style={{ color: "var(--clr-blue2)" }}>Standard overtakes Basic at age <strong>{intersectionStdVsBasic}</strong></span>}
-                    {intersectionEscVsBasic  && <span style={{ color: "var(--clr-emerald)" }}>Escalating overtakes Basic at age <strong>{intersectionEscVsBasic}</strong></span>}
-                  </div>
-                )}
-                {(intersectionEscCumVsStdCum || intersectionStdCumVsBasicCum || intersectionEscCumVsBasicCum) && (
-                  <div style={{ padding: "10px 14px", borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", display: "flex", flexWrap: "wrap", gap: "12px 24px", fontSize: 12 }}>
-                    <span style={{ color: "var(--text-muted)", fontWeight: 700, alignSelf: "center" }}>💵 Cash-in-Hand Breakeven:</span>
-                    {intersectionEscCumVsStdCum    && <span style={{ color: "var(--clr-amber3)" }}>Escalating cash exceeds Standard at age <strong>{intersectionEscCumVsStdCum}</strong></span>}
-                    {intersectionStdCumVsBasicCum  && <span style={{ color: "var(--clr-blue2)" }}>Standard cash exceeds Basic at age <strong>{intersectionStdCumVsBasicCum}</strong></span>}
-                    {intersectionEscCumVsBasicCum  && <span style={{ color: "var(--clr-emerald)" }}>Escalating cash exceeds Basic at age <strong>{intersectionEscCumVsBasicCum}</strong></span>}
-                  </div>
-                )}
-                {/* Basic plan card with embedded premium slider */}
-                <div style={{ padding: 14, borderRadius: 12, background: "rgba(var(--clr-amber3-rgb),0.06)", border: "2px solid rgba(var(--clr-amber3-rgb),0.3)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    <strong style={{ color: "var(--clr-amber3)" }}>Basic Bequest: </strong>Before age 90 (Phase 1): remaining personal RA balance <em>plus</em> a full refund of the premium paid — CPF policy returns the full premium if death occurs before the pool phase. After 90 (Phase 2): unused pool premium minus any payouts already drawn from the pool. Higher % → larger pool premium, smaller retained RA, lower Phase 1 payout.
-                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(var(--clr-amber3-rgb),0.2)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-amber3)", display: "flex", alignItems: "center", gap: 4 }}>
-                          <SlidersHorizontal style={{ width: 11, height: 11 }} />Basic Premium
-                          {/* AUTO badge: shown when slider matches CPF policy value for the current payout age */}
-                          {basicPremiumPct === Math.min(20, Math.max(10, 10 + ((Number(inputs.payoutAge) || 65) - 65) * 2)) && (
-                            <span style={{ fontSize: 11, fontWeight: 700, background: "rgba(var(--clr-amber3-rgb),0.2)", color: "var(--clr-amber3)", borderRadius: 4, padding: "1px 5px", marginLeft: 2 }}>AUTO</span>
-                          )}
-                        </span>
-                        <span style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-amber)", fontFamily: "monospace" }}>{basicPremiumPct}%</span>
-                      </div>
-                      <input type="range" min={10} max={20} step={1} value={basicPremiumPct} aria-label="CPF LIFE Basic Plan premium percentage" onChange={e => setBasicPremiumPct(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-amber3)", margin: "2px 0" }} />
-                      <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>CPF policy: 10% at age 65, +2% per year of deferral (12% at 66 → 20% at 70). Auto-set from your payout age. Drag to explore — resets on next payout age change.</p>
-                    </div>
-                  </div>
-                {/* Breakeven Analysis */}
+                {/* Unified Plan Breakeven & Crossover Analysis — Total Yield and Cash-in-Hand together */}
                 <div style={{ background: "var(--bg-base)", border: "1px solid var(--border-strong)", borderRadius: 16, padding: 20 }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 900, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />Plan Breakeven &amp; Crossover Analysis</h4>
-                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>All crossover ages below are based on cumulative Total Yield (payouts + bequest). Switch to "Total Yield" or "Cumulative Payout" views to see the corresponding reference lines on the chart.</p>
+                  <h4 style={{ fontSize: 14, fontWeight: 900, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />Plan Breakeven &amp; Crossover Analysis</h4>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>Each card shows two crossover ages: <strong>Total Yield</strong> (payouts + bequest — switch to "Total Yield" view) and <strong>Cash-in-Hand</strong> (payouts only, no bequest — switch to "Cumulative Payout" view). Dashed reference lines appear on the chart for each mode.</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     {[
-                      ["Standard vs. Escalating", "Escalating Overtakes Standard", intersectionEscVsStd, "var(--clr-amber)", "rgba(var(--clr-amber3-rgb),0.1)", "rgba(var(--clr-amber3-rgb),0.2)", "Esc starts ~20% lower but grows 2%/yr. Takes decades for cumulative total yield to catch up. Break-Even Age shows when Escalating surpasses Standard."],
-                      ["Standard vs. Basic", "Standard Overtakes Basic", intersectionStdVsBasic, "var(--clr-blue)", "rgba(var(--clr-blue2-rgb),0.1)", "rgba(var(--clr-blue2-rgb),0.2)", "In early retirement, Basic yields more total value because the 90% retained RA earns compound interest into your bequest. Once Basic RA depletes at 90, Standard overtakes."],
-                      ["Escalating vs. Basic", "Escalating Overtakes Basic", intersectionEscVsBasic, "var(--clr-violet2)", "rgba(var(--clr-purple-rgb),0.1)", "rgba(var(--clr-purple-rgb),0.2)", "Basic's high early bequest makes it lead initially, but Escalating's 2% annual growth compounds fastest over the extreme long term, eventually surpassing Basic."],
-                      ["Monthly Payout Crossover", "Esc Monthly Payout Exceeds Standard", intersectionEscPayVsStdPay, "var(--clr-green)", "rgba(var(--clr-emerald-rgb),0.1)", "rgba(var(--clr-emerald-rgb),0.2)", "At 2%/yr compounding, Escalating monthly payout eventually exceeds Standard's fixed amount. This is the age your monthly cheque is larger under Escalating."]
-                    ].map(([cardTitle, label, age, color, bg, border, note]) => (
+                      {
+                        cardTitle: "Standard vs. Escalating",
+                        label: "Escalating Overtakes Standard",
+                        yieldAge: intersectionEscVsStd,
+                        cashAge: intersectionEscCumVsStdCum,
+                        color: "var(--clr-amber)", bg: "rgba(var(--clr-amber3-rgb),0.1)", border: "rgba(var(--clr-amber3-rgb),0.2)",
+                        cashColor: "var(--clr-amber3)",
+                        note: "Esc starts ~20% lower but grows 2%/yr. Total Yield crossover happens later than cash crossover because Standard's bequest component stays high in early retirement.",
+                      },
+                      {
+                        cardTitle: "Standard vs. Basic",
+                        label: "Standard Overtakes Basic",
+                        yieldAge: intersectionStdVsBasic,
+                        cashAge: intersectionStdCumVsBasicCum,
+                        color: "var(--clr-blue)", bg: "rgba(var(--clr-blue2-rgb),0.1)", border: "rgba(var(--clr-blue2-rgb),0.2)",
+                        cashColor: "var(--clr-blue2)",
+                        note: "Basic's retained RA earns 4% interest boosting early total value. Once the personal RA depletes (~age 90), Standard's larger pool payout takes over on both metrics.",
+                      },
+                      {
+                        cardTitle: "Escalating vs. Basic",
+                        label: "Escalating Overtakes Basic",
+                        yieldAge: intersectionEscVsBasic,
+                        cashAge: intersectionEscCumVsBasicCum,
+                        color: "var(--clr-violet2)", bg: "rgba(var(--clr-purple-rgb),0.1)", border: "rgba(var(--clr-purple-rgb),0.2)",
+                        cashColor: "var(--clr-emerald)",
+                        note: "Basic leads early due to retained RA compound growth. Escalating's 2%/yr monthly growth ultimately surpasses Basic — though this may be beyond age 95 for some RA levels.",
+                      },
+                      {
+                        cardTitle: "Monthly Payout Crossover",
+                        label: "Esc Monthly Payout Exceeds Standard",
+                        yieldAge: intersectionEscPayVsStdPay,
+                        cashAge: null,
+                        color: "var(--clr-green)", bg: "rgba(var(--clr-emerald-rgb),0.1)", border: "rgba(var(--clr-emerald-rgb),0.2)",
+                        cashColor: null,
+                        note: "At 2%/yr compounding, the Escalating monthly amount eventually exceeds Standard's fixed monthly payout. This is the age your monthly income is larger under Escalating. Switch to Monthly Payout view for the dashed reference line.",
+                      },
+                    ].map(({ cardTitle, label, yieldAge, cashAge, color, bg, border, cashColor, note }) => (
                       <div key={label} style={{ padding: 14, borderRadius: 12, background: bg, border: `1px solid ${border}` }}>
                         <p style={{ fontSize: 14, fontWeight: 900, color, marginBottom: 4 }}>{cardTitle}</p>
-                        <p style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{label}</p>
-                        <p style={{ fontSize: 22, fontWeight: 900, fontFamily: "monospace", color, marginBottom: 6 }}>{age ? `Age ${age}` : "Beyond Age 95"}</p>
+                        <p style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>{label}</p>
+                        <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+                          <div>
+                            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 2 }}>⚖️ Total Yield</p>
+                            <p style={{ fontSize: 20, fontWeight: 900, fontFamily: "monospace", color }}>{yieldAge ? `Age ${yieldAge}` : ">95"}</p>
+                          </div>
+                          {cashAge !== null && (
+                            <div>
+                              <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 2 }}>💵 Cash-in-Hand</p>
+                              <p style={{ fontSize: 20, fontWeight: 900, fontFamily: "monospace", color: cashColor }}>{cashAge ? `Age ${cashAge}` : ">95"}</p>
+                            </div>
+                          )}
+                        </div>
                         <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{note}</p>
                       </div>
                     ))}
