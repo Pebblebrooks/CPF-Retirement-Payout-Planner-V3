@@ -1485,6 +1485,13 @@ function runRSSEngine(inputs, {
   let earlyRetireFired = false;
   const data = [];
 
+  // BHS is permanently locked at the value prevailing on the member's 65th birthday
+  // (CPF Board policy). For members already ≥65 at simulation start, approximated
+  // at the 2026 table value (pre-2026 historical BHS not stored in this model).
+  // This constant caps every BHS formula so MA headroom, VCMA, MMSS and overflow
+  // are all correctly constrained post-65.
+  const bhsLockedYear = Math.max(2026, baseYear + (65 - startAge));
+
   // ─── YEAR LOOP ──────────────────────────────────────────────────────────────
   for (let age = startAge; age <= maxAge; age++) {
     let yearInflow    = 0;
@@ -1529,7 +1536,7 @@ function runRSSEngine(inputs, {
 
     // Gov Grant to MA (e.g. MediSave Grant for Newborns, CHAS, ElderFund).
     // Previously the MGN was hardcoded; now driven by govGrantMa input.
-    const bhsNow = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+    const bhsNow = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
     const govGrantMaAmt = Math.min((Number(inputs.govGrantMa) || 0) * effGovGrantMaFreq, Math.max(0, bhsNow - ma));
     if (govGrantMaAmt > 0) {
       ma += govGrantMaAmt;
@@ -1608,7 +1615,7 @@ function runRSSEngine(inputs, {
 
     // OA→MA transfer
     if (age >= 55 && annualOaToMa > 0 && effOaToMaFreq > 0 && !isForeigner) {
-      const projBHS_tr = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+      const projBHS_tr = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
       const actualOaToMa = Math.min(annualOaToMa, oa, oaToMaForLovedOne ? annualOaToMa : Math.max(0, projBHS_tr - ma));
       oa -= actualOaToMa;
       if (!oaToMaForLovedOne) { ma += actualOaToMa; } else { yearLovedOneOut += actualOaToMa; totalOutSpent += actualOaToMa; }
@@ -1617,7 +1624,7 @@ function runRSSEngine(inputs, {
     // vcMaCash
     const maBeforeVcMa = ma;
     if (vcMaCash * effVcMaFreq > 0 && !isForeigner) {
-      const projBHS_vcma = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+      const projBHS_vcma = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
       const actualVcMa = Math.min(vcMaCash * effVcMaFreq, Math.max(0, projBHS_vcma - ma));
       ma += actualVcMa; yearInflow += actualVcMa; totalInjected += actualVcMa; yearVoluntary += actualVcMa;
     }
@@ -1631,7 +1638,7 @@ function runRSSEngine(inputs, {
     const bonusMmss     = Math.min((Number(inputs.salaryBonus) || 0) * gf_mmss, awCeilingMmss);
     const mmssMonthlyIncome = isSEP ? (leContribPaused ? 0 : (Number(inputs.netTradeIncome) || 0) / 12) : Math.round((owAnnualScaled_mmss + bonusMmss) / 12);
     if (isSC && age >= 55 && age <= 70 && simYear_mmss >= MMSS_PILOT_START_YEAR && simYear_mmss <= MMSS_PILOT_END_YEAR && mmssMonthlyIncome <= 4000) {
-      const projBHS_mm = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, simYear_mmss - 2026)));
+      const projBHS_mm = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(simYear_mmss, bhsLockedYear) - 2026)));
       if (maBeforeVcMa < projBHS_mm / 2) {
         const vcMaThis = vcMaCash * effVcMaFreq;
         if (vcMaThis > 0) { const actualMmss = Math.min(vcMaThis, 1000, Math.max(0, projBHS_mm - ma)); if (actualMmss > 0) pendingMmssCarry += actualMmss; }
@@ -1672,7 +1679,7 @@ function runRSSEngine(inputs, {
         const toSA_vc3a = vc3aTotal - Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) - toMA_vc3a;
         const wisToMA_sep = wisAmount > 0 ? Math.round(wisAmount * effWisFreq * 0.9) : 0;
         yearWisCash = wisAmount > 0 ? Math.round(wisAmount * effWisFreq * 0.1) : 0;
-        const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
         const maRoom = Math.max(0, projBHS_i - ma);
         const actualMandatoryMA_sep = Math.min(sepMandatoryMA, maRoom);
         const vcMaRoomSep = Math.max(0, maRoom - actualMandatoryMA_sep);
@@ -1775,7 +1782,7 @@ function runRSSEngine(inputs, {
           : Math.round(vc3aSA * vc3aScale) + (Number(inputs.vcSaTopup) || 0) * effVcSaFreq + (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
         const cappedVcMA = Math.round(vc3aMA * vc3aScale);
         const totalOA = mandatoryOA_i + cappedVcOA + wisOA;
-        const projBHS_emp = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        const projBHS_emp = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
         const maRoomEmp = Math.max(0, projBHS_emp - ma);
         const actualMandatoryMA_emp = Math.min(mandatoryMA_i, maRoomEmp);
         const vcMaRoomEmp = Math.max(0, maRoomEmp - actualMandatoryMA_emp);
@@ -2398,6 +2405,9 @@ function runProjectionEngine(inputs, {
 
   const data = [];
 
+  // BHS locked at member's 65th birthday — mirrors SEP branch constant above.
+  const bhsLockedYear = Math.max(2026, baseYear + (65 - startAge));
+
   for (let age = startAge; age <= maxAge; age++) {
     let yearInflow = 0;
     // Per-category flow trackers (reset each year for cashflow ledger)
@@ -2463,7 +2473,7 @@ function runProjectionEngine(inputs, {
 
     // Gov Grant to MA (e.g. MediSave Grant for Newborns, CHAS, ElderFund).
     // Previously hardcoded as MGN; now driven by govGrantMa input. BHS-capped.
-    const bhsNow = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+    const bhsNow = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
     const govGrantMaAmt = Math.min((Number(inputs.govGrantMa) || 0) * effGovGrantMaFreq, Math.max(0, bhsNow - ma));
     if (govGrantMaAmt > 0) {
       ma += govGrantMaAmt;
@@ -2636,7 +2646,7 @@ function runProjectionEngine(inputs, {
     // OA→MA transfer: CPF policy requires age 55+, FRS or BRS+property already set aside.
     // For self: internal move OA→MA (both accounts change). For loved one: OA outflow only.
     if (age >= 55 && annualOaToMa > 0 && effOaToMaFreq > 0 && !isForeigner) { // B1: foreigners have no CPF
-      const projBHS_tr = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+      const projBHS_tr = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
       const maRoom_tr = oaToMaForLovedOne ? annualOaToMa : Math.max(0, projBHS_tr - ma);
       const actualOaToMa = Math.min(annualOaToMa, oa, maRoom_tr);
       oa -= actualOaToMa;
@@ -2653,7 +2663,7 @@ function runProjectionEngine(inputs, {
     // before the current year's VCMA top-up (Issue 5 fix).
     const maBeforeVcMa = ma;
     if (vcMaCash * effVcMaFreq > 0 && !isForeigner) { // B1: foreigners cannot top up CPF
-      const projBHS_vcma = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+      const projBHS_vcma = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
       const maRoom_vcma = Math.max(0, projBHS_vcma - ma);
       const actualVcMa = Math.min(vcMaCash * effVcMaFreq, maRoom_vcma);
       ma += actualVcMa;
@@ -2695,7 +2705,7 @@ function runProjectionEngine(inputs, {
     if (isSC && age >= 55 && age <= 70 &&
         simYear_mmss >= MMSS_PILOT_START_YEAR && simYear_mmss <= MMSS_PILOT_END_YEAR &&
         mmssMonthlyIncome <= 4000) {
-      const projBHS_mm = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, simYear_mmss - 2026)));
+      const projBHS_mm = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(simYear_mmss, bhsLockedYear) - 2026)));
       if (maBeforeVcMa < projBHS_mm / 2) { // Issue 5: pre-VCMA balance for eligibility
         const vcMaThis = vcMaCash * effVcMaFreq;
         if (vcMaThis > 0) {
@@ -2770,7 +2780,7 @@ function runProjectionEngine(inputs, {
         // WIS for SEP: 90% goes to MA (subject to BHS), 10% is cash (not modelled here)
         const wisToMA_sep = wisAmount > 0 ? Math.round(wisAmount * effWisFreq * 0.9) : 0;
         yearWisCash = wisAmount > 0 ? Math.round(wisAmount * effWisFreq * 0.1) : 0; // BUG-44: cash portion for display
-        const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
         const maRoom = Math.max(0, projBHS_i - ma);
         // B3 SEP: priority split — mandatory MA gets first claim on BHS room, vc3a MA gets remainder
         const actualMandatoryMA_sep = Math.min(sepMandatoryMA, maRoom);
@@ -2933,7 +2943,7 @@ function runProjectionEngine(inputs, {
 
         const totalOA = mandatoryOA_i + cappedVcOA + wisOA;
         // BHS cap on MA — B3: priority split so mandatory gets first claim, then vc3a MA, then WIS MA
-        const projBHS_emp = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        const projBHS_emp = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
         const maRoomEmp = Math.max(0, projBHS_emp - ma);
         const actualMandatoryMA_emp = Math.min(mandatoryMA_i, maRoomEmp);
         const vcMaRoomEmp = Math.max(0, maRoomEmp - actualMandatoryMA_emp);
@@ -6957,7 +6967,14 @@ export default function App() {
   const currentBRS = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, yearsFrom2026));
   const currentFRS = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, yearsFrom2026));
   const currentERS = currentFRS * 2;
-  const currentBHS = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, yearsFrom2026));
+  // BHS sidebar display: lock at the member's age-65 cohort value (CPF policy).
+  // For members already ≥65, cap the growth years at the year they turned 65 so
+  // the displayed BHS cap never exceeds their permanently-fixed cohort value.
+  const currentAge_bhs = Number(inputs.currentAge) || 35;
+  const bhsDisplayYears = currentAge_bhs >= 65
+    ? Math.max(0, yearsFrom2026 - (currentAge_bhs - 65))   // retroactive lock
+    : yearsFrom2026;                                         // not yet 65: growing BHS
+  const currentBHS = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + (Number(inputs.retirementSumGrowth)||3)/100, bhsDisplayYears));
 
   const currentSaRa = Number(inputs.saBalance) || 0;
   const currentMa = Number(inputs.maBalance) || 0;
