@@ -20516,11 +20516,35 @@ ${milestoneSnapshotHtml}
                       <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={v => formatCurrency(v)} wrapperStyle={STYLES.chartTooltipWrapper} />
                       <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={STYLES.chartLegend} />
                       {/* Total Yield breakeven lines */}
-                      {viewMode === "total" && liEscVsStd    && <ReferenceLine x={liEscVsStd}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",  dy: -2,  value: `Esc>Std Age ${liEscVsStd}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
-                      {viewMode === "total" && liStdVsBasic  && <ReferenceLine x={liStdVsBasic}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight", dy: 20,  value: `Std>Basic Age ${liStdVsBasic}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
-                      {/* Q3 FIX: intersectionEscVsBasic was computed but never rendered — now shown on total mode */}
-                      {/* Esc>Basic: insideTop (centred above green line); Esc>Std: insideTopLeft; Std>Basic: insideTopRight — each label fans from its own line */}
-                      {viewMode === "total" && liEscVsBasic  && <ReferenceLine x={liEscVsBasic}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTop",       dy: 0,   value: `Esc>Basic Age ${liEscVsBasic}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
+                      {/* Crossover labels: custom viewBox renderers place each label at a distinct
+                          vertical slot (top / middle / bottom) so they never collide even when the
+                          crossover ages are adjacent.  Horizontal anchor mirrors the user's request:
+                          orange = left of its line, green = right of its line, blue = right of its line. */}
+                      {viewMode === "total" && liEscVsStd && (
+                        <ReferenceLine x={liEscVsStd} stroke="var(--clr-amber3)" strokeWidth={1.5} strokeDasharray="4 4"
+                          label={({ viewBox: vb }) => (
+                            <text x={vb.x - 6} y={vb.y + 14} textAnchor="end" fill="var(--clr-amber3)" fontSize={11} fontWeight="bold">
+                              {`Esc>Std Age ${liEscVsStd}`}
+                            </text>
+                          )} />
+                      )}
+                      {viewMode === "total" && liStdVsBasic && (
+                        <ReferenceLine x={liStdVsBasic} stroke="var(--clr-blue2)" strokeWidth={1.5} strokeDasharray="4 4"
+                          label={({ viewBox: vb }) => (
+                            <text x={vb.x + 6} y={vb.y + vb.height - 8} textAnchor="start" fill="var(--clr-blue2)" fontSize={11} fontWeight="bold">
+                              {`Std>Basic Age ${liStdVsBasic}`}
+                            </text>
+                          )} />
+                      )}
+                      {/* Q3 FIX: liEscVsBasic was computed but never rendered — now shown in total mode */}
+                      {viewMode === "total" && liEscVsBasic && (
+                        <ReferenceLine x={liEscVsBasic} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4"
+                          label={({ viewBox: vb }) => (
+                            <text x={vb.x + 6} y={vb.y + vb.height * 0.5} textAnchor="start" fill="var(--clr-emerald)" fontSize={11} fontWeight="bold">
+                              {`Esc>Basic Age ${liEscVsBasic}`}
+                            </text>
+                          )} />
+                      )}
                       {/* Monthly payout crossover line */}
                       {viewMode === "payout" && liEscPayVsStdPay && <ReferenceLine x={liEscPayVsStdPay} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std Monthly Age ${liEscPayVsStdPay}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
                       {/* Q3 NEW: Cumulative Payout breakeven lines */}
