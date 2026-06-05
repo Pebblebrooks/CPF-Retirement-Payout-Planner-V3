@@ -20217,11 +20217,11 @@ ${milestoneSnapshotHtml}
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8, marginBottom: 8 }}>
                         {[
-                          ["📈 The Line Chart", "Five view modes from age " + inputs.payoutAge + " to 95: Monthly Payout, Annual Payout, Cumulative Payout (cash-in-hand running total), Bequest, and Total Yield (payouts + bequest). Click any mode card below the chart to switch, or use the buttons above it. Hover for exact values at any age."],
+                          ["📈 The Line Chart", "Five view modes from age " + inputs.payoutAge + " to 95: Monthly Payout, Annual Payout, Cumulative Payout (running total of payouts received, bequest excluded), Bequest, and Total Yield (payouts + bequest). Click any mode card below the chart to switch, or use the buttons above it. Hover for exact values at any age."],
                           ["Standard Plan (grey)", "Level flat monthly payout for life. 100% of RA transferred as premium. Predictable income but no inflation protection."],
                           ["Escalating Plan (green)", "Monthly payout starts ~20% lower than Standard but grows at 2%/yr. Surpasses Standard eventually — see the crossover age in the analysis section."],
                           ["Basic Plan (amber)", "RA is split: a % is premium (pool), the rest stays in your personal RA earning 4% and funds your own payouts until ~age 90. After 90, the pool takes over. Adjust the premium % in the Premium Structure block."],
-                          ["📐 Breakeven / Crossover", "Two types: Total Yield (payouts + bequest) and Cash-in-Hand (payouts only, no bequest). Switch to 'Total Yield' for yield crossover lines, or 'Cumulative Payout' for cash crossover lines. All ages shown in the Plan Analysis section below the chart."],
+                          ["📐 Breakeven / Crossover", "Two types: Total Yield (payouts + bequest — switch to 'Total Yield' view) and Cumulative Payout (payouts only, no bequest — switch to 'Cumulative Payout' view). All crossover ages are shown in the Plan Analysis section below the chart."],
                           ["📋 Sensitivity Table", "Shows starting monthly payouts and all crossover ages for every payout age from 65 to 70. Green row = your current selection."],
                         ].map(([title, desc]) => (
                           <div key={title} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
@@ -20322,10 +20322,10 @@ ${milestoneSnapshotHtml}
                     </div>
                   ))}
                 </div>
-                {/* Unified Plan Breakeven & Crossover Analysis — Total Yield and Cash-in-Hand together */}
+                {/* Unified Plan Breakeven & Crossover Analysis — Total Yield and Cumulative Payout together */}
                 <div style={{ background: "var(--bg-base)", border: "1px solid var(--border-strong)", borderRadius: 16, padding: 20 }}>
                   <h4 style={{ fontSize: 14, fontWeight: 900, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />Plan Breakeven &amp; Crossover Analysis</h4>
-                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>Each card shows two crossover ages: <strong>Total Yield</strong> (payouts + bequest — switch to "Total Yield" view) and <strong>Cash-in-Hand</strong> (payouts only, no bequest — switch to "Cumulative Payout" view). Dashed reference lines appear on the chart for each mode.</p>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>Each card shows two crossover ages: <strong>Total Yield</strong> (payouts + bequest — switch to "Total Yield" view) and <strong>Cumulative Payout</strong> (payouts only, no bequest — switch to "Cumulative Payout" view). Dashed reference lines appear on the chart for each mode.</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     {[
                       {
@@ -20375,7 +20375,7 @@ ${milestoneSnapshotHtml}
                           </div>
                           {cashAge !== null && (
                             <div>
-                              <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 2 }}>💵 Cash-in-Hand</p>
+                              <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 2 }}>📈 Cumulative Payout</p>
                               <p style={{ fontSize: 20, fontWeight: 900, fontFamily: "monospace", color: cashColor }}>{cashAge ? `Age ${cashAge}` : ">95"}</p>
                             </div>
                           )}
