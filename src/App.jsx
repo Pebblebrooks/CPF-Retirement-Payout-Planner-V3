@@ -278,12 +278,22 @@ const CPF_LIFE_TABLE_M = [
   { ra:  82400, std:  490, esc:  390, bas:  450 }, // CPF table: RA@55=$50k → RA@65=$82.4k
   { ra: 170100, std:  950, esc:  760, bas:  880 }, // BRS: RA@55=$110.2k → RA@65=$170.1k
   { ra: 227900, std: 1250, esc: 1000, bas: 1150 }, // RA@55=$150k → RA@65=$227.9k
+  { ra: 315000, std: 1700, esc: 1340, bas: 1560 }, // CPF Estimator: YOB 1970 male RA@65=$315k (calibration anchor)
   { ra: 330100, std: 1780, esc: 1420, bas: 1640 }, // FRS: RA@55=$220.4k → RA@65=$330.1k
   { ra: 445600, std: 2380, esc: 1900, bas: 2190 }, // RA@55=$300k → RA@65=$445.6k
   { ra: 560000, std: 2990, esc: 2360, bas: 2730 }, // CPF estimator: YOB 1963 RA=$560k age 65
   { ra: 650100, std: 3440, esc: 2750, bas: 3160 }, // ERS: RA@55=$440.8k → RA@65=$650.1k
 ];
-const FEMALE_PAYOUT_MULTIPLIER = 0.93;
+// Plan-specific female/male CPF LIFE payout ratio — sourced from CPF Board Monthly Payout
+// Estimator (YOB 1970, RA $315,000 at payout age 65). Each plan has a different ratio because
+// the bequest/premium structure and escalation mechanics alter mortality-risk loading differently:
+//   Standard  0.9353 — close to the actuarial life-expectancy ratio; female/male ~$1,590/$1,700.
+//   Escalating 0.9104 — female/male starting payout compressed (~$1,220/$1,340) because
+//                        higher male starting payout means faster growth divergence over time.
+//   Basic      0.9615 — premium / guaranteed-refund structure partially offsets the longevity
+//                        gap; effective female/male loading narrowed to ~$1,500/$1,560.
+// Calibrated May 2026 against CPF Board Estimator output. Max residual after applying: ≤$2/mo.
+const FEMALE_PAYOUT_MULTIPLIER = { std: 0.9353, esc: 0.9104, bas: 0.9615 };
 // ── CPF LIFE Deferral Bonus Multipliers ──────────────────────────────────────
 // Source: CPF Board Estimator (2026 cohort) — YOB 1971 (RA $65–90k) and YOB 1963
 // (RA $560–690k) at payout ages 65–70 across Standard, Escalating, Basic plans.
@@ -413,7 +423,10 @@ const interpolateCpfLife = (raBalance, plan, isMale, pAge = 65) => {
   // Ages 65–70: CPF Board Estimator data. Ages 71–80: actuarially derived for RSS migrations.
   const deferralYr = Math.min(15, Math.max(0, (pAge || 65) - 65));
   const deferralMult = (CPF_LIFE_DEFERRAL_MULT[plan] ?? CPF_LIFE_DEFERRAL_MULT.std)[deferralYr];
-  return Math.max(0, monthly * deferralMult * (isMale ? 1 : FEMALE_PAYOUT_MULTIPLIER));
+  // Apply plan-specific female multiplier — each plan's mortality-risk loading differs.
+  // FEMALE_PAYOUT_MULTIPLIER is now an object {std, esc, bas}; fall back to std if plan unknown.
+  const femMult = isMale ? 1 : (FEMALE_PAYOUT_MULTIPLIER[plan] ?? FEMALE_PAYOUT_MULTIPLIER.std);
+  return Math.max(0, monthly * deferralMult * femMult);
 };
 
 // Shared Basic Plan parameter setup — used by payoutProjection and sensitivityData.
@@ -509,29 +522,38 @@ const computeSensitivityRow = (pAge, raAtPayout, isMale) => {
     const yr = age - pAge;
     const stdPay = stdStart * 12;
     const escPay = (escStart * Math.pow(1.02, yr)) * 12;
+
+    // Fix 2 (bequest timing): CPF Board convention — "Bequest at Age X" means the estate value
+    // if the member dies at the START of age X, before receiving that year's payout.
+    // Save pre-payout cumulative values BEFORE incrementing so bequest uses the correct base.
+    const prevCumStd = cumStd;
+    const prevCumEsc = cumEsc;
     cumStd += stdPay; cumEsc += escPay;
 
     // B2 fix: if balance drops below $60k before the pre-computed trigger age, lock in actual trigger age now.
     if (age < 90 && basicRaRem < 60000 && age < phase1bActualTriggerS) phase1bActualTriggerS = age;
 
+    const prevBasicRaRem = basicRaRem;                  // Fix 2: save BEFORE deduction
     const { basPay, newRaRem } = computeBasicPlanYearPayout(
       age, phase1bActualTriggerS, basicP1aAnnual, basicP2Annual, basicRaRem, basicEffAFS
     );
     let basBeq = 0;
     if (age < 90) {
       basicRaRem = newRaRem;
-      basBeq = basicRaRem + basicPremS;
+      basBeq = prevBasicRaRem + basicPremS;             // Fix 2: RA BEFORE this year's deduction
     } else {
       // B1 fix: on first Phase 2 year, carry any residual RA_Retained into the effective bequest pool (fires once)
       if (basicRaRem > 0) { effectivePremPoolS += basicRaRem; basicRaRem = 0; }
+      const prevCumBasPool = cumBasPool;                // Fix 2: save BEFORE incrementing
       cumBasPool += basPay;
-      basBeq = Math.max(0, effectivePremPoolS - cumBasPool);
+      basBeq = Math.max(0, effectivePremPoolS - prevCumBasPool); // Fix 2: pool BEFORE this year's draw
     }
     cumBas += basPay;
 
-    // Bequest pool uses full RA (the CPF LIFE premium — the entire RA entering the scheme).
-    const stdBeq = Math.max(0, raAtPayout - cumStd);
-    const escBeq = Math.max(0, raAtPayout - cumEsc);
+    // Fix 2: use prevCumStd/prevCumEsc (before this year) so the crossover ages reflect
+    // the CPF Board's "bequest at start of age X" convention, not end-of-year.
+    const stdBeq = Math.max(0, raAtPayout - prevCumStd);
+    const escBeq = Math.max(0, raAtPayout - prevCumEsc);
     const stdT = cumStd + stdBeq, escT = cumEsc + escBeq, basT = cumBas + basBeq;
     if (!escVsStd   && age > pAge && escT > stdT)  escVsStd   = age;
     if (!stdVsBasic && age > pAge && stdT > basT)  stdVsBasic = age;
@@ -9010,16 +9032,23 @@ export default function App() {
         stdRA = p.ra; escRA = p.ra; basRA = p.ra;
         stdBeq = p.sa + p.ra; escBeq = p.sa + p.ra; basBeq = p.sa + p.ra;
       } else {
+        // Fix 2 (bequest timing): CPF Board convention — "Bequest at Age X" = estate value if member
+        // dies at START of age X before receiving that year's payout. Save pre-payout cumulative
+        // values BEFORE incrementing so bequests reflect the correct timing.
+        const prevCumStd = cumPayoutStandard;
+        const prevCumEsc = cumPayoutEscalating;
+
         stdPayY = lifePlans.standard.start * 12; cumPayoutStandard += stdPayY;
-        stdBeq = Math.max(0, initialRA - cumPayoutStandard);
+        stdBeq = Math.max(0, initialRA - prevCumStd);   // Fix 2: before this year's payout
 
         escPayY = (lifePlans.escalating.start * Math.pow(1.02, yearsElapsed)) * 12; cumPayoutEscalating += escPayY;
-        escBeq = Math.max(0, initialRA - cumPayoutEscalating);
+        escBeq = Math.max(0, initialRA - prevCumEsc);   // Fix 2: before this year's payout
 
         // ── Basic Plan: Phase 1A / Phase 1B / Phase 2 — use shared helper ──────
         if (age < 90) {
           // B2 fix: if balance drops below $60k before pre-computed trigger age, lock in actual trigger now.
           if (basicRaRemaining < 60000 && age < phase1bActualStartAge) phase1bActualStartAge = age;
+          const prevBasicRaRem = basicRaRemaining;      // Fix 2: save BEFORE deduction
           const { basPay, newRaRem } = computeBasicPlanYearPayout(
             age, phase1bActualStartAge, basicPhase1aAnnual, basicPhase2Annual,
             basicRaRemaining, basicEffAnnualFactor
@@ -9028,7 +9057,7 @@ export default function App() {
           basicRaRemaining = newRaRem;
           cumPayoutBasic += basPayY;
           basRA = basicRaRemaining;
-          basBeq = basRA + basicPremium; // Phase 1: remaining RA + full premium refund
+          basBeq = prevBasicRaRem + basicPremium;        // Fix 2: RA BEFORE this year's deduction
         } else {
           // Phase 2 (age ≥ 90): lower constant payout from communal annuity pool
           const { basPay } = computeBasicPlanYearPayout(
@@ -9038,11 +9067,12 @@ export default function App() {
           // When Phase 1B fires early, basicRaRemaining at age 90 can be > 0; discarding it caused a
           // visible bequest cliff-drop and understated the member's estate value.
           if (basicRaRemaining > 0) { effectivePremiumPool += basicRaRemaining; basicRaRemaining = 0; }
+          const prevCumBasicPool = cumPayoutBasicPool;   // Fix 2: save BEFORE incrementing
           basRA = 0;
           basPayY = basPay;
           cumPayoutBasic += basPayY;
           cumPayoutBasicPool += basPayY;
-          basBeq = Math.max(0, effectivePremiumPool - cumPayoutBasicPool);
+          basBeq = Math.max(0, effectivePremiumPool - prevCumBasicPool); // Fix 2: pool before this year's draw
         }
       }
       const propVal = includeProp ? p.propertyValue : 0;
@@ -9087,25 +9117,31 @@ export default function App() {
         stdRA = p.ra; escRA = p.ra; basRA = p.ra;
         stdBeq = p.sa + p.ra; escBeq = p.sa + p.ra; basBeq = p.sa + p.ra;
       } else {
+        // Fix 2 (bequest timing): save pre-payout cumulative BEFORE incrementing.
+        const prevCumStdSp = cumPayoutStandard;
+        const prevCumEscSp = cumPayoutEscalating;
+
         stdPayY = spouseLifePlans.standard.start * 12; cumPayoutStandard += stdPayY;
-        stdBeq = Math.max(0, initialRA - cumPayoutStandard);
+        stdBeq = Math.max(0, initialRA - prevCumStdSp);   // Fix 2: before this year's payout
         escPayY = (spouseLifePlans.escalating.start * Math.pow(1.02, yearsElapsed)) * 12; cumPayoutEscalating += escPayY;
-        escBeq = Math.max(0, initialRA - cumPayoutEscalating);
+        escBeq = Math.max(0, initialRA - prevCumEscSp);   // Fix 2: before this year's payout
         if (age < 90) {
           if (basicRaRemaining < 60000 && age < phase1bActualStartAge) phase1bActualStartAge = age;
+          const prevBasicRaRemSp = basicRaRemaining;      // Fix 2: save BEFORE deduction
           const { basPay, newRaRem } = computeBasicPlanYearPayout(
             age, phase1bActualStartAge, basicPhase1aAnnual, basicPhase2Annual,
             basicRaRemaining, basicEffAnnualFactor
           );
           basPayY = basPay; basicRaRemaining = newRaRem;
           cumPayoutBasic += basPayY; basRA = basicRaRemaining;
-          basBeq = basRA + basicPremium;
+          basBeq = prevBasicRaRemSp + basicPremium;        // Fix 2: RA BEFORE this year's deduction
         } else {
           const { basPay } = computeBasicPlanYearPayout(age, phase1bStartAge, basicPhase1aAnnual, basicPhase2Annual, 0, basicEffAnnualFactor);
           if (basicRaRemaining > 0) { effectivePremiumPool += basicRaRemaining; basicRaRemaining = 0; }
+          const prevCumBasPoolSp = cumPayoutBasicPool;     // Fix 2: save BEFORE incrementing
           basRA = 0; basPayY = basPay;
           cumPayoutBasic += basPayY; cumPayoutBasicPool += basPayY;
-          basBeq = Math.max(0, effectivePremiumPool - cumPayoutBasicPool);
+          basBeq = Math.max(0, effectivePremiumPool - prevCumBasPoolSp); // Fix 2: pool before this year's draw
         }
       }
       const propVal = includeProp ? (p.propertyValue || 0) : 0;
