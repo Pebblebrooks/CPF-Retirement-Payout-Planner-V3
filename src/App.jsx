@@ -8432,7 +8432,7 @@ export default function App() {
           return xirr != null ? xirr.toFixed(2) + "%" : "—†";
         });
         const lifeIrrVals = ["basic","standard","escalating"].map(plan => {
-          if (!isPA || row.age < pa + 2) return "—";
+          if (!isPA || row.age < pa + 1) return "—";
           const val = lifeEffRateByAge[plan]?.[row.age];
           return val != null ? val.toFixed(2) + "%" : "—";
         });
@@ -9822,24 +9822,27 @@ export default function App() {
     if (P <= 0 || !payoutProjection?.length) return {};
     const result = { standard: {}, escalating: {}, basic: {} };
     const payoutRows = payoutProjection.filter(d => d.age >= pa);
-    // Pre-build per-plan cumulative inflow arrays (avoids redundant slicing)
+    // Pre-build per-plan cumulative inflow arrays.
+    // Annuity-immediate convention: first payout at t=1 (one year after investment at t=0).
+    // t = (age - pa) + 1  so the row at age=pa → t=1, age=pa+1 → t=2, etc.
+    // This ensures Standard IRR = 0% at Y=0 (analytically exact) and Basic IRR is
+    // correctly positive from Y=0, without any hardcoded overrides.
     const cumFlows = { standard: [], escalating: [], basic: [] };
     for (const d of payoutRows) {
       for (const plan of ['standard', 'escalating', 'basic']) {
-        cumFlows[plan].push({ t: d.age - pa, v: d[`${plan}Annual`] || 0 });
+        cumFlows[plan].push({ t: d.age - pa + 1, v: d[`${plan}Annual`] || 0 });
       }
     }
     for (let i = 0; i < payoutRows.length; i++) {
       const d = payoutRows[i];
       const Y = d.age - pa; // years elapsed since payout age
       for (const plan of ['standard', 'escalating', 'basic']) {
-        if (Y === 0) { result[plan][d.age] = 0; continue; }
         const flows = [
-          { t: 0, v: -P },                        // lump-sum "investment" at payout age
-          ...cumFlows[plan].slice(0, i + 1),       // annual payouts t=1 … t=Y
+          { t: 0, v: -P },                         // lump-sum "investment" at payout age
+          ...cumFlows[plan].slice(0, i + 1),        // annual payouts t=1 … t=Y+1
         ];
         const bequest = d[`${plan}Bequest`] || 0;
-        if (bequest > 0) flows.push({ t: Y, v: bequest }); // terminal bequest
+        if (bequest > 0) flows.push({ t: Y + 1, v: bequest }); // terminal bequest at t=Y+1
         const irr = computeXIRR(flows);
         result[plan][d.age] = irr !== null ? Math.max(-0.20, Math.min(0.20, irr)) * 100 : 0;
       }
@@ -9857,23 +9860,23 @@ export default function App() {
     if (P <= 0 || !spousePayoutProjection?.length) return {};
     const result = { standard: {}, escalating: {}, basic: {} };
     const payoutRows = spousePayoutProjection.filter(d => d.age >= pa);
+    // Annuity-immediate: t = (age - pa) + 1, matching primary lifeEffRateByAge convention.
     const cumFlows = { standard: [], escalating: [], basic: [] };
     for (const d of payoutRows) {
       for (const plan of ['standard', 'escalating', 'basic']) {
-        cumFlows[plan].push({ t: d.age - pa, v: d[`${plan}Annual`] || 0 });
+        cumFlows[plan].push({ t: d.age - pa + 1, v: d[`${plan}Annual`] || 0 });
       }
     }
     for (let i = 0; i < payoutRows.length; i++) {
       const d = payoutRows[i];
       const Y = d.age - pa;
       for (const plan of ['standard', 'escalating', 'basic']) {
-        if (Y === 0) { result[plan][d.age] = 0; continue; }
         const flows = [
           { t: 0, v: -P },
           ...cumFlows[plan].slice(0, i + 1),
         ];
         const bequest = d[`${plan}Bequest`] || 0;
-        if (bequest > 0) flows.push({ t: Y, v: bequest });
+        if (bequest > 0) flows.push({ t: Y + 1, v: bequest });
         const irr = computeXIRR(flows);
         result[plan][d.age] = irr !== null ? Math.max(-0.20, Math.min(0.20, irr)) * 100 : 0;
       }
@@ -20668,7 +20671,7 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
                 <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2 }}>
-                  {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ["effRate", "Eff. Return %"]].map(([id, label]) => (
+                  {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
                     <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                       {label}
                     </button>
@@ -20687,6 +20690,15 @@ ${milestoneSnapshotHtml}
                         }))
                       : baseRows;
                     const isEffRate = viewMode === "effRate";
+                    // IRR-specific breakeven: first age where Standard's effective return %
+                    // surpasses Basic's. Distinct from liStdVsBasic (Total Yield crossover)
+                    // which measures dollar amounts — these two ages will differ.
+                    const effRateBreakeven = isEffRate
+                      ? lifeChartData.find(d =>
+                          d.standardEffRate != null && d.basicEffRate != null &&
+                          d.standardEffRate >= d.basicEffRate
+                        )?.age ?? null
+                      : null;
                     return (
                   <ResponsiveContainer width="99%" height="100%">
                     <LineChart data={lifeChartData}>
@@ -20736,11 +20748,11 @@ ${milestoneSnapshotHtml}
                         <ReferenceLine y={4} stroke="rgba(52,211,153,0.55)" strokeWidth={1.5} strokeDasharray="5 3"
                           label={{ position: "insideTopLeft", dx: 6, dy: -4, value: "4% (SA/RA floor)", fill: "var(--clr-green)", fontSize: 10, fontWeight: 700 }} />
                       )}
-                      {isEffRate && liStdVsBasic && (
-                        <ReferenceLine x={liStdVsBasic} stroke="var(--clr-blue2)" strokeWidth={1.5} strokeDasharray="4 4"
+                      {isEffRate && effRateBreakeven && (
+                        <ReferenceLine x={effRateBreakeven} stroke="var(--clr-blue2)" strokeWidth={1.5} strokeDasharray="4 4"
                           label={({ viewBox: vb }) => (
                             <text x={vb.x + 6} y={vb.y + vb.height * 0.3} textAnchor="start" fill="var(--clr-blue2)" fontSize={11} fontWeight="bold">
-                              {`Std>Basic Age ${liStdVsBasic}`}
+                              {`Std IRR>Basic ≈ Age ${effRateBreakeven}`}
                             </text>
                           )} />
                       )}
@@ -20753,14 +20765,14 @@ ${milestoneSnapshotHtml}
                   })()}
                 </div>
                 {/* Info cards — one per view mode, highlighted when active. Click to switch chart view. */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${isRSSMode ? 5 : 6}, 1fr)`, gap: 8 }}>
                   {[
                     ["payout",      "Monthly Payout",     "var(--clr-slate)",   "Fixed or rising monthly income. Escalating starts ~20% lower then grows 2%/yr. Dashed line shows the month Escalating exceeds Standard."],
                     ["annualPayout","Annual Payout",       "var(--clr-blue2)",   "Monthly × 12. Useful for household budget planning. No breakeven line — refer to Monthly or Total Yield views."],
                     ["cumPayout",   "Cumulative Payout",   "var(--clr-emerald)", "Running cash received in hand — bequest excluded. Answers: 'By this age, which plan has paid me more cash?'"],
                     ["bequest",     "Bequest",             "var(--clr-slate)",   "Premium minus cumulative payouts at each age. Drops to $0 once the full premium is paid out (~age 80 for Standard)."],
                     ["total",       "Total Yield",         "var(--clr-blue)",    "Cumulative payouts + remaining bequest. Shows all 3 Total Yield crossover lines. Best view for plan comparison."],
-                    ["effRate",     "Eff. Return %",       "var(--clr-violet)",  "Annual IRR on your RA 'investment' at payout age. Standard near 0% while bequest offsets payouts (~age 65–80), then rises. Basic holds ~4% via RA interest. Dashed vertical = Total Yield breakeven. Horizontal line = 4% SA/RA floor."],
+                    ...(!isRSSMode ? [["effRate", "Eff. Return %", "var(--clr-violet)", "Annual IRR on your RA 'investment' at payout age. Standard near 0% while bequest offsets payouts (~age 65–80), then rises. Basic positive from payout age (reflects mortality-credit-enhanced actuarial rate). Dashed vertical = IRR breakeven. Horizontal line = 4% SA/RA floor."]] : []),
                   ].map(([mode, title, color, text]) => (
                     <div key={mode} onClick={() => setViewMode(mode)} style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: viewMode === mode ? "rgba(var(--clr-emerald-rgb),0.06)" : "var(--bg-panel-muted)", border: `1.5px solid ${viewMode === mode ? color : "var(--border-subtle)"}`, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4, transition: "all 0.2s" }}>
                       <strong style={{ color, display: "block", marginBottom: 3, fontSize: 12 }}>{title}</strong>{text}
@@ -22136,7 +22148,7 @@ ${milestoneSnapshotHtml}
                               if (row.age < pa) {
                                 return [0,1,2].map(i => <td key={`lirr${i}`} style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>—</td>);
                               }
-                              if (row.age < pa + 2) {
+                              if (row.age < pa + 1) {
                                 return [0,1,2].map(i => <td key={`lirr${i}`} style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", fontSize: 11, whiteSpace: "nowrap" }}>settling…</td>);
                               }
                               return [
