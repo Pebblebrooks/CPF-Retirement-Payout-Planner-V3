@@ -17835,7 +17835,7 @@ ${milestoneSnapshotHtml}
                     // ── Card renderer ─────────────────────────────────────────────────────
                     const MemberCard = ({ header, accent, bgRgba, cpfTotal, ageLabel, monthly, planShort, cpfTip, payTip }) => (
                       <div style={{ padding: "7px 10px", borderRadius: 10, border: `1px solid ${accent}55`, background: bgRgba, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
-                        <div style={{ fontSize: 10, fontWeight: 900, color: accent, letterSpacing: "0.08em", borderBottom: `1px solid ${accent}33`, paddingBottom: 4, marginBottom: 1 }}>{header}</div>
+                        <div style={{ fontSize: 10, fontWeight: 900, color: accent, letterSpacing: "0.08em", textAlign: "center", borderBottom: `1px solid ${accent}33`, paddingBottom: 4, marginBottom: 1 }}>{header}</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                           <div title={cpfTip} style={{ textAlign: "center", cursor: "help" }}>
                             <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>CPF Total</div>
@@ -19943,8 +19943,13 @@ ${milestoneSnapshotHtml}
                             const ea = Number(ev.endAge);
                             const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement' || sa === ea;
                             const labelVal = `${ev.label || meta.label}`;
-                            if (isPoint) return <ReferenceLine key={`le-${idx}`} x={sa} stroke={color} strokeWidth={2} strokeDasharray="5 3" label={{ position: "insideTopLeft", value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
-                            return <ReferenceArea key={`le-${idx}`} x1={sa} x2={Math.min(ea, debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)} fill={color} fillOpacity={0.08} stroke={color} strokeOpacity={0.4} strokeWidth={1} label={{ position: "insideTop", value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
+                            // Stagger point-event labels across 4 vertical slots (0/18/36/54 px)
+                            // to prevent text from piling on top of each other when events are close.
+                            const _leDy = (idx % 4) * 18;
+                            if (isPoint) return <ReferenceLine key={`le-${idx}`} x={sa} stroke={color} strokeWidth={2} strokeDasharray="5 3" label={{ position: "insideTopLeft", dy: _leDy, value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
+                            // Range events: stagger top label similarly
+                            const _leAreaDy = (idx % 3) * 14;
+                            return <ReferenceArea key={`le-${idx}`} x1={sa} x2={Math.min(ea, debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)} fill={color} fillOpacity={0.08} stroke={color} strokeOpacity={0.4} strokeWidth={1} label={{ position: "insideTop", dy: _leAreaDy, value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
                           })}
                           {(() => {
                             const ca_m = Number(debouncedInputs.currentAge) || 0;
@@ -20727,7 +20732,7 @@ ${milestoneSnapshotHtml}
                       {/* Eff. Return % mode: horizontal 4% floor + vertical breakeven */}
                       {isEffRate && (
                         <ReferenceLine y={4} stroke="rgba(52,211,153,0.55)" strokeWidth={1.5} strokeDasharray="5 3"
-                          label={{ position: "insideBottomRight", value: "4% (SA/RA floor)", fill: "var(--clr-green)", fontSize: 10, fontWeight: 700 }} />
+                          label={{ position: "insideTopLeft", dx: 6, dy: -4, value: "4% (SA/RA floor)", fill: "var(--clr-green)", fontSize: 10, fontWeight: 700 }} />
                       )}
                       {isEffRate && liStdVsBasic && (
                         <ReferenceLine x={liStdVsBasic} stroke="var(--clr-blue2)" strokeWidth={1.5} strokeDasharray="4 4"
