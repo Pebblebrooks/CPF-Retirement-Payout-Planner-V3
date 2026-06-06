@@ -278,22 +278,12 @@ const CPF_LIFE_TABLE_M = [
   { ra:  82400, std:  490, esc:  390, bas:  450 }, // CPF table: RA@55=$50k → RA@65=$82.4k
   { ra: 170100, std:  950, esc:  760, bas:  880 }, // BRS: RA@55=$110.2k → RA@65=$170.1k
   { ra: 227900, std: 1250, esc: 1000, bas: 1150 }, // RA@55=$150k → RA@65=$227.9k
-  { ra: 315000, std: 1700, esc: 1340, bas: 1560 }, // CPF Estimator: YOB 1970 male RA@65=$315k (calibration anchor)
   { ra: 330100, std: 1780, esc: 1420, bas: 1640 }, // FRS: RA@55=$220.4k → RA@65=$330.1k
   { ra: 445600, std: 2380, esc: 1900, bas: 2190 }, // RA@55=$300k → RA@65=$445.6k
   { ra: 560000, std: 2990, esc: 2360, bas: 2730 }, // CPF estimator: YOB 1963 RA=$560k age 65
   { ra: 650100, std: 3440, esc: 2750, bas: 3160 }, // ERS: RA@55=$440.8k → RA@65=$650.1k
 ];
-// Plan-specific female/male CPF LIFE payout ratio — sourced from CPF Board Monthly Payout
-// Estimator (YOB 1970, RA $315,000 at payout age 65). Each plan has a different ratio because
-// the bequest/premium structure and escalation mechanics alter mortality-risk loading differently:
-//   Standard  0.9353 — close to the actuarial life-expectancy ratio; female/male ~$1,590/$1,700.
-//   Escalating 0.9104 — female/male starting payout compressed (~$1,220/$1,340) because
-//                        higher male starting payout means faster growth divergence over time.
-//   Basic      0.9615 — premium / guaranteed-refund structure partially offsets the longevity
-//                        gap; effective female/male loading narrowed to ~$1,500/$1,560.
-// Calibrated May 2026 against CPF Board Estimator output. Max residual after applying: ≤$2/mo.
-const FEMALE_PAYOUT_MULTIPLIER = { std: 0.9353, esc: 0.9104, bas: 0.9615 };
+const FEMALE_PAYOUT_MULTIPLIER = 0.93;
 // ── CPF LIFE Deferral Bonus Multipliers ──────────────────────────────────────
 // Source: CPF Board Estimator (2026 cohort) — YOB 1971 (RA $65–90k) and YOB 1963
 // (RA $560–690k) at payout ages 65–70 across Standard, Escalating, Basic plans.
@@ -423,10 +413,7 @@ const interpolateCpfLife = (raBalance, plan, isMale, pAge = 65) => {
   // Ages 65–70: CPF Board Estimator data. Ages 71–80: actuarially derived for RSS migrations.
   const deferralYr = Math.min(15, Math.max(0, (pAge || 65) - 65));
   const deferralMult = (CPF_LIFE_DEFERRAL_MULT[plan] ?? CPF_LIFE_DEFERRAL_MULT.std)[deferralYr];
-  // Apply plan-specific female multiplier — each plan's mortality-risk loading differs.
-  // FEMALE_PAYOUT_MULTIPLIER is now an object {std, esc, bas}; fall back to std if plan unknown.
-  const femMult = isMale ? 1 : (FEMALE_PAYOUT_MULTIPLIER[plan] ?? FEMALE_PAYOUT_MULTIPLIER.std);
-  return Math.max(0, monthly * deferralMult * femMult);
+  return Math.max(0, monthly * deferralMult * (isMale ? 1 : FEMALE_PAYOUT_MULTIPLIER));
 };
 
 // Shared Basic Plan parameter setup — used by payoutProjection and sensitivityData.
@@ -522,38 +509,29 @@ const computeSensitivityRow = (pAge, raAtPayout, isMale) => {
     const yr = age - pAge;
     const stdPay = stdStart * 12;
     const escPay = (escStart * Math.pow(1.02, yr)) * 12;
-
-    // Fix 2 (bequest timing): CPF Board convention — "Bequest at Age X" means the estate value
-    // if the member dies at the START of age X, before receiving that year's payout.
-    // Save pre-payout cumulative values BEFORE incrementing so bequest uses the correct base.
-    const prevCumStd = cumStd;
-    const prevCumEsc = cumEsc;
     cumStd += stdPay; cumEsc += escPay;
 
     // B2 fix: if balance drops below $60k before the pre-computed trigger age, lock in actual trigger age now.
     if (age < 90 && basicRaRem < 60000 && age < phase1bActualTriggerS) phase1bActualTriggerS = age;
 
-    const prevBasicRaRem = basicRaRem;                  // Fix 2: save BEFORE deduction
     const { basPay, newRaRem } = computeBasicPlanYearPayout(
       age, phase1bActualTriggerS, basicP1aAnnual, basicP2Annual, basicRaRem, basicEffAFS
     );
     let basBeq = 0;
     if (age < 90) {
       basicRaRem = newRaRem;
-      basBeq = prevBasicRaRem + basicPremS;             // Fix 2: RA BEFORE this year's deduction
+      basBeq = basicRaRem + basicPremS;
     } else {
       // B1 fix: on first Phase 2 year, carry any residual RA_Retained into the effective bequest pool (fires once)
       if (basicRaRem > 0) { effectivePremPoolS += basicRaRem; basicRaRem = 0; }
-      const prevCumBasPool = cumBasPool;                // Fix 2: save BEFORE incrementing
       cumBasPool += basPay;
-      basBeq = Math.max(0, effectivePremPoolS - prevCumBasPool); // Fix 2: pool BEFORE this year's draw
+      basBeq = Math.max(0, effectivePremPoolS - cumBasPool);
     }
     cumBas += basPay;
 
-    // Fix 2: use prevCumStd/prevCumEsc (before this year) so the crossover ages reflect
-    // the CPF Board's "bequest at start of age X" convention, not end-of-year.
-    const stdBeq = Math.max(0, raAtPayout - prevCumStd);
-    const escBeq = Math.max(0, raAtPayout - prevCumEsc);
+    // Bequest pool uses full RA (the CPF LIFE premium — the entire RA entering the scheme).
+    const stdBeq = Math.max(0, raAtPayout - cumStd);
+    const escBeq = Math.max(0, raAtPayout - cumEsc);
     const stdT = cumStd + stdBeq, escT = cumEsc + escBeq, basT = cumBas + basBeq;
     if (!escVsStd   && age > pAge && escT > stdT)  escVsStd   = age;
     if (!stdVsBasic && age > pAge && stdT > basT)  stdVsBasic = age;
@@ -620,6 +598,14 @@ const DEFAULT_INPUTS = {
   goalTargetCPF: 0,           // Goal Simulator: desired total CPF balance at payout age (0 = no goal set)
   plannedDownpaymentOA: 0,
   downpaymentAge: 35,
+  // Housing Grants — one-time OA credits at downpaymentAge, all included in cumHousingOA for CPF refund tracking
+  ehgAmount: 0,               // Enhanced CPF Housing Grant (up to $120k families / $60k singles)
+  cpfHousingGrantResale: 0,   // CPF Housing Grant for Resale Flats (up to $80k families / $40k singles)
+  phgAmount: 0,               // Proximity Housing Grant (up to $30k / $20k)
+  stepUpGrantAmount: 0,       // Step-Up CPF Housing Grant (up to $15k second-timers)
+  // Insurance — annual OA deductions; user enters premium from their CPF statement
+  dpsAnnualPremium: 0,        // Dependants' Protection Scheme (21–64, SC/PR, OA first then SA/RA fallback)
+  hpsAnnualPremium: 0,        // Home Protection Scheme (HDB owners only, ends at min(65, housingStop))
   // OA Drawdown (post-payout-age supplementary income from OA)
   oaDrawdownStartAge: 0,         // 0 = disabled; age to begin drawing from OA (must be >= payoutAge)
   oaDrawdownMonthly: 0,          // monthly cash draw from OA (in addition to CPF LIFE)
@@ -1170,6 +1156,8 @@ const INPUT_LABELS = {
   privateAssetGoal: "Private Asset Goal",
   goalTargetCPF: "CPF Goal Target",
   plannedDownpaymentOA: "OA Downpayment", downpaymentAge: "Downpayment Age",
+  ehgAmount: "Enhanced CPF Housing Grant", cpfHousingGrantResale: "CPF Housing Grant (Resale)", phgAmount: "Proximity Housing Grant", stepUpGrantAmount: "Step-Up CPF Grant",
+  dpsAnnualPremium: "DPS Annual Premium", hpsAnnualPremium: "HPS Annual Premium",
   oaDrawdownStartAge: "OA Drawdown Start Age", oaDrawdownMonthly: "OA Monthly Drawdown",
   oaDrawdownFloor: "OA Drawdown Floor", propMonetiseEnabled: "Prop Monetise",
   propMonetiseScheme: "Prop Scheme", propMonetiseAge: "Prop Monetise Age",
@@ -1440,7 +1428,12 @@ function runRSSEngine(inputs, {
   const plannedDownpaymentOA = Number(inputs.plannedDownpaymentOA) || 0;
   const downpaymentAge       = Number(inputs.downpaymentAge) || 35;
   let downpaymentApplied = startAge > downpaymentAge;
-  const srsCap = ((inputs.citizenStatus || 'SC').toLowerCase() === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // BUG-9 fix: normalise case
+  // Housing grants — one-time OA credits at downpaymentAge, tracked in cumHousingOA/FV for CPF refund
+  const _totalHousingGrants = (Number(inputs.ehgAmount)||0) + (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) + (Number(inputs.stepUpGrantAmount)||0);
+  let housingGrantApplied = startAge > downpaymentAge;
+  // Insurance deductions from OA (user-entered from CPF statement)
+  const _dpsAnnual = Number(inputs.dpsAnnualPremium) || 0;
+  const _hpsAnnual = Number(inputs.hpsAnnualPremium) || 0;
   const srsContrib     = overrideSrsContrib !== undefined ? Math.min(overrideSrsContrib, srsCap) : Math.min(Number(inputs.srsAnnualContribution) || 0, srsCap);
   const srsContribStop = Number(inputs.srsContribStopAge)    || 63;
   const srsReturn      = (Number(inputs.srsReturnRate) || 0) / 100;
@@ -1588,6 +1581,15 @@ function runRSSEngine(inputs, {
     }
     if (srsDrawdownApplied && age >= srsDrawStart && age < srsDrawStart + srsDrawYears) { srsBalance = Math.max(0, srsBalance - srsAnnualDraw); }
     if (srsDrawdownApplied && age === srsDrawStart + srsDrawYears - 1) srsBalance = 0;
+
+    // Housing grants — one-time OA credit at downpaymentAge (same year as downpayment)
+    // CPF policy: grants are included in cumHousingOA/FV and must be refunded on sale with 2.5%/yr interest
+    if (!housingGrantApplied && age === downpaymentAge && _totalHousingGrants > 0 && !isForeigner) {
+      oa += _totalHousingGrants;
+      cumHousingOA += _totalHousingGrants;
+      cumHousingFV += _totalHousingGrants;
+      housingGrantApplied = true;
+    }
 
     // Downpayment
     if (age === downpaymentAge && plannedDownpaymentOA > 0 && !downpaymentApplied) {
@@ -1952,6 +1954,17 @@ function runRSSEngine(inputs, {
     cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
     oa = Math.max(0, oa - activeHousing);
 
+    // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
+    if (!isForeigner && _dpsAnnual > 0 && age >= 21 && age < 65) {
+      const fromOA = Math.min(oa, _dpsAnnual); oa -= fromOA;
+      const rem = _dpsAnnual - fromOA;
+      if (rem > 0) { if (age < 55) sa = Math.max(0, sa - rem); else ra = Math.max(0, ra - rem); }
+    }
+    // HPS — Home Protection Scheme: annual OA deduction, SC/PR only, ends at min(65, housingStop)
+    if (!isForeigner && _hpsAnnual > 0 && age < Math.min(65, housingStop)) {
+      oa = Math.max(0, oa - _hpsAnnual);
+    }
+
     // Property sale refund
     if (sellPropertyAge > 0 && age === sellPropertyAge && !refundApplied) {
       const totalRefund = Math.round(cumHousingFV);
@@ -2285,6 +2298,10 @@ function runProjectionEngine(inputs, {
   const oaEduLoanFreq   = inputs.oaEduLoanFreq || 'one-time';
   const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0);
   const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
+  // Housing grants + insurance — declared here so engine loop can reference them
+  const _totalHousingGrantsPE = (Number(inputs.ehgAmount)||0) + (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) + (Number(inputs.stepUpGrantAmount)||0);
+  const _dpsAnnualPE = Number(inputs.dpsAnnualPremium) || 0;
+  const _hpsAnnualPE = Number(inputs.hpsAnnualPremium) || 0;
   const medInfl = (Number(inputs.medicalInflationRate) || 0) / 100;
   const isSEP = inputs.isSelfEmployed === true;
   const isLeasehold = inputs.propertyLeasehold === true;
@@ -2299,8 +2316,7 @@ function runProjectionEngine(inputs, {
   const plannedDownpaymentOA = Number(inputs.plannedDownpaymentOA) || 0;
   const downpaymentAge = Number(inputs.downpaymentAge) || 35;
   let downpaymentApplied = startAge > downpaymentAge;
-
-  // SRS: Supplementary Retirement Scheme
+  let housingGrantApplied = startAge > downpaymentAge; // mirrors downpaymentApplied — both fire at downpaymentAge
   // Contributions grow at srsReturnRate. At srsDrawdownStartAge the balance is drawn down
   // evenly over srsDrawdownYears (must deplete within 10 yrs of first withdrawal per IRAS rules).
   // Only 50% of each annual withdrawal is taxable income (statutory retirement age concession).
@@ -2552,6 +2568,14 @@ function runProjectionEngine(inputs, {
     }
     // PMT formula produces near-zero balance at final year; cleanup handles any float residual
     if (srsDrawdownApplied && age === srsDrawStart + srsDrawYears - 1) srsBalance = 0;
+
+    // Housing grants — one-time OA credit at downpaymentAge (CPF refund tracking: included in cumHousingOA/FV)
+    if (!housingGrantApplied && age === downpaymentAge && _totalHousingGrantsPE > 0 && !isForeigner) {
+      oa += _totalHousingGrantsPE;
+      cumHousingOA += _totalHousingGrantsPE;
+      cumHousingFV  += _totalHousingGrantsPE;
+      housingGrantApplied = true;
+    }
 
     // Phase 2: Property Downpayment from OA
     if (age === downpaymentAge && plannedDownpaymentOA > 0 && !downpaymentApplied) {
@@ -3174,6 +3198,17 @@ function runProjectionEngine(inputs, {
     // Compound existing accrued interest and add this year's withdrawal's first year of interest
     cumHousingFV = (cumHousingFV + activeHousing) * 1.025;   // (prev + this year's withdrawal) × 1.025 — each withdrawal compounds from its own year
     oa = Math.max(0, oa - activeHousing);
+
+    // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
+    if (!isForeigner && _dpsAnnualPE > 0 && age >= 21 && age < 65) {
+      const fromOA = Math.min(oa, _dpsAnnualPE); oa -= fromOA;
+      const rem = _dpsAnnualPE - fromOA;
+      if (rem > 0) { if (age < 55) sa = Math.max(0, sa - rem); else ra = Math.max(0, ra - rem); }
+    }
+    // HPS — Home Protection Scheme: annual OA deduction, SC/PR only, ends at min(65, housingStop)
+    if (!isForeigner && _hpsAnnualPE > 0 && age < Math.min(65, housingStop)) {
+      oa = Math.max(0, oa - _hpsAnnualPE);
+    }
     // #3 Property CPF refund: at sell age, refund principal + 2.5% accrued interest to OA
     if (sellPropertyAge > 0 && age === sellPropertyAge && !refundApplied) {
       // cumHousingFV = FV of all OA housing withdrawals compounded at 2.5%/yr per withdrawal date.
@@ -8487,6 +8522,8 @@ export default function App() {
       sellPropertyAge,
       currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
       plannedDownpaymentOA, downpaymentAge,
+      ehgAmount, cpfHousingGrantResale, phgAmount, stepUpGrantAmount,
+      dpsAnnualPremium, hpsAnnualPremium,
       srsBalance, srsAnnualContribution, srsContribStopAge, srsReturnRate,
       srsDrawdownStartAge, srsDrawdownYears, // R4: srsCitizenPR removed — dead field, engine reads citizenStatus instead
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
@@ -8530,6 +8567,8 @@ export default function App() {
       sellPropertyAge,
       currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
       plannedDownpaymentOA, downpaymentAge,
+      ehgAmount, cpfHousingGrantResale, phgAmount, stepUpGrantAmount,
+      dpsAnnualPremium, hpsAnnualPremium,
       srsBalance, srsAnnualContribution, srsContribStopAge, srsReturnRate,
       srsDrawdownStartAge, srsDrawdownYears,
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
@@ -9032,23 +9071,16 @@ export default function App() {
         stdRA = p.ra; escRA = p.ra; basRA = p.ra;
         stdBeq = p.sa + p.ra; escBeq = p.sa + p.ra; basBeq = p.sa + p.ra;
       } else {
-        // Fix 2 (bequest timing): CPF Board convention — "Bequest at Age X" = estate value if member
-        // dies at START of age X before receiving that year's payout. Save pre-payout cumulative
-        // values BEFORE incrementing so bequests reflect the correct timing.
-        const prevCumStd = cumPayoutStandard;
-        const prevCumEsc = cumPayoutEscalating;
-
         stdPayY = lifePlans.standard.start * 12; cumPayoutStandard += stdPayY;
-        stdBeq = Math.max(0, initialRA - prevCumStd);   // Fix 2: before this year's payout
+        stdBeq = Math.max(0, initialRA - cumPayoutStandard);
 
         escPayY = (lifePlans.escalating.start * Math.pow(1.02, yearsElapsed)) * 12; cumPayoutEscalating += escPayY;
-        escBeq = Math.max(0, initialRA - prevCumEsc);   // Fix 2: before this year's payout
+        escBeq = Math.max(0, initialRA - cumPayoutEscalating);
 
         // ── Basic Plan: Phase 1A / Phase 1B / Phase 2 — use shared helper ──────
         if (age < 90) {
           // B2 fix: if balance drops below $60k before pre-computed trigger age, lock in actual trigger now.
           if (basicRaRemaining < 60000 && age < phase1bActualStartAge) phase1bActualStartAge = age;
-          const prevBasicRaRem = basicRaRemaining;      // Fix 2: save BEFORE deduction
           const { basPay, newRaRem } = computeBasicPlanYearPayout(
             age, phase1bActualStartAge, basicPhase1aAnnual, basicPhase2Annual,
             basicRaRemaining, basicEffAnnualFactor
@@ -9057,7 +9089,7 @@ export default function App() {
           basicRaRemaining = newRaRem;
           cumPayoutBasic += basPayY;
           basRA = basicRaRemaining;
-          basBeq = prevBasicRaRem + basicPremium;        // Fix 2: RA BEFORE this year's deduction
+          basBeq = basRA + basicPremium; // Phase 1: remaining RA + full premium refund
         } else {
           // Phase 2 (age ≥ 90): lower constant payout from communal annuity pool
           const { basPay } = computeBasicPlanYearPayout(
@@ -9067,12 +9099,11 @@ export default function App() {
           // When Phase 1B fires early, basicRaRemaining at age 90 can be > 0; discarding it caused a
           // visible bequest cliff-drop and understated the member's estate value.
           if (basicRaRemaining > 0) { effectivePremiumPool += basicRaRemaining; basicRaRemaining = 0; }
-          const prevCumBasicPool = cumPayoutBasicPool;   // Fix 2: save BEFORE incrementing
           basRA = 0;
           basPayY = basPay;
           cumPayoutBasic += basPayY;
           cumPayoutBasicPool += basPayY;
-          basBeq = Math.max(0, effectivePremiumPool - prevCumBasicPool); // Fix 2: pool before this year's draw
+          basBeq = Math.max(0, effectivePremiumPool - cumPayoutBasicPool);
         }
       }
       const propVal = includeProp ? p.propertyValue : 0;
@@ -9117,31 +9148,25 @@ export default function App() {
         stdRA = p.ra; escRA = p.ra; basRA = p.ra;
         stdBeq = p.sa + p.ra; escBeq = p.sa + p.ra; basBeq = p.sa + p.ra;
       } else {
-        // Fix 2 (bequest timing): save pre-payout cumulative BEFORE incrementing.
-        const prevCumStdSp = cumPayoutStandard;
-        const prevCumEscSp = cumPayoutEscalating;
-
         stdPayY = spouseLifePlans.standard.start * 12; cumPayoutStandard += stdPayY;
-        stdBeq = Math.max(0, initialRA - prevCumStdSp);   // Fix 2: before this year's payout
+        stdBeq = Math.max(0, initialRA - cumPayoutStandard);
         escPayY = (spouseLifePlans.escalating.start * Math.pow(1.02, yearsElapsed)) * 12; cumPayoutEscalating += escPayY;
-        escBeq = Math.max(0, initialRA - prevCumEscSp);   // Fix 2: before this year's payout
+        escBeq = Math.max(0, initialRA - cumPayoutEscalating);
         if (age < 90) {
           if (basicRaRemaining < 60000 && age < phase1bActualStartAge) phase1bActualStartAge = age;
-          const prevBasicRaRemSp = basicRaRemaining;      // Fix 2: save BEFORE deduction
           const { basPay, newRaRem } = computeBasicPlanYearPayout(
             age, phase1bActualStartAge, basicPhase1aAnnual, basicPhase2Annual,
             basicRaRemaining, basicEffAnnualFactor
           );
           basPayY = basPay; basicRaRemaining = newRaRem;
           cumPayoutBasic += basPayY; basRA = basicRaRemaining;
-          basBeq = prevBasicRaRemSp + basicPremium;        // Fix 2: RA BEFORE this year's deduction
+          basBeq = basRA + basicPremium;
         } else {
           const { basPay } = computeBasicPlanYearPayout(age, phase1bStartAge, basicPhase1aAnnual, basicPhase2Annual, 0, basicEffAnnualFactor);
           if (basicRaRemaining > 0) { effectivePremiumPool += basicRaRemaining; basicRaRemaining = 0; }
-          const prevCumBasPoolSp = cumPayoutBasicPool;     // Fix 2: save BEFORE incrementing
           basRA = 0; basPayY = basPay;
           cumPayoutBasic += basPayY; cumPayoutBasicPool += basPayY;
-          basBeq = Math.max(0, effectivePremiumPool - prevCumBasPoolSp); // Fix 2: pool before this year's draw
+          basBeq = Math.max(0, effectivePremiumPool - cumPayoutBasicPool);
         }
       }
       const propVal = includeProp ? (p.propertyValue || 0) : 0;
@@ -17297,7 +17322,59 @@ ${milestoneSnapshotHtml}
                     <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Amount ($) · Age of purchase</p>
                   </div>}
 
-                  {/* Sell Property */}
+                  {/* Housing Grants — SC/PR only; credited to OA at downpaymentAge; included in CPF refund on sale */}
+                  {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
+                      🏠 CPF Housing Grants
+                      <TooltipBox id="t-housing-grants" text="One-time OA credits at your downpayment age from HDB/CPF grant approval. Included in cumHousingOA for CPF refund tracking — on property sale these amounts (+ 2.5%/yr interest) must be refunded to OA. Enter amounts from your HDB/CPF approval letter. Grants are SC/PR only." />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      {[
+                        ["ehgAmount",             "EHG (up to $120k/$60k)",   "Enhanced CPF Housing Grant — tiered by household income. Families up to $120,000; singles up to $60,000. Applies to BTO and resale flats."],
+                        ["cpfHousingGrantResale",  "Resale Grant (up to $80k)", "CPF Housing Grant for Resale Flats — first-timers. Families up to $80,000; singles up to $40,000."],
+                        ["phgAmount",              "PHG (up to $30k)",          "Proximity Housing Grant — purchase near/with parents or married children. Families up to $30,000 (with) or $20,000 (within 4km). Singles half-amount."],
+                        ["stepUpGrantAmount",       "Step-Up Grant (up to $15k)","Step-Up CPF Housing Grant — second-timers upgrading from 2-room to 3-room flat in non-mature estate. Up to $15,000."],
+                      ].map(([name, label, tip]) => (
+                        <div key={name}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
+                            {label}<TooltipBox id={`t-${name}`} text={tip} />
+                          </div>
+                          <input type="text" inputMode="decimal" name={name} placeholder="0" value={getDisplayValue(name, inputs[name])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(name)} aria-label={label} className={fieldChanged(name) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                        </div>
+                      ))}
+                    </div>
+                    {(() => {
+                      const totalGrants = (Number(inputs.ehgAmount)||0) + (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) + (Number(inputs.stepUpGrantAmount)||0);
+                      return totalGrants > 0 ? (
+                        <p style={{ fontSize: 12, color: "var(--clr-blue)", marginTop: 4 }}>
+                          Total grants: <strong>${totalGrants.toLocaleString()}</strong> — credited to OA at age {inputs.downpaymentAge || 35}. Included in CPF refund on sale.
+                        </p>
+                      ) : null;
+                    })()}
+                  </div>}
+
+                  {/* Insurance — DPS and HPS: annual OA deductions, SC/PR only */}
+                  {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
+                      🛡️ CPF Insurance Premiums
+                      <TooltipBox id="t-cpf-insurance" text="Annual OA premiums deducted by CPF Board. Enter your actual premium from your CPF annual statement. DPS: OA deducted first, SA/RA fallback if OA insufficient. HPS: OA only, ends at age 65 or mortgage payoff (Housing Stop Age), whichever is earlier. Both SC/PR only." />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      {[
+                        ["dpsAnnualPremium", "DPS Premium ($/yr)", "Dependants' Protection Scheme — opt-out term life insurance. Provides up to $70,000 lump sum (reduces to $55,000 at age 60) on death, terminal illness, or total permanent disability. Administered by Great Eastern Life. Coverage ends at 65. OA deducted first; if OA is $0, balance deducted from SA (pre-55) or RA (55+). Enter your annual premium from your CPF statement."],
+                        ["hpsAnnualPremium", "HPS Premium ($/yr)", "Home Protection Scheme — HDB flat owners using CPF for mortgage instalments only. Mortgage-reducing insurance that clears your outstanding HDB loan on death, terminal illness, or TPD. Deducted annually from OA. Coverage ends at 65 or when loan is fully paid (Housing Stop Age), whichever is earlier. Does not apply to private property or ECs. Enter your annual premium from your CPF statement."],
+                      ].map(([name, label, tip]) => (
+                        <div key={name}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
+                            {label}<TooltipBox id={`t-${name}`} text={tip} />
+                          </div>
+                          <input type="text" inputMode="decimal" name={name} placeholder="0" value={inputs[name] || ""} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={label} className={fieldChanged(name) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          {name === "dpsAnnualPremium" && (Number(inputs.dpsAnnualPremium)||0) > 0 && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Deducted from OA (SA/RA fallback) each year age 21–64</p>}
+                          {name === "hpsAnnualPremium" && (Number(inputs.hpsAnnualPremium)||0) > 0 && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Deducted from OA each year until age {Math.min(65, Number(inputs.housingStopAge)||55)}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                       Sell Property at Age
