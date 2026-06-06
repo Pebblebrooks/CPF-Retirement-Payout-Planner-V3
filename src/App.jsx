@@ -3516,10 +3516,13 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
   // Derive the selected <option> value string from current state
   const selectedVal = isAnnual ? `annual:${durVal}` : "one-time";
 
-  // Build option list
+  // Build option list — use inputs.payoutAge for the "indefinite" label so it
+  // reads "Annually (to 65)" (or whatever the member's payout age is) rather
+  // than the hardcoded projection ceiling of 95.
+  const _ftPayoutAge = Number(inputs?.payoutAge) || 95;
   const options = [
     { value: "one-time", label: "One-Time" },
-    { value: "annual:0", label: "Annually (to 95)" },
+    { value: "annual:0", label: `Annually (to ${_ftPayoutAge})` },
   ];
   if (durKey) {
     // Inject persisted custom value if not already a preset (e.g. loaded from saved profile)
@@ -3598,7 +3601,7 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
         onClick={e => e.stopPropagation()}
         title={isAnnual
           ? (durVal === 0
-              ? "Applied every year until age 95 (end of projection)."
+              ? `Applied every year until age ${_ftPayoutAge} (your payout age).`
               : `Applied every year for ${durVal} yr${durVal !== 1 ? "s" : ""} from your current age, then stops.`)
           : "Applied once in the first projection year."}
         style={selectStyle}
@@ -17763,7 +17766,7 @@ ${milestoneSnapshotHtml}
                     { label: "Migration", value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge} · ${{ bas: 'Basic', std: 'Std', esc: 'Esc' }[inputs.lifePlanAtMigration || 'std']}` : "None", color: inputs.lifeMigrationAge > 0 ? "var(--clr-purple)" : "var(--text-muted)", tip: inputs.lifeMigrationAge > 0 ? `Migrating to CPF LIFE ${{ bas: 'Basic', std: 'Standard', esc: 'Escalating' }[inputs.lifePlanAtMigration || 'std']} plan at age ${inputs.lifeMigrationAge}` : "Staying on RSS until RA depletes — no CPF LIFE migration planned" },
                     { label: "Payout Start", value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "var(--clr-amber)", tip: "Age when CPF Board began your RSS monthly payouts" },
                   ] : (() => {
-                    // Zone 1 KPI strip: 3 metrics only — Total CPF | Active plan payout | Payout age
+                    // KPI strip: 3 primary metrics + optional spouse/combined cards in household mode
                     const activePlan = highlightPlan || "standard";
                     const activePlanObj = lifePlans?.[activePlan];
                     const activePayoutRaw = activePlanObj
@@ -17776,11 +17779,46 @@ ${milestoneSnapshotHtml}
                       ? activePayoutRaw * (1 - basicPremiumPct / 100) / 0.90
                       : activePayoutRaw;
                     const planLabel = { standard: "Standard plan", escalating: "Escalating plan", basic: "Basic plan" }[activePlan] || "Standard plan";
-                    return [
+                    const kpis = [
                       { label: "Total CPF", sublabel: `at payout age ${inputs.payoutAge}`, value: formatCurrency(dispTotal), color: "var(--clr-blue)", tip: "Total CPF balance (OA+MA+RA) at your chosen payout age — the nest egg that funds CPF LIFE payouts" },
                       { label: planLabel, sublabel: "monthly payout", value: activePayout ? formatCurrency(Math.round(applyInflation(activePayout, inputs.payoutAge))) : "—", color: "var(--clr-emerald)", tip: `${planLabel} monthly payout from CPF LIFE. Switch plans in the plan comparison below. Figures from 2026 CPF Board data.` },
                       { label: "Payout age", sublabel: "CPF LIFE start", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts." },
                     ];
+
+                    // ── Household KPI extension ─────────────────────────────────────────────
+                    // Shared spouse data computation — used by both Life and Strategy extensions.
+                    const _showSpouseKpis = householdEnabled && spouseProjection?.length > 0;
+                    if (_showSpouseKpis && (activeTab === "life" || activeTab === "strategy")) {
+                      const sDispData  = spouseAccumulationByAge.get(spousePayoutAge) || {};
+                      const sTotal     = (sDispData.oa||0) + (sDispData.sa||0) + (sDispData.ma||0) + (sDispData.ra||0);
+                      const sActivePlan    = spouseLifePlan || "standard";
+                      const sActivePlanObj = spouseLifePlans?.[sActivePlan];
+                      const sPayoutRaw     = sActivePlanObj
+                        ? (debouncedSpouseInputs.isMale !== false ? sActivePlanObj.startM : sActivePlanObj.startF)
+                        : 0;
+                      const sPayout = (sActivePlan === 'basic' && sPayoutRaw > 0)
+                        ? sPayoutRaw * (1 - spouseBasicPremiumPct / 100) / 0.90
+                        : sPayoutRaw;
+                      const sPlanLabel = { standard: "Standard plan", escalating: "Escalating plan", basic: "Basic plan" }[sActivePlan] || "Standard plan";
+
+                      if (activeTab === "life") {
+                        // Life tab: show 3 spouse KPIs mirroring the 3 primary ones
+                        kpis.push(
+                          { label: "Spouse CPF", sublabel: `at payout age ${debouncedSpouseInputs.payoutAge}`, value: formatCurrency(sTotal), color: "var(--clr-purple)", tip: "Spouse total CPF balance (OA+MA+RA) at their chosen payout age" },
+                          { label: `Spouse ${sPlanLabel}`, sublabel: "monthly payout", value: sPayout ? formatCurrency(Math.round(applyInflation(sPayout, spousePayoutAge))) : "—", color: "var(--clr-violet)", tip: `Spouse ${sPlanLabel} monthly payout from CPF LIFE. Figures from 2026 CPF Board data.` },
+                          { label: "Spouse payout age", sublabel: "CPF LIFE start", value: `${debouncedSpouseInputs.payoutAge}`, color: "var(--clr-amber)", tip: "Spouse payout age — when their CPF LIFE payouts begin." },
+                        );
+                      } else {
+                        // Strategy tab: show Spouse CPF + Combined household CPF
+                        const combinedTotal = dispTotal + sTotal;
+                        kpis.push(
+                          { label: "Spouse CPF", sublabel: `at age ${debouncedSpouseInputs.payoutAge}`, value: formatCurrency(sTotal), color: "var(--clr-purple)", tip: "Spouse total CPF at their payout age" },
+                          { label: "Combined CPF", sublabel: "Primary + Spouse", value: formatCurrency(combinedTotal), color: "#f43f5e", tip: `Combined household CPF — Primary ${formatCurrency(dispTotal)} at ${inputs.payoutAge} + Spouse ${formatCurrency(sTotal)} at ${debouncedSpouseInputs.payoutAge}` },
+                        );
+                      }
+                    }
+
+                    return kpis;
                   })();
                 })().map(({ label, sublabel, value, color, tip }, i) => (
                   <KpiCard
