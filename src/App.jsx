@@ -3516,10 +3516,13 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
   // Derive the selected <option> value string from current state
   const selectedVal = isAnnual ? `annual:${durVal}` : "one-time";
 
-  // Build option list
+  // Build option list — use inputs.payoutAge for the "indefinite" label so it
+  // reads "Annually (to 65)" (or whatever the member's payout age is) rather
+  // than the hardcoded projection ceiling of 95.
+  const _ftPayoutAge = Number(inputs?.payoutAge) || 95;
   const options = [
     { value: "one-time", label: "One-Time" },
-    { value: "annual:0", label: "Annually (to 95)" },
+    { value: "annual:0", label: `Annually (to ${_ftPayoutAge})` },
   ];
   if (durKey) {
     // Inject persisted custom value if not already a preset (e.g. loaded from saved profile)
@@ -3598,7 +3601,7 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
         onClick={e => e.stopPropagation()}
         title={isAnnual
           ? (durVal === 0
-              ? "Applied every year until age 95 (end of projection)."
+              ? `Applied every year until age ${_ftPayoutAge} (your payout age).`
               : `Applied every year for ${durVal} yr${durVal !== 1 ? "s" : ""} from your current age, then stops.`)
           : "Applied once in the first projection year."}
         style={selectStyle}
@@ -17798,91 +17801,159 @@ ${milestoneSnapshotHtml}
             {/* Persistent KPI strip — hidden on Summary tab (Zone 1 already shows these metrics) */}
             {activeTab !== "guide" && activeTab !== "summary" && activeTab !== "readiness" && (
               <div className="kpi-strip-wrap">
-              <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "1fr", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-                {(() => {
-                  const pa = payoutAge65; // CQ-2 fix: use debounced value to match displayProjection/displayAccumulation
-                  // Use displayProjection (already inflation-adjusted when isRealDollars=true)
-                  const paRow = displayProjectionByAge.get(pa)
-                    || displayProjection.find(d => d.age > pa) // E6 fix: O(1) for hot path; fallback O(n) scan only on Map miss (rare edge: pa beyond projection horizon)
-                    || displayProjection[0];
-                  // totalCpfAtPayout from displayAccumulation (also inflation-adjusted)
-                  // REM-2d/2e fix: replaced O(n) displayAccumulation.find() with O(1) accumulationByAge.get()
-                  const dispPayoutData = accumulationByAge.get(pa) || {};
-                  const dispTotal = (dispPayoutData.oa || 0) + (dispPayoutData.sa || 0) + (dispPayoutData.ma || 0) + (dispPayoutData.ra || 0);
-                  // RA at 55 — from displayAccumulation; if already past 55, use current RA
-                  const ca2 = Number(inputs.currentAge) || 35;
-                  const ra55Row = ca2 >= 55
-                    ? displayAccumulation[0]  // current state — index 0 is current age, not age-keyed
-                    : accumulationByAge.get(55);
-                  const ra55 = ra55Row?.ra || 0;
-                  const ra55Sublabel = ca2 >= 55 ? "current balance" : "projected at 55";
-                  // RSS mode: replace CPF LIFE plan KPIs with RSS-specific figures
-                  const isRSSKpi = debouncedInputs.cpfScheme === 'rss';
-                  const rssCurrentRa = (accumulationByAge.get(ca2) || displayAccumulation[0])?.ra || Number(inputs.saBalance) || 0;
-                  const rssAnnual = (Number(inputs.rssMonthlyPayout) || 0) * 12;
-                  // Bug6-KPI fix: replaced simplified flat-4% depletion loop with a direct
-                  // read from the engine projection. The old formula used only CPF_RATES.RA (4%)
-                  // and ignored the 1% extra on first $60k and 1% extra on first $30k, producing
-                  // a depletion age 2–5 years earlier than the RSS tab for typical balances.
-                  // The engine already computes the authoritative answer — read rssDepletionAge
-                  // from the last row that carries it (same pattern as milestones at line ~5300).
-                  const rssDepEst = (() => {
-                    if (!isRSSKpi || rssAnnual <= 0) return null;
-                    for (let i = projection.length - 1; i >= 0; i--) {
-                      if (projection[i]?.rssDepletionAge != null) return projection[i].rssDepletionAge;
-                    }
-                    return ">95";
-                  })();
-                  // rssIsGrowing: RA can never deplete when annual draw < RA interest at current balance.
-                  // Use the live rssCurrentRa for the interest estimate (same logic as before, but
-                  // the payout display now matches the RSS tab exactly).
-                  const rssIsGrowing = rssDepEst === ">95" && rssAnnual > 0 && rssAnnual < rssCurrentRa * CPF_RATES.RA;
-                  return isRSSKpi ? [
-                    { label: "Current RA", value: formatCurrency(rssCurrentRa), color: "var(--clr-blue)", tip: "Current Retirement Account balance — this is drawn down each month under RSS" },
-                    { label: "RSS Payout", value: inputs.rssMonthlyPayout > 0 ? formatCurrency(Number(inputs.rssMonthlyPayout)) + "/mo" : "Not set", color: inputs.rssMonthlyPayout > 0 ? "var(--clr-green)" : "var(--clr-red)", tip: "Your fixed CPF Board monthly payout under RSS" },
-                    { label: "Annual Draw", value: rssAnnual > 0 ? formatCurrency(rssAnnual) + "/yr" : "—", color: "var(--clr-blue)", tip: "Total annual RSS drawdown from RA (monthly × 12)" },
-                    { label: "Est. Depletion",
-                      value: rssDepEst ? `Age ${rssDepEst}` : "—",
-                      color: rssIsGrowing ? "var(--clr-amber)"
-                           : (rssDepEst && typeof rssDepEst === "number" && rssDepEst < 85 ? "var(--clr-red)" : "var(--clr-green)"),
-                      tip: rssIsGrowing
-                        ? `RA is growing — your annual payout (${formatCurrency(rssAnnual)}/yr) is less than the 4% base interest your RA earns (~${formatCurrency(Math.round(rssCurrentRa * CPF_RATES.RA))}/yr). Increase your monthly payout above ~${formatCurrency(Math.ceil(rssCurrentRa * CPF_RATES.RA / 12))}/mo to project a depletion date.`
-                        : `Projected age when RA reaches $0 under RSS — read directly from the engine projection (4% base + 1% extra on first $60k + 1% extra on first $30k). Matches the RSS tab depletion age exactly.` },
-                    { label: "Migration", value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge} · ${{ bas: 'Basic', std: 'Std', esc: 'Esc' }[inputs.lifePlanAtMigration || 'std']}` : "None", color: inputs.lifeMigrationAge > 0 ? "var(--clr-purple)" : "var(--text-muted)", tip: inputs.lifeMigrationAge > 0 ? `Migrating to CPF LIFE ${{ bas: 'Basic', std: 'Standard', esc: 'Escalating' }[inputs.lifePlanAtMigration || 'std']} plan at age ${inputs.lifeMigrationAge}` : "Staying on RSS until RA depletes — no CPF LIFE migration planned" },
-                    { label: "Payout Start", value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "var(--clr-amber)", tip: "Age when CPF Board began your RSS monthly payouts" },
-                  ] : (() => {
-                    // Zone 1 KPI strip: 3 metrics only — Total CPF | Active plan payout | Payout age
-                    const activePlan = highlightPlan || "standard";
-                    const activePlanObj = lifePlans?.[activePlan];
-                    const activePayoutRaw = activePlanObj
-                      ? (inputs.isMale !== false ? activePlanObj.startM : activePlanObj.startF)
-                      : 0;
-                    // B1-KPI fix: Basic plan raw value is unscaled — apply the same premium scaling
-                    // used in payoutProjection: start × (1 − pct/100) / 0.90. Standard/Escalating
-                    // are already at the correct unscaled table value so no adjustment needed.
-                    const activePayout = (activePlan === 'basic' && activePayoutRaw > 0)
-                      ? activePayoutRaw * (1 - basicPremiumPct / 100) / 0.90
-                      : activePayoutRaw;
-                    const planLabel = { standard: "Standard plan", escalating: "Escalating plan", basic: "Basic plan" }[activePlan] || "Standard plan";
-                    return [
-                      { label: "Total CPF", sublabel: `at payout age ${inputs.payoutAge}`, value: formatCurrency(dispTotal), color: "var(--clr-blue)", tip: "Total CPF balance (OA+MA+RA) at your chosen payout age — the nest egg that funds CPF LIFE payouts" },
-                      { label: planLabel, sublabel: "monthly payout", value: activePayout ? formatCurrency(Math.round(applyInflation(activePayout, inputs.payoutAge))) : "—", color: "var(--clr-emerald)", tip: `${planLabel} monthly payout from CPF LIFE. Switch plans in the plan comparison below. Figures from 2026 CPF Board data.` },
-                      { label: "Payout age", sublabel: "CPF LIFE start", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts." },
-                    ];
-                  })();
-                })().map(({ label, sublabel, value, color, tip }, i) => (
-                  <KpiCard
-                    key={i}
-                    label={label}
-                    sublabel={sublabel}
-                    value={value}
-                    color={color}
-                    tip={tip}
-                    isFirst={i === 0}
-                    isEarly={i > 0 && i < 4}
-                  />
-                ))}
-              </div>{/* /kpi-strip */}
+              {/* ── Household 3-column grouped banner (Life + Strategy tabs only) ──────────
+                  Replaces the flat KPI strip when household mode is active on these tabs.
+                  Shows one card per member (Primary | Spouse | Combined), each with two
+                  metrics: CPF Total at payout age + CPF LIFE monthly payout.
+                  The standalone "Payout age" column is removed — age is shown inline as the
+                  CPF Total sublabel inside each card. */}
+              {householdEnabled && debouncedInputs.cpfScheme !== 'rss' && (activeTab === "life" || activeTab === "strategy") && spouseProjection?.length > 0
+                ? (() => {
+                    // ── Primary data ──────────────────────────────────────────────────────
+                    const pa          = payoutAge65;
+                    const pData       = accumulationByAge.get(pa) || {};
+                    const pTotal      = (pData.oa||0) + (pData.sa||0) + (pData.ma||0) + (pData.ra||0);
+                    const pPlan       = highlightPlan || "standard";
+                    const pPlanObj    = lifePlans?.[pPlan];
+                    const pPayoutRaw  = pPlanObj ? (inputs.isMale !== false ? pPlanObj.startM : pPlanObj.startF) : 0;
+                    const pPayout     = (pPlan === 'basic' && pPayoutRaw > 0) ? pPayoutRaw * (1 - basicPremiumPct / 100) / 0.90 : pPayoutRaw;
+                    const pMonthly    = pPayout ? Math.round(applyInflation(pPayout, pa)) : 0;
+                    const pPlanShort  = { standard: "Standard", escalating: "Escalating", basic: "Basic" }[pPlan] || "Standard";
+                    // ── Spouse data ───────────────────────────────────────────────────────
+                    const spa         = spousePayoutAge;
+                    const sData       = spouseAccumulationByAge.get(spa) || {};
+                    const sTotal      = (sData.oa||0) + (sData.sa||0) + (sData.ma||0) + (sData.ra||0);
+                    const sPlan       = spouseLifePlan || "standard";
+                    const sPlanObj    = spouseLifePlans?.[sPlan];
+                    const sPayoutRaw  = sPlanObj ? (debouncedSpouseInputs.isMale !== false ? sPlanObj.startM : sPlanObj.startF) : 0;
+                    const sPayout     = (sPlan === 'basic' && sPayoutRaw > 0) ? sPayoutRaw * (1 - spouseBasicPremiumPct / 100) / 0.90 : sPayoutRaw;
+                    const sMonthly    = sPayout ? Math.round(applyInflation(sPayout, spa)) : 0;
+                    const sPlanShort  = { standard: "Standard", escalating: "Escalating", basic: "Basic" }[sPlan] || "Standard";
+                    // ── Combined ─────────────────────────────────────────────────────────
+                    const cTotal      = pTotal + sTotal;
+                    const cMonthly    = pMonthly + sMonthly;
+                    // ── Card renderer ─────────────────────────────────────────────────────
+                    const MemberCard = ({ header, accent, bgRgba, cpfTotal, ageLabel, monthly, planShort, cpfTip, payTip }) => (
+                      <div style={{ padding: "7px 10px", borderRadius: 10, border: `1px solid ${accent}55`, background: bgRgba, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
+                        <div style={{ fontSize: 10, fontWeight: 900, color: accent, letterSpacing: "0.08em", borderBottom: `1px solid ${accent}33`, paddingBottom: 4, marginBottom: 1 }}>{header}</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                          <div title={cpfTip} style={{ textAlign: "center", cursor: "help" }}>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>CPF Total</div>
+                            <div style={{ fontSize: 10, fontWeight: 500, color: "var(--text-subtle)", whiteSpace: "nowrap" }}>at age {ageLabel}</div>
+                            <div style={{ fontSize: 14, fontWeight: 900, color: accent, fontFamily: "monospace", marginTop: 1 }}>{formatCurrency(cpfTotal)}</div>
+                          </div>
+                          <div title={payTip} style={{ textAlign: "center", cursor: "help" }}>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{planShort} /mo</div>
+                            <div style={{ fontSize: 10, fontWeight: 500, color: "var(--text-subtle)", whiteSpace: "nowrap" }}>CPF LIFE payout</div>
+                            <div style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-emerald)", fontFamily: "monospace", marginTop: 1 }}>{monthly ? formatCurrency(monthly) : "—"}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                    return (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box" }}>
+                        <MemberCard header="👤 PRIMARY" accent="var(--clr-blue)" bgRgba="rgba(var(--clr-blue-rgb),0.07)"
+                          cpfTotal={pTotal} ageLabel={pa} monthly={pMonthly} planShort={pPlanShort}
+                          cpfTip={`Primary total CPF (OA+SA/RA+MA) at payout age ${pa}`}
+                          payTip={`Primary ${pPlanShort} plan monthly CPF LIFE payout — 2026 CPF Board data`} />
+                        <MemberCard header="👤 SPOUSE" accent="var(--clr-purple)" bgRgba="rgba(var(--clr-purple-rgb),0.07)"
+                          cpfTotal={sTotal} ageLabel={spa} monthly={sMonthly} planShort={sPlanShort}
+                          cpfTip={`Spouse total CPF (OA+SA/RA+MA) at payout age ${spa}`}
+                          payTip={`Spouse ${sPlanShort} plan monthly CPF LIFE payout — 2026 CPF Board data`} />
+                        <MemberCard header="👥 COMBINED" accent="#f43f5e" bgRgba="rgba(244,63,94,0.07)"
+                          cpfTotal={cTotal} ageLabel={`${pa} / ${spa}`} monthly={cMonthly} planShort="Combined"
+                          cpfTip={`Combined household CPF — Primary ${formatCurrency(pTotal)} at ${pa} + Spouse ${formatCurrency(sTotal)} at ${spa}`}
+                          payTip={`Combined monthly CPF LIFE — Primary ${formatCurrency(pMonthly)}/mo + Spouse ${formatCurrency(sMonthly)}/mo`} />
+                      </div>
+                    );
+                  })()
+                /* ── Standard flat KPI strip — solo mode or non-Life/Strategy tabs ── */
+                : (
+                  <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "1fr", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+                    {(() => {
+                      const pa = payoutAge65; // CQ-2 fix: use debounced value to match displayProjection/displayAccumulation
+                      // Use displayProjection (already inflation-adjusted when isRealDollars=true)
+                      const paRow = displayProjectionByAge.get(pa)
+                        || displayProjection.find(d => d.age > pa) // E6 fix: O(1) for hot path; fallback O(n) scan only on Map miss (rare edge: pa beyond projection horizon)
+                        || displayProjection[0];
+                      // totalCpfAtPayout from displayAccumulation (also inflation-adjusted)
+                      // REM-2d/2e fix: replaced O(n) displayAccumulation.find() with O(1) accumulationByAge.get()
+                      const dispPayoutData = accumulationByAge.get(pa) || {};
+                      const dispTotal = (dispPayoutData.oa || 0) + (dispPayoutData.sa || 0) + (dispPayoutData.ma || 0) + (dispPayoutData.ra || 0);
+                      // RA at 55 — from displayAccumulation; if already past 55, use current RA
+                      const ca2 = Number(inputs.currentAge) || 35;
+                      const ra55Row = ca2 >= 55
+                        ? displayAccumulation[0]  // current state — index 0 is current age, not age-keyed
+                        : accumulationByAge.get(55);
+                      const ra55 = ra55Row?.ra || 0;
+                      const ra55Sublabel = ca2 >= 55 ? "current balance" : "projected at 55";
+                      // RSS mode: replace CPF LIFE plan KPIs with RSS-specific figures
+                      const isRSSKpi = debouncedInputs.cpfScheme === 'rss';
+                      const rssCurrentRa = (accumulationByAge.get(ca2) || displayAccumulation[0])?.ra || Number(inputs.saBalance) || 0;
+                      const rssAnnual = (Number(inputs.rssMonthlyPayout) || 0) * 12;
+                      // Bug6-KPI fix: replaced simplified flat-4% depletion loop with a direct
+                      // read from the engine projection. The old formula used only CPF_RATES.RA (4%)
+                      // and ignored the 1% extra on first $60k and 1% extra on first $30k, producing
+                      // a depletion age 2–5 years earlier than the RSS tab for typical balances.
+                      // The engine already computes the authoritative answer — read rssDepletionAge
+                      // from the last row that carries it (same pattern as milestones at line ~5300).
+                      const rssDepEst = (() => {
+                        if (!isRSSKpi || rssAnnual <= 0) return null;
+                        for (let i = projection.length - 1; i >= 0; i--) {
+                          if (projection[i]?.rssDepletionAge != null) return projection[i].rssDepletionAge;
+                        }
+                        return ">95";
+                      })();
+                      // rssIsGrowing: RA can never deplete when annual draw < RA interest at current balance.
+                      const rssIsGrowing = rssDepEst === ">95" && rssAnnual > 0 && rssAnnual < rssCurrentRa * CPF_RATES.RA;
+                      return isRSSKpi ? [
+                        { label: "Current RA", value: formatCurrency(rssCurrentRa), color: "var(--clr-blue)", tip: "Current Retirement Account balance — this is drawn down each month under RSS" },
+                        { label: "RSS Payout", value: inputs.rssMonthlyPayout > 0 ? formatCurrency(Number(inputs.rssMonthlyPayout)) + "/mo" : "Not set", color: inputs.rssMonthlyPayout > 0 ? "var(--clr-green)" : "var(--clr-red)", tip: "Your fixed CPF Board monthly payout under RSS" },
+                        { label: "Annual Draw", value: rssAnnual > 0 ? formatCurrency(rssAnnual) + "/yr" : "—", color: "var(--clr-blue)", tip: "Total annual RSS drawdown from RA (monthly × 12)" },
+                        { label: "Est. Depletion",
+                          value: rssDepEst ? `Age ${rssDepEst}` : "—",
+                          color: rssIsGrowing ? "var(--clr-amber)"
+                               : (rssDepEst && typeof rssDepEst === "number" && rssDepEst < 85 ? "var(--clr-red)" : "var(--clr-green)"),
+                          tip: rssIsGrowing
+                            ? `RA is growing — your annual payout (${formatCurrency(rssAnnual)}/yr) is less than the 4% base interest your RA earns (~${formatCurrency(Math.round(rssCurrentRa * CPF_RATES.RA))}/yr). Increase your monthly payout above ~${formatCurrency(Math.ceil(rssCurrentRa * CPF_RATES.RA / 12))}/mo to project a depletion date.`
+                            : `Projected age when RA reaches $0 under RSS — read directly from the engine projection (4% base + 1% extra on first $60k + 1% extra on first $30k). Matches the RSS tab depletion age exactly.` },
+                        { label: "Migration", value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge} · ${{ bas: 'Basic', std: 'Std', esc: 'Esc' }[inputs.lifePlanAtMigration || 'std']}` : "None", color: inputs.lifeMigrationAge > 0 ? "var(--clr-purple)" : "var(--text-muted)", tip: inputs.lifeMigrationAge > 0 ? `Migrating to CPF LIFE ${{ bas: 'Basic', std: 'Standard', esc: 'Escalating' }[inputs.lifePlanAtMigration || 'std']} plan at age ${inputs.lifeMigrationAge}` : "Staying on RSS until RA depletes — no CPF LIFE migration planned" },
+                        { label: "Payout Start", value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "var(--clr-amber)", tip: "Age when CPF Board began your RSS monthly payouts" },
+                      ] : (() => {
+                        // Standard 3-metric strip: Total CPF | Active plan payout | Payout age
+                        const activePlan = highlightPlan || "standard";
+                        const activePlanObj = lifePlans?.[activePlan];
+                        const activePayoutRaw = activePlanObj
+                          ? (inputs.isMale !== false ? activePlanObj.startM : activePlanObj.startF)
+                          : 0;
+                        // B1-KPI fix: Basic plan raw value is unscaled — apply the same premium scaling
+                        // used in payoutProjection: start × (1 − pct/100) / 0.90. Standard/Escalating
+                        // are already at the correct unscaled table value so no adjustment needed.
+                        const activePayout = (activePlan === 'basic' && activePayoutRaw > 0)
+                          ? activePayoutRaw * (1 - basicPremiumPct / 100) / 0.90
+                          : activePayoutRaw;
+                        const planLabel = { standard: "Standard plan", escalating: "Escalating plan", basic: "Basic plan" }[activePlan] || "Standard plan";
+                        return [
+                          { label: "Total CPF", sublabel: `at payout age ${inputs.payoutAge}`, value: formatCurrency(dispTotal), color: "var(--clr-blue)", tip: "Total CPF balance (OA+MA+RA) at your chosen payout age — the nest egg that funds CPF LIFE payouts" },
+                          { label: planLabel, sublabel: "monthly payout", value: activePayout ? formatCurrency(Math.round(applyInflation(activePayout, inputs.payoutAge))) : "—", color: "var(--clr-emerald)", tip: `${planLabel} monthly payout from CPF LIFE. Switch plans in the plan comparison below. Figures from 2026 CPF Board data.` },
+                          { label: "Payout age", sublabel: "CPF LIFE start", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts." },
+                        ];
+                      })();
+                    })().map(({ label, sublabel, value, color, tip }, i) => (
+                      <KpiCard
+                        key={i}
+                        label={label}
+                        sublabel={sublabel}
+                        value={value}
+                        color={color}
+                        tip={tip}
+                        isFirst={i === 0}
+                        isEarly={i > 0 && i < 4}
+                      />
+                    ))}
+                  </div>
+                )
+              }
               {/* /kpi-strip-wrap */}</div>
             )}
           </div>
