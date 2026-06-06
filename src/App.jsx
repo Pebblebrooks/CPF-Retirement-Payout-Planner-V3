@@ -249,6 +249,20 @@ const getPRRates = (prYear, age, rateType = 'GG') => {
   if (!table) return null;
   return table.find(r => age <= r.maxAge) || table[table.length - 1];
 };
+// ── DPS premium lookup — Great Eastern Life / CPF Board ─────────────────────
+// Premiums are age-banded (assessed at member's age on last birthday).
+// Source: Dependants' Protection Scheme premium table (2025/2026).
+// Coverage ends at age 65. SC/PR only. Used by engines (per-year lookup) and
+// the sidebar UI (show current-age auto-premium).
+const getDpsPremiumForAge = (age) => {
+  if (age >= 65) return 0; // coverage ends at 65
+  if (age <= 34) return 18;
+  if (age <= 39) return 30;
+  if (age <= 44) return 50;
+  if (age <= 49) return 93;
+  if (age <= 54) return 188;
+  return 298; // ages 55–64
+};
 // ── CPF LIFE 2026 Payout Reference Dataset ──────────────────────────────────
 // Source: CPF Board Monthly Payout Estimator (2026 cohort, male, payout age 65).
 // CPF Board does not publish exact actuarial/mortality formulas — industry standard
@@ -603,8 +617,9 @@ const DEFAULT_INPUTS = {
   cpfHousingGrantResale: 0,   // CPF Housing Grant for Resale Flats (up to $80k families / $40k singles)
   phgAmount: 0,               // Proximity Housing Grant (up to $30k / $20k)
   stepUpGrantAmount: 0,       // Step-Up CPF Housing Grant (up to $15k second-timers)
-  // Insurance — annual OA deductions; user enters premium from their CPF statement
-  dpsAnnualPremium: 0,        // Dependants' Protection Scheme (21–64, SC/PR, OA first then SA/RA fallback)
+  // Insurance — annual OA deductions
+  dpsMode: "auto",             // "auto"|"optout"|"custom" — how DPS premium is determined
+  dpsAnnualPremium: 0,        // Dependants' Protection Scheme — only read when dpsMode === "custom"
   hpsAnnualPremium: 0,        // Home Protection Scheme (HDB owners only, ends at min(65, housingStop))
   // OA Drawdown (post-payout-age supplementary income from OA)
   oaDrawdownStartAge: 0,         // 0 = disabled; age to begin drawing from OA (must be >= payoutAge)
@@ -1157,7 +1172,7 @@ const INPUT_LABELS = {
   goalTargetCPF: "CPF Goal Target",
   plannedDownpaymentOA: "OA Downpayment", downpaymentAge: "Downpayment Age",
   ehgAmount: "Enhanced CPF Housing Grant", cpfHousingGrantResale: "CPF Housing Grant (Resale)", phgAmount: "Proximity Housing Grant", stepUpGrantAmount: "Step-Up CPF Grant",
-  dpsAnnualPremium: "DPS Annual Premium", hpsAnnualPremium: "HPS Annual Premium",
+  dpsMode: "DPS Mode", dpsAnnualPremium: "DPS Annual Premium", hpsAnnualPremium: "HPS Annual Premium",
   oaDrawdownStartAge: "OA Drawdown Start Age", oaDrawdownMonthly: "OA Monthly Drawdown",
   oaDrawdownFloor: "OA Drawdown Floor", propMonetiseEnabled: "Prop Monetise",
   propMonetiseScheme: "Prop Scheme", propMonetiseAge: "Prop Monetise Age",
@@ -1431,8 +1446,8 @@ function runRSSEngine(inputs, {
   // Housing grants — one-time OA credits at downpaymentAge, tracked in cumHousingOA/FV for CPF refund
   const _totalHousingGrants = (Number(inputs.ehgAmount)||0) + (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) + (Number(inputs.stepUpGrantAmount)||0);
   let housingGrantApplied = startAge > downpaymentAge;
-  // Insurance deductions from OA (user-entered from CPF statement)
-  const _dpsAnnual = Number(inputs.dpsAnnualPremium) || 0;
+  // Insurance deductions from OA — dpsMode drives whether/how DPS is applied
+  const _dpsMode = inputs.dpsMode || 'auto'; // "auto"|"optout"|"custom"
   const _hpsAnnual = Number(inputs.hpsAnnualPremium) || 0;
   const srsContrib     = overrideSrsContrib !== undefined ? Math.min(overrideSrsContrib, srsCap) : Math.min(Number(inputs.srsAnnualContribution) || 0, srsCap);
   const srsContribStop = Number(inputs.srsContribStopAge)    || 63;
@@ -1955,10 +1970,14 @@ function runRSSEngine(inputs, {
     oa = Math.max(0, oa - activeHousing);
 
     // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
-    if (!isForeigner && _dpsAnnual > 0 && age >= 21 && age < 65) {
-      const fromOA = Math.min(oa, _dpsAnnual); oa -= fromOA;
-      const rem = _dpsAnnual - fromOA;
-      if (rem > 0) { if (age < 55) sa = Math.max(0, sa - rem); else ra = Math.max(0, ra - rem); }
+    // auto: use getDpsPremiumForAge(age) so premium steps up correctly as member ages each year
+    if (!isForeigner && age >= 21 && age < 65 && _dpsMode !== 'optout') {
+      const dpsPrem = _dpsMode === 'auto' ? getDpsPremiumForAge(age) : (Number(inputs.dpsAnnualPremium) || 0);
+      if (dpsPrem > 0) {
+        const fromOA = Math.min(oa, dpsPrem); oa -= fromOA;
+        const rem = dpsPrem - fromOA;
+        if (rem > 0) { if (age < 55) sa = Math.max(0, sa - rem); else ra = Math.max(0, ra - rem); }
+      }
     }
     // HPS — Home Protection Scheme: annual OA deduction, SC/PR only, ends at min(65, housingStop)
     if (!isForeigner && _hpsAnnual > 0 && age < Math.min(65, housingStop)) {
@@ -2300,7 +2319,7 @@ function runProjectionEngine(inputs, {
   const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
   // Housing grants + insurance — declared here so engine loop can reference them
   const _totalHousingGrantsPE = (Number(inputs.ehgAmount)||0) + (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) + (Number(inputs.stepUpGrantAmount)||0);
-  const _dpsAnnualPE = Number(inputs.dpsAnnualPremium) || 0;
+  const _dpsModePE = inputs.dpsMode || 'auto'; // "auto"|"optout"|"custom"
   const _hpsAnnualPE = Number(inputs.hpsAnnualPremium) || 0;
   const medInfl = (Number(inputs.medicalInflationRate) || 0) / 100;
   const isSEP = inputs.isSelfEmployed === true;
@@ -3200,10 +3219,14 @@ function runProjectionEngine(inputs, {
     oa = Math.max(0, oa - activeHousing);
 
     // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
-    if (!isForeigner && _dpsAnnualPE > 0 && age >= 21 && age < 65) {
-      const fromOA = Math.min(oa, _dpsAnnualPE); oa -= fromOA;
-      const rem = _dpsAnnualPE - fromOA;
-      if (rem > 0) { if (age < 55) sa = Math.max(0, sa - rem); else ra = Math.max(0, ra - rem); }
+    // auto: use getDpsPremiumForAge(age) so premium steps up correctly as member ages each year
+    if (!isForeigner && age >= 21 && age < 65 && _dpsModePE !== 'optout') {
+      const dpsPremPE = _dpsModePE === 'auto' ? getDpsPremiumForAge(age) : (Number(inputs.dpsAnnualPremium) || 0);
+      if (dpsPremPE > 0) {
+        const fromOA = Math.min(oa, dpsPremPE); oa -= fromOA;
+        const rem = dpsPremPE - fromOA;
+        if (rem > 0) { if (age < 55) sa = Math.max(0, sa - rem); else ra = Math.max(0, ra - rem); }
+      }
     }
     // HPS — Home Protection Scheme: annual OA deduction, SC/PR only, ends at min(65, housingStop)
     if (!isForeigner && _hpsAnnualPE > 0 && age < Math.min(65, housingStop)) {
@@ -8523,7 +8546,7 @@ export default function App() {
       currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
       plannedDownpaymentOA, downpaymentAge,
       ehgAmount, cpfHousingGrantResale, phgAmount, stepUpGrantAmount,
-      dpsAnnualPremium, hpsAnnualPremium,
+      dpsMode, dpsAnnualPremium, hpsAnnualPremium,
       srsBalance, srsAnnualContribution, srsContribStopAge, srsReturnRate,
       srsDrawdownStartAge, srsDrawdownYears, // R4: srsCitizenPR removed — dead field, engine reads citizenStatus instead
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
@@ -8568,7 +8591,7 @@ export default function App() {
       currentPrivateAssets, annualPrivateSaving, privateAssetGrowthRate,
       plannedDownpaymentOA, downpaymentAge,
       ehgAmount, cpfHousingGrantResale, phgAmount, stepUpGrantAmount,
-      dpsAnnualPremium, hpsAnnualPremium,
+      dpsMode, dpsAnnualPremium, hpsAnnualPremium,
       srsBalance, srsAnnualContribution, srsContribStopAge, srsReturnRate,
       srsDrawdownStartAge, srsDrawdownYears,
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
@@ -17357,22 +17380,86 @@ ${milestoneSnapshotHtml}
                   {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
                       🛡️ CPF Insurance Premiums
-                      <TooltipBox id="t-cpf-insurance" text="Annual OA premiums deducted by CPF Board. Enter your actual premium from your CPF annual statement. DPS: OA deducted first, SA/RA fallback if OA insufficient. HPS: OA only, ends at age 65 or mortgage payoff (Housing Stop Age), whichever is earlier. Both SC/PR only." />
+                      <TooltipBox id="t-cpf-insurance" text="Annual OA premiums deducted by CPF Board. DPS: OA deducted first, SA/RA fallback if OA insufficient. Covers death, terminal illness, TPD up to $70k (reduces to $55k at 60). HPS: OA only, ends at 65 or mortgage payoff. Both SC/PR only." />
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      {[
-                        ["dpsAnnualPremium", "DPS Premium ($/yr)", "Dependants' Protection Scheme — opt-out term life insurance. Provides up to $70,000 lump sum (reduces to $55,000 at age 60) on death, terminal illness, or total permanent disability. Administered by Great Eastern Life. Coverage ends at 65. OA deducted first; if OA is $0, balance deducted from SA (pre-55) or RA (55+). Enter your annual premium from your CPF statement."],
-                        ["hpsAnnualPremium", "HPS Premium ($/yr)", "Home Protection Scheme — HDB flat owners using CPF for mortgage instalments only. Mortgage-reducing insurance that clears your outstanding HDB loan on death, terminal illness, or TPD. Deducted annually from OA. Coverage ends at 65 or when loan is fully paid (Housing Stop Age), whichever is earlier. Does not apply to private property or ECs. Enter your annual premium from your CPF statement."],
-                      ].map(([name, label, tip]) => (
-                        <div key={name}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
-                            {label}<TooltipBox id={`t-${name}`} text={tip} />
+
+                    {/* ── DPS: mode selector ──────────────────────────────── */}
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>
+                        DPS Premium ($/yr)
+                        <TooltipBox id="t-dpsAnnualPremium" text="Dependants' Protection Scheme — opt-out term life insurance administered by Great Eastern Life. Provides up to $70,000 (reduces to $55,000 at age 60) on death, terminal illness, or total permanent disability. Coverage ends at 65. OA deducted first; SA (pre-55) or RA (55+) if OA is insufficient. Auto mode applies the official age-banded premium table each simulation year — more accurate than a fixed entry." />
+                      </div>
+                      {/* Mode selector — Auto / Opt Out / Custom */}
+                      <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                        {[["auto", "Auto"], ["optout", "Opt Out"], ["custom", "Custom"]].map(([val, lbl]) => {
+                          const active = (inputs.dpsMode || "auto") === val;
+                          return (
+                            <button key={val} onClick={() => setInputs(p => ({ ...p, dpsMode: val }))}
+                              style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                                border: active ? "none" : "1px solid var(--border-strong)", cursor: "pointer",
+                                background: active ? "var(--clr-blue)" : "var(--bg-muted)",
+                                color: active ? "#fff" : "var(--text-muted)", transition: "background 0.15s" }}>
+                              {lbl}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {/* Auto: read-only computed display */}
+                      {(inputs.dpsMode || "auto") === "auto" && (() => {
+                        const autoPrem = getDpsPremiumForAge(currentAge_ui);
+                        return (
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, fontFamily: "monospace" }}>
+                              <span style={{ fontSize: 14, color: "var(--text-bright)", fontWeight: 700 }}>${autoPrem.toLocaleString()}<span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)", marginLeft: 6 }}>/yr</span></span>
+                              <span style={{ fontSize: 10, color: "var(--clr-blue)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>auto</span>
+                            </div>
+                            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
+                              Age-banded: ≤34 $18 · 35–39 $30 · 40–44 $50 · 45–49 $93 · 50–54 $188 · 55–64 $298. Updates each simulation year. Coverage ends at 65.
+                            </p>
                           </div>
-                          <input type="text" inputMode="decimal" name={name} placeholder="0" value={inputs[name] || ""} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label={label} className={fieldChanged(name) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                          {name === "dpsAnnualPremium" && (Number(inputs.dpsAnnualPremium)||0) > 0 && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Deducted from OA (SA/RA fallback) each year age 21–64</p>}
-                          {name === "hpsAnnualPremium" && (Number(inputs.hpsAnnualPremium)||0) > 0 && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Deducted from OA each year until age {Math.min(65, Number(inputs.housingStopAge)||55)}</p>}
+                        );
+                      })()}
+                      {/* Opt Out: $0 display */}
+                      {(inputs.dpsMode || "auto") === "optout" && (
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, fontFamily: "monospace", opacity: 0.6 }}>
+                            <span style={{ fontSize: 14, color: "var(--text-muted)" }}>$0<span style={{ fontSize: 11, marginLeft: 6 }}>/yr</span></span>
+                            <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>opted out</span>
+                          </div>
+                          <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>No DPS deductions modelled. You remain responsible for any actual premiums.</p>
                         </div>
-                      ))}
+                      )}
+                      {/* Custom: editable text input */}
+                      {(inputs.dpsMode || "auto") === "custom" && (
+                        <div>
+                          <input type="text" inputMode="decimal" name="dpsAnnualPremium" placeholder="0"
+                            value={inputs.dpsAnnualPremium || ""}
+                            onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                            aria-label="DPS Annual Premium (custom)"
+                            className={fieldChanged("dpsAnnualPremium") ? "cpf-fc" : undefined}
+                            style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          {(Number(inputs.dpsAnnualPremium) || 0) > 0 && (
+                            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>Deducted from OA (SA/RA fallback) each year age 21–64. Enter amount from your CPF statement.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── HPS: unchanged simple input ─────────────────────── */}
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
+                        HPS Premium ($/yr)
+                        <TooltipBox id="t-hpsAnnualPremium" text="Home Protection Scheme — HDB flat owners using CPF for mortgage instalments only. Mortgage-reducing insurance that clears your outstanding HDB loan on death, terminal illness, or TPD. Deducted annually from OA. Coverage ends at 65 or when loan is fully paid (Housing Stop Age), whichever is earlier. Does not apply to private property or ECs. Enter your annual premium from your CPF statement." />
+                      </div>
+                      <input type="text" inputMode="decimal" name="hpsAnnualPremium" placeholder="0"
+                        value={inputs.hpsAnnualPremium || ""}
+                        onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        aria-label="HPS Annual Premium"
+                        className={fieldChanged("hpsAnnualPremium") ? "cpf-fc" : undefined}
+                        style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                      {(Number(inputs.hpsAnnualPremium) || 0) > 0 && (
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Deducted from OA each year until age {Math.min(65, Number(inputs.housingStopAge) || 55)}</p>
+                      )}
                     </div>
                   </div>}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
