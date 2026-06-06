@@ -3516,13 +3516,10 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
   // Derive the selected <option> value string from current state
   const selectedVal = isAnnual ? `annual:${durVal}` : "one-time";
 
-  // Build option list — use inputs.payoutAge for the "indefinite" label so it
-  // reads "Annually (to 65)" (or whatever the member's payout age is) rather
-  // than the hardcoded projection ceiling of 95.
-  const _ftPayoutAge = Number(inputs?.payoutAge) || 95;
+  // Build option list
   const options = [
     { value: "one-time", label: "One-Time" },
-    { value: "annual:0", label: `Annually (to ${_ftPayoutAge})` },
+    { value: "annual:0", label: "Annually (to 95)" },
   ];
   if (durKey) {
     // Inject persisted custom value if not already a preset (e.g. loaded from saved profile)
@@ -3601,7 +3598,7 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
         onClick={e => e.stopPropagation()}
         title={isAnnual
           ? (durVal === 0
-              ? `Applied every year until age ${_ftPayoutAge} (your payout age).`
+              ? "Applied every year until age 95 (end of projection)."
               : `Applied every year for ${durVal} yr${durVal !== 1 ? "s" : ""} from your current age, then stops.`)
           : "Applied once in the first projection year."}
         style={selectStyle}
@@ -8126,7 +8123,8 @@ export default function App() {
       "Bas Monthly Payout", "Bas Annual Payout", "Bas Bequest",
       "Std Total Yield", "Esc Total Yield", "Bas Total Yield",
       "Net Worth - Std (incl. Property)", "Net Worth - Esc (incl. Property)", "Net Worth - Bas (incl. Property)",
-      "Yield (B) Amount", "Yield (S) Amount", "Yield (E) Amount", "CPF Eff. Rate %", "Yield IRR % (Std)", "Yield IRR % (Esc)", "Yield IRR % (Bas)"
+      "Yield (B) Amount", "Yield (S) Amount", "Yield (E) Amount", "CPF Eff. Rate %", "Yield IRR % (Std)", "Yield IRR % (Esc)", "Yield IRR % (Bas)",
+      "LIFE IRR % (Bas)", "LIFE IRR % (Std)", "LIFE IRR % (Esc)"
     ];
     const rows = projection.map(row => {
       const lr = payoutByAge.get(row.age) || {};
@@ -8157,6 +8155,13 @@ export default function App() {
           if (row.age < pa) return "";
           const xirr = xirrByAge[plan]?.[row.age];
           return xirr != null ? xirr.toFixed(2) + "%" : "";
+        })),
+        // LIFE IRR % — effective return from payout age (RA as single investment)
+        ...(["basic", "standard", "escalating"].map(plan => {
+          const pa = payoutAge65;
+          if (row.age < pa) return "";
+          const val = lifeEffRateByAge[plan]?.[row.age];
+          return val != null ? val.toFixed(2) + "%" : "";
         }))
       ];
     });
@@ -8387,7 +8392,7 @@ export default function App() {
 <p>Plan shown: ${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} | Payout Age: ${pa} | Generated: ${new Date().toLocaleDateString("en-SG")}</p>
 <table>
 <thead><tr><th>Age</th><th>OA</th><th>MA</th><th>SA/RA</th><th>Inflows</th><th>Outflows</th>
-<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th><th>CPF Rate</th><th>XIRR (B)</th><th>XIRR (S)</th><th>XIRR (E)</th></tr></thead>
+<th>Bas Pay</th><th>Bas Beq</th><th>Std Pay</th><th>Std Beq</th><th>Esc Pay</th><th>Esc Beq</th><th>Total Yield</th><th>CPF Rate</th><th>XIRR (B)</th><th>XIRR (S)</th><th>XIRR (E)</th><th>LIFE IRR (B)</th><th>LIFE IRR (S)</th><th>LIFE IRR (E)</th></tr></thead>
 <tbody>${rowsHtml}</tbody>
 </table>
 </body></html>`;
@@ -8408,7 +8413,7 @@ export default function App() {
       // R2 fix: derive is55Plus from debouncedInputs so the SA/RA column label
       // matches the same data source as the rest of the print function.
       const is55PlusAtPrint = (Number(debouncedInputs.currentAge) || 0) >= 55;
-      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield", "CPF Rate", "XIRR (B)", "XIRR (S)", "XIRR (E)"].join("\t");
+      const headers = ["Age", "OA", "MA", is55PlusAtPrint ? "RA" : "SA", "Inflows", "Outflows", "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield", "CPF Rate", "XIRR (B)", "XIRR (S)", "XIRR (E)", "LIFE IRR (B)", "LIFE IRR (S)", "LIFE IRR (E)"].join("\t");
       const textRows = displayProjection.map(row => {
         const baseRow = accumulationByAge.get(row.age) || {};
         const raSaBal = (baseRow.sa || 0) + (row[`${highlightPlan}RA`] || 0);
@@ -8421,7 +8426,12 @@ export default function App() {
           const xirr = xirrByAge[plan]?.[row.age];
           return xirr != null ? xirr.toFixed(2) + "%" : "—†";
         });
-        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`]), tEffRate, ...xirrVals].join("\t");
+        const lifeIrrVals = ["basic","standard","escalating"].map(plan => {
+          if (!isPA || row.age < pa + 2) return "—";
+          const val = lifeEffRateByAge[plan]?.[row.age];
+          return val != null ? val.toFixed(2) + "%" : "—";
+        });
+        return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`]), tEffRate, ...xirrVals, ...lifeIrrVals].join("\t");
       }).join("\n");
       setExportModal({ type: "print", content: `CPF Projection — ${memberName} (Age ${startAge} to 95)\n${"=".repeat(60)}\n${headers}\n${textRows}` });
     }
@@ -9792,6 +9802,81 @@ export default function App() {
     return result;
   }, [activeTab, projection, payoutProjection, payoutAge65, debouncedInputs.currentAge,
       debouncedInputs.cpfScheme, debouncedInputs.rssPayoutStartAge]);
+
+  // ── lifeEffRateByAge ─────────────────────────────────────────────────────────
+  // "Effective return from payout age" — treats RA at payout age as the single
+  // investment and computes an annual IRR at each age from payout to 95.
+  // Answers: "if I invested my RA at payout age, what annual return am I getting?"
+  // Distinct from xirrByAge (which includes all contribution history from current age).
+  // Used in LIFE tab "Eff. Return %" chart view and Data Table "LIFE IRR" columns.
+  const lifeEffRateByAge = useMemo(() => {
+    if (activeTab !== "life" && activeTab !== "table") return {};
+    if (debouncedInputs.cpfScheme === 'rss') return {};
+    const pa = payoutAge65;
+    const P  = debouncedInputs.applyRaOaTransfer ? raAfterTransfer : raAtPayout;
+    if (P <= 0 || !payoutProjection?.length) return {};
+    const result = { standard: {}, escalating: {}, basic: {} };
+    const payoutRows = payoutProjection.filter(d => d.age >= pa);
+    // Pre-build per-plan cumulative inflow arrays (avoids redundant slicing)
+    const cumFlows = { standard: [], escalating: [], basic: [] };
+    for (const d of payoutRows) {
+      for (const plan of ['standard', 'escalating', 'basic']) {
+        cumFlows[plan].push({ t: d.age - pa, v: d[`${plan}Annual`] || 0 });
+      }
+    }
+    for (let i = 0; i < payoutRows.length; i++) {
+      const d = payoutRows[i];
+      const Y = d.age - pa; // years elapsed since payout age
+      for (const plan of ['standard', 'escalating', 'basic']) {
+        if (Y === 0) { result[plan][d.age] = 0; continue; }
+        const flows = [
+          { t: 0, v: -P },                        // lump-sum "investment" at payout age
+          ...cumFlows[plan].slice(0, i + 1),       // annual payouts t=1 … t=Y
+        ];
+        const bequest = d[`${plan}Bequest`] || 0;
+        if (bequest > 0) flows.push({ t: Y, v: bequest }); // terminal bequest
+        const irr = computeXIRR(flows);
+        result[plan][d.age] = irr !== null ? Math.max(-0.20, Math.min(0.20, irr)) * 100 : 0;
+      }
+    }
+    return result;
+  }, [activeTab, payoutProjection, payoutAge65, raAtPayout, raAfterTransfer,
+      debouncedInputs.applyRaOaTransfer, debouncedInputs.cpfScheme]);
+
+  // Spouse mirror of lifeEffRateByAge
+  const spouseLifeEffRateByAge = useMemo(() => {
+    if (!householdEnabled) return {};
+    if (activeTab !== "life" && activeTab !== "table") return {};
+    const pa = spousePayoutAge;
+    const P  = debouncedSpouseInputs.applyRaOaTransfer ? spouseRaAfterTransfer : spouseRaAtPayout;
+    if (P <= 0 || !spousePayoutProjection?.length) return {};
+    const result = { standard: {}, escalating: {}, basic: {} };
+    const payoutRows = spousePayoutProjection.filter(d => d.age >= pa);
+    const cumFlows = { standard: [], escalating: [], basic: [] };
+    for (const d of payoutRows) {
+      for (const plan of ['standard', 'escalating', 'basic']) {
+        cumFlows[plan].push({ t: d.age - pa, v: d[`${plan}Annual`] || 0 });
+      }
+    }
+    for (let i = 0; i < payoutRows.length; i++) {
+      const d = payoutRows[i];
+      const Y = d.age - pa;
+      for (const plan of ['standard', 'escalating', 'basic']) {
+        if (Y === 0) { result[plan][d.age] = 0; continue; }
+        const flows = [
+          { t: 0, v: -P },
+          ...cumFlows[plan].slice(0, i + 1),
+        ];
+        const bequest = d[`${plan}Bequest`] || 0;
+        if (bequest > 0) flows.push({ t: Y, v: bequest });
+        const irr = computeXIRR(flows);
+        result[plan][d.age] = irr !== null ? Math.max(-0.20, Math.min(0.20, irr)) * 100 : 0;
+      }
+    }
+    return result;
+  }, [householdEnabled, activeTab, spousePayoutProjection, spousePayoutAge,
+      spouseRaAtPayout, spouseRaAfterTransfer,
+      debouncedSpouseInputs.applyRaOaTransfer]);
 
   // BUG-10 fix: use payoutAge65 (debounced) so payoutAgeData matches the debounced displayAccumulation.
   // REM-1 fix: replaced O(n) displayAccumulation.find() with O(1) accumulationByAge.get() — Map is
@@ -17766,7 +17851,7 @@ ${milestoneSnapshotHtml}
                     { label: "Migration", value: inputs.lifeMigrationAge > 0 ? `Age ${inputs.lifeMigrationAge} · ${{ bas: 'Basic', std: 'Std', esc: 'Esc' }[inputs.lifePlanAtMigration || 'std']}` : "None", color: inputs.lifeMigrationAge > 0 ? "var(--clr-purple)" : "var(--text-muted)", tip: inputs.lifeMigrationAge > 0 ? `Migrating to CPF LIFE ${{ bas: 'Basic', std: 'Standard', esc: 'Escalating' }[inputs.lifePlanAtMigration || 'std']} plan at age ${inputs.lifeMigrationAge}` : "Staying on RSS until RA depletes — no CPF LIFE migration planned" },
                     { label: "Payout Start", value: `Age ${inputs.rssPayoutStartAge || 65}`, color: "var(--clr-amber)", tip: "Age when CPF Board began your RSS monthly payouts" },
                   ] : (() => {
-                    // KPI strip: 3 primary metrics + optional spouse/combined cards in household mode
+                    // Zone 1 KPI strip: 3 metrics only — Total CPF | Active plan payout | Payout age
                     const activePlan = highlightPlan || "standard";
                     const activePlanObj = lifePlans?.[activePlan];
                     const activePayoutRaw = activePlanObj
@@ -17779,46 +17864,11 @@ ${milestoneSnapshotHtml}
                       ? activePayoutRaw * (1 - basicPremiumPct / 100) / 0.90
                       : activePayoutRaw;
                     const planLabel = { standard: "Standard plan", escalating: "Escalating plan", basic: "Basic plan" }[activePlan] || "Standard plan";
-                    const kpis = [
+                    return [
                       { label: "Total CPF", sublabel: `at payout age ${inputs.payoutAge}`, value: formatCurrency(dispTotal), color: "var(--clr-blue)", tip: "Total CPF balance (OA+MA+RA) at your chosen payout age — the nest egg that funds CPF LIFE payouts" },
                       { label: planLabel, sublabel: "monthly payout", value: activePayout ? formatCurrency(Math.round(applyInflation(activePayout, inputs.payoutAge))) : "—", color: "var(--clr-emerald)", tip: `${planLabel} monthly payout from CPF LIFE. Switch plans in the plan comparison below. Figures from 2026 CPF Board data.` },
                       { label: "Payout age", sublabel: "CPF LIFE start", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts." },
                     ];
-
-                    // ── Household KPI extension ─────────────────────────────────────────────
-                    // Shared spouse data computation — used by both Life and Strategy extensions.
-                    const _showSpouseKpis = householdEnabled && spouseProjection?.length > 0;
-                    if (_showSpouseKpis && (activeTab === "life" || activeTab === "strategy")) {
-                      const sDispData  = spouseAccumulationByAge.get(spousePayoutAge) || {};
-                      const sTotal     = (sDispData.oa||0) + (sDispData.sa||0) + (sDispData.ma||0) + (sDispData.ra||0);
-                      const sActivePlan    = spouseLifePlan || "standard";
-                      const sActivePlanObj = spouseLifePlans?.[sActivePlan];
-                      const sPayoutRaw     = sActivePlanObj
-                        ? (debouncedSpouseInputs.isMale !== false ? sActivePlanObj.startM : sActivePlanObj.startF)
-                        : 0;
-                      const sPayout = (sActivePlan === 'basic' && sPayoutRaw > 0)
-                        ? sPayoutRaw * (1 - spouseBasicPremiumPct / 100) / 0.90
-                        : sPayoutRaw;
-                      const sPlanLabel = { standard: "Standard plan", escalating: "Escalating plan", basic: "Basic plan" }[sActivePlan] || "Standard plan";
-
-                      if (activeTab === "life") {
-                        // Life tab: show 3 spouse KPIs mirroring the 3 primary ones
-                        kpis.push(
-                          { label: "Spouse CPF", sublabel: `at payout age ${debouncedSpouseInputs.payoutAge}`, value: formatCurrency(sTotal), color: "var(--clr-purple)", tip: "Spouse total CPF balance (OA+MA+RA) at their chosen payout age" },
-                          { label: `Spouse ${sPlanLabel}`, sublabel: "monthly payout", value: sPayout ? formatCurrency(Math.round(applyInflation(sPayout, spousePayoutAge))) : "—", color: "var(--clr-violet)", tip: `Spouse ${sPlanLabel} monthly payout from CPF LIFE. Figures from 2026 CPF Board data.` },
-                          { label: "Spouse payout age", sublabel: "CPF LIFE start", value: `${debouncedSpouseInputs.payoutAge}`, color: "var(--clr-amber)", tip: "Spouse payout age — when their CPF LIFE payouts begin." },
-                        );
-                      } else {
-                        // Strategy tab: show Spouse CPF + Combined household CPF
-                        const combinedTotal = dispTotal + sTotal;
-                        kpis.push(
-                          { label: "Spouse CPF", sublabel: `at age ${debouncedSpouseInputs.payoutAge}`, value: formatCurrency(sTotal), color: "var(--clr-purple)", tip: "Spouse total CPF at their payout age" },
-                          { label: "Combined CPF", sublabel: "Primary + Spouse", value: formatCurrency(combinedTotal), color: "#f43f5e", tip: `Combined household CPF — Primary ${formatCurrency(dispTotal)} at ${inputs.payoutAge} + Spouse ${formatCurrency(sTotal)} at ${debouncedSpouseInputs.payoutAge}` },
-                        );
-                      }
-                    }
-
-                    return kpis;
                   })();
                 })().map(({ label, sublabel, value, color, tip }, i) => (
                   <KpiCard
@@ -20365,6 +20415,7 @@ ${milestoneSnapshotHtml}
               };
               const activeSensData     = isSpouseLife ? spouseSensitivityData    : sensitivityData;
               const activeInputsLife   = isSpouseLife ? debouncedSpouseInputs    : debouncedInputs;
+      const activeLifeEffRate  = isSpouseLife ? spouseLifeEffRateByAge   : lifeEffRateByAge;
               // Destructure intersections into li* aliases so LIFE tab JSX references them without change
               const {
                 intersectionEscVsStd:        liEscVsStd,
@@ -20539,19 +20590,32 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
                 <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2 }}>
-                  {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"]].map(([id, label]) => (
+                  {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ["effRate", "Eff. Return %"]].map(([id, label]) => (
                     <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                       {label}
                     </button>
                   ))}
                 </div>
                 <div className="fhd-chart-grow" style={{ height: 350, minHeight: 220 }}>
+                  {/* For effRate mode, merge effective-rate values into chart data */}
+                  {(() => {
+                    const baseRows = activeDisplayProj.filter(d => d.age >= activePayoutAge);
+                    const lifeChartData = viewMode === "effRate"
+                      ? baseRows.map(d => ({
+                          age: d.age,
+                          standardEffRate:   activeLifeEffRate?.standard?.[d.age]   ?? null,
+                          escalatingEffRate: activeLifeEffRate?.escalating?.[d.age] ?? null,
+                          basicEffRate:      activeLifeEffRate?.basic?.[d.age]      ?? null,
+                        }))
+                      : baseRows;
+                    const isEffRate = viewMode === "effRate";
+                    return (
                   <ResponsiveContainer width="99%" height="100%">
-                    <LineChart data={activeDisplayProj.filter(d => d.age >= activePayoutAge)}> {/* BUG-51 fix: use debounced payoutAge65 */}
+                    <LineChart data={lifeChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                       <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 11 }} />
-                      <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Amount ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 11, style: { textAnchor: "middle" } }} />
-                      <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={v => formatCurrency(v)} wrapperStyle={STYLES.chartTooltipWrapper} />
+                      <YAxis tickFormatter={isEffRate ? v => `${v.toFixed(1)}%` : v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: isEffRate ? "Return (% / yr)" : "Amount ($)", angle: -90, position: "insideLeft", offset: 14, fill: "var(--chart-text)", fontSize: 11, style: { textAnchor: "middle" } }} />
+                      <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={isEffRate ? v => v != null ? `${v.toFixed(2)}%` : "—" : v => formatCurrency(v)} wrapperStyle={STYLES.chartTooltipWrapper} />
                       <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={STYLES.chartLegend} />
                       {/* Total Yield breakeven lines */}
                       {/* Crossover labels: custom viewBox renderers place each label at a distinct
@@ -20589,20 +20653,36 @@ ${milestoneSnapshotHtml}
                       {viewMode === "cumPayout" && liEscCumVsStdCum    && <ReferenceLine x={liEscCumVsStdCum}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 0,  value: `Esc>Std Cash Age ${liEscCumVsStdCum}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
                       {viewMode === "cumPayout" && liStdCumVsBasicCum  && <ReferenceLine x={liStdCumVsBasicCum}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 18, value: `Std>Basic Cash Age ${liStdCumVsBasicCum}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
                       {viewMode === "cumPayout" && liEscCumVsBasicCum  && <ReferenceLine x={liEscCumVsBasicCum}  stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopRight", dy: 0,  value: `Esc>Basic Cash Age ${liEscCumVsBasicCum}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
-                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "standardMonthly" : viewMode === "annualPayout" ? "standardAnnual" : viewMode === "total" ? "standardTotal" : viewMode === "cumPayout" ? "standardCumPayout" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.35} dot={false} name="Standard" />
-                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "escalatingMonthly" : viewMode === "annualPayout" ? "escalatingAnnual" : viewMode === "total" ? "escalatingTotal" : viewMode === "cumPayout" ? "escalatingCumPayout" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.35} dot={false} name="Escalating" />
-                      <Line isAnimationActive={false} type="monotone" dataKey={viewMode === "payout" ? "basicMonthly" : viewMode === "annualPayout" ? "basicAnnual" : viewMode === "total" ? "basicTotal" : viewMode === "cumPayout" ? "basicCumPayout" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.35} dot={false} name="Basic" />
+                      {/* Eff. Return % mode: horizontal 4% floor + vertical breakeven */}
+                      {isEffRate && (
+                        <ReferenceLine y={4} stroke="rgba(52,211,153,0.55)" strokeWidth={1.5} strokeDasharray="5 3"
+                          label={{ position: "insideBottomRight", value: "4% (SA/RA floor)", fill: "var(--clr-green)", fontSize: 10, fontWeight: 700 }} />
+                      )}
+                      {isEffRate && liStdVsBasic && (
+                        <ReferenceLine x={liStdVsBasic} stroke="var(--clr-blue2)" strokeWidth={1.5} strokeDasharray="4 4"
+                          label={({ viewBox: vb }) => (
+                            <text x={vb.x + 6} y={vb.y + vb.height * 0.3} textAnchor="start" fill="var(--clr-blue2)" fontSize={11} fontWeight="bold">
+                              {`Std>Basic Age ${liStdVsBasic}`}
+                            </text>
+                          )} />
+                      )}
+                      <Line isAnimationActive={false} type="monotone" dataKey={isEffRate ? "standardEffRate" : viewMode === "payout" ? "standardMonthly" : viewMode === "annualPayout" ? "standardAnnual" : viewMode === "total" ? "standardTotal" : viewMode === "cumPayout" ? "standardCumPayout" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.35} dot={false} name="Standard" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={isEffRate ? "escalatingEffRate" : viewMode === "payout" ? "escalatingMonthly" : viewMode === "annualPayout" ? "escalatingAnnual" : viewMode === "total" ? "escalatingTotal" : viewMode === "cumPayout" ? "escalatingCumPayout" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.35} dot={false} name="Escalating" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={isEffRate ? "basicEffRate" : viewMode === "payout" ? "basicMonthly" : viewMode === "annualPayout" ? "basicAnnual" : viewMode === "total" ? "basicTotal" : viewMode === "cumPayout" ? "basicCumPayout" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.35} dot={false} name="Basic" />
                     </LineChart>
                   </ResponsiveContainer>
+                    );
+                  })()}
                 </div>
                 {/* Info cards — one per view mode, highlighted when active. Click to switch chart view. */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
                   {[
                     ["payout",      "Monthly Payout",     "var(--clr-slate)",   "Fixed or rising monthly income. Escalating starts ~20% lower then grows 2%/yr. Dashed line shows the month Escalating exceeds Standard."],
                     ["annualPayout","Annual Payout",       "var(--clr-blue2)",   "Monthly × 12. Useful for household budget planning. No breakeven line — refer to Monthly or Total Yield views."],
                     ["cumPayout",   "Cumulative Payout",   "var(--clr-emerald)", "Running cash received in hand — bequest excluded. Answers: 'By this age, which plan has paid me more cash?'"],
                     ["bequest",     "Bequest",             "var(--clr-slate)",   "Premium minus cumulative payouts at each age. Drops to $0 once the full premium is paid out (~age 80 for Standard)."],
                     ["total",       "Total Yield",         "var(--clr-blue)",    "Cumulative payouts + remaining bequest. Shows all 3 Total Yield crossover lines. Best view for plan comparison."],
+                    ["effRate",     "Eff. Return %",       "var(--clr-violet)",  "Annual IRR on your RA 'investment' at payout age. Standard near 0% while bequest offsets payouts (~age 65–80), then rises. Basic holds ~4% via RA interest. Dashed vertical = Total Yield breakeven. Horizontal line = 4% SA/RA floor."],
                   ].map(([mode, title, color, text]) => (
                     <div key={mode} onClick={() => setViewMode(mode)} style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: viewMode === mode ? "rgba(var(--clr-emerald-rgb),0.06)" : "var(--bg-panel-muted)", border: `1.5px solid ${viewMode === mode ? color : "var(--border-subtle)"}`, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4, transition: "all 0.2s" }}>
                       <strong style={{ color, display: "block", marginBottom: 3, fontSize: 12 }}>{title}</strong>{text}
@@ -21760,6 +21840,7 @@ ${milestoneSnapshotHtml}
                       ["Yield (B/S/E)", "Cumulative total yield = all payouts received + current bequest value. Measures the total financial return of each plan.", "var(--clr-blue)"],
                       ["CPF Rate", "Blended CPF effective rate that year: total interest credited (OA + SA/RA + MA, including the extra 1% bonus tier) divided by total CPF balance. Shows at all ages. Compare against XIRR — if XIRR exceeds CPF Rate, CPF LIFE is beating passive CPF interest.", "#5eead4"],
                       ["XIRR (B/S/E)", "Internal Rate of Return for all 3 CPF LIFE plans at each age (Basic · Standard · Escalating). Each shows independently — compare to see which plan beats the CPF Rate benchmark first. Green = >4%, amber = 2–4%, red = <2%. In RSS mode a single XIRR (RSS) column is shown instead. † = pre-breakeven: payouts + bequest do not yet exceed contributions at any positive rate.", "var(--clr-violet)"],
+                      ["LIFE IRR (B/S/E)", "Effective annual return treating the RA at payout age as the single investment. Standard stays near 0% while bequest offsets payouts (~age 65–80), then rises as payouts accumulate; Basic holds ~4% via retained RA interest throughout Phase 1. Distinct from XIRR — LIFE IRR covers only the CPF LIFE payout phase, not the full contribution history from current age. Matches the 'Eff. Return %' chart in the LIFE tab.", "var(--clr-violet)"],
                     ].map(([col, desc, color]) => (
                       <div key={col} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 3 }}>{col}</div>
@@ -21836,7 +21917,7 @@ ${milestoneSnapshotHtml}
                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700, fontSize: 13, fontFamily: "monospace", tableLayout: "auto" }}>
                       <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                         <tr style={{ background: "var(--header-bg)", borderBottom: "1px solid var(--border-strong)" }}>
-                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", "CPF Rate", ...(isRSSMode ? ["XIRR (RSS)"] : ["XIRR (B)", "XIRR (S)", "XIRR (E)"])].map((h, i) => (
+                          {["Age", "OA", "MA", "SA/RA", "Inflows", "Outflows", ...((Number(inputs.wisAmount) || 0) > 0 ? ["WIS Cash"] : []), "Bas Pay", "Bas Beq", "Std Pay", "Std Beq", "Esc Pay", "Esc Beq", "Yield (B)", "Yield (S)", "Yield (E)", "CPF Rate", ...(isRSSMode ? ["XIRR (RSS)"] : ["XIRR (B)", "XIRR (S)", "XIRR (E)"]), ...(!isRSSMode ? ["LIFE IRR (B)", "LIFE IRR (S)", "LIFE IRR (E)"] : [])].map((h, i) => (
                             <th key={h} style={{
                               padding: "10px 8px", textAlign: i === 0 ? "left" : "right", fontSize: 12, fontWeight: 800, textTransform: "uppercase", color: i >= 12 ? "var(--clr-blue)" : "var(--text-muted)", whiteSpace: "nowrap",
                               ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--header-bg)", boxShadow: "var(--shadow-sticky)" } : {})
@@ -21930,6 +22011,31 @@ ${milestoneSnapshotHtml}
                                 xirrCell("standard",   "var(--text-bright)", "s"),
                                 xirrCell("escalating", "var(--clr-green)",  "e"),
                               ];
+                            })()}
+                            {/* LIFE IRR columns — effective return from payout age (not full contribution history) */}
+                            {!isRSSMode && (() => {
+                              const pa = payoutAge65;
+                              if (row.age < pa) {
+                                return [0,1,2].map(i => <td key={`lirr${i}`} style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>—</td>);
+                              }
+                              if (row.age < pa + 2) {
+                                return [0,1,2].map(i => <td key={`lirr${i}`} style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", fontSize: 11, whiteSpace: "nowrap" }}>settling…</td>);
+                              }
+                              return [
+                                ["basic",      "var(--clr-orange)", "lb"],
+                                ["standard",   "var(--text-bright)", "ls"],
+                                ["escalating", "var(--clr-green)",   "le"],
+                              ].map(([plan, color, key]) => {
+                                const val = lifeEffRateByAge[plan]?.[row.age];
+                                if (val == null) return <td key={key} style={{ padding: "7px 8px", textAlign: "right", color: "var(--text-muted)", whiteSpace: "nowrap" }}>—</td>;
+                                const rateColor = val >= 4 ? "var(--clr-green)" : val >= 2 ? "var(--clr-amber)" : val >= 0 ? "var(--text-muted)" : "var(--clr-red)";
+                                return (
+                                  <td key={key} style={{ padding: "7px 8px", textAlign: "right", whiteSpace: "nowrap" }}
+                                    title={`LIFE IRR (${plan}) at age ${row.age}: ${val.toFixed(2)}% — annual return treating RA at payout age as the single investment. Distinct from XIRR (which includes full contribution history).`}>
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: rateColor, fontFamily: "monospace" }}>{val.toFixed(2)}%</span>
+                                  </td>
+                                );
+                              });
                             })()}
                           </tr>);
                         })}
