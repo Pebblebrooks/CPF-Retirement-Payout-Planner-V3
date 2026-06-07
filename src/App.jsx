@@ -468,8 +468,10 @@ const computeBasicPlanYearPayout = (age, phase1bTrigger, phase1aAnnual, phase2An
       const t = yTotal > 0 ? yLeft / yTotal : 0;
       basPay = phase2Annual + t * (phase1aAnnual - phase2Annual);
     }
-    // RA_Retained: effective annual factor (~8–11%/yr) embeds the annuity pool subsidy,
-    // calibrated to deplete basicPV to $0 at age 90 at the lookup-table PMT.
+    // RA_Retained: effective annual factor (~4.0–4.5%/yr; close to the SA/RA rate) is
+    // calibrated by solveEffectiveRate (Newton-Raphson) to deplete basicPV to $0 at
+    // age 90 given the lookup-table Phase 1A PMT. It is NOT higher than 4% — the earlier
+    // "8–11%/yr" comment was incorrect and has been removed.
     const newRaRem = Math.max(0, (basicRaRem * effAnnualFactor) - basPay);
     return { basPay, newRaRem };
   } else {
@@ -9060,8 +9062,9 @@ export default function App() {
     //   Phase 1A (pAge → Phase1B trigger): STABLE payout = interpolateCpfLife 'bas' result.
     //     RA_Retained tracked using the effective rate r that depletes it to $0 at exactly
     //     age 90 given the lookup-table PMT (solved via Newton-Raphson).
-    //     This effective rate (~8-11%/yr) is higher than 4% because it reflects the pooled
-    //     fund subsidy — the lookup PMT is actuarially set, not a pure RSS drawdown.
+    //     This effective rate is ~4.0–4.5%/yr (close to the 4% SA/RA floor), solved via
+    //     Newton-Raphson in solveEffectiveRate. The earlier "8–11%/yr" comment was incorrect
+    //     — it does NOT reflect a pooled fund subsidy above 4%.
     //
     //   Phase 1B trigger: when combined balance (RA_Retained + OA + MA from live projection)
     //     drops below $60K. Payout linearly declines from Phase 1A → Phase 2 level.
@@ -22688,8 +22691,8 @@ ${milestoneSnapshotHtml}
                             ["36 – 45", "37%", "20%", "17%", "21%", "7%", "9%"],
                             ["46 – 50", "37%", "20%", "17%", "19%", "8%", "10%"],
                             ["51 – 55", "37%", "20%", "17%", "15%", "11.5%", "10.5%"],
-                            ["56 – 60", "34%", "17%", "17%", "12%", "11.5%", "10.5%"],
-                            ["61 – 65", "25%", "13%", "12%", "3.5%", "11%", "10.5%"],
+                            ["56 – 60", "34%", "18%", "16%", "12%", "11.5%", "10.5%"],
+                            ["61 – 65", "25%", "12.5%", "12.5%", "3.5%", "11%", "10.5%"],
                             ["66 – 70", "16.5%", "7.5%", "9%", "1%", "5%", "10.5%"],
                             ["> 70", "12.5%", "5%", "7.5%", "1%", "1%", "10.5%"]
                           ].map(([age, tot, e1, e2, oa, sa, ma], i) => (
