@@ -5737,6 +5737,7 @@ export default function App() {
   const [scenarioB, setScenarioB] = useState(null);
   const [scenarioLabelA, setScenarioLabelA] = useState("");
   const [scenarioLabelB, setScenarioLabelB] = useState("");
+  const [compareShowAll, setCompareShowAll] = useState(false); // toggle: diff-only vs all-inputs table
 
   // ── Household: spouse/partner state ────────────────────────────────────────
   // spouseInputs: full inputs object for the spouse engine run (same shape as inputs)
@@ -13556,6 +13557,11 @@ ${milestoneSnapshotHtml}
           .z1-hero { padding: 12px 10px !important; border-radius: 14px !important; }
           .z4-plans-grid { grid-template-columns: 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr !important; }
+          /* Rental income 3-col grid collapses to 2-col on narrow phones */
+          .rental-grid-3col { grid-template-columns: 1fr 1fr !important; }
+          .rental-grid-3col > div:last-child { grid-column: 1 / -1; }
+          /* Compare slot grid: 1 col on narrow phones */
+          .compare-slots-grid { grid-template-columns: 1fr !important; }
           /* Docs tab sticky nav on small phones — full mobile stack: 48px fixed header + 44px tab strip + 44px input-params-bar = 136px. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; padding: 14px 14px 10px !important; }
           #docs-sticky-nav h3 { font-size: 16px !important; }
@@ -17714,7 +17720,7 @@ ${milestoneSnapshotHtml}
                         <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Recurring monthly cash from renting your property</p>
                       </div>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <div className="rental-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                           Monthly ($)
@@ -19821,16 +19827,17 @@ ${milestoneSnapshotHtml}
 
                 {/* ── Net Worth Trajectory — stacked area from current age to 95 ── */}
                 {(() => {
+                  const showProp = inputs.includeProperty === true;
                   const nwData = displayAccumulation.map(row => {
                     const cpf = (row.oa || 0) + (row.sa || 0) + (row.ra || 0) + (row.ma || 0);
                     const priv = row.privateAssets || 0;
                     const srs  = row.srsBalance || 0;
-                    const prop = row.propertyValue || 0;
+                    const prop = showProp ? (row.propertyValue || 0) : 0;
                     return { age: row.age, cpf, priv, srs, prop, total: cpf + priv + srs + prop };
                   }).filter(r => r.age >= (Number(inputs.currentAge) || 35));
                   if (!nwData.length) return null;
                   const peakNW = Math.max(...nwData.map(r => r.total), 1);
-                  const hasProperty = nwData.some(r => r.prop > 0);
+                  const hasProperty = showProp && nwData.some(r => r.prop > 0);
                   const hasSRS      = nwData.some(r => r.srs  > 0);
                   const hasPriv     = nwData.some(r => r.priv > 0);
                   const fmtK = v => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`;
@@ -19839,7 +19846,7 @@ ${milestoneSnapshotHtml}
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                         <TrendingUp style={{ width: 15, height: 15, color: "var(--clr-purple)", flexShrink: 0 }} />
                         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Net Worth Trajectory</span>
-                        <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 2 }}>CPF · Private · SRS{hasProperty ? " · Property" : ""}</span>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 2 }}>CPF{hasPriv ? " · Private" : ""}{hasSRS ? " · SRS" : ""}{hasProperty ? " · Property" : ""}</span>
                         <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--clr-purple)", fontWeight: 700 }}>Peak {fmtK(peakNW)}</span>
                       </div>
                       <ResponsiveContainer width="100%" height={200}>
@@ -19966,8 +19973,11 @@ ${milestoneSnapshotHtml}
                               { label: "Contribution stop age", unit: "yrs", min: Number(debouncedInputs.currentAge)||35, max: 75, step: 1, val: effCS, set: setWhatIfContribStop, base: Number(debouncedInputs.contributionStopAge)||65, fmt: v=>`${v}` },
                               { label: "Monthly OA drawdown", unit: "$", min: 0, max: 5000, step: 50, val: effOAD, set: setWhatIfOaDrawdown, base: Number(debouncedInputs.oaDrawdownMonthly)||0, fmt: v=>v>0?`${formatCurrency(v)}/mo`:"Off" },
                               { label: "Annual SRS contribution", unit: "$", min: 0, max: 15300, step: 100, val: effSRS, set: setWhatIfSrsContrib, base: Number(debouncedInputs.srsAnnualContribution)||0, fmt: formatCurrency },
-                              { label: "Private asset growth rate", unit: "%", min: 0, max: 10, step: 0.5, val: effPG, set: setWhatIfPrivGrowth, base: Number(debouncedInputs.privateAssetGrowthRate)||0, fmt: v=>`${v.toFixed(1)}%` },
-                            ].map(({ label, min, max, step, val, set, base, fmt }) => {
+                              // Only show private growth slider when the user has private assets — otherwise it has zero impact and misleads
+                              ...((Number(debouncedInputs.currentPrivateAssets)||0) > 0 || (Number(debouncedInputs.annualPrivateSaving)||0) > 0
+                                ? [{ label: "Private asset growth rate", unit: "%", min: 0, max: 10, step: 0.5, val: effPG, set: setWhatIfPrivGrowth, base: Number(debouncedInputs.privateAssetGrowthRate)||0, fmt: v=>`${v.toFixed(1)}%`, note: "Private assets only — CPF earns guaranteed rates" }]
+                                : []),
+                            ].map(({ label, min, max, step, val, set, base, fmt, note }) => {
                               const changed = Math.abs(val - base) > 0.001;
                               return (
                                 <div key={label} style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 14px", border: `1px solid ${changed ? "rgba(var(--clr-emerald-rgb),0.3)" : "var(--border-subtle)"}` }}>
@@ -19987,6 +19997,7 @@ ${milestoneSnapshotHtml}
                                     {changed && <span style={{ color: "var(--text-muted)" }}>base: {fmt(base)}</span>}
                                     <span>{fmt(max)}</span>
                                   </div>
+                                  {note && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, fontStyle: "italic" }}>ℹ {note}. OA 2.5% · SA/RA/MA 4% are fixed.</p>}
                                 </div>
                               );
                             })}
@@ -21105,9 +21116,9 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2 }}>
+                <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
                   {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
-                    <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                    <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                       {label}
                     </button>
                   ))}
@@ -21498,6 +21509,93 @@ ${milestoneSnapshotHtml}
                       </div>
                     ))}
                   </div>
+                  {/* ── Full Input Comparison table — shown when both A & B are saved ── */}
+                  {scenarioA && scenarioB && (() => {
+                    const iA = scenarioA.inputs || {};
+                    const iB = scenarioB.inputs || {};
+                    const lblA = scenarioLabelA || "Scenario A";
+                    const lblB = scenarioLabelB || "Scenario B";
+                    // Key groups: only the ~35 most meaningful inputs, in logical sections
+                    const GROUPS = [
+                      { title: "👤 Profile", keys: ["currentAge","gender","payoutAge","retirementAge","lifeExpectancy","citizenStatus","prYear","isSelfEmployed"] },
+                      { title: "💰 Current Balances", keys: ["oaBalance","saBalance","maBalance","currentPrivateAssets","srsBalance"] },
+                      { title: "📈 Salary & Contributions", keys: ["salaryGross","bonusMonths","contributionStopAge","annualPrivateSaving","srsAnnualContribution"] },
+                      { title: "⬆️ Voluntary Top-ups", keys: ["vcSaTopup","vc3a","vcMaCash","mrssAnnual","mmssAnnual"] },
+                      { title: "🏠 Housing", keys: ["housingOutflow","housingStopAge","propertyValue","propertyGrowthRate","includeProperty","propMonetiseEnabled","propMonetiseScheme","propMonetiseAge","propMonetiseCashProceeds","rentalIncome","rentalStartAge","rentalEndAge"] },
+                      { title: "📤 Decumulation", keys: ["oaDrawdownMonthly","oaDrawdownStartAge","oaDrawdownFloor","dieWithZeroEnabled","retirementMonthlyIncome"] },
+                      { title: "🛡️ Insurance & SRS", keys: ["dpsMode","dpsAnnualPremium","hpsAnnualPremium","srsAnnualContribution","srsContribStopAge","srsDrawdownStartAge"] },
+                      { title: "📊 Returns & Growth", keys: ["privateAssetGrowthRate","inflationRate","salaryGrowth"] },
+                    ];
+                    const fmtVal = (k, v) => {
+                      if (v === null || v === undefined || v === "") return "—";
+                      if (typeof v === "boolean") return v ? "✓ Yes" : "No";
+                      if (k.toLowerCase().includes("age") || k === "bonusMonths" || k === "prYear") return String(v);
+                      if (k.toLowerCase().includes("rate") || k.toLowerCase().includes("growth") || k === "inflationRate") return `${v}%`;
+                      if (typeof v === "number" && v >= 100) return `$${v.toLocaleString()}`;
+                      return String(v);
+                    };
+                    const allRows = GROUPS.flatMap(g => g.keys.map(k => ({ group: g.title, key: k, label: INPUT_LABELS[k] || k, vA: iA[k], vB: iB[k] })));
+                    const differs = row => String(row.vA ?? "") !== String(row.vB ?? "");
+                    const visibleRows = compareShowAll ? allRows : allRows.filter(differs);
+                    let lastGroup = null;
+                    return (
+                      <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, padding: "14px 16px", marginBottom: 16 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>
+                            Input Comparison — {lblA} vs {lblB}
+                          </span>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => setCompareShowAll(false)}
+                              style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: !compareShowAll ? "var(--clr-blue)" : "var(--bg-muted)", color: !compareShowAll ? "#fff" : "var(--text-muted)" }}>
+                              Differences only {!compareShowAll && `(${allRows.filter(differs).length})`}
+                            </button>
+                            <button onClick={() => setCompareShowAll(true)}
+                              style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: compareShowAll ? "var(--clr-blue)" : "var(--bg-muted)", color: compareShowAll ? "#fff" : "var(--text-muted)" }}>
+                              Show all
+                            </button>
+                          </div>
+                        </div>
+                        {visibleRows.length === 0 && (
+                          <p style={{ fontSize: 13, color: "var(--clr-green)", textAlign: "center", padding: "12px 0" }}>✓ All inputs are identical between Scenario A and Scenario B.</p>
+                        )}
+                        {visibleRows.length > 0 && (
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                              <thead>
+                                <tr style={{ borderBottom: "2px solid var(--border-strong)" }}>
+                                  <th style={{ textAlign: "left", padding: "6px 8px", color: "var(--text-muted)", fontWeight: 700, fontSize: 11, textTransform: "uppercase", width: "40%" }}>Parameter</th>
+                                  <th style={{ textAlign: "right", padding: "6px 8px", color: "#3b82f6", fontWeight: 700, fontSize: 11, textTransform: "uppercase", width: "30%" }}>{lblA}</th>
+                                  <th style={{ textAlign: "right", padding: "6px 8px", color: "#f97316", fontWeight: 700, fontSize: 11, textTransform: "uppercase", width: "30%" }}>{lblB}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {visibleRows.map((row, i) => {
+                                  const isNew = row.group !== lastGroup;
+                                  lastGroup = row.group;
+                                  const diff = differs(row);
+                                  return (
+                                    <React.Fragment key={row.key}>
+                                      {isNew && compareShowAll && (
+                                        <tr><td colSpan={3} style={{ padding: "10px 8px 4px", fontSize: 11, fontWeight: 800, color: "var(--clr-blue)", textTransform: "uppercase", letterSpacing: "0.06em", borderTop: i > 0 ? "1px solid var(--border-subtle)" : "none" }}>{row.group}</td></tr>
+                                      )}
+                                      <tr style={{ background: diff ? "rgba(var(--clr-amber-rgb),0.06)" : "transparent", borderBottom: "1px solid var(--border-subtle)" }}>
+                                        <td style={{ padding: "6px 8px", color: diff ? "var(--text-bright)" : "var(--text-muted)", fontWeight: diff ? 600 : 400 }}>
+                                          {diff && <span style={{ color: "var(--clr-amber)", marginRight: 5, fontSize: 10 }}>●</span>}
+                                          {row.label}
+                                        </td>
+                                        <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", color: diff ? "#3b82f6" : "var(--text-muted)", fontWeight: diff ? 700 : 400 }}>{fmtVal(row.key, row.vA)}</td>
+                                        <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", color: diff ? "#f97316" : "var(--text-muted)", fontWeight: diff ? 700 : 400 }}>{fmtVal(row.key, row.vB)}</td>
+                                      </tr>
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {/* Chart */}
                   {scenarioA && scenarioB ? (
                     <div>
