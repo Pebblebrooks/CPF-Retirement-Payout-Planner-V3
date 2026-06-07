@@ -633,6 +633,12 @@ const DEFAULT_INPUTS = {
   propMonetiseAge: 65,           // age at which the scheme event occurs (one-time)
   propMonetiseCashProceeds: 0,   // net cash received by member (after CPF refund, stamp duty etc.)
   propMonetiseRaTopup: 0,        // RA top-up component (Silver Housing Bonus CPF portion, or LBS annuity lump-sum)
+  lbsMonthlyPayout: 0,          // LBS: monthly income HDB pays after lease buyback ($/mo); active from propMonetiseAge → lbsPayoutEndAge
+  lbsPayoutEndAge: 85,           // LBS: age when monthly payout stream ends (when sold lease portion expires)
+  // Rental Income — recurring cash inflow from property rental
+  rentalIncome: 0,               // monthly rental income ($/mo)
+  rentalStartAge: 0,             // 0 = disabled; age to start receiving rental income
+  rentalEndAge: 85,              // age to stop receiving rental income
   // SRS (Supplementary Retirement Scheme)
   srsBalance: 0,
   srsAnnualContribution: 0,
@@ -1179,6 +1185,8 @@ const INPUT_LABELS = {
   oaDrawdownFloor: "OA Drawdown Floor", propMonetiseEnabled: "Prop Monetise",
   propMonetiseScheme: "Prop Scheme", propMonetiseAge: "Prop Monetise Age",
   propMonetiseCashProceeds: "Prop Cash Proceeds", propMonetiseRaTopup: "Prop RA Top-up",
+  lbsMonthlyPayout: "LBS Monthly Payout", lbsPayoutEndAge: "LBS Payout End Age",
+  rentalIncome: "Rental Income (Monthly)", rentalStartAge: "Rental Start Age", rentalEndAge: "Rental End Age",
   srsBalance: "SRS Balance", srsAnnualContribution: "SRS Annual Contrib",
   srsContribStopAge: "SRS Contrib Stop Age", srsReturnRate: "SRS Return Rate %",
   srsDrawdownStartAge: "SRS Drawdown Start Age", srsDrawdownYears: "SRS Drawdown Years",
@@ -1505,6 +1513,13 @@ function runRSSEngine(inputs, {
   const propMonetiseCash    = Number(inputs.propMonetiseCashProceeds) || 0;
   const propMonetiseRaTopup = Number(inputs.propMonetiseRaTopup)      || 0;
   let propMonetiseApplied   = startAge >= propMonetiseAge && propMonetiseEnabled;
+  // LBS monthly income stream — only active when scheme = 'lbs'
+  const _lbsMonthlyRSS = (propMonetiseEnabled && inputs.propMonetiseScheme === 'lbs') ? (Number(inputs.lbsMonthlyPayout) || 0) : 0;
+  const _lbsEndAgeRSS  = Number(inputs.lbsPayoutEndAge) || 85;
+  // Rental income — recurring cash inflow to private assets, independent of prop monetise
+  const _rentalMonthlyRSS = Number(inputs.rentalIncome) || 0;
+  const _rentalStartRSS   = Number(inputs.rentalStartAge) || 0;
+  const _rentalEndRSS     = Number(inputs.rentalEndAge) || 85;
   const owMonthly            = Math.min(Number(inputs.salaryGross) || 0, 8000);
   const owAnnualSubjectToCPF = owMonthly * 12;
   const awCeiling            = Math.max(0, 102000 - owAnnualSubjectToCPF);
@@ -2031,6 +2046,16 @@ function runRSSEngine(inputs, {
       currentPropValue = Math.max(0, currentPropValue - propMonetiseCash - propMonetiseRaTopup);
       propMonetiseApplied = true;
     }
+    // LBS ongoing monthly payout — HDB pays from propMonetiseAge until lbsPayoutEndAge
+    if (_lbsMonthlyRSS > 0 && age >= propMonetiseAge && age <= _lbsEndAgeRSS) {
+      const lbsAnnual = _lbsMonthlyRSS * 12;
+      privateAssets += lbsAnnual; yearInflow += lbsAnnual; totalInjected += lbsAnnual;
+    }
+    // Rental income — recurring cash inflow from property rental
+    if (_rentalMonthlyRSS > 0 && _rentalStartRSS > 0 && age >= _rentalStartRSS && age <= _rentalEndRSS) {
+      const rentalAnnual = _rentalMonthlyRSS * 12;
+      privateAssets += rentalAnnual; yearInflow += rentalAnnual; totalInjected += rentalAnnual;
+    }
 
     // Property growth
     if (!refundApplied) {
@@ -2429,6 +2454,13 @@ function runProjectionEngine(inputs, {
   const propMonetiseCash = Number(inputs.propMonetiseCashProceeds) || 0;
   const propMonetiseRaTopup = Number(inputs.propMonetiseRaTopup) || 0;
   let propMonetiseApplied = startAge >= propMonetiseAge && propMonetiseEnabled;
+  // LBS ongoing monthly payout — only active when scheme is 'lbs'
+  const _lbsMonthlyPE = (propMonetiseEnabled && inputs.propMonetiseScheme === 'lbs') ? (Number(inputs.lbsMonthlyPayout) || 0) : 0;
+  const _lbsEndAgePE  = Number(inputs.lbsPayoutEndAge) || 85;
+  // Rental income — recurring monthly cash inflow from property rental
+  const _rentalMonthlyPE = Number(inputs.rentalIncome) || 0;
+  const _rentalStartPE   = Number(inputs.rentalStartAge) || 0;
+  const _rentalEndPE     = Number(inputs.rentalEndAge) || 85;
 
   // AW ceiling: $102,000 − Total Ordinary Wages subject to CPF for the year
   // (NOT the CPF contributions themselves — the OW wages, capped at $8,000/mo × 12 = $96,000)
@@ -3327,6 +3359,16 @@ function runProjectionEngine(inputs, {
       // Property value reduced to reflect downgrade / LBS (approximate: remove proceeds from property value)
       currentPropValue = Math.max(0, currentPropValue - propMonetiseCash - propMonetiseRaTopup);
       propMonetiseApplied = true;
+    }
+    // LBS ongoing monthly payout — HDB pays from propMonetiseAge until lbsPayoutEndAge
+    if (_lbsMonthlyPE > 0 && age >= propMonetiseAge && age <= _lbsEndAgePE) {
+      const lbsAnnual = _lbsMonthlyPE * 12;
+      privateAssets += lbsAnnual; yearInflow += lbsAnnual; totalInjected += lbsAnnual;
+    }
+    // Rental income — recurring cash inflow from property rental
+    if (_rentalMonthlyPE > 0 && _rentalStartPE > 0 && age >= _rentalStartPE && age <= _rentalEndPE) {
+      const rentalAnnual = _rentalMonthlyPE * 12;
+      privateAssets += rentalAnnual; yearInflow += rentalAnnual; totalInjected += rentalAnnual;
     }
 
     // Property
@@ -6557,8 +6599,26 @@ export default function App() {
       // LBS-specific: HDB pays annuity premium into RA; total RA cannot exceed ERS
       // D-NEW-4 fix: use RETIREMENT_SUMS_2026.ERS constant instead of hardcoded 440800 — validation stays correct when the constant is updated for future years.
       if (pmScheme === 'lbs' && !errs.propMonetiseRaTopup && pmRA > RETIREMENT_SUMS_2026.ERS) errs.propMonetiseRaTopup = `LBS RA top-up capped at ERS ($${RETIREMENT_SUMS_2026.ERS.toLocaleString()})`;
-      // SHB-specific: bonus is $30k (3-room or smaller) or $15k (2-room Flexi); soft warn if suspiciously high
-      if (pmScheme === 'shb' && !errs.propMonetiseRaTopup && pmRA > 90000) errs.propMonetiseRaTopup = "SHB RA bonus cap is $30,000–$90,000 depending on flat type — verify with CPF Board";
+      // SHB-specific: bonus is capped at $30,000 total (cash + RA); warn if RA alone exceeds this
+      if (pmScheme === 'shb' && !errs.propMonetiseRaTopup && pmRA > 30000) errs.propMonetiseRaTopup = "SHB RA bonus typically capped at $30,000 (4-room → 3-room or smaller). Verify exact amount with HDB before entering.";
+      // LBS monthly payout validation
+      if (pmScheme === 'lbs') {
+        const lbsMo = Number(inp.lbsMonthlyPayout) || 0;
+        if (lbsMo < 0 || lbsMo > 20000) errs.lbsMonthlyPayout = "0 – $20,000/mo";
+        const lbsEnd = Number(inp.lbsPayoutEndAge) || 85;
+        if (lbsEnd < pmAge || lbsEnd > 99) errs.lbsPayoutEndAge = `Must be > event age (${pmAge}) and ≤ 99`;
+      }
+    }
+    // Rental income validation
+    const rentalMoV = Number(inp.rentalIncome) || 0;
+    const rentalStV = Number(inp.rentalStartAge) || 0;
+    const rentalEnV = Number(inp.rentalEndAge) || 85;
+    if (rentalMoV < 0 || rentalMoV > 50000) errs.rentalIncome = "0 – $50,000/mo";
+    if (rentalStV > 0) {
+      const caR = Number(inp.currentAge) || 35;
+      if (rentalStV < caR || rentalStV > 95) errs.rentalStartAge = `${caR}–95`;
+      if (rentalEnV <= rentalStV) errs.rentalEndAge = `Must be > start age (${rentalStV})`;
+      if (rentalEnV > 99) errs.rentalEndAge = "Must be ≤ 99";
     }
     // SRS validation
     const srsCap = ((inp.citizenStatus || 'SC').toLowerCase() === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // BUG-9 fix + P2 fix
@@ -8554,6 +8614,8 @@ export default function App() {
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
+      lbsMonthlyPayout, lbsPayoutEndAge,
+      rentalIncome, rentalStartAge, rentalEndAge,
       vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD, birthMonth, birthYear, // D4 Phase2/3
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq, // mrssFreq removed — mirrors vcSaFreq by CPF policy
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
@@ -8599,6 +8661,8 @@ export default function App() {
       oaDrawdownStartAge, oaDrawdownMonthly, oaDrawdownFloor,
       propMonetiseEnabled, propMonetiseScheme, propMonetiseAge,
       propMonetiseCashProceeds, propMonetiseRaTopup,
+      lbsMonthlyPayout, lbsPayoutEndAge,
+      rentalIncome, rentalStartAge, rentalEndAge,
       vcMaCash, oaToMaForLovedOne, oaToSaForLovedOne, citizenStatus, prYear, prRateType, isPwD, birthMonth, birthYear,
       vc3aFreq, vcSaFreq, vcMaFreq, vcVhrFreq, govGrantFreq, govGrantMaFreq, wisFreq,
       cpfisOaFreq, cpfisSaFreq, housingFreq, oaWithdrawalFreq, oaToMaFreq, oaToSaFreq,
@@ -9998,6 +10062,12 @@ export default function App() {
     const propMonAge = Number(debouncedInputs.propMonetiseAge) || 65;
     const propMonCash = Number(debouncedInputs.propMonetiseCashProceeds) || 0;
     const propEnabled = debouncedInputs.propMonetiseEnabled === true;
+    const isLBS = propEnabled && debouncedInputs.propMonetiseScheme === 'lbs';
+    const lbsMonthly = isLBS ? (Number(debouncedInputs.lbsMonthlyPayout) || 0) : 0;
+    const lbsEndAge  = Number(debouncedInputs.lbsPayoutEndAge) || 85;
+    const rentalMonthly = Number(debouncedInputs.rentalIncome) || 0;
+    const rentalStart   = Number(debouncedInputs.rentalStartAge) || 0;
+    const rentalEnd     = Number(debouncedInputs.rentalEndAge) || 85;
 
     // Pre-compute SRS annual draw from projection (first year of drawdown balance / years)
     // P2-A fix: use displayAccumulation so Real Dollars toggle is respected
@@ -10070,9 +10140,15 @@ export default function App() {
       // Property Monetisation — one-time cash event spread over the year
       const propMon = (propEnabled && age === propMonAge && propMonCash > 0) ? Math.round(propMonCash / 12) : 0;
 
-      const totalMonthly = cpfLife + rssDrawdown + oaDraw + srs + privateDrawdown + propMon;
+      // LBS monthly payout — HDB income stream after LBS event
+      const lbsMon = (lbsMonthly > 0 && age >= propMonAge && age <= lbsEndAge) ? _scDeflate(lbsMonthly, age) : 0;
 
-      data.push({ age, cpfLife, rssDrawdown, oaDraw, srs, privateAsset: privateDrawdown, propMon, totalMonthly });
+      // Rental income — recurring monthly income from property rental
+      const rentalMon = (rentalMonthly > 0 && rentalStart > 0 && age >= rentalStart && age <= rentalEnd) ? _scDeflate(rentalMonthly, age) : 0;
+
+      const totalMonthly = cpfLife + rssDrawdown + oaDraw + srs + privateDrawdown + propMon + lbsMon + rentalMon;
+
+      data.push({ age, cpfLife, rssDrawdown, oaDraw, srs, privateAsset: privateDrawdown, propMon, lbsMon, rentalMon, totalMonthly });
     }
     return data;
   // I-1/II-7/II-8 fix: replace payoutByAge with displayProjectionByAge (deflation-aware);
@@ -10082,6 +10158,8 @@ export default function App() {
     debouncedInputs.srsDrawdownStartAge, debouncedInputs.srsDrawdownYears,
     effectiveOaDrawStartAge, effectiveOaDrawMonthly, effectiveOaDrawFloor,
     debouncedInputs.propMonetiseEnabled, debouncedInputs.propMonetiseAge, debouncedInputs.propMonetiseCashProceeds,
+    debouncedInputs.propMonetiseScheme, debouncedInputs.lbsMonthlyPayout, debouncedInputs.lbsPayoutEndAge,
+    debouncedInputs.rentalIncome, debouncedInputs.rentalStartAge, debouncedInputs.rentalEndAge,
     debouncedInputs.srsReturnRate, highlightPlan,
     debouncedInputs.cpfScheme, debouncedInputs.rssPayoutStartAge, debouncedInputs.rssMonthlyPayout]);
 
@@ -17584,7 +17662,33 @@ ${milestoneSnapshotHtml}
                           </p>
                           {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && (
                             <div style={{ marginTop: 6, background: "rgba(var(--clr-blue-rgb),0.06)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#93c5fd", lineHeight: 1.5 }}>
-                              💡 <strong>LBS monthly payout not modelled:</strong> After LBS, HDB pays you a monthly income for the duration of the sold lease tail. This stream is not modelled as a recurring cash flow here. To include it, add the estimated annual LBS payout as a recurring private income amount in the <strong>Decumulation &amp; Goals</strong> panel.
+                              💡 <strong>LBS monthly payout:</strong> After LBS, HDB pays you a monthly income for the duration of the sold lease tail. Enter the estimated monthly amount below — it will appear as a recurring income stream in the Strategy chart and Gantt.
+                            </div>
+                          )}
+                          {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                              <div>
+                                <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
+                                  LBS Monthly Payout ($)
+                                  <TooltipBox id="t-lbs-monthly" text="HDB's monthly income payment to you after the Lease Buyback Scheme is completed. This is separate from the lump sum RA top-up. It continues until the sold lease portion expires (enter end age in the next field). Credited to private assets each year in the engine." />
+                                </div>
+                                <input type="text" inputMode="decimal" name="lbsMonthlyPayout" placeholder="0"
+                                  value={getDisplayValue("lbsMonthlyPayout", inputs.lbsMonthlyPayout)}
+                                  onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                                  className={fieldChanged("lbsMonthlyPayout") ? "cpf-fc" : undefined}
+                                  style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid rgba(var(--clr-blue-rgb),0.3)`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                              </div>
+                              <div>
+                                <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
+                                  Payout End Age
+                                  <TooltipBox id="t-lbs-end" text="Age when the LBS monthly payout ends — when the sold portion of the HDB lease expires. Estimate: your current age + remaining lease years sold to HDB." />
+                                </div>
+                                <input type="text" inputMode="decimal" name="lbsPayoutEndAge" placeholder="85"
+                                  value={inputs.lbsPayoutEndAge}
+                                  onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                                  className={fieldChanged("lbsPayoutEndAge") ? "cpf-fc" : undefined}
+                                  style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid rgba(var(--clr-blue-rgb),0.3)`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                              </div>
                             </div>
                           )}
                         </div>
@@ -17598,6 +17702,57 @@ ${milestoneSnapshotHtml}
                       🔒 <strong style={{ color: "var(--clr-amber)" }}>Not available to foreigners:</strong> Housing OA Outflow, OA Downpayment, Property Pledge (BRS mode), and Property Monetisation (LBS/SHB) require a CPF account (SC or PR). Property value tracking and Sell Property at Age remain active.
                     </div>
                   )}
+
+                  {/* Rental Income — recurring monthly cash inflow; available to all (SC/PR/Foreigner) */}
+                  <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div>
+                        <p style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-blue)", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
+                          Rental Income
+                          <TooltipBox id="t-rental-income" text="Model recurring rental income from your property — e.g. renting out a room, or renting out your whole flat after moving in with family. Credited to private assets each year between start and end age. Appears as a separate stream in the income stack chart and Gantt timeline. Applicable to SC, PR, and Foreigner members." />
+                        </p>
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Recurring monthly cash from renting your property</p>
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
+                          Monthly ($)
+                          <TooltipBox id="t-rental-mo" text="Net monthly rental income after agent commission, property tax, and maintenance. Leave at 0 to disable." />
+                        </div>
+                        <input type="text" inputMode="decimal" name="rentalIncome" placeholder="0"
+                          value={getDisplayValue("rentalIncome", inputs.rentalIncome)}
+                          onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                          onFocus={e => setFocusedField("rentalIncome")}
+                          className={fieldChanged("rentalIncome") ? "cpf-fc" : undefined}
+                          style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.rentalIncome ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                        {inputErrors.rentalIncome && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.rentalIncome}</p>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Start Age</div>
+                        <input type="text" inputMode="decimal" name="rentalStartAge" placeholder="65"
+                          value={inputs.rentalStartAge}
+                          onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                          className={fieldChanged("rentalStartAge") ? "cpf-fc" : undefined}
+                          style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.rentalStartAge ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                        {inputErrors.rentalStartAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.rentalStartAge}</p>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>End Age</div>
+                        <input type="text" inputMode="decimal" name="rentalEndAge" placeholder="85"
+                          value={inputs.rentalEndAge}
+                          onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                          className={fieldChanged("rentalEndAge") ? "cpf-fc" : undefined}
+                          style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.rentalEndAge ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                        {inputErrors.rentalEndAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.rentalEndAge}</p>}
+                      </div>
+                    </div>
+                    {(Number(inputs.rentalIncome) || 0) > 0 && (Number(inputs.rentalStartAge) || 0) > 0 && !inputErrors.rentalIncome && !inputErrors.rentalStartAge && (
+                      <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                        ${(Number(inputs.rentalIncome) || 0).toLocaleString()}/mo · age {inputs.rentalStartAge}–{inputs.rentalEndAge} · ${((Number(inputs.rentalIncome)||0) * 12).toLocaleString()}/yr credited to private assets
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>}
             </div>
@@ -19663,6 +19818,83 @@ ${milestoneSnapshotHtml}
 
                 {/* FRS Tracker has moved to the Strategy tab — see Strategy → FRS Tracker section */}
                 {/* Estate at Death has moved to the LIFE tab — see LIFE → Estate at Death section */}
+
+                {/* ── Net Worth Trajectory — stacked area from current age to 95 ── */}
+                {(() => {
+                  const nwData = displayAccumulation.map(row => {
+                    const cpf = (row.oa || 0) + (row.sa || 0) + (row.ra || 0) + (row.ma || 0);
+                    const priv = row.privateAssets || 0;
+                    const srs  = row.srsBalance || 0;
+                    const prop = row.propertyValue || 0;
+                    return { age: row.age, cpf, priv, srs, prop, total: cpf + priv + srs + prop };
+                  }).filter(r => r.age >= (Number(inputs.currentAge) || 35));
+                  if (!nwData.length) return null;
+                  const peakNW = Math.max(...nwData.map(r => r.total), 1);
+                  const hasProperty = nwData.some(r => r.prop > 0);
+                  const hasSRS      = nwData.some(r => r.srs  > 0);
+                  const hasPriv     = nwData.some(r => r.priv > 0);
+                  const fmtK = v => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`;
+                  return (
+                    <div data-zone="nw-chart" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: "16px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                        <TrendingUp style={{ width: 15, height: 15, color: "var(--clr-purple)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Net Worth Trajectory</span>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 2 }}>CPF · Private · SRS{hasProperty ? " · Property" : ""}</span>
+                        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--clr-purple)", fontWeight: 700 }}>Peak {fmtK(peakNW)}</span>
+                      </div>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={nwData} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="nwCpfGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.05} />
+                            </linearGradient>
+                            <linearGradient id="nwPrivGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#10b981" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
+                            </linearGradient>
+                            <linearGradient id="nwSrsGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#0ea5e9" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.05} />
+                            </linearGradient>
+                            <linearGradient id="nwPropGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.35} />
+                              <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.05} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                          <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 11 }} />
+                          <YAxis tickFormatter={fmtK} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} width={52} />
+                          <Tooltip
+                            contentStyle={{ background: "var(--tooltip-bg)", border: "1px solid var(--tooltip-border)", borderRadius: 10, fontSize: 12, padding: "8px 12px" }}
+                            labelStyle={{ fontSize: 13, color: "var(--tooltip-label)", fontWeight: 800, marginBottom: 4 }}
+                            labelFormatter={v => `Age ${v}`}
+                            formatter={(v, n) => [fmtK(v), n]}
+                            wrapperStyle={{ pointerEvents: "none" }}
+                          />
+                          <Area isAnimationActive={false} type="monotone" dataKey="cpf"  stackId="nw" stroke="#7c3aed" strokeWidth={1.5} fill="url(#nwCpfGrad)"  name="CPF" />
+                          {hasPriv     && <Area isAnimationActive={false} type="monotone" dataKey="priv" stackId="nw" stroke="#10b981" strokeWidth={1.5} fill="url(#nwPrivGrad)" name="Private Assets" />}
+                          {hasSRS      && <Area isAnimationActive={false} type="monotone" dataKey="srs"  stackId="nw" stroke="#0ea5e9" strokeWidth={1.5} fill="url(#nwSrsGrad)"  name="SRS" />}
+                          {hasProperty && <Area isAnimationActive={false} type="monotone" dataKey="prop" stackId="nw" stroke="#f59e0b" strokeWidth={1.5} fill="url(#nwPropGrad)" name="Property" />}
+                        </AreaChart>
+                      </ResponsiveContainer>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+                        {[
+                          ["CPF", "#7c3aed"],
+                          ...(hasPriv     ? [["Private Assets", "#10b981"]] : []),
+                          ...(hasSRS      ? [["SRS", "#0ea5e9"]]            : []),
+                          ...(hasProperty ? [["Property", "#f59e0b"]]       : []),
+                        ].map(([name, color]) => (
+                          <div key={name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-muted)" }}>
+                            <div style={{ width: 10, height: 10, borderRadius: 2, background: color, opacity: 0.8 }} />
+                            <span>{name}</span>
+                          </div>
+                        ))}
+                        {isRealDollars && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>Real dollars</span>}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── What-If Explorer — full explorer moved from Compare tab (Q2 migration) ── */}
                 <details data-zone="what-if" open={execDashMode || undefined} style={{ borderRadius: 18, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", overflow: "visible" }}>
@@ -23497,8 +23729,22 @@ ${milestoneSnapshotHtml}
                 const propCash = Number(inputs.propMonetiseCashProceeds) || 0;
                 summaryRows.push({ label: `Property Mon. (${inputs.propMonetiseScheme || "downgrade"})`, startAge: propMonAge, endAge: propMonAge, monthly: Math.round(propCash / 12), total: propCash, color: "var(--clr-orange)", note: "one-time" });
               }
+              // LBS monthly income — recurring stream after lease buyback
+              const lbsMonthlyInc = propEnabled && (inputs.propMonetiseScheme === 'lbs') ? (Number(inputs.lbsMonthlyPayout) || 0) : 0;
+              const lbsPayEnd     = Number(inputs.lbsPayoutEndAge) || 85;
+              if (lbsMonthlyInc > 0) {
+                summaryRows.push({ label: "LBS Monthly Income", startAge: propMonAge, endAge: lbsPayEnd, monthly: lbsMonthlyInc, total: lbsMonthlyInc * 12 * Math.max(0, lbsPayEnd - propMonAge + 1), color: "#14b8a6" });
+              }
+              // Rental income — recurring cash stream
+              const rentalMo  = Number(inputs.rentalIncome) || 0;
+              const rentalSt  = Number(inputs.rentalStartAge) || 0;
+              const rentalEn  = Number(inputs.rentalEndAge) || 85;
+              if (rentalMo > 0 && rentalSt > 0) {
+                summaryRows.push({ label: "Rental Income", startAge: rentalSt, endAge: rentalEn, monthly: rentalMo, total: rentalMo * 12 * Math.max(0, rentalEn - rentalSt + 1), color: "#a78bfa" });
+              }
 
-              const totalCombined = summaryRows.filter(r => r.label !== `Property Mon. (${inputs.propMonetiseScheme || "downgrade"})`).reduce((s, r) => s + r.monthly, 0);
+              const propMonLabel = `Property Mon. (${inputs.propMonetiseScheme || "downgrade"})`;
+              const totalCombined = summaryRows.filter(r => r.note !== "one-time").reduce((s, r) => s + r.monthly, 0);
               const shortfall = target > 0 ? target - totalCombined : 0;
 
               return (
@@ -24177,6 +24423,14 @@ ${milestoneSnapshotHtml}
                               <stop offset="5%"  stopColor="#f97316" stopOpacity={0.32} />
                               <stop offset="95%" stopColor="#f97316" stopOpacity={0.06} />
                             </linearGradient>
+                            <linearGradient id="stgLbsGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#14b8a6" stopOpacity={0.36} />
+                              <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.06} />
+                            </linearGradient>
+                            <linearGradient id="stgRentalGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor="#a78bfa" stopOpacity={0.36} />
+                              <stop offset="95%" stopColor="#a78bfa" stopOpacity={0.06} />
+                            </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                           <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 11 }} />
@@ -24198,10 +24452,12 @@ ${milestoneSnapshotHtml}
                               Area the entire income stack chart was blank for RSS members. */}
                           {isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="rssDrawdown" stackId="1" stroke="var(--clr-blue)" strokeWidth={2} fill="url(#stgRssGrad)" name="RSS Drawdown" />}
                           {!isForeigner && !isRSSStrategy && <Area isAnimationActive={false} type="monotone" dataKey="cpfLife"      stackId="1" stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#stgCpfGrad)" name="CPF LIFE" />}
-                          <Area isAnimationActive={false} type="monotone" dataKey="oaDraw"       stackId="1" stroke="var(--clr-amber2)" strokeWidth={2} fill="url(#stgOaGrad)"   name="OA Drawdown" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="srs"          stackId="1" stroke="#0ea5e9"           strokeWidth={2} fill="url(#stgSrsGrad)"  name="SRS" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="privateAsset" stackId="1" stroke="#10b981"           strokeWidth={2} fill="url(#stgPrvGrad)"  name="Private Assets" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="propMon"      stackId="1" stroke="#f97316"           strokeWidth={2} fill="url(#stgPropGrad)" name="Property Mon." />
+                          <Area isAnimationActive={false} type="monotone" dataKey="oaDraw"       stackId="1" stroke="var(--clr-amber2)" strokeWidth={2} fill="url(#stgOaGrad)"    name="OA Drawdown" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="srs"          stackId="1" stroke="#0ea5e9"           strokeWidth={2} fill="url(#stgSrsGrad)"   name="SRS" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="privateAsset" stackId="1" stroke="#10b981"           strokeWidth={2} fill="url(#stgPrvGrad)"   name="Private Assets" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="propMon"      stackId="1" stroke="#f97316"           strokeWidth={2} fill="url(#stgPropGrad)"  name="Property Mon." />
+                          <Area isAnimationActive={false} type="monotone" dataKey="lbsMon"       stackId="1" stroke="#14b8a6"           strokeWidth={2} fill="url(#stgLbsGrad)"   name="LBS Income" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="rentalMon"    stackId="1" stroke="#a78bfa"           strokeWidth={2} fill="url(#stgRentalGrad)" name="Rental" />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -24214,6 +24470,8 @@ ${milestoneSnapshotHtml}
                         ["SRS", "#0ea5e9"],
                         ["Private Assets", "#10b981"],
                         ["Property Mon.", "#f97316"],
+                        ...(lbsMonthly > 0 ? [["LBS Income", "#14b8a6"]] : []),
+                        ...(rentalMonthly > 0 && rentalStart > 0 ? [["Rental", "#a78bfa"]] : []),
                       ].map(([name, color]) => (
                         <div key={name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-muted)" }}>
                           <div style={{ width: 10, height: 10, borderRadius: 2, background: color, opacity: 0.85 }} />
@@ -24271,7 +24529,7 @@ ${milestoneSnapshotHtml}
                       </div>
                     ))}
 
-                    {/* Property monetisation pulse */}
+                    {/* Property monetisation — dot for downgrade/SHB; bar for LBS which has an ongoing stream */}
                     {propEnabled && (Number(inputs.propMonetiseCashProceeds) || 0) > 0 && (
                       <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
                         <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0, fontSize: 12, fontWeight: 600, color: "var(--text-muted)", paddingRight: 10, textAlign: "right" }}>Property Mon.</div>
@@ -24283,38 +24541,62 @@ ${milestoneSnapshotHtml}
                       </div>
                     )}
 
-                    {/* Rev #D2: Life Events Gantt row — one block per enabled event */}
-                    {(inputs.lifeEvents || []).filter(e => e.enabled !== false).length > 0 && (
+                    {/* LBS monthly income bar — shown when LBS scheme + monthly payout configured */}
+                    {propEnabled && (inputs.propMonetiseScheme === 'lbs') && lbsMonthlyInc > 0 && (
                       <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-                        <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0, fontSize: 12, fontWeight: 600, color: "#ef4444", paddingRight: 10, textAlign: "right", whiteSpace: "nowrap" }}>Life Events</div>
-                        <div style={{ flex: 1, position: "relative", height: 18, background: "var(--bg-panel)", borderRadius: 4, border: "1px solid rgba(239,68,68,0.2)" }}>
-                          {(inputs.lifeEvents || []).filter(e => e.enabled !== false).map((ev, idx) => {
-                            const meta = LIFE_EVENT_TYPES[ev.type] || {};
-                            const color = meta.color || "#ef4444";
-                            const sa = Number(ev.startAge);
-                            const ea = Number(ev.endAge);
-                            const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement' || sa === ea;
-                            if (isPoint) {
-                              const GanttDotIcon = meta.icon || Activity;
-                              return (
-                                <div key={idx} title={`${ev.label || meta.label} · Age ${sa}`}
-                                  style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", width: 14, height: 14, borderRadius: "50%", background: color, border: "2px solid var(--bg-muted)", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "default", ...ganttDot(sa) }}>
-                                  <GanttDotIcon style={{ width: 8, height: 8, color: "#fff" }} />
-                                </div>
-                              );
-                            }
-                            const GanttBarIcon = meta.icon || Activity;
-                            return (
-                              <div key={idx} title={`${ev.label || meta.label} · Age ${sa}–${ea}`}
-                                style={{ position: "absolute", top: 2, bottom: 2, borderRadius: 4, background: color, opacity: 0.75, display: "flex", alignItems: "center", gap: 3, paddingLeft: 3, cursor: "default", overflow: "hidden", ...ganttPct(sa, ea) }}>
-                                <GanttBarIcon style={{ width: 9, height: 9, color: "#fff", flexShrink: 0 }} />
-                                <span style={{ fontSize: 12, color: "#fff", fontWeight: 800, whiteSpace: "nowrap" }}>{ev.label || meta.label}</span>
-                              </div>
-                            );
-                          })}
+                        <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0, fontSize: 12, fontWeight: 600, color: "#14b8a6", paddingRight: 10, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>LBS Income</div>
+                        <div style={{ flex: 1, position: "relative", height: 18, background: "var(--bg-panel)", borderRadius: 4, border: "1px solid rgba(20,184,166,0.25)" }}>
+                          <div title={`LBS monthly income age ${propMonAge}–${lbsPayEnd}`} style={{ position: "absolute", top: 2, bottom: 2, borderRadius: 4, background: "#14b8a6", opacity: 0.82, display: "flex", alignItems: "center", paddingLeft: 4, overflow: "hidden", ...ganttPct(propMonAge, lbsPayEnd) }}>
+                            <span style={{ fontSize: 11, color: "#fff", fontWeight: 800, whiteSpace: "nowrap" }}>${lbsMonthlyInc.toLocaleString()}/mo</span>
+                          </div>
                         </div>
                       </div>
                     )}
+
+                    {/* Rental income bar — shown when rental is configured */}
+                    {rentalMo > 0 && rentalSt > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                        <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0, fontSize: 12, fontWeight: 600, color: "#a78bfa", paddingRight: 10, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Rental</div>
+                        <div style={{ flex: 1, position: "relative", height: 18, background: "var(--bg-panel)", borderRadius: 4, border: "1px solid rgba(167,139,250,0.25)" }}>
+                          <div title={`Rental income age ${rentalSt}–${rentalEn}`} style={{ position: "absolute", top: 2, bottom: 2, borderRadius: 4, background: "#a78bfa", opacity: 0.82, display: "flex", alignItems: "center", paddingLeft: 4, overflow: "hidden", ...ganttPct(rentalSt, rentalEn) }}>
+                            <span style={{ fontSize: 11, color: "#fff", fontWeight: 800, whiteSpace: "nowrap" }}>${rentalMo.toLocaleString()}/mo</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Life Events Gantt — one dedicated row per enabled event so labels never overlap */}
+                    {(inputs.lifeEvents || []).filter(e => e.enabled !== false).map((ev, idx) => {
+                      const meta = LIFE_EVENT_TYPES[ev.type] || {};
+                      const color = meta.color || "#ef4444";
+                      const sa = Number(ev.startAge);
+                      const ea = Number(ev.endAge);
+                      const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement' || sa === ea;
+                      const EvIcon = meta.icon || Activity;
+                      const rowLabel = ev.label || meta.label || ev.type;
+                      return (
+                        <div key={idx} style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                          <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0, fontSize: 11, fontWeight: 600, color, paddingRight: 10, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                            title={rowLabel}>
+                            {rowLabel}
+                          </div>
+                          <div style={{ flex: 1, position: "relative", height: 18, background: "var(--bg-panel)", borderRadius: 4, border: `1px solid ${color}33` }}>
+                            {isPoint ? (
+                              <div title={`${rowLabel} · Age ${sa}`}
+                                style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", width: 14, height: 14, borderRadius: "50%", background: color, border: "2px solid var(--bg-muted)", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "default", ...ganttDot(sa) }}>
+                                <EvIcon style={{ width: 8, height: 8, color: "#fff" }} />
+                              </div>
+                            ) : (
+                              <div title={`${rowLabel} · Age ${sa}–${ea}`}
+                                style={{ position: "absolute", top: 2, bottom: 2, borderRadius: 4, background: color, opacity: 0.78, display: "flex", alignItems: "center", gap: 3, paddingLeft: 4, cursor: "default", overflow: "hidden", ...ganttPct(sa, ea) }}>
+                                <EvIcon style={{ width: 9, height: 9, color: "#fff", flexShrink: 0 }} />
+                                <span style={{ fontSize: 11, color: "#fff", fontWeight: 800, whiteSpace: "nowrap" }}>Age {sa}–{ea}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
 
                     {/* Phase 2 salary Gantt row — point dot at salaryPhaseAge */}
                     {(() => {
