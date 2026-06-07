@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallba
 import { createPortal } from "react-dom";
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea,
+  Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea, ComposedChart,
   PieChart as RechartsPieChart, Pie as RechartsPie, Cell as RechartsCell
 } from "recharts";
 import {
@@ -5163,6 +5163,47 @@ function ReadinessTab({
     });
   }, [currentOA, currentSA, currentMA, currentTotal]);
 
+  // ── Wealth-at-payout-age donut (Issue 3 addition) ─────────────────────────
+  // Shows CPF / Private Assets / SRS / Property breakdown at payout age pa.
+  // Uses a shared arc-geometry helper so we only maintain the math once.
+  const buildDonutArcs = (slices) => {
+    const total = slices.reduce((s, p) => s + p.value, 0);
+    if (total === 0) return [];
+    let cumulAngle = -90;
+    const r = 48;
+    const toRad = d => (d * Math.PI) / 180;
+    return slices
+      .filter(s => s.value > 0)
+      .map(s => {
+        const pct = s.value / total;
+        const deg = pct * 360;
+        const startA = cumulAngle;
+        cumulAngle += deg;
+        const x1 = 60 + r * Math.cos(toRad(startA));
+        const y1 = 60 + r * Math.sin(toRad(startA));
+        const x2 = 60 + r * Math.cos(toRad(startA + deg));
+        const y2 = 60 + r * Math.sin(toRad(startA + deg));
+        const large = deg > 180 ? 1 : 0;
+        const d = deg >= 359.9
+          ? `M ${60 + r} 60 A ${r} ${r} 0 1 1 ${60 + r - 0.001} 60`
+          : `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+        return { ...s, d, pct };
+      });
+  };
+  const wealthDonutParts = useMemo(() => {
+    const cpfVal  = totalCPF;
+    const privVal = payoutData.privateAssets || 0;
+    const srsVal  = payoutData.srsBalance    || 0;
+    const propVal = inputs.includeProperty !== false ? (payoutData.propertyValue || 0) : 0;
+    return buildDonutArcs([
+      { key: "cpf",  label: "CPF",            value: cpfVal,  color: "var(--clr-purple)"  },
+      { key: "priv", label: "Private Assets", value: privVal, color: "var(--clr-emerald)" },
+      { key: "srs",  label: "SRS",            value: srsVal,  color: "#0ea5e9"             },
+      { key: "prop", label: "Property",       value: propVal, color: "#f59e0b"             },
+    ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalCPF, payoutData, inputs.includeProperty]);
+
   // ── Gauge arc path (unchanged from Phase 1/2) ────────────────────────────
   const gaugeArc = (pct) => {
     const cx = 110, cy2 = 90, r = 72;
@@ -5184,6 +5225,30 @@ function ReadinessTab({
 
   return (
     <div className="readiness-tab-outer" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* ── How to read this tab ── */}
+      <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
+        <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
+          <Activity style={{ width: 13, height: 13, color: "var(--clr-emerald)", flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, color: "var(--text-highlight)", fontSize: 14 }}>How to read this tab</span>
+          <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)", marginLeft: "auto" }} />
+        </summary>
+        <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+          {[
+            ["🎯 Readiness Score", "The arc gauge is a weighted composite of four sub-scores: FRS Coverage, Income Coverage, P10 Downside, and Longevity. Green ≥ 75, amber 50–74, red < 50. The score updates live as you change inputs."],
+            ["📊 KPI Tiles", "Five headline numbers: total CPF at payout age, monthly CPF LIFE payout, income coverage %, P10 downside (bad-luck scenario), and OA depletion age. Enable Monte Carlo in the Accumulation tab to unlock the downside tile."],
+            ["📈 RA vs Retirement Sums", "A progress bar comparing your projected RA at payout age against BRS, FRS, and ERS. These targets grow at the retirement-sum growth rate you set in the sidebar (default 3%/yr)."],
+            ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
+            ["🥧 Wealth Mix", "A doughnut showing how your total wealth at payout age is distributed across CPF, Private Assets, SRS, and Property. Reflects the Include Property toggle."],
+            ["⚡ Action Priority Queue", "The five highest-impact actions ranked by urgency — FRS gap, plan switch, income gap, OA depletion risk, and SRS setup. Each card links directly to the relevant tab or sidebar section."],
+          ].map(([title, desc]) => (
+            <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-highlight)", margin: "0 0 2px", whiteSpace: "nowrap" }}>{title}</p>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>{desc}</p>
+            </div>
+          ))}
+        </div>
+      </details>
 
       {/* ── ROW 1: Gauge (4 sub-scores) + 5-col KPI hero ── */}
       <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
@@ -5502,10 +5567,10 @@ function ReadinessTab({
         </div>
       </div>
 
-      {/* ── ROW 3: Allocation donut + Milestones (unchanged) ── */}
-      <div className="rd-row3" style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16 }}>
+      {/* ── ROW 3: Current allocation donut + Wealth-at-PA donut + Milestones ── */}
+      <div className="rd-row3" style={{ display: "grid", gridTemplateColumns: "200px 200px 1fr", gap: 16 }}>
 
-        {/* Allocation donut */}
+        {/* Current allocation donut */}
         <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <p style={{ ...labelStyle, marginBottom: 10 }}>Current allocation</p>
           {currentTotal > 0 ? (
@@ -5535,8 +5600,42 @@ function ReadinessTab({
           )}
         </div>
 
+        {/* Retirement Wealth Mix donut — wealth at payout age across all asset classes */}
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <p style={{ ...labelStyle, marginBottom: 10 }}>Wealth at age {pa}</p>
+          {wealthDonutParts.length > 0 ? (
+            <>
+              <svg width="120" height="120" viewBox="0 0 120 120">
+                {wealthDonutParts.map((s) => (
+                  <path key={s.key} d={s.d} fill="none" stroke={s.color} strokeWidth="14" strokeLinecap="butt" />
+                ))}
+                <circle cx="60" cy="60" r="34" fill="var(--bg-panel)" />
+                <text x="60" y="57" textAnchor="middle" style={{ fontSize: 11, fontWeight: 700, fill: "var(--text-muted)" }}>Total</text>
+                <text x="60" y="70" textAnchor="middle" style={{ fontSize: 11, fontWeight: 700, fill: "var(--text-bright)" }}>
+                  {formatCurrency(wealthDonutParts.reduce((s, p) => s + p.value, 0))}
+                </text>
+              </svg>
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
+                {wealthDonutParts.map((s) => (
+                  <div key={s.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{s.label}</span>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-main)" }}>{Math.round(s.pct * 100)}%</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p style={{ fontSize: 12, color: "var(--text-subtle)", textAlign: "center", marginTop: 20 }}>
+              Enter CPF balances and private assets to see retirement wealth mix
+            </p>
+          )}
+        </div>
+
         {/* Milestone alerts */}
-        <div style={cardStyle}>
+        <div className="rd-row3-milestones" style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <p style={labelStyle}>Milestone alerts ({milestones.length})</p>
             <button onClick={() => { setActiveTab("summary"); setSidebarOpen(true); }}
@@ -5737,7 +5836,6 @@ export default function App() {
   const [scenarioB, setScenarioB] = useState(null);
   const [scenarioLabelA, setScenarioLabelA] = useState("");
   const [scenarioLabelB, setScenarioLabelB] = useState("");
-  const [compareShowAll, setCompareShowAll] = useState(false); // toggle: diff-only vs all-inputs table
 
   // ── Household: spouse/partner state ────────────────────────────────────────
   // spouseInputs: full inputs object for the spouse engine run (same shape as inputs)
@@ -5757,6 +5855,9 @@ export default function App() {
 
   const [showMonteCarlo, setShowMonteCarlo] = useState(false);
   const [showBaseline, setShowBaseline] = useState(false);
+  const [showSorr, setShowSorr]               = useState(false);         // SORR stress-test panel
+  const [sorrCrashYears, setSorrCrashYears]   = useState(5);             // years of bad returns (1–10)
+  const [sorrCrashReturn, setSorrCrashReturn] = useState(-10);           // annual return during crash (%)
   const [showLifeEventMarkers, setShowLifeEventMarkers] = useState(true); // Rev #D2: default ON so events are visible immediately
   // accumChartMode: 'stacked' = AreaChart (wealth composition); 'lines' = LineChart (individual accounts, no MA stacking artifact)
   const [accumChartMode, setAccumChartMode] = useState('stacked');
@@ -10164,6 +10265,65 @@ export default function App() {
     debouncedInputs.srsReturnRate, highlightPlan,
     debouncedInputs.cpfScheme, debouncedInputs.rssPayoutStartAge, debouncedInputs.rssMonthlyPayout]);
 
+  // ── SORR (Sequence of Returns Risk) stress test ─────────────────────────────
+  // Models the impact of bad market returns in the FIRST N years of retirement on private assets.
+  // CPF accounts (OA/SA/RA/MA) are unaffected — they earn guaranteed rates.
+  // The intended annual draw for each age is inferred from strategyChartData[].privateAsset × 12.
+  const sorrData = useMemo(() => {
+    if (!showSorr) return null;
+    const pa        = payoutAge65;
+    const privAtPA  = accumulationByAge.get(pa)?.privateAssets || 0;
+    if (privAtPA === 0) return { hasData: false };
+
+    const normalRate = (Number(debouncedInputs.privateAssetGrowthRate) || 0) / 100;
+    const saving     = (Number(debouncedInputs.annualPrivateSaving)    || 0);
+    const crashRate  = sorrCrashReturn / 100;
+
+    // Build map of baseline monthly draw from strategyChartData (already deflation-aware)
+    const drawByAge = new Map(strategyChartData.map(r => [r.age, r.privateAsset || 0]));
+
+    let sorrPriv = privAtPA;
+    const rows = [];
+
+    for (let age = pa; age <= 95; age++) {
+      const basePriv    = accumulationByAge.get(age)?.privateAssets || 0;
+      const monthlyDraw = drawByAge.get(age) || 0;
+      const annualDraw  = monthlyDraw * 12;
+      const yearInRet   = age - pa;
+      const appliedRate = yearInRet < sorrCrashYears ? crashRate : normalRate;
+
+      if (age > pa) {
+        sorrPriv = Math.max(0, sorrPriv * (1 + appliedRate) + saving - annualDraw);
+      }
+
+      rows.push({
+        age,
+        basePriv,
+        sorrPriv: Math.round(sorrPriv),
+        privGap:  Math.max(0, Math.round(basePriv - sorrPriv)),
+        sorrMonthly: sorrPriv > 0 ? monthlyDraw : 0,
+        baseMonthly: monthlyDraw,
+        isCrash:  yearInRet < sorrCrashYears,
+      });
+    }
+
+    const sorrDepletionAge = rows.find(r => r.sorrPriv <= 0)?.age || null;
+    const baseDepletionAge = rows.find(r => r.basePriv <= 0)?.age || null;
+    // Total lifetime income that won't be available due to SORR (annual, not monthly)
+    const lifetimeGap = Math.round(rows.reduce((s, r) => s + Math.max(0, r.baseMonthly - r.sorrMonthly) * 12, 0));
+
+    return {
+      hasData: true,
+      rows,
+      sorrDepletionAge,
+      baseDepletionAge,
+      lifetimeGap,
+      privAtPA,
+      crashEndAge: pa + sorrCrashYears,
+    };
+  }, [showSorr, sorrCrashYears, sorrCrashReturn, strategyChartData, accumulationByAge,
+      payoutAge65, debouncedInputs.privateAssetGrowthRate, debouncedInputs.annualPrivateSaving]);
+
   // OA Exhaustion Age: first projection age where OA balance falls to/below the bequest floor
   // during the drawdown window. null = OA sustains to age 95 (or drawdown not active).
   const oaExhaustAge = useMemo(() => {
@@ -13390,7 +13550,8 @@ ${milestoneSnapshotHtml}
           .rd-row1 { grid-template-columns: 1fr !important; }
           .rd-kpi-hero { grid-template-columns: repeat(3, 1fr) !important; }
           .rd-row2 { grid-template-columns: 1fr 1fr !important; }
-          .rd-row3 { grid-template-columns: 1fr !important; }
+          .rd-row3 { grid-template-columns: 1fr 1fr !important; }
+          .rd-row3-milestones { grid-column: 1 / -1; }
           /* Tablet sticky bottom action bar — always shown on tablet, hidden elsewhere */
           .tablet-action-bar { display: flex !important; }
           /* Docs/QS sticky nav: parent fhd-tab-inner now has padding:0, so banners sit at the
@@ -13518,6 +13679,7 @@ ${milestoneSnapshotHtml}
           .rd-kpi-hero { grid-template-columns: 1fr 1fr !important; }
           .rd-row2 { grid-template-columns: 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr !important; }
+          .rd-row3-milestones { grid-column: 1 !important; }
           /* Docs/QS sticky nav: header IS sticky at 641–768px too (top:0, z-index:50).
              Full stack: header 48 + tab strip 44 + input-params-bar 44 = 136px. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
@@ -13557,11 +13719,6 @@ ${milestoneSnapshotHtml}
           .z1-hero { padding: 12px 10px !important; border-radius: 14px !important; }
           .z4-plans-grid { grid-template-columns: 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr !important; }
-          /* Rental income 3-col grid collapses to 2-col on narrow phones */
-          .rental-grid-3col { grid-template-columns: 1fr 1fr !important; }
-          .rental-grid-3col > div:last-child { grid-column: 1 / -1; }
-          /* Compare slot grid: 1 col on narrow phones */
-          .compare-slots-grid { grid-template-columns: 1fr !important; }
           /* Docs tab sticky nav on small phones — full mobile stack: 48px fixed header + 44px tab strip + 44px input-params-bar = 136px. */
           #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; padding: 14px 14px 10px !important; }
           #docs-sticky-nav h3 { font-size: 16px !important; }
@@ -17720,7 +17877,7 @@ ${milestoneSnapshotHtml}
                         <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Recurring monthly cash from renting your property</p>
                       </div>
                     </div>
-                    <div className="rental-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                           Monthly ($)
@@ -19827,17 +19984,16 @@ ${milestoneSnapshotHtml}
 
                 {/* ── Net Worth Trajectory — stacked area from current age to 95 ── */}
                 {(() => {
-                  const showProp = inputs.includeProperty === true;
                   const nwData = displayAccumulation.map(row => {
                     const cpf = (row.oa || 0) + (row.sa || 0) + (row.ra || 0) + (row.ma || 0);
                     const priv = row.privateAssets || 0;
                     const srs  = row.srsBalance || 0;
-                    const prop = showProp ? (row.propertyValue || 0) : 0;
+                    const prop = row.propertyValue || 0;
                     return { age: row.age, cpf, priv, srs, prop, total: cpf + priv + srs + prop };
                   }).filter(r => r.age >= (Number(inputs.currentAge) || 35));
                   if (!nwData.length) return null;
                   const peakNW = Math.max(...nwData.map(r => r.total), 1);
-                  const hasProperty = showProp && nwData.some(r => r.prop > 0);
+                  const hasProperty = nwData.some(r => r.prop > 0);
                   const hasSRS      = nwData.some(r => r.srs  > 0);
                   const hasPriv     = nwData.some(r => r.priv > 0);
                   const fmtK = v => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`;
@@ -19846,7 +20002,7 @@ ${milestoneSnapshotHtml}
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                         <TrendingUp style={{ width: 15, height: 15, color: "var(--clr-purple)", flexShrink: 0 }} />
                         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Net Worth Trajectory</span>
-                        <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 2 }}>CPF{hasPriv ? " · Private" : ""}{hasSRS ? " · SRS" : ""}{hasProperty ? " · Property" : ""}</span>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 2 }}>CPF · Private · SRS{hasProperty ? " · Property" : ""}</span>
                         <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--clr-purple)", fontWeight: 700 }}>Peak {fmtK(peakNW)}</span>
                       </div>
                       <ResponsiveContainer width="100%" height={200}>
@@ -19973,11 +20129,8 @@ ${milestoneSnapshotHtml}
                               { label: "Contribution stop age", unit: "yrs", min: Number(debouncedInputs.currentAge)||35, max: 75, step: 1, val: effCS, set: setWhatIfContribStop, base: Number(debouncedInputs.contributionStopAge)||65, fmt: v=>`${v}` },
                               { label: "Monthly OA drawdown", unit: "$", min: 0, max: 5000, step: 50, val: effOAD, set: setWhatIfOaDrawdown, base: Number(debouncedInputs.oaDrawdownMonthly)||0, fmt: v=>v>0?`${formatCurrency(v)}/mo`:"Off" },
                               { label: "Annual SRS contribution", unit: "$", min: 0, max: 15300, step: 100, val: effSRS, set: setWhatIfSrsContrib, base: Number(debouncedInputs.srsAnnualContribution)||0, fmt: formatCurrency },
-                              // Only show private growth slider when the user has private assets — otherwise it has zero impact and misleads
-                              ...((Number(debouncedInputs.currentPrivateAssets)||0) > 0 || (Number(debouncedInputs.annualPrivateSaving)||0) > 0
-                                ? [{ label: "Private asset growth rate", unit: "%", min: 0, max: 10, step: 0.5, val: effPG, set: setWhatIfPrivGrowth, base: Number(debouncedInputs.privateAssetGrowthRate)||0, fmt: v=>`${v.toFixed(1)}%`, note: "Private assets only — CPF earns guaranteed rates" }]
-                                : []),
-                            ].map(({ label, min, max, step, val, set, base, fmt, note }) => {
+                              { label: "Private asset growth rate", unit: "%", min: 0, max: 10, step: 0.5, val: effPG, set: setWhatIfPrivGrowth, base: Number(debouncedInputs.privateAssetGrowthRate)||0, fmt: v=>`${v.toFixed(1)}%` },
+                            ].map(({ label, min, max, step, val, set, base, fmt }) => {
                               const changed = Math.abs(val - base) > 0.001;
                               return (
                                 <div key={label} style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 14px", border: `1px solid ${changed ? "rgba(var(--clr-emerald-rgb),0.3)" : "var(--border-subtle)"}` }}>
@@ -19997,7 +20150,6 @@ ${milestoneSnapshotHtml}
                                     {changed && <span style={{ color: "var(--text-muted)" }}>base: {fmt(base)}</span>}
                                     <span>{fmt(max)}</span>
                                   </div>
-                                  {note && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, fontStyle: "italic" }}>ℹ {note}. OA 2.5% · SA/RA/MA 4% are fixed.</p>}
                                 </div>
                               );
                             })}
@@ -20194,6 +20346,30 @@ ${milestoneSnapshotHtml}
                     </span>
                   </div>
                 )}
+
+                {/* ── How to read this tab ── */}
+                <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden", marginBottom: 16 }}>
+                  <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
+                    <BarChart3 style={{ width: 13, height: 13, color: "var(--clr-blue2)", flexShrink: 0 }} />
+                    <span style={{ fontWeight: 700, color: "var(--text-highlight)", fontSize: 14 }}>How to read this tab</span>
+                    <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)", marginLeft: "auto" }} />
+                  </summary>
+                  <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                    {[
+                      ["⊞ Stacked mode", "Shows CPF wealth composition year-by-year — OA (blue), SA/RA (green), MA (purple) stacked to reveal how accounts build toward your payout age. Note: the visible MA dip at age 55 is a display artefact from stacking — switch to Lines mode to see true individual balances."],
+                      ["∿ Lines mode", "Renders each account as an independent curve. SA terminates at 55 and RA appears from 55 onwards. Best for spotting when individual accounts hit caps or deplete."],
+                      ["📉 Baseline ghost", "The dashed grey line shows the mandatory-contributions-only projection with all voluntary top-ups, transfers, and grants zeroed. The gap between the ghost and the solid line is the value your active voluntary strategy adds."],
+                      ["🎲 Monte Carlo band", "200 simulations with randomised CPF interest rates each year. The shaded purple band is the P10–P90 range; the dashed line is P50. The Probability of Sufficiency badge shows the share of runs where CPF at payout age ≥ projected FRS. Variance presets: Mild ±0.5%, Base ±1%, Stress ±2%."],
+                      ["🔔 Life Events overlay", "Coloured vertical bands mark active life events (retrenchment, career break, windfall, etc.). Toggle the Events button to show or hide them. Events are configured in the Life Events panel in the sidebar."],
+                      ["📍 Vertical markers", "The dotted line at age 55 marks when the SA is converted to RA. The solid line at your payout age marks when CPF LIFE begins and accumulation ends."],
+                    ].map(([title, desc]) => (
+                      <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-highlight)", margin: "0 0 2px", whiteSpace: "nowrap" }}>{title}</p>
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>{desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
 
                 {/* ── Title row + controls ── */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -21116,9 +21292,9 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+                <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2 }}>
                   {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
-                    <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                    <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                       {label}
                     </button>
                   ))}
@@ -21509,93 +21685,6 @@ ${milestoneSnapshotHtml}
                       </div>
                     ))}
                   </div>
-                  {/* ── Full Input Comparison table — shown when both A & B are saved ── */}
-                  {scenarioA && scenarioB && (() => {
-                    const iA = scenarioA.inputs || {};
-                    const iB = scenarioB.inputs || {};
-                    const lblA = scenarioLabelA || "Scenario A";
-                    const lblB = scenarioLabelB || "Scenario B";
-                    // Key groups: only the ~35 most meaningful inputs, in logical sections
-                    const GROUPS = [
-                      { title: "👤 Profile", keys: ["currentAge","gender","payoutAge","retirementAge","lifeExpectancy","citizenStatus","prYear","isSelfEmployed"] },
-                      { title: "💰 Current Balances", keys: ["oaBalance","saBalance","maBalance","currentPrivateAssets","srsBalance"] },
-                      { title: "📈 Salary & Contributions", keys: ["salaryGross","bonusMonths","contributionStopAge","annualPrivateSaving","srsAnnualContribution"] },
-                      { title: "⬆️ Voluntary Top-ups", keys: ["vcSaTopup","vc3a","vcMaCash","mrssAnnual","mmssAnnual"] },
-                      { title: "🏠 Housing", keys: ["housingOutflow","housingStopAge","propertyValue","propertyGrowthRate","includeProperty","propMonetiseEnabled","propMonetiseScheme","propMonetiseAge","propMonetiseCashProceeds","rentalIncome","rentalStartAge","rentalEndAge"] },
-                      { title: "📤 Decumulation", keys: ["oaDrawdownMonthly","oaDrawdownStartAge","oaDrawdownFloor","dieWithZeroEnabled","retirementMonthlyIncome"] },
-                      { title: "🛡️ Insurance & SRS", keys: ["dpsMode","dpsAnnualPremium","hpsAnnualPremium","srsAnnualContribution","srsContribStopAge","srsDrawdownStartAge"] },
-                      { title: "📊 Returns & Growth", keys: ["privateAssetGrowthRate","inflationRate","salaryGrowth"] },
-                    ];
-                    const fmtVal = (k, v) => {
-                      if (v === null || v === undefined || v === "") return "—";
-                      if (typeof v === "boolean") return v ? "✓ Yes" : "No";
-                      if (k.toLowerCase().includes("age") || k === "bonusMonths" || k === "prYear") return String(v);
-                      if (k.toLowerCase().includes("rate") || k.toLowerCase().includes("growth") || k === "inflationRate") return `${v}%`;
-                      if (typeof v === "number" && v >= 100) return `$${v.toLocaleString()}`;
-                      return String(v);
-                    };
-                    const allRows = GROUPS.flatMap(g => g.keys.map(k => ({ group: g.title, key: k, label: INPUT_LABELS[k] || k, vA: iA[k], vB: iB[k] })));
-                    const differs = row => String(row.vA ?? "") !== String(row.vB ?? "");
-                    const visibleRows = compareShowAll ? allRows : allRows.filter(differs);
-                    let lastGroup = null;
-                    return (
-                      <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, padding: "14px 16px", marginBottom: 16 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>
-                            Input Comparison — {lblA} vs {lblB}
-                          </span>
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={() => setCompareShowAll(false)}
-                              style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: !compareShowAll ? "var(--clr-blue)" : "var(--bg-muted)", color: !compareShowAll ? "#fff" : "var(--text-muted)" }}>
-                              Differences only {!compareShowAll && `(${allRows.filter(differs).length})`}
-                            </button>
-                            <button onClick={() => setCompareShowAll(true)}
-                              style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: compareShowAll ? "var(--clr-blue)" : "var(--bg-muted)", color: compareShowAll ? "#fff" : "var(--text-muted)" }}>
-                              Show all
-                            </button>
-                          </div>
-                        </div>
-                        {visibleRows.length === 0 && (
-                          <p style={{ fontSize: 13, color: "var(--clr-green)", textAlign: "center", padding: "12px 0" }}>✓ All inputs are identical between Scenario A and Scenario B.</p>
-                        )}
-                        {visibleRows.length > 0 && (
-                          <div style={{ overflowX: "auto" }}>
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                              <thead>
-                                <tr style={{ borderBottom: "2px solid var(--border-strong)" }}>
-                                  <th style={{ textAlign: "left", padding: "6px 8px", color: "var(--text-muted)", fontWeight: 700, fontSize: 11, textTransform: "uppercase", width: "40%" }}>Parameter</th>
-                                  <th style={{ textAlign: "right", padding: "6px 8px", color: "#3b82f6", fontWeight: 700, fontSize: 11, textTransform: "uppercase", width: "30%" }}>{lblA}</th>
-                                  <th style={{ textAlign: "right", padding: "6px 8px", color: "#f97316", fontWeight: 700, fontSize: 11, textTransform: "uppercase", width: "30%" }}>{lblB}</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {visibleRows.map((row, i) => {
-                                  const isNew = row.group !== lastGroup;
-                                  lastGroup = row.group;
-                                  const diff = differs(row);
-                                  return (
-                                    <React.Fragment key={row.key}>
-                                      {isNew && compareShowAll && (
-                                        <tr><td colSpan={3} style={{ padding: "10px 8px 4px", fontSize: 11, fontWeight: 800, color: "var(--clr-blue)", textTransform: "uppercase", letterSpacing: "0.06em", borderTop: i > 0 ? "1px solid var(--border-subtle)" : "none" }}>{row.group}</td></tr>
-                                      )}
-                                      <tr style={{ background: diff ? "rgba(var(--clr-amber-rgb),0.06)" : "transparent", borderBottom: "1px solid var(--border-subtle)" }}>
-                                        <td style={{ padding: "6px 8px", color: diff ? "var(--text-bright)" : "var(--text-muted)", fontWeight: diff ? 600 : 400 }}>
-                                          {diff && <span style={{ color: "var(--clr-amber)", marginRight: 5, fontSize: 10 }}>●</span>}
-                                          {row.label}
-                                        </td>
-                                        <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", color: diff ? "#3b82f6" : "var(--text-muted)", fontWeight: diff ? 700 : 400 }}>{fmtVal(row.key, row.vA)}</td>
-                                        <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", color: diff ? "#f97316" : "var(--text-muted)", fontWeight: diff ? 700 : 400 }}>{fmtVal(row.key, row.vB)}</td>
-                                      </tr>
-                                    </React.Fragment>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
                   {/* Chart */}
                   {scenarioA && scenarioB ? (
                     <div>
@@ -23880,6 +23969,30 @@ ${milestoneSnapshotHtml}
 
                     const spouseAvailable = householdEnabled && spouseProjection.length > 0;
 
+                    // Goal Simulator guide — inserted at top of returned JSX below
+                    const GoalSimGuide = () => (
+                      <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
+                        <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
+                          <Target style={{ width: 13, height: 13, color: "#f43f5e", flexShrink: 0 }} />
+                          <span style={{ fontWeight: 700, color: "var(--text-highlight)", fontSize: 14 }}>How to use the Goal Simulator</span>
+                          <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)", marginLeft: "auto" }} />
+                        </summary>
+                        <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                          {[
+                            ["1 — Set a CPF target", "Enter the total CPF balance you want at payout age in the Target field below. Your current projection baseline is shown for reference. Leave the field blank to use 3× the projected FRS as a default benchmark."],
+                            ["2 — Run the solver", "Click ⚡ Calculate Strategies to generate three plans: Strategy A (RSTU top-ups only), Strategy B (VC3A contributions only), and Strategy C (blended — cheapest after-tax combination of both). Each card shows annual cash required, monthly equivalent, and feasibility given CPF caps."],
+                            ["3 — Apply to Profile", "Click Apply to Profile on any strategy card to instantly write the recommended top-up amounts to your sidebar. Click ↩ Revert to undo the last apply. Clear Simulator resets to your original baseline even after multiple applies."],
+                            ["4 — Switch to Income Roadmap", "After applying a strategy, navigate to the Income Roadmap sub-tab to verify how the higher RA translates into a higher CPF LIFE monthly payout and whether it closes your retirement income gap."],
+                          ].map(([title, desc]) => (
+                            <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
+                              <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-highlight)", margin: "0 0 2px", whiteSpace: "nowrap" }}>{title}</p>
+                              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>{desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    );
+
                     // Strategy D: tax-optimised — lowest effective after-tax annual cash outflow
                     const SG_TAX_BRACKETS = [7, 11.5, 15, 19.5, 22];
                     const taxRate = marginalTaxRate / 100;
@@ -23934,6 +24047,9 @@ ${milestoneSnapshotHtml}
 
                     return (
                       <div style={{ padding: "24px 24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
+
+                        {/* ── How to use guide ──────────────────────────── */}
+                        <GoalSimGuide />
 
                         {/* ── View toggle: Primary / Spouse / Combined ──── */}
                         <div style={{ display: "flex", gap: 0, borderRadius: 10, overflow: "clip", border: "1px solid var(--border-subtle)", alignSelf: "flex-start" }}>
@@ -24568,8 +24684,8 @@ ${milestoneSnapshotHtml}
                         ["SRS", "#0ea5e9"],
                         ["Private Assets", "#10b981"],
                         ["Property Mon.", "#f97316"],
-                        ...(lbsMonthly > 0 ? [["LBS Income", "#14b8a6"]] : []),
-                        ...(rentalMonthly > 0 && rentalStart > 0 ? [["Rental", "#a78bfa"]] : []),
+                        ...(lbsMonthlyInc > 0 ? [["LBS Income", "#14b8a6"]] : []),
+                        ...(rentalMo > 0 && rentalSt > 0 ? [["Rental", "#a78bfa"]] : []),
                       ].map(([name, color]) => (
                         <div key={name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-muted)" }}>
                           <div style={{ width: 10, height: 10, borderRadius: 2, background: color, opacity: 0.85 }} />
@@ -24747,7 +24863,132 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
 
-                  {/* ── SECTION 3: Lifetime Strategy Summary Table ── */}
+                  {/* ── SECTION 3: SORR Stress Test ── */}
+                  <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                    {/* Header + toggle button */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showSorr ? 16 : 0 }}>
+                      <Activity style={{ width: 15, height: 15, color: "#ef4444", flexShrink: 0 }} />
+                      <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>SORR Stress Test</h4>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>Sequence of Returns Risk — decumulation phase</span>
+                      <button
+                        onClick={() => setShowSorr(v => !v)}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: `1px solid ${showSorr ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showSorr ? "rgba(239,68,68,0.10)" : "var(--bg-input)", color: showSorr ? "#ef4444" : "var(--text-muted)", cursor: "pointer", transition: "all .15s" }}>
+                        <Activity style={{ width: 12, height: 12 }} />
+                        {showSorr ? "Hide SORR" : "Show SORR Analysis"}
+                      </button>
+                    </div>
+
+                    {showSorr && (() => {
+                      const privAtPA = accumulationByAge.get(pa)?.privateAssets || 0;
+                      if (privAtPA === 0) return (
+                        <div style={{ padding: "12px 16px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", fontSize: 13, color: "var(--text-muted)" }}>
+                          <strong>No private assets modelled.</strong> SORR applies to market-dependent assets only — CPF accounts earn guaranteed rates and are unaffected. Add private assets in the sidebar to run this analysis.
+                        </div>
+                      );
+
+                      return (
+                        <>
+                          {/* Controls row */}
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16, padding: "12px 16px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                            <div style={{ flex: 1, minWidth: 180 }}>
+                              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 6px" }}>
+                                Crash Duration: <strong style={{ color: "var(--text-bright)" }}>{sorrCrashYears} yr{sorrCrashYears !== 1 ? "s" : ""}</strong>
+                              </p>
+                              <input type="range" min={1} max={10} step={1} value={sorrCrashYears}
+                                onChange={e => setSorrCrashYears(Number(e.target.value))}
+                                style={{ width: "100%", accentColor: "#ef4444" }} />
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 2 }}>
+                                <span>1 yr</span><span>10 yrs</span>
+                              </div>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 180 }}>
+                              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 6px" }}>
+                                Annual Return During Crash: <strong style={{ color: "#ef4444" }}>{sorrCrashReturn}%</strong>
+                              </p>
+                              <input type="range" min={-30} max={0} step={1} value={sorrCrashReturn}
+                                onChange={e => setSorrCrashReturn(Number(e.target.value))}
+                                style={{ width: "100%", accentColor: "#ef4444" }} />
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 2 }}>
+                                <span>−30%</span><span>0%</span>
+                              </div>
+                            </div>
+                            <div style={{ alignSelf: "center", padding: "8px 12px", borderRadius: 8, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.25)", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, maxWidth: 220 }}>
+                              <strong style={{ color: "#ef4444" }}>CPF unaffected.</strong> OA earns 2.5%, SA/RA/MA earn 4% regardless of market conditions. Only private assets are stress-tested.
+                            </div>
+                          </div>
+
+                          {/* Impact chart */}
+                          {sorrData?.hasData && (
+                            <>
+                              <div style={{ height: 220, marginBottom: 12 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <ComposedChart data={sorrData.rows} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+                                    <defs>
+                                      <linearGradient id="sorrGapGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+                                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0.04} />
+                                      </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                                    <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickLine={false} axisLine={false} label={{ value: "Age", position: "insideBottomRight", offset: -4, fontSize: 11, fill: "var(--text-muted)" }} />
+                                    <YAxis tickFormatter={v => v >= 1e6 ? `$${(v/1e6).toFixed(1)}M` : `$${(v/1e3).toFixed(0)}k`} tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickLine={false} axisLine={false} width={56} />
+                                    <Tooltip
+                                      formatter={(v, name) => [`$${Math.round(v).toLocaleString()}`, name]}
+                                      contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }}
+                                      labelFormatter={l => `Age ${l}`}
+                                    />
+                                    {/* Crash period shading */}
+                                    <ReferenceArea x1={pa} x2={Math.min(sorrData.crashEndAge, 95)} fill="rgba(239,68,68,0.07)" stroke="rgba(239,68,68,0.25)" strokeDasharray="4 3" label={{ value: "Crash", position: "insideTopLeft", fontSize: 10, fill: "#ef4444" }} />
+                                    {/* Gap fill area */}
+                                    <Area type="monotone" dataKey="privGap" fill="url(#sorrGapGrad)" stroke="none" name="Private Shortfall" stackId={null} />
+                                    {/* Baseline and SORR lines */}
+                                    <Line type="monotone" dataKey="basePriv" stroke="var(--clr-emerald)" strokeWidth={2} dot={false} name="Baseline" />
+                                    <Line type="monotone" dataKey="sorrPriv" stroke="#ef4444" strokeWidth={2} strokeDasharray="6 3" dot={false} name="SORR Scenario" />
+                                    <Legend iconType="line" wrapperStyle={{ fontSize: 12 }} />
+                                  </ComposedChart>
+                                </ResponsiveContainer>
+                              </div>
+
+                              {/* KPI summary row */}
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+                                {[
+                                  {
+                                    label: "Private wealth at 80",
+                                    base: sorrData.rows.find(r => r.age === 80)?.basePriv,
+                                    sorr: sorrData.rows.find(r => r.age === 80)?.sorrPriv,
+                                  },
+                                  {
+                                    label: "Private wealth at 85",
+                                    base: sorrData.rows.find(r => r.age === 85)?.basePriv,
+                                    sorr: sorrData.rows.find(r => r.age === 85)?.sorrPriv,
+                                  },
+                                ].map(({ label, base, sorr }) => base != null && (
+                                  <div key={label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+                                    <p style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-emerald)", margin: "0 0 2px" }}>Baseline: ${Math.round(base).toLocaleString()}</p>
+                                    <p style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", margin: 0 }}>SORR: ${Math.round(sorr).toLocaleString()}</p>
+                                    {base > 0 && <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "2px 0 0" }}>−{Math.round((1 - sorr / base) * 100)}% impact</p>}
+                                  </div>
+                                ))}
+                                <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Asset depletion age</p>
+                                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-emerald)", margin: "0 0 2px" }}>Baseline: {sorrData.baseDepletionAge ? `Age ${sorrData.baseDepletionAge}` : "Sustains to 95+"}</p>
+                                  <p style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", margin: 0 }}>SORR: {sorrData.sorrDepletionAge ? `Age ${sorrData.sorrDepletionAge}` : "Sustains to 95+"}</p>
+                                </div>
+                                <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Lifetime income at risk</p>
+                                  <p style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", margin: "0 0 2px" }}>${sorrData.lifetimeGap.toLocaleString()}</p>
+                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>total private income gap vs baseline due to early crash</p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* ── SECTION 4: Lifetime Strategy Summary Table ── */}
                   <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                       <TableIcon style={{ width: 15, height: 15, color: "var(--clr-emerald)" }} />
