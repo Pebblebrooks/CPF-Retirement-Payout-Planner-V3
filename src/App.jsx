@@ -5199,11 +5199,7 @@ function ReadinessTab({
     const cpfVal  = totalCPF;
     const privVal = payoutData.privateAssets || 0;
     const srsVal  = payoutData.srsBalance    || 0;
-    // Fix 2: always include property in the wealth snapshot donut regardless of
-    // includeProperty toggle. That toggle gates the net worth trajectory/chart only.
-    // payoutData.propertyValue is always populated by the engine (line ~2189);
-    // buildDonutArcs already filters zero-value slices, so $0 property adds nothing.
-    const propVal = payoutData.propertyValue || 0;
+    const propVal = inputs.includeProperty !== false ? (payoutData.propertyValue || 0) : 0;
     return buildDonutArcs([
       { key: "cpf",  label: "CPF",            value: cpfVal,  color: "var(--clr-purple)"  },
       { key: "priv", label: "Private Assets", value: privVal, color: "var(--clr-emerald)" },
@@ -5211,7 +5207,7 @@ function ReadinessTab({
       { key: "prop", label: "Property",       value: propVal, color: "#f59e0b"             },
     ]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalCPF, payoutData]);
+  }, [totalCPF, payoutData, inputs.includeProperty]);
 
   // ── Gauge arc path (unchanged from Phase 1/2) ────────────────────────────
   const gaugeArc = (pct) => {
@@ -5248,7 +5244,7 @@ function ReadinessTab({
             ["📊 KPI Tiles", "Five headline numbers: total CPF at payout age, monthly CPF LIFE payout, income coverage %, P10 downside (bad-luck scenario), and OA depletion age. Enable Monte Carlo in the Accumulation tab to unlock the downside tile."],
             ["📈 RA vs Retirement Sums", "A progress bar comparing your projected RA at payout age against BRS, FRS, and ERS. These targets grow at the retirement-sum growth rate you set in the sidebar (default 3%/yr)."],
             ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
-            ["🥧 Wealth Mix", "A doughnut showing how your total wealth at payout age is distributed across CPF, Private Assets, SRS, and Property. Always shows all asset classes held — use the Include Property toggle to control whether property counts in the net worth trajectory."],
+            ["🥧 Wealth Mix", "A doughnut showing how your total wealth at payout age is distributed across CPF, Private Assets, SRS, and Property. Reflects the Include Property toggle."],
             ["⚡ Action Priority Queue", "The five highest-impact actions ranked by urgency — FRS gap, plan switch, income gap, OA depletion risk, and SRS setup. Each card links directly to the relevant tab or sidebar section."],
           ].map(([title, desc]) => (
             <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
