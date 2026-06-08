@@ -8844,6 +8844,11 @@ export default function App() {
     setExportModal({ type: "milestone", content });
   };
 
+  // F1: Configurable planning horizon (95 / 100 / 105). Defined HERE — before
+  // engineKey and projection useMemos — to avoid TDZ when projection callback
+  // executes on first render and calls engineFn(debouncedInputs, { maxAge: maxPA }).
+  const maxPA = Number(debouncedInputs.maxProjectionAge) || 95;
+
   // #7 — Memoise on only engine-relevant fields (not name, display prefs etc.)
   const engineKey = useMemo(() => {
     const {
@@ -9085,9 +9090,6 @@ export default function App() {
   // variable it closes over must already be initialised at the point useMemo() is called.
   // NX10 fix: payoutAge65 reads debouncedInputs so it matches the debounced projection.
   const payoutAge65 = Number(debouncedInputs.payoutAge) || 65;
-  // F1: Configurable planning horizon (95 / 100 / 105). All engine loops,
-  // filters, chart axes, and labels use maxPA instead of the hardcoded 95.
-  const maxPA = Number(debouncedInputs.maxProjectionAge) || 95;
 
   // CQ-2 perf: use projectionByAge Map (O(1)) instead of projection.find() (O(n))
   const raAtPayout = projectionByAge.get(payoutAge65)?.ra || 0;
