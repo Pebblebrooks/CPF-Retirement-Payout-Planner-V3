@@ -20137,8 +20137,11 @@ ${milestoneSnapshotHtml}
                               { label: "Contribution stop age", unit: "yrs", min: Number(debouncedInputs.currentAge)||35, max: 75, step: 1, val: effCS, set: setWhatIfContribStop, base: Number(debouncedInputs.contributionStopAge)||65, fmt: v=>`${v}` },
                               { label: "Monthly OA drawdown", unit: "$", min: 0, max: 5000, step: 50, val: effOAD, set: setWhatIfOaDrawdown, base: Number(debouncedInputs.oaDrawdownMonthly)||0, fmt: v=>v>0?`${formatCurrency(v)}/mo`:"Off" },
                               { label: "Annual SRS contribution", unit: "$", min: 0, max: 15300, step: 100, val: effSRS, set: setWhatIfSrsContrib, base: Number(debouncedInputs.srsAnnualContribution)||0, fmt: formatCurrency },
-                              { label: "Private asset growth rate", unit: "%", min: 0, max: 10, step: 0.5, val: effPG, set: setWhatIfPrivGrowth, base: Number(debouncedInputs.privateAssetGrowthRate)||0, fmt: v=>`${v.toFixed(1)}%` },
-                            ].map(({ label, min, max, step, val, set, base, fmt }) => {
+                              // Only show private growth slider when the user has private assets — otherwise it has zero impact and misleads
+                              ...((Number(debouncedInputs.currentPrivateAssets)||0) > 0 || (Number(debouncedInputs.annualPrivateSaving)||0) > 0
+                                ? [{ label: "Private asset growth rate", unit: "%", min: 0, max: 10, step: 0.5, val: effPG, set: setWhatIfPrivGrowth, base: Number(debouncedInputs.privateAssetGrowthRate)||0, fmt: v=>`${v.toFixed(1)}%`, note: "Private assets only — CPF earns guaranteed rates" }]
+                                : []),
+                            ].map(({ label, min, max, step, val, set, base, fmt, note }) => {
                               const changed = Math.abs(val - base) > 0.001;
                               return (
                                 <div key={label} style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 14px", border: `1px solid ${changed ? "rgba(var(--clr-emerald-rgb),0.3)" : "var(--border-subtle)"}` }}>
@@ -20158,6 +20161,7 @@ ${milestoneSnapshotHtml}
                                     {changed && <span style={{ color: "var(--text-muted)" }}>base: {fmt(base)}</span>}
                                     <span>{fmt(max)}</span>
                                   </div>
+                                  {note && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, fontStyle: "italic" }}>ℹ {note}. OA 2.5% · SA/RA/MA 4% are fixed.</p>}
                                 </div>
                               );
                             })}
