@@ -5841,6 +5841,7 @@ export default function App() {
   const [scenarioB, setScenarioB] = useState(null);
   const [scenarioLabelA, setScenarioLabelA] = useState("");
   const [scenarioLabelB, setScenarioLabelB] = useState("");
+  const [compareView, setCompareView] = useState("diff"); // 'diff' | 'filled' | 'all'
 
   // ── Household: spouse/partner state ────────────────────────────────────────
   // spouseInputs: full inputs object for the spouse engine run (same shape as inputs)
@@ -20102,12 +20103,13 @@ ${milestoneSnapshotHtml}
                       const effSRS = whatIfSrsContrib  !== null ? whatIfSrsContrib  : (Number(debouncedInputs.srsAnnualContribution) || 0);
                       const effPG  = whatIfPrivGrowth  !== null ? whatIfPrivGrowth  : (Number(debouncedInputs.privateAssetGrowthRate) || 0);
                       const basePARow = accumulationByAge.get(effPA);
-                      const baseTotal = (basePARow?.total || 0) + (basePARow?.privateAssets || 0) + (basePARow?.srsBalance || 0);
+                      const _inclProp = debouncedInputs.includeProperty ?? true;
+                      const baseTotal = (basePARow?.total || 0) + (basePARow?.privateAssets || 0) + (basePARow?.srsBalance || 0) + (_inclProp ? (basePARow?.propertyValue || 0) : 0);
                       const wiLastRow = whatIfProjection?.rows[whatIfProjection.rows.length - 1];
                       const _wiInflD = isRealDollars ? (Number(debouncedInputs.inflationRate) || 0) / 100 : 0;
                       const _wiCaD   = Number(debouncedInputs.currentAge) || 35;
                       const deflate  = (val) => (isRealDollars && val) ? Math.round(val / Math.pow(1 + _wiInflD, Math.max(0, effPA - _wiCaD))) : val;
-                      const whatIfTotal = wiLastRow ? deflate((wiLastRow.oa + wiLastRow.sa + wiLastRow.ma + wiLastRow.ra) + (wiLastRow.privateAssets || 0) + (wiLastRow.srsBalance || 0)) : 0;
+                      const whatIfTotal = wiLastRow ? deflate((wiLastRow.oa + wiLastRow.sa + wiLastRow.ma + wiLastRow.ra) + (wiLastRow.privateAssets || 0) + (wiLastRow.srsBalance || 0) + (_inclProp ? (wiLastRow.propertyValue || 0) : 0)) : 0;
                       const delta = whatIfTotal - baseTotal;
                       return (
                         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -20182,7 +20184,10 @@ ${milestoneSnapshotHtml}
                                   const f = Math.pow(1 + inflD_wi, Math.max(0, r.age - caD_wi));
                                   return { ...r,
                                     oa: Math.round((r.oa||0)/f), sa: Math.round((r.sa||0)/f),
-                                    ma: Math.round((r.ma||0)/f), ra: Math.round((r.ra||0)/f) };
+                                    ma: Math.round((r.ma||0)/f), ra: Math.round((r.ra||0)/f),
+                                    privateAssets: Math.round((r.privateAssets||0)/f),
+                                    srsBalance:    Math.round((r.srsBalance||0)/f),
+                                    propertyValue: Math.round((r.propertyValue||0)/f) };
                                 })
                               : rawWiRows;
                             const baseRows = displayAccumulation || [];
@@ -20190,8 +20195,9 @@ ${milestoneSnapshotHtml}
                             const wiByAge   = new Map(wiRows.map(r => [r.age, r]));
                             const baseByAge = new Map(baseRows.map(r => [r.age, r]));
                             const maxAge = Math.max(...wiRows.map(r => r.age), ...baseRows.map(r => r.age), effPA);
-                            const wiTotal   = r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0);
-                            const baseTotal = r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0);
+                            const _inclPropChart = debouncedInputs.includeProperty ?? true;
+                            const wiTotal   = r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0)+(r.privateAssets||0)+(r.srsBalance||0)+(_inclPropChart?(r.propertyValue||0):0);
+                            const baseTotal = r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0)+(r.privateAssets||0)+(r.srsBalance||0)+(_inclPropChart?(r.propertyValue||0):0);
                             const allTotals = [...wiRows.map(wiTotal), ...baseRows.map(baseTotal)].filter(v => v > 0);
                             const maxVal = Math.max(...allTotals, 1);
                             const chartW = 560; const chartH = 160; const pad = { t: 10, r: 20, b: 28, l: 58 };
@@ -20235,6 +20241,15 @@ ${milestoneSnapshotHtml}
                               const saLabel = bestAge >= 55 ? "RA" : "SA";
                               const wSaRa = wr ? ((wr.sa||0)+(wr.ra||0)) : 0;
                               const bSaRa = br ? ((br.sa||0)+(br.ra||0)) : 0;
+                              const bSRS  = br ? (br.srsBalance||0) : 0;
+                              const wSRS  = wr ? (wr.srsBalance||0) : 0;
+                              const bPriv = br ? (br.privateAssets||0) : 0;
+                              const wPriv = wr ? (wr.privateAssets||0) : 0;
+                              const bProp = (_inclPropChart && br) ? (br.propertyValue||0) : 0;
+                              const wProp = (_inclPropChart && wr) ? (wr.propertyValue||0) : 0;
+                              const showSRS  = bSRS  > 0 || wSRS  > 0;
+                              const showPriv = bPriv > 0 || wPriv > 0;
+                              const showProp = _inclPropChart && (bProp > 0 || wProp > 0);
                               const modeTag = isRealDollars ? " (Real$)" : "";
                               tip.innerHTML = `
                                 <div style="font-size: 12px;font-weight:700;color:var(--text-muted);margin-bottom:6px;letter-spacing:.04em">
@@ -20251,6 +20266,9 @@ ${milestoneSnapshotHtml}
                                   <tr><td style="color:var(--text-muted);padding:1px 0">MA</td>
                                     <td style="text-align:right;padding:1px 4px;font-family:monospace">${br ? fmt(br.ma||0) : "—"}</td>
                                     <td style="text-align:right;padding:1px 4px;font-family:monospace;color:var(--clr-green)">${wr ? fmt(wr.ma||0) : "—"}</td></tr>
+                                  ${showSRS  ? `<tr><td style="color:var(--text-muted);padding:1px 0">SRS</td><td style="text-align:right;padding:1px 4px;font-family:monospace">${fmt(bSRS)}</td><td style="text-align:right;padding:1px 4px;font-family:monospace;color:var(--clr-green)">${fmt(wSRS)}</td></tr>` : ""}
+                                  ${showPriv ? `<tr><td style="color:var(--text-muted);padding:1px 0">Private</td><td style="text-align:right;padding:1px 4px;font-family:monospace">${fmt(bPriv)}</td><td style="text-align:right;padding:1px 4px;font-family:monospace;color:var(--clr-green)">${fmt(wPriv)}</td></tr>` : ""}
+                                  ${showProp ? `<tr><td style="color:var(--text-muted);padding:1px 0">Property</td><td style="text-align:right;padding:1px 4px;font-family:monospace">${fmt(bProp)}</td><td style="text-align:right;padding:1px 4px;font-family:monospace;color:var(--clr-green)">${fmt(wProp)}</td></tr>` : ""}
                                   <tr style="border-top:1px solid var(--border-subtle)">
                                     <td style="font-weight:700;padding:2px 0">Total</td>
                                     <td style="text-align:right;padding:2px 4px;font-family:monospace;font-weight:700">${fmt(bt)}</td>
@@ -20271,7 +20289,7 @@ ${milestoneSnapshotHtml}
                             return (
                               <div style={{ background: "var(--bg-muted)", borderRadius: 12, padding: "14px 16px" }}>
                                 <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 10px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                                  Base vs What-If · Total CPF Balance{isRealDollars ? " · Real$" : ""}
+                                  Base vs What-If · Total Net Worth{isRealDollars ? " · Real$" : ""}{_inclPropChart ? " (CPF+SRS+Priv+Prop)" : " (CPF+SRS+Priv)"}
                                   <span style={{ fontSize: 11, fontWeight: 400, marginLeft: 8, opacity: 0.6 }}>Hover for per-account breakdown</span>
                                 </p>
                                 <div id={svgContainerId} style={{ position: "relative", cursor: "crosshair" }}
@@ -21264,7 +21282,8 @@ ${milestoneSnapshotHtml}
                 {/* Payout Premium Structure — Standard, Escalating (fixed 100%) and Basic (variable slider) in one block */}
                 <div style={{ background: "var(--bg-base)", border: "1px solid var(--border-strong)", borderRadius: 14, padding: "14px 18px" }}>
                   <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><SlidersHorizontal style={{ width: 13, height: 13, color: "var(--clr-amber)" }} />CPF LIFE Premium Structure</h4>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                  {/* viewportWidth < 600: single column so Basic plan slider card never clips off-screen */}
+                  <div style={{ display: "grid", gridTemplateColumns: viewportWidth < 600 ? "1fr" : "1fr 1fr 1fr", gap: 16 }}>
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-slate)" }}>Standard Plan Premium</span>
@@ -21297,12 +21316,21 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2 }}>
-                  {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
-                    <button key={id} onClick={() => setViewMode(id)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
-                      {label}
-                    </button>
-                  ))}
+                {/* View mode button strip.
+                    Mobile fix: buttons use flex:"0 0 auto" + whiteSpace:nowrap so they don't compress;
+                    the container scrolls horizontally. A right-edge gradient fade on viewportWidth<768
+                    signals to the user that Total Yield and Eff. Return % are reachable by swiping. */}
+                <div style={{ position: "relative" }}>
+                  <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+                    {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
+                      <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {viewportWidth < 768 && (
+                    <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36, background: "linear-gradient(to right, transparent, var(--bg-base))", pointerEvents: "none", borderRadius: "0 12px 12px 0" }} />
+                  )}
                 </div>
                 <div className="fhd-chart-grow" style={{ height: 350, minHeight: 220 }}>
                   {/* For effRate mode, merge effective-rate values into chart data */}
@@ -21391,8 +21419,9 @@ ${milestoneSnapshotHtml}
                     );
                   })()}
                 </div>
-                {/* Info cards — one per view mode, highlighted when active. Click to switch chart view. */}
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(${isRSSMode ? 5 : 6}, 1fr)`, gap: 8 }}>
+                {/* Info cards — one per view mode, highlighted when active. Click to switch chart view.
+                    Mobile fix: collapse from 5/6-col to 2-col grid so cards remain readable at ~178px each. */}
+                <div style={{ display: "grid", gridTemplateColumns: viewportWidth < 640 ? "repeat(2, 1fr)" : `repeat(${isRSSMode ? 5 : 6}, 1fr)`, gap: 8 }}>
                   {[
                     ["payout",      "Monthly Payout",     "var(--clr-slate)",   "Fixed or rising monthly income. Escalating starts ~20% lower then grows 2%/yr. Dashed line shows the month Escalating exceeds Standard."],
                     ["annualPayout","Annual Payout",       "var(--clr-blue2)",   "Monthly × 12. Useful for household budget planning. No breakeven line — refer to Monthly or Total Yield views."],
@@ -21725,6 +21754,119 @@ ${milestoneSnapshotHtml}
                           <Download style={{ width: 13, height: 13 }} />Export A vs B Diff (CSV)
                         </button>
                       </div>
+                      {/* ── Input Comparison Table ───────────────────────────────────────────────
+                          3-way toggle: Diff (only fields that differ A≠B) | Filled (≥1 scenario
+                          has a non-zero value) | All (every tracked field). Composite Fragment
+                          keys prevent React ghost-node accumulation on toggle.
+                          srsAnnualContribution lives only in Insurance & SRS (removed from Salary)
+                          to eliminate the duplicate-key React bug that caused phantom SRS rows. */}
+                      {(() => {
+                        const iA = (scenarioA && scenarioA.inputs) ? scenarioA.inputs : {};
+                        const iB = (scenarioB && scenarioB.inputs) ? scenarioB.inputs : {};
+                        const lblA = scenarioLabelA || "Scenario A";
+                        const lblB = scenarioLabelB || "Scenario B";
+                        const GROUPS = [
+                          { title: "👤 Profile",              keys: ["currentAge","gender","payoutAge","retirementAge","lifeExpectancy","citizenStatus","prYear","isSelfEmployed"] },
+                          { title: "💰 Current Balances",     keys: ["oaBalance","saBalance","maBalance","currentPrivateAssets","srsBalance"] },
+                          { title: "📈 Salary & Contributions", keys: ["salaryGross","salaryBonus","contributionStopAge","annualPrivateSaving"] },
+                          { title: "⬆️ Voluntary Top-ups",   keys: ["vcSaTopup","vc3a","vcMaCash","mrssAnnual","mmssAnnual"] },
+                          { title: "🏠 Housing",              keys: ["housingOutflow","housingStopAge","propertyValue","propertyGrowthRate","includeProperty","propMonetiseEnabled","propMonetiseScheme","propMonetiseAge","propMonetiseCashProceeds","rentalIncome","rentalStartAge","rentalEndAge"] },
+                          { title: "📤 Decumulation",         keys: ["oaDrawdownMonthly","oaDrawdownStartAge","oaDrawdownFloor","dieWithZeroEnabled","retirementMonthlyIncome"] },
+                          { title: "🛡️ Insurance & SRS",     keys: ["dpsMode","dpsAnnualPremium","hpsAnnualPremium","srsAnnualContribution","srsContribStopAge","srsDrawdownStartAge","srsDrawdownYears","srsReturnRate"] },
+                          { title: "📊 Returns & Growth",     keys: ["privateAssetGrowthRate","inflationRate","salaryGrowthRate"] },
+                        ];
+                        const fmtVal = (k, v) => {
+                          if (v === null || v === undefined || v === "") return "—";
+                          if (typeof v === "boolean") return v ? "✓ Yes" : "No";
+                          if (k.toLowerCase().includes("age") || k === "salaryBonus" || k === "prYear") return String(v);
+                          if (k.toLowerCase().includes("rate") || k.toLowerCase().includes("growth") || k === "inflationRate") return `${v}%`;
+                          if (typeof v === "number" && v >= 100) return `$${v.toLocaleString()}`;
+                          return String(v);
+                        };
+                        // Build flat rows — group included in each row for composite key + header grouping
+                        const allRows = GROUPS.flatMap(g =>
+                          g.keys.map(k => ({ group: g.title, key: k, label: INPUT_LABELS[k] || k, vA: iA[k], vB: iB[k] }))
+                        );
+                        const differs = row => String(row.vA ?? "") !== String(row.vB ?? "");
+                        const isFilled = row => {
+                          const nonEmpty = v => v !== null && v !== undefined && v !== "" && v !== 0 && v !== false;
+                          return nonEmpty(row.vA) || nonEmpty(row.vB);
+                        };
+                        const visibleRows = compareView === "all"    ? allRows
+                                          : compareView === "filled"  ? allRows.filter(isFilled)
+                                          :                             allRows.filter(differs);
+                        let lastGroup = null;
+                        const btnStyle = (mode) => ({
+                          padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700,
+                          border: "none", cursor: "pointer",
+                          background: compareView === mode ? "var(--clr-blue)" : "var(--bg-muted)",
+                          color:      compareView === mode ? "#fff"           : "var(--text-muted)",
+                        });
+                        return (
+                          <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, padding: "14px 16px", marginTop: 16 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>
+                                Input Comparison — {lblA} vs {lblB}
+                              </span>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button onClick={() => setCompareView("diff")}   style={btnStyle("diff")}>
+                                  Differences {compareView === "diff" && `(${allRows.filter(differs).length})`}
+                                </button>
+                                <button onClick={() => setCompareView("filled")} style={btnStyle("filled")}>
+                                  Filled {compareView === "filled" && `(${allRows.filter(isFilled).length})`}
+                                </button>
+                                <button onClick={() => setCompareView("all")}    style={btnStyle("all")}>
+                                  All fields
+                                </button>
+                              </div>
+                            </div>
+                            {visibleRows.length === 0 && (
+                              <p style={{ fontSize: 13, color: "var(--clr-green)", textAlign: "center", padding: "12px 0" }}>
+                                {compareView === "diff"
+                                  ? "✓ All inputs are identical between Scenario A and Scenario B."
+                                  : "No filled inputs found — both scenarios use default values."}
+                              </p>
+                            )}
+                            {visibleRows.length > 0 && (
+                              <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                                  <thead>
+                                    <tr style={{ borderBottom: "2px solid var(--border-strong)" }}>
+                                      <th style={{ textAlign: "left", padding: "6px 8px", color: "var(--text-muted)", fontWeight: 700, fontSize: 11, textTransform: "uppercase", width: "40%" }}>Parameter</th>
+                                      <th style={{ textAlign: "right", padding: "6px 8px", color: "#3b82f6", fontWeight: 700, fontSize: 11, textTransform: "uppercase", width: "30%" }}>{lblA}</th>
+                                      <th style={{ textAlign: "right", padding: "6px 8px", color: "#f97316", fontWeight: 700, fontSize: 11, textTransform: "uppercase", width: "30%" }}>{lblB}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {visibleRows.map((row, i) => {
+                                      const isNew = row.group !== lastGroup;
+                                      lastGroup = row.group;
+                                      const diff = differs(row);
+                                      return (
+                                        // Composite key = group + field name prevents React duplicate-key
+                                        // ghost accumulation when toggling between view modes
+                                        <React.Fragment key={`${row.group}::${row.key}`}>
+                                          {isNew && compareView !== "diff" && (
+                                            <tr><td colSpan={3} style={{ padding: "10px 8px 4px", fontSize: 11, fontWeight: 800, color: "var(--clr-blue)", textTransform: "uppercase", letterSpacing: "0.06em", borderTop: i > 0 ? "1px solid var(--border-subtle)" : "none" }}>{row.group}</td></tr>
+                                          )}
+                                          <tr style={{ background: diff ? "rgba(var(--clr-amber-rgb),0.06)" : "transparent", borderBottom: "1px solid var(--border-subtle)" }}>
+                                            <td style={{ padding: "6px 8px", color: diff ? "var(--text-bright)" : "var(--text-muted)", fontWeight: diff ? 600 : 400 }}>
+                                              {diff && <span style={{ color: "var(--clr-amber)", marginRight: 5, fontSize: 10 }}>●</span>}
+                                              {row.label}
+                                            </td>
+                                            <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", color: diff ? "#3b82f6" : "var(--text-muted)", fontWeight: diff ? 700 : 400 }}>{fmtVal(row.key, row.vA)}</td>
+                                            <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", color: diff ? "#f97316" : "var(--text-muted)", fontWeight: diff ? 700 : 400 }}>{fmtVal(row.key, row.vB)}</td>
+                                          </tr>
+                                        </React.Fragment>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div style={{ height: 240, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "var(--text-muted)", fontStyle: "italic", border: "2px dashed var(--border-strong)", borderRadius: 16 }}>
