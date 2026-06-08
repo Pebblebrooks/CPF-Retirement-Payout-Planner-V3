@@ -19990,16 +19990,17 @@ ${milestoneSnapshotHtml}
 
                 {/* ── Net Worth Trajectory — stacked area from current age to 95 ── */}
                 {(() => {
+                  const showProp = inputs.includeProperty === true; // Fix: gate all property data on the toggle — without this, prop is always drawn from raw data and the chart ignores the OFF state
                   const nwData = displayAccumulation.map(row => {
                     const cpf = (row.oa || 0) + (row.sa || 0) + (row.ra || 0) + (row.ma || 0);
                     const priv = row.privateAssets || 0;
                     const srs  = row.srsBalance || 0;
-                    const prop = row.propertyValue || 0;
+                    const prop = showProp ? (row.propertyValue || 0) : 0; // Fix: was always row.propertyValue — ignored includeProperty toggle
                     return { age: row.age, cpf, priv, srs, prop, total: cpf + priv + srs + prop };
                   }).filter(r => r.age >= (Number(inputs.currentAge) || 35));
                   if (!nwData.length) return null;
                   const peakNW = Math.max(...nwData.map(r => r.total), 1);
-                  const hasProperty = nwData.some(r => r.prop > 0);
+                  const hasProperty = showProp && nwData.some(r => r.prop > 0); // Fix: was nwData.some(...) alone — showProp guard ensures Area is hidden when toggle is OFF
                   const hasSRS      = nwData.some(r => r.srs  > 0);
                   const hasPriv     = nwData.some(r => r.priv > 0);
                   const fmtK = v => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`;
@@ -20008,7 +20009,7 @@ ${milestoneSnapshotHtml}
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                         <TrendingUp style={{ width: 15, height: 15, color: "var(--clr-purple)", flexShrink: 0 }} />
                         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Net Worth Trajectory</span>
-                        <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 2 }}>CPF · Private · SRS{hasProperty ? " · Property" : ""}</span>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 2 }}>CPF{hasPriv ? " · Private" : ""}{hasSRS ? " · SRS" : ""}{hasProperty ? " · Property" : ""}</span>{/* Fix: was hardcoded "CPF · Private · SRS" — subtitle now reflects actual balances present */}
                         <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--clr-purple)", fontWeight: 700 }}>Peak {fmtK(peakNW)}</span>
                       </div>
                       <ResponsiveContainer width="100%" height={200}>
