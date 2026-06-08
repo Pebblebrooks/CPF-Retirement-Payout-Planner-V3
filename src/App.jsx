@@ -495,7 +495,7 @@ const computeBasicPlanYearPayout = (age, phase1bTrigger, phase1aAnnual, phase2An
 // D4-Bug2: parameter renamed raAfterTransfer → raAtPayout (full RA before OA transfer).
 // CPF LIFE payout is set on the full RA; the 20% OA transfer is a separate liquidity benefit
 // and does not reduce the payout basis. Bequest pools also use full RA as the premium base.
-const computeSensitivityRow = (pAge, raAtPayout, isMale) => {
+const computeSensitivityRow = (pAge, raAtPayout, isMale, maxAge = 95) => {
   const stdStart = interpolateCpfLife(raAtPayout, 'std', isMale, pAge);
   const escStart = interpolateCpfLife(raAtPayout, 'esc', isMale, pAge);
 
@@ -521,7 +521,7 @@ const computeSensitivityRow = (pAge, raAtPayout, isMale) => {
   let phase1bActualTriggerS = phase1bTriggerS;
   let escVsStd = null, stdVsBasic = null, escVsBasic = null;
 
-  for (let age = pAge; age <= 95; age++) {
+  for (let age = pAge; age <= maxAge; age++) {
     const yr = age - pAge;
     const stdPay = stdStart * 12;
     const escPay = (escStart * Math.pow(1.02, yr)) * 12;
@@ -603,7 +603,7 @@ const DEFAULT_INPUTS = {
   medicalInflationRate: 5,
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
   propertyGoalValue: 0,       // optional target property value at payout age (0 = no goal; shows % of net worth instead)
-  inflationRate: 2, includeProperty: true,
+  inflationRate: 2, includeProperty: true, maxProjectionAge: 95,
   sellPropertyAge: 0,
   // Private Assets & Goals
   targetMonthlyIncome: 0,
@@ -1172,7 +1172,7 @@ const INPUT_LABELS = {
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
   propertyLeasehold: "Is Leasehold", propertyLeaseYears: "Lease Years",
   propertyGoalValue: "Property Goal Value",
-  inflationRate: "Inflation Rate %", includeProperty: "Include Property",
+  inflationRate: "Inflation Rate %", includeProperty: "Include Property", maxProjectionAge: "Max Projection Age",
   sellPropertyAge: "Sell Property Age",
   targetMonthlyIncome: "Target Monthly Income", currentPrivateAssets: "Private Assets",
   annualPrivateSaving: "Annual Private Saving", privateAssetGrowthRate: "Private Asset Growth %",
@@ -1341,7 +1341,7 @@ function runRSSEngine(inputs, {
   overrideOaDrawdownMonthly,
   overrideSrsContrib,
   overridePrivGrowthRate,
-  maxAge = 95,
+  maxAge = 95,          // F1: configurable horizon (95/100/105)
   randomiseRates = false,
   mcVariance = 1,
 } = {}) {
@@ -2239,7 +2239,7 @@ function runProjectionEngine(inputs, {
   overrideOaDrawdownMonthly,       // Rev #12: What-If OA monthly drawdown override
   overrideSrsContrib,              // Rev #12: What-If SRS annual contribution override
   overridePrivGrowthRate,          // Rev #12: What-If private asset growth rate % override
-  maxAge = 95,
+  maxAge = 95,          // F1: configurable horizon (95/100/105)
   randomiseRates = false,          // Monte Carlo mode: rate variance applied per year
   mcVariance = 1,                  // Rev #MC: variance band in % (e.g. 1 = ±1%). Sourced from inputs.mcVariancePct.
 } = {}) {
@@ -5133,6 +5133,50 @@ function ReadinessTab({
     return items.slice(0, 5);
   }, [frsBarPct, projFRS, raAtPA, pa, highlightPlan, stdPay, basPay, target, waterfallCovPct, waterfallTotal, waterfallItems.length, oaDrawActive, oaDepletionAge, oaIncomeGapYrs, lifeExpectancy, inputs.srsBalance, inputs.srsAnnualContribution]);
 
+  // ── F3: Tier Shock Analysis ───────────────────────────────────────────────
+  // Pure analytical computation — no engine re-run. Uses already-computed raAtPA,
+  // projBRS/FRS/ERS, and module-level interpolateCpfLife to show the payout
+  // consequence of landing one tier lower than currently projected.
+  const tierShockData = useMemo(() => {
+    if (!raAtPA || raAtPA <= 0 || !projFRS || projFRS <= 0) return null;
+    // Determine which tier the member is currently projected to land in
+    let currentTier, tierFloor, lowerTierName, lowerTierFloor;
+    if (raAtPA >= projERS) {
+      currentTier = "ERS"; tierFloor = projERS;
+      lowerTierName = "FRS"; lowerTierFloor = projFRS;
+    } else if (raAtPA >= projFRS) {
+      currentTier = "FRS"; tierFloor = projFRS;
+      lowerTierName = "BRS"; lowerTierFloor = projBRS;
+    } else if (raAtPA >= projBRS) {
+      currentTier = "BRS"; tierFloor = projBRS;
+      lowerTierName = "Below BRS"; lowerTierFloor = projBRS * 0.5;
+    } else {
+      // Below BRS — show how far short and what BRS payout would be
+      currentTier = "Below BRS"; tierFloor = 0;
+      lowerTierName = null; lowerTierFloor = null;
+    }
+    // Current projected Standard payout
+    const currentMonthly = Math.round(interpolateCpfLife(raAtPA, 'std', isMale, pa));
+    // Payout at just below the current tier floor (stress scenario)
+    const lowerMonthly = lowerTierFloor != null
+      ? Math.round(interpolateCpfLife(Math.max(0, lowerTierFloor - 1), 'std', isMale, pa))
+      : 0;
+    const monthlyDelta = currentMonthly - lowerMonthly;
+    const deltaPct = currentMonthly > 0 ? Math.round((monthlyDelta / currentMonthly) * 100) : 0;
+    // RA buffer above current tier floor (how much the member can afford to lose before dropping)
+    const raBuf = tierFloor > 0 ? Math.max(0, raAtPA - tierFloor) : raAtPA;
+    // BRS payout — always show as an anchor reference
+    const brsMonthly = Math.round(interpolateCpfLife(projBRS, 'std', isMale, pa));
+    const frsMonthly = Math.round(interpolateCpfLife(projFRS, 'std', isMale, pa));
+    const ersMonthly = Math.round(interpolateCpfLife(projERS, 'std', isMale, pa));
+    return {
+      currentTier, tierFloor, lowerTierName, lowerTierFloor,
+      currentMonthly, lowerMonthly, monthlyDelta, deltaPct, raBuf,
+      brsMonthly, frsMonthly, ersMonthly,
+      projBRS, projFRS, projERS,
+    };
+  }, [raAtPA, projFRS, projBRS, projERS, isMale, pa]);
+
   // ── Donut geometry (unchanged from Phase 1/2) ────────────────────────────
   const donutParts = useMemo(() => {
     if (currentTotal === 0) return [];
@@ -5723,6 +5767,103 @@ function ReadinessTab({
         </div>
       )}
 
+      {/* ── ROW 4.5: Tier Risk Analysis (F3) — full-width ── */}
+      {tierShockData && (
+        <div style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <p style={labelStyle}>Tier Risk Analysis</p>
+            <span style={{
+              padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+              background: tierShockData.currentTier === "ERS" ? "rgba(16,185,129,0.12)"
+                : tierShockData.currentTier === "FRS" ? "rgba(59,130,246,0.12)"
+                : tierShockData.currentTier === "BRS" ? "rgba(245,158,11,0.12)"
+                : "rgba(239,68,68,0.12)",
+              color: tierShockData.currentTier === "ERS" ? "var(--clr-green)"
+                : tierShockData.currentTier === "FRS" ? "var(--clr-blue)"
+                : tierShockData.currentTier === "BRS" ? "var(--clr-amber)"
+                : "var(--clr-red)",
+            }}>
+              Projected: {tierShockData.currentTier} tier
+            </span>
+          </div>
+
+          {/* Tier ladder — visual bar showing BRS / FRS / ERS anchors vs raAtPA */}
+          <div style={{ marginBottom: 16 }}>
+            {[
+              { label: "ERS", value: tierShockData.projERS, monthly: tierShockData.ersMonthly, color: "var(--clr-green)" },
+              { label: "FRS", value: tierShockData.projFRS, monthly: tierShockData.frsMonthly, color: "var(--clr-blue)" },
+              { label: "BRS", value: tierShockData.projBRS, monthly: tierShockData.brsMonthly, color: "var(--clr-amber)" },
+            ].map(({ label, value, monthly, color }) => {
+              const pct = Math.min(100, Math.round((raAtPA / value) * 100));
+              const reached = raAtPA >= value;
+              return (
+                <div key={label} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: reached ? color : "var(--text-subtle)" }}>
+                      {reached ? "✓ " : ""}{label} — {formatCurrency(value)}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      Standard: <strong style={{ color: reached ? color : "var(--text-subtle)" }}>{formatCurrency(monthly)}/mo</strong>
+                    </span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 99, background: "var(--bg-input)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: reached ? color : "rgba(100,100,120,0.4)", transition: "width 0.4s" }} />
+                  </div>
+                </div>
+              );
+            })}
+            {/* Member's projected RA marker */}
+            <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-muted)" }}>
+              Your projected RA at {pa}: <strong style={{ color: "var(--text-bright)" }}>{formatCurrency(raAtPA)}</strong>
+              {tierShockData.raBuf > 0 && tierShockData.tierFloor > 0 && (
+                <span style={{ marginLeft: 8, color: "var(--clr-green)", fontWeight: 600 }}>
+                  +{formatCurrency(tierShockData.raBuf)} above {tierShockData.currentTier} floor
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Tier-drop consequence — only meaningful when there is a tier below */}
+          {tierShockData.lowerTierName && tierShockData.monthlyDelta > 0 && (
+            <div style={{
+              padding: "12px 16px", borderRadius: 12,
+              background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)",
+            }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: "0 0 6px" }}>
+                If RA drops to {tierShockData.lowerTierName} tier at age {pa}:
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                {[
+                  { label: "Current payout", value: `${formatCurrency(tierShockData.currentMonthly)}/mo`, color: "var(--clr-green)" },
+                  { label: "Tier-drop payout", value: `${formatCurrency(tierShockData.lowerMonthly)}/mo`, color: "var(--clr-red)" },
+                  { label: "Monthly shortfall", value: `−${formatCurrency(tierShockData.monthlyDelta)}/mo (−${tierShockData.deltaPct}%)`, color: "var(--clr-red)" },
+                ].map(({ label, value, color }) => (
+                  <div key={label} style={{ textAlign: "center" }}>
+                    <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 3px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+                    <p style={{ fontSize: 13, fontWeight: 800, color, margin: 0 }}>{value}</p>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "8px 0 0" }}>
+                Lifetime impact (to age {lifeExpectancy}): {formatCurrency(tierShockData.monthlyDelta * 12 * Math.max(0, lifeExpectancy - pa))} less in total CPF LIFE payouts
+              </p>
+            </div>
+          )}
+
+          {/* Below BRS warning */}
+          {tierShockData.currentTier === "Below BRS" && (
+            <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: "0 0 4px" }}>
+                Projected RA is below BRS — CPF LIFE auto-enrolment minimum not met
+              </p>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+                Gap to BRS: {formatCurrency(Math.max(0, tierShockData.projBRS - raAtPA))} · consider topping up SA/RA via RSTU or VC3A
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── ROW 5: Action priority queue (full-width) — Phase 3 ── */}
       {actionItems.length > 0 && (
         <div style={cardStyle}>
@@ -5864,6 +6005,10 @@ export default function App() {
   const [showSorr, setShowSorr]               = useState(false);         // SORR stress-test panel
   const [sorrCrashYears, setSorrCrashYears]   = useState(5);             // years of bad returns (1–10)
   const [sorrCrashReturn, setSorrCrashReturn] = useState(-10);           // annual return during crash (%)
+  const [showInflationStress, setShowInflationStress]         = useState(false); // F2: inflation stress toggle
+  const [inflationStressRate, setInflationStressRate]         = useState(4);     // F2: stress CPI % (default 4%)
+  const [showPropertyStress, setShowPropertyStress]           = useState(false); // F4: property correction toggle
+  const [propertyStressGrowthRate, setPropertyStressGrowthRate] = useState(0);  // F4: stressed growth rate %
   const [showLifeEventMarkers, setShowLifeEventMarkers] = useState(true); // Rev #D2: default ON so events are visible immediately
   // accumChartMode: 'stacked' = AreaChart (wealth composition); 'lines' = LineChart (individual accounts, no MA stacking artifact)
   const [accumChartMode, setAccumChartMode] = useState('stacked');
@@ -6255,6 +6400,7 @@ export default function App() {
     const pa = Number(inp.payoutAge) || 65;
     const cs = Number(inp.contributionStopAge) || 65;
     const hs = Number(inp.housingStopAge) || 55;
+    const maxPAv = Number(inp.maxProjectionAge) || 95; // F1: dynamic upper bound for input validation
     if (ca < 0 || ca > 95) errs.currentAge = "Age must be 0–95";
     // D3: under-16 info note — cash top-ups locked, CPF nominations and CPFIS not yet available
     if (!errs.currentAge && ca >= 0 && ca < 16) errs.currentAge = "Members under 16 are managed by a parent or guardian. Cash top-ups to SA/MA (VC3A, RSTU, VCMA) can be entered here on the child's behalf. CPF nominations require age 16+. CPFIS requires age 18+ and is locked in the Outflows section.";
@@ -6420,7 +6566,7 @@ export default function App() {
     const phaseAge = phaseAgeRaw === 0 ? null : phaseAgeRaw;
     const sgr2 = Number(inp.salaryGrowthRate2) || 0;
     if (phaseAge !== null) {
-      if (isNaN(phaseAge) || phaseAge < ca || phaseAge > 95) errs.salaryPhaseAge = `Must be ${ca}–95`;
+      if (isNaN(phaseAge) || phaseAge < ca || phaseAge > maxPAv) errs.salaryPhaseAge = `Must be ${ca}–${maxPAv}`;
       if (sgr2 < -50 || sgr2 > 50) errs.salaryGrowthRate2 = "-50% to 50%";
       // R-10 fix: warn when a phase transition age is set but Phase 2 growth rate is 0.
       // The engine silently applies 0% growth after phaseAge — salary growth stops entirely.
@@ -6442,7 +6588,7 @@ export default function App() {
       const mag = Number(ev.magnitude);
       const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement';
       if (!ev.type) evErrs.type = "Select an event type";
-      if (isNaN(sa) || sa < ca || sa > 95) evErrs.startAge = `Must be ${ca}–95`;
+      if (isNaN(sa) || sa < ca || sa > maxPAv) evErrs.startAge = `Must be ${ca}–${maxPAv}`;
       if (!isPoint) {
         if (isNaN(ea) || ea < sa) evErrs.endAge = "Must be ≥ start age";
         if (ea > 95) evErrs.endAge = "Must be ≤ 95";
@@ -6469,7 +6615,7 @@ export default function App() {
     else if (!isNaN(rsg) && rsg > 6) errs.retirementSumGrowth = "Above 6% is aggressive — CPF Board historical average is ~3%";
     // Property value: 0 – $50,000,000
     const sPA = Number(inp.sellPropertyAge) || 0;
-    if (sPA > 0 && (sPA < (Number(inp.currentAge) || 35) || sPA > 95)) errs.sellPropertyAge = `Must be ${Number(inp.currentAge) || 35}–95`;
+    if (sPA > 0 && (sPA < (Number(inp.currentAge) || 35) || sPA > maxPAv)) errs.sellPropertyAge = `Must be ${Number(inp.currentAge) || 35}–${maxPAv}`;
     const pv = Number(inp.propertyValue) || 0;
     if (pv < 0 || pv > 50000000) errs.propertyValue = "0 – $50M";
     const pgr = Number(inp.propertyGrowthRate) || 0;
@@ -6697,7 +6843,7 @@ export default function App() {
       const pmScheme = inp.propMonetiseScheme ?? 'downgrade';
       const pmAge = Number(inp.propMonetiseAge) || 65;
       const ca3 = Number(inp.currentAge) || 35;
-      if (pmAge < ca3 || pmAge > 95) errs.propMonetiseAge = `${ca3}–95`;
+      if (pmAge < ca3 || pmAge > maxPAv) errs.propMonetiseAge = `${ca3}–${maxPAv}`;
       // LBS-specific: CPF Board minimum entry age is 65
       if (pmScheme === 'lbs' && !errs.propMonetiseAge && pmAge < 65) errs.propMonetiseAge = "LBS requires age 65+ (CPF Board eligibility)";
       const pmCash = Number(inp.propMonetiseCashProceeds) || 0;
@@ -6724,7 +6870,7 @@ export default function App() {
     if (rentalMoV < 0 || rentalMoV > 50000) errs.rentalIncome = "0 – $50,000/mo";
     if (rentalStV > 0) {
       const caR = Number(inp.currentAge) || 35;
-      if (rentalStV < caR || rentalStV > 95) errs.rentalStartAge = `${caR}–95`;
+      if (rentalStV < caR || rentalStV > maxPAv) errs.rentalStartAge = `${caR}–${maxPAv}`;
       if (rentalEnV <= rentalStV) errs.rentalEndAge = `Must be > start age (${rentalStV})`;
       if (rentalEnV > 99) errs.rentalEndAge = "Must be ≤ 99";
     }
@@ -7575,35 +7721,6 @@ export default function App() {
 
     return { baseline, targetAmt, gap: targetAmt - baseline, stratA, stratB, stratC, sensitivityRSTU, sensitivityVC3A };
   };
-
-  // ── Max-achievable reactive hint (Issue 4) ───────────────────────────────
-  // Computes the highest CPF total the primary member can reach at payout age
-  // by maxing both levers (RSTU $8k/yr + VC3A $37,740/yr). Single engine call
-  // per debounce cycle — used to show a "Max achievable → set" pill next to the
-  // custom amount input so users never need to trial-and-error the ceiling.
-  const goalSimMaxReachable = useMemo(() => {
-    const pa = Number(debouncedInputs.payoutAge) || 65;
-    const isRSSGS = debouncedInputs.cpfScheme === 'rss';
-    if (isRSSGS) return null; // RSS has no RSTU/VC3A levers
-    try {
-      const rows = runProjectionEngine({ ...debouncedInputs, vcSaTopup: GS_RSTU_CAP, vc3aCash: GS_VC3A_CAP });
-      const row  = rows.find(r => r.age === pa) || {};
-      const total = (row.oa||0) + (row.sa||0) + (row.ra||0) + (row.ma||0);
-      return total > 0 ? total : null;
-    } catch { return null; }
-  }, [debouncedInputs]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const goalSimMaxReachableSpouse = useMemo(() => {
-    const spa = Number(debouncedSpouseInputs.payoutAge) || 65;
-    if (!householdEnabled || spouseProjection.length === 0) return null;
-    if (debouncedSpouseInputs.cpfScheme === 'rss') return null;
-    try {
-      const rows = runProjectionEngine({ ...debouncedSpouseInputs, vcSaTopup: GS_RSTU_CAP, vc3aCash: GS_VC3A_CAP });
-      const row  = rows.find(r => r.age === spa) || {};
-      const total = (row.oa||0) + (row.sa||0) + (row.ra||0) + (row.ma||0);
-      return total > 0 ? total : null;
-    } catch { return null; }
-  }, [debouncedSpouseInputs, householdEnabled, spouseProjection.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Primary solver ────────────────────────────────────────────────────────
   const solveGoal = () => {
@@ -8557,8 +8674,8 @@ export default function App() {
       Number(scenarioB.inputs?.currentAge) || 35
     );
     const ageSet = new Set([paA, paB]);
-    for (let a = startAge; a <= 95; a += 5) ageSet.add(a);
-    const ages = [...ageSet].filter(a => a >= startAge && a <= 95).sort((x, y) => x - y);
+    for (let a = startAge; a <= maxPA; a += 5) ageSet.add(a);
+    const ages = [...ageSet].filter(a => a >= startAge && a <= maxPA).sort((x, y) => x - y);
 
     // R-9 fix: prepend a metadata row disclosing that all figures are nominal (un-deflated).
     // This is important when the user is viewing the app in Real$ mode — the CSV always
@@ -8672,7 +8789,7 @@ export default function App() {
   td { padding: 4px 6px; text-align: right; border-bottom: 1px solid #e2e8f0; }
   td:first-child { text-align: left; font-weight: 700; }
 </style></head><body>
-<h1>CPF Projection — ${memberName} (Age ${startAge} to 95)</h1>
+<h1>CPF Projection — ${memberName} (Age ${startAge} to ${maxPA})</h1>
 <p>Plan shown: ${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} | Payout Age: ${pa} | Generated: ${new Date().toLocaleDateString("en-SG")}</p>
 <table>
 <thead><tr><th>Age</th><th>OA</th><th>MA</th><th>SA/RA</th><th>Inflows</th><th>Outflows</th>
@@ -8763,6 +8880,7 @@ export default function App() {
       salaryPhaseAge, salaryGrowthRate2, // Rev #22 (careerBreakStartAge/EndAge removed — use Life Events career_break)
       lifeEvents, // Rev #D2
       cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer, // RSS fields + transfer toggle
+      maxProjectionAge, // F1: planning horizon — changes here trigger full re-projection
     } = debouncedInputs;
     // N-BUG-5 fix: lifeEvents objects carry a UUID `id` field generated at creation time.
     // Including raw lifeEvents in JSON.stringify means deleting+re-adding the same event
@@ -8810,6 +8928,7 @@ export default function App() {
       salaryPhaseAge, salaryGrowthRate2,
       lifeEvents: lifeEventsForKey,
       cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer,
+      maxProjectionAge,
     });
   }, [debouncedInputs]); // eslint-disable-line react-hooks/exhaustive-deps
   const projection = useMemo(() => {
@@ -8904,7 +9023,7 @@ export default function App() {
       finalPass._dwzPrivMonthly = Math.round(pmtPrivAnnual / 12); // monthly draw for UI display
       return finalPass;
     }
-    return engineFn(debouncedInputs);
+    return engineFn(debouncedInputs, { maxAge: maxPA });
   }, [engineKey]); // eslint-disable-line
 
   // projectionByAge: O(1) lookup for the raw (nominal) engine projection — used wherever
@@ -8966,6 +9085,9 @@ export default function App() {
   // variable it closes over must already be initialised at the point useMemo() is called.
   // NX10 fix: payoutAge65 reads debouncedInputs so it matches the debounced projection.
   const payoutAge65 = Number(debouncedInputs.payoutAge) || 65;
+  // F1: Configurable planning horizon (95 / 100 / 105). All engine loops,
+  // filters, chart axes, and labels use maxPA instead of the hardcoded 95.
+  const maxPA = Number(debouncedInputs.maxProjectionAge) || 95;
 
   // CQ-2 perf: use projectionByAge Map (O(1)) instead of projection.find() (O(n))
   const raAtPayout = projectionByAge.get(payoutAge65)?.ra || 0;
@@ -9077,7 +9199,7 @@ export default function App() {
     const sLifeEscAtPA = Math.round(interpolateCpfLife(sRaBase, 'esc', sIsMale, spousePa));
     const sLifeBasAtPA = Math.round(interpolateCpfLife(sRaBase, 'bas', sIsMale, spousePa) * (1 - sBasPct / 100) / 0.90);
     const rows = [];
-    for (let age = startAge; age <= 95; age++) {
+    for (let age = startAge; age <= maxPA; age++) {
       const pRow = projectionByAge.get(age) || {};
       const sRow = spouseProjectionByAge.get(age) || {};
       const pInPayout = age >= primaryPa;
@@ -9469,7 +9591,7 @@ export default function App() {
   // sa: null post-55; ra: null pre-55; total = sum of all active accounts.
   const accumLineChartData = useMemo(() => {
     const isRSSChart = debouncedInputs.cpfScheme === 'rss';
-    const ageLimit = isRSSChart ? 95 : payoutAge65;
+    const ageLimit = isRSSChart ? maxPA : payoutAge65; // F1
     return (displayAccumulation || [])
       .filter(d => d.age <= ageLimit)
       .map(row => ({
@@ -9589,7 +9711,7 @@ export default function App() {
     // full drawdown window (currentAge → 95) has MC data. For CPF LIFE members
     // keep the existing behaviour (accumulation window: currentAge → payoutAge).
     const isRSSMC = debouncedInputs.cpfScheme === 'rss';
-    const endAge = isRSSMC ? 95 : pa;
+    const endAge = isRSSMC ? maxPA : pa; // F1
     const ageTotals = {};
     for (let age = ca; age <= endAge; age++) ageTotals[age] = [];
     const mcVar = Math.max(0.1, Number(debouncedInputs.mcVariancePct) || 1); // Rev #MC: user-controlled band
@@ -9654,7 +9776,7 @@ export default function App() {
     // including the RSS payout — voluntary top-ups are still zeroed as before.
     const isRSSBaseline = debouncedInputs.cpfScheme === 'rss';
     const rows = isRSSBaseline
-      ? runRSSEngine(baselineInputs, { maxAge: 95 })
+      ? runRSSEngine(baselineInputs, { maxAge: maxPA })
       : runProjectionEngine(baselineInputs, { maxAge: pa });
     if (isRealDollars) {
       const ca = Number(debouncedInputs.currentAge) || 35;
@@ -9690,14 +9812,9 @@ export default function App() {
     // Bug2-WI fix: RSS members must use runRSSEngine so the RSS drawdown is modelled in
     // the What-If run. runProjectionEngine with maxAge:effPA=65 produced an empty array
     // for RSS members already aged 68+ (loop runs 0 iterations), making the What-If chart
-    // entirely blank.
-    // Bug3-WI fix: OA drawdown slider had zero visible effect for LIFE members because
-    // wiMaxAge was effPA (e.g. 65). OA drawdown starts at effPA and operates in the
-    // POST-payout window (ages 65→95). With maxAge=65 the engine only applied one year of
-    // drawdown (~$12k on a $2M scale — invisible). Fix: always run to 95 so both curves
-    // cover the full accumulation + decumulation horizon and all slider effects are visible.
+    // entirely blank. Use maxAge:95 for RSS (full drawdown window) as with the main projection.
     const isRSSWI = debouncedInputs.cpfScheme === 'rss';
-    const wiMaxAge = 95; // always full horizon — post-payout sliders (OA drawdown, payout age) need the full window
+    const wiMaxAge = isRSSWI ? maxPA : effPA; // F1
     const rows = isRSSWI
       ? runRSSEngine(wiInputs, {
           maxAge: wiMaxAge,
@@ -9792,7 +9909,7 @@ export default function App() {
     const startA = scenarioA?.projection?.[0]?.age ?? 35;
     const startB = scenarioB?.projection?.[0]?.age ?? 35;
     const startAge = Math.min(startA, startB, 35);
-    for (let age = startAge; age <= 95; age++) {
+    for (let age = startAge; age <= maxPA; age++) {
       // R-1 fix: pass scenario-specific deflate function so each curve is independently deflated
       const yA = getNetWorth(scenarioA, age, scAPayoutMap, scAProjMap, deflateA);
       const yB = getNetWorth(scenarioB, age, scBPayoutMap, scBProjMap, deflateB);
@@ -9895,7 +10012,7 @@ export default function App() {
           let bal = ra;
           let depAge = null;
           const start = Number(debouncedInputs.rssPayoutStartAge) || 65;
-          for (let age = start; age <= 95; age++) {
+          for (let age = start; age <= maxPA; age++) { // F1
             bal = bal * (1 + CPF_RATES.RA) - annual;
             if (bal <= 0) { depAge = age; break; }
           }
@@ -10234,7 +10351,7 @@ export default function App() {
         : val;
 
     const data = [];
-    for (let age = pa; age <= 95; age++) {
+    for (let age = pa; age <= maxPA; age++) {
       // BUG-13 fix: use O(1) Map lookups instead of O(n) .find() inside the loop
       // I-1 fix: use displayProjectionByAge (deflated when isRealDollars=true) instead of
       // payoutByAge (always nominal) so CPF LIFE area responds to the Nom/Real$ toggle.
@@ -10325,7 +10442,7 @@ export default function App() {
     let sorrPriv = privAtPA;
     const rows = [];
 
-    for (let age = pa; age <= 95; age++) {
+    for (let age = pa; age <= maxPA; age++) {
       const basePriv    = accumulationByAge.get(age)?.privateAssets || 0;
       const monthlyDraw = drawByAge.get(age) || 0;
       const annualDraw  = monthlyDraw * 12;
@@ -10364,6 +10481,67 @@ export default function App() {
   }, [showSorr, sorrCrashYears, sorrCrashReturn, strategyChartData, accumulationByAge,
       payoutAge65, debouncedInputs.privateAssetGrowthRate, debouncedInputs.annualPrivateSaving]);
 
+  // ── F2: Inflation Stress Data ─────────────────────────────────────────────
+  // Shows real purchasing-power erosion of CPF LIFE monthly payout under a higher
+  // stress CPI vs the member's base inflation rate. No engine re-run — presentation only.
+  const inflationStressData = useMemo(() => {
+    if (!showInflationStress) return null;
+    const baseInfl   = (Number(debouncedInputs.inflationRate) || 0) / 100;
+    const stressInfl = inflationStressRate / 100;
+    const pa = payoutAge65;
+    // Get CPF LIFE monthly payout from the active plan (nominal)
+    const activePlan  = highlightPlan || 'standard';
+    const planObj     = lifePlans?.[activePlan];
+    const isMaleVal   = debouncedInputs.isMale !== false;
+    const cpfLifeNom  = planObj ? Math.round((isMaleVal ? planObj.startM : planObj.startF) *
+      (activePlan === 'basic' ? (1 - (Number(debouncedInputs.basicPremiumPct) || 10) / 100) / 0.90 : 1)) : 0;
+    if (cpfLifeNom <= 0) return null;
+    const rows = [];
+    for (let age = pa; age <= maxPA; age++) {
+      const yrs       = age - pa;
+      const baseReal   = Math.round(cpfLifeNom * Math.pow(1 + baseInfl,   -yrs));
+      const stressReal = Math.round(cpfLifeNom * Math.pow(1 + stressInfl, -yrs));
+      rows.push({ age, baseReal, stressReal, gap: Math.max(0, baseReal - stressReal) });
+    }
+    const lifeExp      = isMaleVal ? 85 : 88;
+    const lifeRows     = rows.filter(r => r.age <= lifeExp);
+    const lifetimeLoss = Math.round(lifeRows.reduce((s, r) => s + r.gap * 12, 0));
+    const atPA         = rows[0] || {};
+    const at80         = rows.find(r => r.age === 80) || {};
+    const atLifeExp    = rows.find(r => r.age === lifeExp) || {};
+    return { rows, cpfLifeNom, lifetimeLoss, atPA, at80, atLifeExp, lifeExp };
+  }, [showInflationStress, inflationStressRate, debouncedInputs.inflationRate,
+      debouncedInputs.isMale, debouncedInputs.basicPremiumPct,
+      lifePlans, highlightPlan, payoutAge65]);
+
+  // ── F4: Property Correction Stress Data ──────────────────────────────────
+  // Computes stressed property value trajectory at an alternative growth rate.
+  // No engine re-run — simple compound growth on the current property value.
+  const propertyStressData = useMemo(() => {
+    if (!showPropertyStress) return null;
+    const propValue  = Number(debouncedInputs.propertyValue) || 0;
+    if (propValue <= 0) return null;
+    const baseGrowth   = (Number(debouncedInputs.propertyGrowthRate) || 0) / 100;
+    const stressGrowth = propertyStressGrowthRate / 100;
+    const ca           = Number(debouncedInputs.currentAge) || 35;
+    const pa           = payoutAge65;
+    const rows = [];
+    for (let age = ca; age <= pa; age++) {
+      const yrs = age - ca;
+      rows.push({
+        age,
+        baseValue:   Math.round(propValue * Math.pow(1 + baseGrowth,   yrs)),
+        stressValue: Math.round(propValue * Math.pow(1 + stressGrowth, yrs)),
+      });
+    }
+    const baseValueAtPA   = rows[rows.length - 1]?.baseValue   || 0;
+    const stressValueAtPA = rows[rows.length - 1]?.stressValue || 0;
+    const delta           = baseValueAtPA - stressValueAtPA;
+    const deltaPct        = baseValueAtPA > 0 ? Math.round(Math.abs(delta / baseValueAtPA) * 100) : 0;
+    return { rows, baseValueAtPA, stressValueAtPA, delta, deltaPct, propValue, pa, ca };
+  }, [showPropertyStress, propertyStressGrowthRate, debouncedInputs.propertyGrowthRate,
+      debouncedInputs.propertyValue, debouncedInputs.currentAge, payoutAge65]);
+
   // OA Exhaustion Age: first projection age where OA balance falls to/below the bequest floor
   // during the drawdown window. null = OA sustains to age 95 (or drawdown not active).
   const oaExhaustAge = useMemo(() => {
@@ -10399,7 +10577,7 @@ export default function App() {
       const pRow = accumulationByAge.get(pa) || {};    // O(1) — was displayAccumulation.find
       const ppRow = payoutByAge.get(pa) || {};         // O(1) — was payoutProjection.find
       const nwPayout = ppRow[`${highlightPlan}NetWorth`] || 0;
-      const nwAt95 = payoutByAge.get(95)?.[`${highlightPlan}NetWorth`] || 0; // E3/P1 fix: O(1) via existing payoutByAge Map
+      const nwAt95 = payoutByAge.get(maxPA)?.[`${highlightPlan}NetWorth`] || 0; // E3/P1 fix: O(1) via existing payoutByAge Map
       const totalCpf = (pRow.oa || 0) + (pRow.sa || 0) + (pRow.ma || 0) + (pRow.ra || 0);
       const dateStr = new Date().toLocaleDateString("en-SG", { day: "2-digit", month: "long", year: "numeric" });
       const stdMonthly = Math.round(lifePlans.standard.start);
@@ -10459,9 +10637,9 @@ export default function App() {
         const contribFlowsCpf = projection.filter(r => r.injected > 0).map(r => ({ t: r.age - ca, v: -(r.injected) }));
         const result = { standard: {}, escalating: {}, basic: {} };
         ['standard','escalating','basic'].forEach(plan => {
-          const payoutFlows = payoutProjection.filter(r => r.age >= pa && r.age <= 95).map(r => ({ t: r.age - ca, v: r[`${plan}Monthly`] ? r[`${plan}Monthly`] * 12 : 0 }));
-          const bequestRow = payoutByAge.get(95) || {};
-          const terminalV = { t: 95 - ca, v: bequestRow[`${plan}Bequest`] || 0 };
+          const payoutFlows = payoutProjection.filter(r => r.age >= pa && r.age <= maxPA).map(r => ({ t: r.age - ca, v: r[`${plan}Monthly`] ? r[`${plan}Monthly`] * 12 : 0 }));
+          const bequestRow = payoutByAge.get(maxPA) || {};
+          const terminalV = { t: maxPA - ca, v: bequestRow[`${plan}Bequest`] || 0 };
           const xirr = computeXIRR([...contribFlowsCpf, ...payoutFlows, terminalV]);
           result[plan][pa] = xirr !== null ? Math.max(-0.50, Math.min(0.50, xirr)) * 100 : null;
         });
@@ -10477,7 +10655,7 @@ export default function App() {
         // Fix 3: RSS members use runRSSEngine; maxAge:95 (not pa) because RSS projects
         // to age 95 regardless of CPF LIFE payout age. CPF LIFE payout age is irrelevant for RSS.
         const _engine = isRSSPdf ? runRSSEngine : runProjectionEngine;
-        const _maxAge = isRSSPdf ? 95 : pa;
+        const _maxAge = isRSSPdf ? maxPA : pa;
         const rows = _engine(debouncedInputs, {
           overrideVcSA: saTop,
           overrideHousingOutflow: hOut,
@@ -10538,7 +10716,7 @@ export default function App() {
         Number(inputs.milestoneAge3) || 0,
         Number(inputs.milestoneAge4) || 0,
         Number(inputs.milestoneAge5) || 0,
-      ].filter(a => a > 0 && a >= ca && a <= 95);
+      ].filter(a => a > 0 && a >= ca && a <= maxPA);
       const uniqueMsAges = [...new Set(msAges)].sort((a, b) => a - b);
       const milestoneSnapshotHtml = uniqueMsAges.length > 0 ? (() => {
         // Pre-compute CPF totals for each milestone age so we can calculate growth deltas
@@ -10683,7 +10861,7 @@ export default function App() {
       const gBars = stratRows.map((r, i) => {
         const y = gPadT + i * gRowH;
         const startAge = typeof r.start === 'number' ? r.start : pa;
-        const endAge = typeof r.end === 'number' ? r.end : 95;
+        const endAge = typeof r.end === 'number' ? r.end : maxPA;
         const x1 = gX(startAge), x2 = gX(Math.min(endAge + 1, gEnd));
         const bw = Math.max(6, x2 - x1);
         return `<rect x="${x1}" y="${y + 4}" width="${bw}" height="${gRowH - 8}" rx="3" fill="${r.color}" opacity="0.88"/>
@@ -10745,7 +10923,7 @@ export default function App() {
       const compareHtml = (() => {
         if (!scenarioA) return '';
         const paRowA = (scenarioA.projection || []).find(r => r.age === pa) || {};
-        const row95A = (scenarioA.projection || []).find(r => r.age === 95) || {};
+        const row95A = (scenarioA.projection || []).find(r => r.age === maxPA) || {};
         const totalA = (paRowA.oa || 0) + (paRowA.sa || 0) + (paRowA.ma || 0) + (paRowA.ra || 0);
         if (!totalA) return '';
         const diff = totalCpf - totalA;
@@ -10810,7 +10988,7 @@ ${(() => {
   const curProj = projection;
   const paA = Number(scenarioA.inputs?.payoutAge) || pa;
   const startAge2 = Math.min(ca, Number(scenarioA.inputs?.currentAge) || ca);
-  const endAge2   = Math.min(95, Math.max(pa, paA));
+  const endAge2   = Math.min(maxPA, Math.max(pa, paA)); // F1
   const filterAges = (proj) => proj.filter(r => r.age >= startAge2 && r.age <= endAge2 && (r.age % 5 === 0 || r.age === pa || r.age === paA));
   const rowsA2   = filterAges(scAProj);
   const rowsCur2 = filterAges(curProj);
@@ -10871,7 +11049,7 @@ ${yT2}${xT2}${paLineCmp}
 
         // KPI balances at each member's payout age using displayHouseholdByAge (already deflated)
         const hAtCombinedPA = displayHouseholdByAge.get(combinedPA) || {};
-        const hAt95         = displayHouseholdByAge.get(95)         || {};
+        const hAt95         = displayHouseholdByAge.get(maxPA)      || {};
         const pTotal        = (displayHouseholdByAge.get(pPA) || {}).primaryTotal || 0;
         const sTotal        = (displayHouseholdByAge.get(sPA) || {}).spouseTotal  || 0;
         const combinedTotal = hAtCombinedPA.combinedTotal || 0;
@@ -10947,7 +11125,7 @@ ${yT2}${xT2}${paLineCmp}
         const sCS     = (debouncedSpouseInputs.citizenStatus || 'SC').toUpperCase();
 
         // ── Combined accumulation SVG chart ─────────────────────────────────
-        const chartRows = displayHouseholdData.filter(r => r.age >= Math.min(pCA, sCA) && r.age <= 95);
+        const chartRows = displayHouseholdData.filter(r => r.age >= Math.min(pCA, sCA) && r.age <= maxPA);
         const chartSvg = (() => {
           if (chartRows.length < 2) return '';
           const W = 680, H = 170, PL = 62, PB = 26, PT = 10, PR = 10;
@@ -10960,7 +11138,7 @@ ${yT2}${xT2}${paLineCmp}
             const y = PT + CH - Math.round(t * CH);
             return `<line x1="${PL-4}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#e8eef4" stroke-width="0.5"/><text x="${PL-6}" y="${y+3}" text-anchor="end" font-size="7" fill="#94a3b8">${fmt5(Math.round(t * maxY))}</text>`;
           }).join('');
-          const xTks = chartRows.filter((_, i) => i % Math.ceil(n / 12) === 0 || chartRows[i].age === 95).map((r, _, arr) => {
+          const xTks = chartRows.filter((_, i) => i % Math.ceil(n / 12) === 0 || chartRows[i].age === maxPA).map((r, _, arr) => {
             const i = chartRows.indexOf(r);
             return `<text x="${xOf(i)}" y="${PT+CH+14}" text-anchor="middle" font-size="7" fill="#94a3b8">${r.age}</text>`;
           }).join('');
@@ -10993,7 +11171,7 @@ ${paLines}
         const startAge = Math.min(pCA, sCA);
         const every5   = [];
         for (let a = Math.ceil(startAge / 5) * 5; a < combinedPA; a += 5) every5.push(a);
-        const keyAges  = [...new Set([startAge, ...every5, 55, pPA, sPA, 65, 70, 75, 80, 85, 90, 95])].filter(a => a >= startAge && a <= 95).sort((a, b) => a - b);
+        const keyAges  = [...new Set([startAge, ...every5, 55, pPA, sPA, 65, 70, 75, 80, 85, 90, maxPA])].filter(a => a >= startAge && a <= maxPA).sort((a, b) => a - b);
 
         const keyAgeRows = keyAges.map(age => {
           const hRow     = displayHouseholdByAge.get(age) || {};
@@ -11424,7 +11602,7 @@ ${(() => {
           // Area chart with stacked polygon fills.
           // Chart resolution: every year (was every 2 years — changed so single-year lump sums and
           // life event spikes are not silently skipped between data points in the SVG chart).
-          const chartRows = projection.filter(r => r.age >= ca && r.age <= 95);
+          const chartRows = projection.filter(r => r.age >= ca && r.age <= maxPA);
           // Include private assets in Y-axis scale
           const maxPriv = Math.max(...chartRows.map(r => r.privateAssets || 0)) || 0;
           const maxTotal = Math.max(...chartRows.map(r => (r.oa||0)+(r.sa||0)+(r.ma||0)+(r.ra||0))) || 1;
@@ -11471,8 +11649,8 @@ ${(() => {
             const sa_ev = Number(ev.startAge);
             const ea_ev = Number(ev.endAge);
             const isPoint = ev.type === 'windfall' || ev.type === 'early_retirement' || sa_ev === ea_ev;
-            const x1_ev = PL + Math.max(0, Math.min(1, (sa_ev - ca) / (95 - ca))) * CW;
-            const x2_ev = isPoint ? x1_ev + 2 : PL + Math.max(0, Math.min(1, (ea_ev - ca) / (95 - ca))) * CW;
+            const x1_ev = PL + Math.max(0, Math.min(1, (sa_ev - ca) / (maxPA - ca))) * CW;
+            const x2_ev = isPoint ? x1_ev + 2 : PL + Math.max(0, Math.min(1, (ea_ev - ca) / (maxPA - ca))) * CW;
             const lbl = (ev.label || ev.type).slice(0, 14);
             return `<rect x="${x1_ev}" y="${PT}" width="${Math.max(2, x2_ev - x1_ev)}" height="${CH}" fill="${col}" opacity="0.07"/>
 <line x1="${x1_ev}" y1="${PT}" x2="${x1_ev}" y2="${baseY}" stroke="${col}" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>
@@ -11481,7 +11659,7 @@ ${(() => {
           // Monte Carlo band (P10–P90 shaded, P50 dashed line)
           const mcBand = (() => {
             if (!monteCarloData?.rows?.length) return '';
-            const mcRows = monteCarloData.rows.filter(m => m.age >= ca && m.age <= (isRSSPdf ? 95 : pa));
+            const mcRows = monteCarloData.rows.filter(m => m.age >= ca && m.age <= (isRSSPdf ? maxPA : pa));
             if (mcRows.length < 2) return '';
             const mcByAge = new Map(mcRows.map(m => [m.age, m]));
             const mcPts90 = chartRows.filter(r => mcByAge.has(r.age)).map(r => { const idx = chartRows.indexOf(r); return `${xs[idx]},${baseY - Math.round((mcByAge.get(r.age).p90 || 0) / maxY * CH)}`; }).join(' ');
@@ -11496,7 +11674,7 @@ ${(() => {
           // Uses uniqueMsAges (already computed for milestoneSnapshotHtml) so no duplicate logic.
           // X position is computed proportionally within the chart's [ca, 95] age range.
           const msLinesSvg = uniqueMsAges.map(mAge => {
-            const mx = PL + Math.max(0, Math.min(1, (mAge - ca) / (95 - ca))) * CW;
+            const mx = PL + Math.max(0, Math.min(1, (mAge - ca) / (maxPA - ca))) * CW;
             // Stagger label Y so adjacent milestones don't overlap (cycle between PT+8 and PT+18)
             const lblY = PT + 8 + (uniqueMsAges.indexOf(mAge) % 2) * 10;
             return `<line x1="${mx}" y1="${PT}" x2="${mx}" y2="${baseY}" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.75"/>
@@ -11534,7 +11712,7 @@ ${ageLabels}
 
 <div class="sec-hdr sec-hdr-teal" style="margin-top:12px"><span class="sec-ico">💰</span><span class="sec-title" style="color:#0e7490">CPF LIFE Payout Comparison (Age ${pa} to 95)</span></div>
 ${(() => {
-          const lifeRows = payoutProjection.filter(r => r.age >= pa && r.age <= 95);
+          const lifeRows = payoutProjection.filter(r => r.age >= pa && r.age <= maxPA);
           if (lifeRows.length < 2) return '<p style="color:#94a3b8;font-size:9px">Insufficient data for chart.</p>';
           const maxY = Math.max(...lifeRows.map(r => Math.max(r.standardTotal || 0, r.escalatingTotal || 0, r.basicTotal || 0))) || 1;
           const W = 680, H = 170, PL = 65, PB = 28, PT = 10, PR = 10;
@@ -11543,7 +11721,7 @@ ${(() => {
           const yOf = val => PT + CH - Math.round((val / maxY) * CH);
           const fmt3 = v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'k' : v;
           const yTks = [0,0.25,0.5,0.75,1].map(t => { const y=PT+CH-Math.round(t*CH); return `<line x1="${PL-4}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#e8eef4" stroke-width="0.5"/><text x="${PL-6}" y="${y+3}" text-anchor="end" font-size="7" fill="#94a3b8">${fmt3(Math.round(t*maxY))}</text>`; }).join('');
-          const xTks = lifeRows.filter((_,i) => i % Math.ceil(n/10)===0 || lifeRows[i].age===95).map(r => { const i=lifeRows.indexOf(r); return `<text x="${xOf(i)}" y="${PT+CH+14}" text-anchor="middle" font-size="7" fill="#94a3b8">${r.age}</text>`; }).join('');
+          const xTks = lifeRows.filter((_,i) => i % Math.ceil(n/10)===0 || lifeRows[i].age===maxPA).map(r => { const i=lifeRows.indexOf(r); return `<text x="${xOf(i)}" y="${PT+CH+14}" text-anchor="middle" font-size="7" fill="#94a3b8">${r.age}</text>`; }).join('');
           const poly = (key,color,w) => { const pts=lifeRows.map((r,i)=>`${xOf(i)},${yOf(r[key]||0)}`).join(' '); return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="${w||1.8}" opacity="0.9"/>`; };
           // Area fill for active plan
           const aKey = `${highlightPlan}Total`;
@@ -11566,7 +11744,7 @@ ${poly('basicTotal','#f59e0b', highlightPlan==='basic'?2.2:1.3)}
 
 <div class="sec-hdr sec-hdr-teal" style="margin-top:10px"><span class="sec-ico">📊</span><span class="sec-title" style="color:#0e7490">Net Worth Comparison (Age ${pa} to 95)</span></div>
 ${(() => {
-          const nwRows = payoutProjection.filter(r => r.age >= pa && r.age <= 95);
+          const nwRows = payoutProjection.filter(r => r.age >= pa && r.age <= maxPA);
           if (nwRows.length < 2) return '';
           const maxNW = Math.max(...nwRows.map(r => Math.max(r.standardNetWorth||0,r.escalatingNetWorth||0,r.basicNetWorth||0))) || 1;
           const W2=680,H2=150,PL2=65,PB2=26,PT2=10,PR2=10;
@@ -11576,7 +11754,7 @@ ${(() => {
           const fmt4=v=>v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'k':String(Math.round(v));
           const poly2=(key,color,w)=>{const pts=nwRows.map((r,i)=>`${xOf2(i)},${yOf2(r[key]||0)}`).join(' ');return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="${w||1.5}" opacity="0.9"/>`;};
           const yT2=[0,0.25,0.5,0.75,1].map(t=>{const y=PT2+CH2-Math.round(t*CH2);return `<line x1="${PL2-4}" y1="${y}" x2="${W2-PR2}" y2="${y}" stroke="#e8eef4" stroke-width="0.5"/><text x="${PL2-6}" y="${y+3}" text-anchor="end" font-size="7" fill="#94a3b8">${fmt4(Math.round(t*maxNW))}</text>`;}).join('');
-          const xT2=nwRows.filter((_,i)=>i%Math.ceil(n2/10)===0||nwRows[i].age===95).map(r=>{const i=nwRows.indexOf(r);return `<text x="${xOf2(i)}" y="${PT2+CH2+14}" text-anchor="middle" font-size="7" fill="#94a3b8">${r.age}</text>`;}).join('');
+          const xT2=nwRows.filter((_,i)=>i%Math.ceil(n2/10)===0||nwRows[i].age===maxPA).map(r=>{const i=nwRows.indexOf(r);return `<text x="${xOf2(i)}" y="${PT2+CH2+14}" text-anchor="middle" font-size="7" fill="#94a3b8">${r.age}</text>`;}).join('');
           return `<div class="chart-wrap"><svg viewBox="0 0 ${W2} ${H2}" width="100%" height="auto" style="display:block;border:1px solid #e8eef4;border-radius:6px;background:#fafafa">${yT2}${xT2}${poly2('standardNetWorth','#2563eb',highlightPlan==='standard'?2.2:1.3)}${poly2('escalatingNetWorth','#10b981',highlightPlan==='escalating'?2.2:1.3)}${poly2('basicNetWorth','#f59e0b',highlightPlan==='basic'?2.2:1.3)}</svg>
 <div style="display:flex;gap:14px;font-size:8px;color:#64748b;margin-top:3px"><span style="color:#2563eb">&#9644; Standard</span><span style="color:#10b981">&#9644; Escalating</span><span style="color:#f59e0b">&#9644; Basic</span><span style="color:#94a3b8">(Net Worth = Cumulative Payouts + Bequest + OA + MA)</span></div></div>`;
         })()}
@@ -14989,7 +15167,7 @@ ${milestoneSnapshotHtml}
                     ))}
                     <div>
                       <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: inputs.cpfScheme === 'rss' ? "var(--text-muted)" : "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>
-                        <span>Payout At<TooltipBox id="t-payout-age" text="Age at which CPF LIFE monthly payouts begin. You can defer from 65 up to 70 — each year of deferral increases your monthly payout by ~6–7% (the annuity pool has more time to grow). The RA-to-OA transfer (20% lump sum) is also released at this age. SC/PR born 1958 or after only. Not applicable for RSS members (uses RSS Payout Start Age) or Foreigners." /> {isForeigner && <span style={{ fontSize: 11, color: "var(--clr-amber3)", marginLeft: 4 }}>🔒 CPF LIFE N/A</span>}
+                        <span>Payout At {isForeigner && <span style={{ fontSize: 11, color: "var(--clr-amber3)", marginLeft: 4 }}>🔒 CPF LIFE N/A</span>}
                         {inputs.cpfScheme === 'rss' && <span style={{ fontSize: 11, color: "var(--clr-amber3)", marginLeft: 4 }}>🔒 RSS only</span>}</span>
                         <FieldResetBtn name="payoutAge" inputs={inputs} setInputs={setInputs} />
                       </div>
@@ -15708,10 +15886,10 @@ ${milestoneSnapshotHtml}
               {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Balance inputs — UX-10: each label row is cpf-field-row; ↺ appears on hover when changed */}
-                  {([["oaBalance", "Ordinary (OA)", "t-oa-bal", "Ordinary Account (OA) — earns 2.5%/yr. Primary source for housing (HDB loan repayments, downpayments), CPFIS investments, and the age-55 lump-sum withdrawal. Find your balance at cpf.gov.sg → My CPF → Account Balances."], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)", "t-sa-bal", is55Plus ? "Retirement Account (RA) — created at age 55 by merging SA and part of OA up to FRS. Earns 4%/yr. Funds your CPF LIFE premium. After payout age, any eligible portion is transferred to OA as a lump sum." : "Special Account (SA) — earns 4%/yr. Primarily for retirement (capped at FRS via OA→SA transfer; ERS via RSTU). SA is closed at age 55 and merged into the new Retirement Account (RA). Find your balance at cpf.gov.sg."], ["maBalance", "MediSave (MA)", "t-ma-bal", "MediSave Account (MA) — earns 4%/yr. Pays MediShield Life, Integrated Shield Plan premiums, approved medical expenses, and CareShield Life premiums (from age 30). Capped at the Basic Healthcare Sum (BHS, $79,000 in 2026). Excess flows to SA (pre-55) or RA (55+)."]]).map(([n, l, tipId, tipText]) => (
+                  {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
                     <div key={n}>
                       <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>
-                        <span>{l}<TooltipBox id={tipId} text={tipText} /></span>
+                        <span>{l}</span>
                         <FieldResetBtn name={n} inputs={inputs} setInputs={setInputs} />
                       </div>
                       <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l + ' balance'} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -15783,7 +15961,7 @@ ${milestoneSnapshotHtml}
                     <strong style={{ color: "var(--clr-orange)" }}>Self-Employed Member (SEP):</strong> No mandatory OA/SA contributions. Use the Inflows panel below to enter your VC3A (up to $37,740/yr). Funds are <strong style={{ color: "#fdba74" }}>proportionally allocated</strong> across OA/SA/MA using your age-based CPF rates. MA excess above BHS spills to SA/RA (capped at FRS); further excess flows to OA. MA contributions required if net trade income &gt; $6,000.
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 4 }}>Net Trade Income ($/yr)<TooltipBox id="t-nti" text="Your net trade income as declared to IRAS — this is your self-employment income after deducting allowable business expenses. CPF MediSave contributions are mandatory for SEPs earning NTI > $6,000/yr (scaled by age band). There are no mandatory OA or SA contributions for SEPs; use VC3A in the Inflows panel to build OA/SA voluntarily." /></label>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 4 }}>Net Trade Income ($/yr)</label>
                     <input type="text" inputMode="decimal" name="netTradeIncome" value={getDisplayValue("netTradeIncome", inputs.netTradeIncome)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Net Trade Income" onFocus={() => setFocusedField("netTradeIncome")} className={fieldChanged("netTradeIncome") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                   </div>
                   </div>
@@ -15793,12 +15971,12 @@ ${milestoneSnapshotHtml}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, padding: 10, borderRadius: 10, background: "var(--bg-muted)", border: "1px solid var(--border-strong)" }}>
                     <div style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 2 }}>Salary Inputs</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      {([["salaryGross", "OW / Monthly Gross ($)", "t-ow", "Ordinary Wage (OW) — your regular monthly gross pay. CPF contributions are calculated on OW up to the OW Ceiling of $8,000/mo. Enter the full monthly gross; the engine applies the ceiling automatically. Used in Auto-Calc to compute employer + employee mandatory contributions."], ["salaryBonus", "AW / Annual Bonus ($)", "t-aw", "Additional Wage (AW) — bonuses, commissions, or other irregular pay received in the year. CPF contributions on AW are subject to the AW Ceiling = max($102,000 − OW×12, 0). Enter the full annual bonus amount; the engine applies the AW Ceiling automatically."]]).map(([n, l, tipId, tipText]) => (
-                        <div key={n}><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>{l}<TooltipBox id={tipId} text={tipText} /></label>
+                      {[["salaryGross", "OW / Monthly Gross ($)"], ["salaryBonus", "AW / Annual Bonus ($)"]].map(([n, l]) => (
+                        <div key={n}><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>{l}</label>
                           <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} /></div>
                       ))}
                     </div>
-                    <div><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>Salary Growth Rate (% /yr)<TooltipBox id="t-salary-growth" text="Annual rate at which your monthly OW and annual AW grow each year in the projection. A rate of 3% means your salary doubles roughly every 24 years. OW is capped at $8,000/mo and AW ceiling adjusts automatically. Set to 0 to model a flat salary for the full projection period." /></label>
+                    <div><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>Salary Growth Rate (% /yr)</label>
                       <input type="text" inputMode="decimal" name="salaryGrowthRate" value={inputs.salaryGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual salary growth rate" step="0.5" className={fieldChanged("salaryGrowthRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                       <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>OW ceiling: $8,000/mo · AW ceiling: $102,000/yr</p>
                     </div>
@@ -16746,13 +16924,13 @@ ${milestoneSnapshotHtml}
                     <span style={{ fontSize: 12, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.07em" }}>Medical</span>
                   </div>
 
-                  {([["medicalUsage", "Medical Usage (MA) — Annual", "annual", "t-medical-usage", "Annual MA withdrawal for medical expenses at approved institutions — GP/specialist visits, hospitalisation, day surgery. Deducted annually from MA balance. Grows with the Medical Inflation Rate setting. Excludes MediShield Life and CareShield premiums (those go in the fields below). Check your CPF transaction history for a typical annual amount."], ["medishieldIP", "MediShield Life / IP (MA) — Annual", "annual", "t-medishield", "Annual MediShield Life premium (compulsory) plus any Integrated Shield Plan (IP) rider premium — both deducted from MA. MediShield Life provides basic hospitalisation cover; IP riders (e.g., AIA HealthShield, Great Eastern Supreme Health) upgrade coverage to ward class A or private hospitals. Premiums escalate steeply with age — check your insurer's schedule for your current premium."], ["elderCareShield", "ElderShield / CareShield (MA) — Annual", "annual", "t-careshield", "Annual CareShield Life (or legacy ElderShield) premium deducted from MA. CareShield Life is compulsory for SC/PR born on or after 1 Oct 1980 from age 30, providing severe disability payouts. Premium depends on entry age and is payable until age 67 (CareShield Life). Optional enhancements are available from commercial insurers."]]).map(([n, l, freq, tipId, tipText]) => (
+                  {[["medicalUsage", "Medical Usage (MA) — Annual", "annual"], ["medishieldIP", "MediShield Life / IP (MA) — Annual", "annual"], ["elderCareShield", "ElderShield / CareShield (MA) — Annual", "annual"]].map(([n, l, freq]) => (
                     <div key={n}><div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>{l.replace(" — Annual","")}<TooltipBox id={tipId} text={tipText} /></span>
+                      <span>{l.replace(" — Annual","")}</span>
                       <FieldResetBtn name={n} inputs={inputs} setInputs={setInputs} />
                     </div>
                       <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
-                  ))})
+                  ))}
                   {/* ── Medical Inflation Rate ──────────────────────────────── */}
                   <div><div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>Medical Inflation Rate (%)</div>
                     <input type="text" inputMode="decimal" name="medicalInflationRate" value={inputs.medicalInflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} step="0.5" aria-label="Medical inflation rate" className={fieldChanged("medicalInflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
@@ -17540,10 +17718,10 @@ ${milestoneSnapshotHtml}
 
                   {/* Timelines */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {([["contributionStopAge", "Contrib Stop Age", "t-contrib-stop", "Age at which CPF mandatory contributions (employer + employee) cease to be modelled. Typically 65 (statutory retirement age) or earlier if you plan to stop work before that. After this age the engine applies no contribution inflows; existing balances continue to earn interest. Set to your planned career exit age."], ["housingStopAge", "Housing Stop Age", "t-housing-stop", "Age at which your housing loan OA deductions stop — i.e. when your mortgage is fully paid off. Set this to the final repayment year of your home loan. After this age the engine stops deducting housingOutflow from OA, which typically accelerates OA accumulation significantly."]]).map(([n, l, tipId, tipText]) => (
+                    {[["contributionStopAge", "Contrib Stop Age"], ["housingStopAge", "Housing Stop Age"]].map(([n, l]) => (
                       <div key={n}>
                         <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                          {l}<TooltipBox id={tipId} text={tipText} />{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 11, color: "var(--clr-red)" }}>⚠</span>}
+                          {l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 11, color: "var(--clr-red)" }}>⚠</span>}
                         </label>
                         <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} aria-invalid={!!inputErrors[n]} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                       </div>
@@ -17555,6 +17733,26 @@ ${milestoneSnapshotHtml}
                     <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Inflation Rate (%)</label>
                     <input type="text" inputMode="decimal" name="inflationRate" value={inputs.inflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Inflation rate" className={fieldChanged("inflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.inflationRate ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     {inputErrors.inflationRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.inflationRate}</p>}
+                  </div>
+
+                  {/* F1: Planning Horizon */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
+                      Planning Horizon
+                      <TooltipBox id="t-maxpa" text="Maximum age to which all projections, charts, and exports run. 95 is the CPF Board default. Choose 100 or 105 for longevity stress testing." />
+                    </label>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                      {[95, 100, 105].map(opt => (
+                        <button key={opt}
+                          onClick={() => setInputs(p => ({ ...p, maxProjectionAge: opt }))}
+                          style={{ padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 700, border: `1px solid ${(Number(inputs.maxProjectionAge) || 95) === opt ? "var(--clr-purple)" : "var(--border-strong)"}`, cursor: "pointer", background: (Number(inputs.maxProjectionAge) || 95) === opt ? "rgba(139,92,246,0.15)" : "var(--bg-muted)", color: (Number(inputs.maxProjectionAge) || 95) === opt ? "var(--clr-purple)" : "var(--text-muted)", transition: "all .15s" }}>
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "4px 0 0" }}>
+                      Age all projections run to · 95 = CPF default
+                    </p>
                   </div>
 
                   {/* Property details */}
@@ -17972,16 +18170,16 @@ ${milestoneSnapshotHtml}
                   
                   {/* Private Assets */}
                   <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Current Private Assets ($)<TooltipBox id="t-priv-curr" text="Your total non-CPF liquid and investible assets today — savings accounts, brokerage portfolios, unit trusts, endowment plans, bonds, or any other investible savings outside CPF/SRS/property. Exclude emergency funds and illiquid assets (e.g. art, jewellery). The engine grows this balance at your Private Asset Growth Rate annually, adds the Annual Private Saving each year, and tracks it separately from CPF balances in all charts." /></label>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Current Private Assets ($)</label>
                     <input type="text" inputMode="decimal" name="currentPrivateAssets" aria-label="Current private assets balance" value={getDisplayValue("currentPrivateAssets", inputs.currentPrivateAssets)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("currentPrivateAssets"); e.target.select(); }} className={fieldChanged("currentPrivateAssets") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <div>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Annual Saving<TooltipBox id="t-priv-saving" text="Cash you add to private assets each year from take-home pay (after CPF deductions and mandatory outflows). This represents your annual savings rate outside CPF — invest it in a diversified portfolio to grow at your Private Asset Growth Rate. Typical Singaporean savers: $6,000–$24,000/yr. Stops when Contribution Stop Age is reached." /></label>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Annual Saving</label>
                       <input type="text" inputMode="decimal" name="annualPrivateSaving" value={getDisplayValue("annualPrivateSaving", inputs.annualPrivateSaving)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("annualPrivateSaving"); e.target.select(); }} className={fieldChanged("annualPrivateSaving") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Growth (%)<TooltipBox id="t-priv-growth" text="Expected annual real return on your private assets. Historical references: CPF OA earns 2.5%, S&P 500 long-run average ~10% nominal (~7% real). A conservative diversified portfolio might use 4–6%; a 100% equity assumption 8–10%. Unlike CPF, private asset returns are not guaranteed — use Monte Carlo (in the Accumulation tab) to model return variability." /></label>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Growth (%)</label>
                       <input type="text" inputMode="decimal" name="privateAssetGrowthRate" value={inputs.privateAssetGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("privateAssetGrowthRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                   </div>
@@ -18073,7 +18271,7 @@ ${milestoneSnapshotHtml}
                           {inputErrors.srsContribStopAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsContribStopAge}</p>}
                         </div>
                         <div>
-                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Return Rate (%)<TooltipBox id="t-srs-return" text="Expected annual return on your SRS portfolio. SRS funds must be invested — if left as cash in the SRS account they earn only ~0.05%/yr. Typical investors deploy SRS into unit trusts, ETFs, Singapore shares, or SSBs. A conservative fixed-income portfolio might earn 3–4%; a 60/40 equity-bond mix 5–6%; 100% equity 7–10%. Unlike CPF, SRS returns are not guaranteed." /></label>
+                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Return Rate (%)</label>
                           <input type="text" inputMode="decimal" name="srsReturnRate" value={inputs.srsReturnRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("srsReturnRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsReturnRate ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.srsReturnRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsReturnRate}</p>}
                         </div>
@@ -20140,14 +20338,11 @@ ${milestoneSnapshotHtml}
                       const basePARow = accumulationByAge.get(effPA);
                       const _inclProp = debouncedInputs.includeProperty ?? true;
                       const baseTotal = (basePARow?.total || 0) + (basePARow?.privateAssets || 0) + (basePARow?.srsBalance || 0) + (_inclProp ? (basePARow?.propertyValue || 0) : 0);
-                      // Bug3-WI fix: wiMaxAge is now 95, so the last row is age 95, not effPA.
-                      // Both base tile and what-if tile must compare at effPA so the Impact delta is meaningful.
-                      const _wiRowsByAge = new Map((whatIfProjection?.rows || []).map(r => [r.age, r]));
-                      const wiPARow = _wiRowsByAge.get(effPA) || whatIfProjection?.rows?.[whatIfProjection.rows.length - 1];
+                      const wiLastRow = whatIfProjection?.rows[whatIfProjection.rows.length - 1];
                       const _wiInflD = isRealDollars ? (Number(debouncedInputs.inflationRate) || 0) / 100 : 0;
                       const _wiCaD   = Number(debouncedInputs.currentAge) || 35;
                       const deflate  = (val) => (isRealDollars && val) ? Math.round(val / Math.pow(1 + _wiInflD, Math.max(0, effPA - _wiCaD))) : val;
-                      const whatIfTotal = wiPARow ? deflate((wiPARow.oa + wiPARow.sa + wiPARow.ma + wiPARow.ra) + (wiPARow.privateAssets || 0) + (wiPARow.srsBalance || 0) + (_inclProp ? (wiPARow.propertyValue || 0) : 0)) : 0;
+                      const whatIfTotal = wiLastRow ? deflate((wiLastRow.oa + wiLastRow.sa + wiLastRow.ma + wiLastRow.ra) + (wiLastRow.privateAssets || 0) + (wiLastRow.srsBalance || 0) + (_inclProp ? (wiLastRow.propertyValue || 0) : 0)) : 0;
                       const delta = whatIfTotal - baseTotal;
                       return (
                         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -20167,23 +20362,23 @@ ${milestoneSnapshotHtml}
                           {/* Sliders grid */}
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 12 }}>
                             {[
-                              ...(!_isRSSForTransfer ? [{ label: "Payout age", unit: "yrs", min: 65, max: 70, step: 1, val: effPA, set: setWhatIfPayoutAge, base: Number(debouncedInputs.payoutAge)||65, fmt: v=>`${v}`, tip: "Defer CPF LIFE start from 65 up to 70. Each year of deferral increases your monthly payout ~6–7% because RA earns 4%/yr longer. The What-If curve extends to age 95 so you can see both the accumulation gain and the higher lifetime payout." }] : []),
-                              { label: "Annual SA/RA top-up (RSTU)", unit: "$", min: 0, max: 37740, step: 100, val: effST, set: setWhatIfSaTopup, base: Number(debouncedInputs.vcSaTopup)||0, fmt: formatCurrency, tip: "Cash top-up to SA (pre-55) or RA (55+) via RSTU. Earns 4%/yr. Tax-relievable up to $8,000/yr. Capped at FRS (SA) or ERS (RA). Slider max: $37,740 (CPF Annual Limit) — RSTU is exempt from this limit so it can exceed $8,000 here for What-If exploration, but the actual tax relief cap is $8,000." },
-                              { label: "Annual housing outflow", unit: "$", min: 0, max: 30000, step: 100, val: effH, set: setWhatIfHousing, base: Number(debouncedInputs.housingOutflow)||0, fmt: formatCurrency, tip: "Annual OA deduction for your home loan. Increasing this reduces your OA balance and slows accumulation. Useful for modelling a larger home or earlier purchase. Reducing it simulates paying off the loan early." },
-                              { label: "Salary bump", unit: "$", min: 0, max: 5000, step: 100, val: effSB, set: setWhatIfSalaryBump, base: 0, fmt: v=>v>0?`+${formatCurrency(v)}/mo`:"No change", tip: "Hypothetical permanent monthly salary increase applied on top of your current gross salary. Increases mandatory CPF contributions (up to OW ceiling $8,000/mo) and accelerates OA/SA/MA accumulation." },
-                              { label: "Contribution stop age", unit: "yrs", min: Number(debouncedInputs.currentAge)||35, max: 75, step: 1, val: effCS, set: setWhatIfContribStop, base: Number(debouncedInputs.contributionStopAge)||65, fmt: v=>`${v}`, tip: "Age at which mandatory CPF contributions stop. Moving this earlier simulates early retirement or retrenchment; later simulates working beyond the retirement age. Affects all three accounts." },
-                              { label: "Monthly OA drawdown", unit: "$", min: 0, max: 5000, step: 50, val: effOAD, set: setWhatIfOaDrawdown, base: Number(debouncedInputs.oaDrawdownMonthly)||0, fmt: v=>v>0?`${formatCurrency(v)}/mo`:"Off", tip: "Monthly cash drawn from OA after your payout age to supplement CPF LIFE income. The What-If engine now runs the full 35→95 window, so the impact of sustained OA drawdown across 30 years is fully visible in the chart. OA depletes faster with a higher monthly draw." },
-                              { label: "Annual SRS contribution", unit: "$", min: 0, max: 15300, step: 100, val: effSRS, set: setWhatIfSrsContrib, base: Number(debouncedInputs.srsAnnualContribution)||0, fmt: formatCurrency, tip: "Annual SRS top-up (SC/PR cap: $15,300/yr; foreigner: $35,700/yr). Contributions are deductible from chargeable income in the year they are made. The SRS balance earns your configured SRS Return Rate. Drawdown starts at age 63 with 50% of each withdrawal taxable." },
+                              ...(!_isRSSForTransfer ? [{ label: "Payout age", unit: "yrs", min: 65, max: 70, step: 1, val: effPA, set: setWhatIfPayoutAge, base: Number(debouncedInputs.payoutAge)||65, fmt: v=>`${v}` }] : []),
+                              { label: "Annual SA/RA top-up (RSTU)", unit: "$", min: 0, max: 37740, step: 100, val: effST, set: setWhatIfSaTopup, base: Number(debouncedInputs.vcSaTopup)||0, fmt: formatCurrency },
+                              { label: "Annual housing outflow", unit: "$", min: 0, max: 30000, step: 100, val: effH, set: setWhatIfHousing, base: Number(debouncedInputs.housingOutflow)||0, fmt: formatCurrency },
+                              { label: "Salary bump", unit: "$", min: 0, max: 5000, step: 100, val: effSB, set: setWhatIfSalaryBump, base: 0, fmt: v=>v>0?`+${formatCurrency(v)}/mo`:"No change" },
+                              { label: "Contribution stop age", unit: "yrs", min: Number(debouncedInputs.currentAge)||35, max: 75, step: 1, val: effCS, set: setWhatIfContribStop, base: Number(debouncedInputs.contributionStopAge)||65, fmt: v=>`${v}` },
+                              { label: "Monthly OA drawdown", unit: "$", min: 0, max: 5000, step: 50, val: effOAD, set: setWhatIfOaDrawdown, base: Number(debouncedInputs.oaDrawdownMonthly)||0, fmt: v=>v>0?`${formatCurrency(v)}/mo`:"Off" },
+                              { label: "Annual SRS contribution", unit: "$", min: 0, max: 15300, step: 100, val: effSRS, set: setWhatIfSrsContrib, base: Number(debouncedInputs.srsAnnualContribution)||0, fmt: formatCurrency },
                               // Only show private growth slider when the user has private assets — otherwise it has zero impact and misleads
                               ...((Number(debouncedInputs.currentPrivateAssets)||0) > 0 || (Number(debouncedInputs.annualPrivateSaving)||0) > 0
-                                ? [{ label: "Private asset growth rate", unit: "%", min: 0, max: 10, step: 0.5, val: effPG, set: setWhatIfPrivGrowth, base: Number(debouncedInputs.privateAssetGrowthRate)||0, fmt: v=>`${v.toFixed(1)}%`, note: "Private assets only — CPF earns guaranteed rates", tip: "Expected annual return on your non-CPF portfolio. CPF OA/SA/MA earn fixed guaranteed rates regardless of this slider. Only your currentPrivateAssets and annualPrivateSaving balance is affected." }]
+                                ? [{ label: "Private asset growth rate", unit: "%", min: 0, max: 10, step: 0.5, val: effPG, set: setWhatIfPrivGrowth, base: Number(debouncedInputs.privateAssetGrowthRate)||0, fmt: v=>`${v.toFixed(1)}%`, note: "Private assets only — CPF earns guaranteed rates" }]
                                 : []),
-                            ].map(({ label, min, max, step, val, set, base, fmt, note, tip }) => {
+                            ].map(({ label, min, max, step, val, set, base, fmt, note }) => {
                               const changed = Math.abs(val - base) > 0.001;
                               return (
                                 <div key={label} style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 14px", border: `1px solid ${changed ? "rgba(var(--clr-emerald-rgb),0.3)" : "var(--border-subtle)"}` }}>
                                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: changed ? "var(--clr-green)" : "var(--text-muted)" }}>{label}{tip && <TooltipBox id={`t-wi-${label.replace(/\s+/g,"_")}`} text={tip} />}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: changed ? "var(--clr-green)" : "var(--text-muted)" }}>{label}</span>
                                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                       <span style={{ fontSize: 13, fontWeight: 700, color: changed ? "var(--clr-green)" : "var(--text-bright)", fontFamily: "monospace" }}>{fmt(val)}</span>
                                       {changed && <button onClick={() => set(null)} style={{ fontSize: 11, padding: "1px 6px", borderRadius: 4, background: "var(--bg-input)", border: "1px solid var(--border-strong)", color: "var(--text-muted)", cursor: "pointer" }}>✕</button>}
@@ -20343,7 +20538,7 @@ ${milestoneSnapshotHtml}
                                         <text x={pad.l-4} y={yScale(v)+3} textAnchor="end" fontSize={8} fill="var(--text-subtle)">{v>=1000000?`$${(v/1000000).toFixed(1)}M`:v>=1000?`$${Math.round(v/1000)}k`:v===0?"$0":""}</text>
                                       </g>
                                     ))}
-                                    {[...new Set([35,40,45,50,55,60,65,70,75,80,85,90,95].filter(a => a >= caD_wi && a <= maxAge))].map(a => (
+                                    {[...new Set([35,40,45,50,55,60,65,70,75,80,85,90,95,...(maxPA > 95 ? [maxPA] : [])].filter(a => a >= caD_wi && a <= maxAge))].map(a => (
                                       <g key={a}>
                                         <line x1={xScale(a)} x2={xScale(a)} y1={pad.t} y2={chartH-pad.b} stroke="var(--border-subtle)" strokeWidth={0.5} strokeDasharray="2,3" />
                                         <text x={xScale(a)} y={chartH-pad.b+10} textAnchor="middle" fontSize={8} fill="var(--text-subtle)">{a}</text>
@@ -20394,7 +20589,7 @@ ${milestoneSnapshotHtml}
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", borderRadius: 10, background: "rgba(var(--clr-blue-rgb),0.07)", border: "1px solid rgba(var(--clr-blue-rgb),0.3)", marginBottom: 16, fontSize: 12, color: "var(--clr-blue)", lineHeight: 1.6 }}>
                       <Clock style={{ width: 14, height: 14, flexShrink: 0, marginTop: 1 }} />
                       <span>
-                        <strong>RSS mode:</strong> Showing full projection from current age ({debouncedInputs.currentAge}) to 95.
+                        <strong>RSS mode:</strong> Showing full projection from current age ({debouncedInputs.currentAge}) to {maxPA}.
                         RA drawdown began at age {rssStartAgeG}{rssMonthlyG > 0 ? ` at ${formatCurrency(rssMonthlyG)}/mo` : " — payout amount not yet set"}.
                         See the <strong>RSS tab</strong> for the dedicated drawdown curve, depletion age, and migration analysis.
                       </span>
@@ -20441,7 +20636,7 @@ ${milestoneSnapshotHtml}
                   <div>
                     <h3 style={{ fontSize: 18, fontWeight: 800, margin: "0 0 2px" }}>
                       {debouncedInputs.cpfScheme === 'rss'
-                        ? `Full Projection — RSS Drawdown (Age ${debouncedInputs.currentAge} → 95)`
+                        ? `Full Projection — RSS Drawdown (Age ${debouncedInputs.currentAge} → ${maxPA})`
                         : `Growth Phase — Age ${inputs.currentAge} → ${inputs.payoutAge}`}
                     </h3>
                     <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
@@ -20624,7 +20819,7 @@ ${milestoneSnapshotHtml}
                             <ReferenceLine x={55} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 3"
                               label={{ position: "insideTopLeft", value: "SA\u2192RA", fill: "#f59e0b", fontSize: 10, fontWeight: "bold" }} />
                           )}
-                          {milestones.filter(m => m.age <= (debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)).map((m, idx) => {
+                          {milestones.filter(m => m.age <= (debouncedInputs.cpfScheme === 'rss' ? maxPA : payoutAge65)).map((m, idx) => {
                             const sc = m.type === "success" ? "var(--clr-emerald)" : m.type === "gold" ? "var(--clr-amber3)" : m.type === "warning" ? "#f97316" : "#ef4444";
                             return <ReferenceLine key={idx} x={m.age} stroke={sc} strokeWidth={1.5} strokeDasharray="3 3" label={{ position: "insideTopRight", value: `Age ${m.age}`, fill: sc, fontSize: 10, fontWeight: "bold" }} />;
                           })}
@@ -20641,7 +20836,7 @@ ${milestoneSnapshotHtml}
                             if (isPoint) return <ReferenceLine key={`le-${idx}`} x={sa} stroke={color} strokeWidth={2} strokeDasharray="5 3" label={{ position: "insideTopLeft", dy: _leDy, value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
                             // Range events: stagger top label similarly
                             const _leAreaDy = (idx % 3) * 14;
-                            return <ReferenceArea key={`le-${idx}`} x1={sa} x2={Math.min(ea, debouncedInputs.cpfScheme === 'rss' ? 95 : payoutAge65)} fill={color} fillOpacity={0.08} stroke={color} strokeOpacity={0.4} strokeWidth={1} label={{ position: "insideTop", dy: _leAreaDy, value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
+                            return <ReferenceArea key={`le-${idx}`} x1={sa} x2={Math.min(ea, debouncedInputs.cpfScheme === 'rss' ? maxPA : payoutAge65)} fill={color} fillOpacity={0.08} stroke={color} strokeOpacity={0.4} strokeWidth={1} label={{ position: "insideTop", dy: _leAreaDy, value: labelVal, fill: color, fontSize: 10, fontWeight: "bold" }} />;
                           })}
                           {(() => {
                             const ca_m = Number(debouncedInputs.currentAge) || 0;
@@ -20767,7 +20962,7 @@ ${milestoneSnapshotHtml}
                       <ul style={{ margin: 0, paddingLeft: 16 }}>
                         <li>SA closes at age 55 and merges into RA. Excess above FRS stays in OA.</li>
                         <li>OA may shrink if housing loan deductions exceed contributions before age {inputs.housingStopAge}.</li>
-                        <li>At age {inputs.payoutAge} RA transfers into the CPF LIFE pool — the chart ends here. The LIFE tab shows payouts from {inputs.payoutAge} to 95.</li>
+                        <li>At age {inputs.payoutAge} RA transfers into the CPF LIFE pool — the chart ends here. The LIFE tab shows payouts from {inputs.payoutAge} to {maxPA}.</li>
                         <li>Annual compounding · BOY convention · 2026 CPF contribution rates. Verify with CPF Board tools.</li>
                       </ul>
                     )}
@@ -21579,7 +21774,7 @@ ${milestoneSnapshotHtml}
 
                 {/* ── Estate at Death — Bequest Projection ── */}
                 {!isForeigner && (() => {
-                  const ages = [65, 70, 75, 80, 85, 90, 95];
+                  const ages = [65, 70, 75, 80, 85, 90, ...(maxPA > 95 ? [maxPA] : [95])];
                   const plan = highlightPlan;
                   const isRSSEstate = debouncedInputs.cpfScheme === 'rss';
                   const refAge = isRSSEstate ? (Number(debouncedInputs.rssPayoutStartAge) || 65) : payoutAge65;
@@ -21935,7 +22130,7 @@ ${milestoneSnapshotHtml}
               const pAtPA  = accumulationByAge.get(pPA)          || {};
               const sAtPA  = spouseAccumulationByAge.get(sPA)    || {};
               const hAtPA  = displayHouseholdByAge.get(combinedPA) || {};
-              const hAt95  = displayHouseholdByAge.get(95)         || {};
+              const hAt95  = displayHouseholdByAge.get(maxPA)      || {};
 
               // HH-5: independent plan keys — each member uses their own CPF LIFE plan selector
               const PLAN_KEY_MAP   = { standard: 'Std', escalating: 'Esc', basic: 'Bas' };
@@ -22305,7 +22500,7 @@ ${milestoneSnapshotHtml}
                           // plus pin age 55 (SA→RA conversion milestone) and age 65 (statutory retirement).
                           const every5 = [];
                           for (let a = Math.ceil(startAge / 5) * 5; a < combinedPA; a += 5) every5.push(a);
-                          const keyAges = [...new Set([startAge, ...every5, 55, pPA, sPA, 65, 70, 75, 80, 85, 90, 95])].filter(a => a >= startAge && a <= 95).sort((a,b) => a-b);
+                          const keyAges = [...new Set([startAge, ...every5, 55, pPA, sPA, 65, 70, 75, 80, 85, 90, maxPA])].filter(a => a >= startAge && a <= maxPA).sort((a,b) => a-b);
                           return keyAges.map(age => {
                             // II-6 fix: use displayHouseholdByAge (deflated when isRealDollars=true)
                             // so primaryTotal, spouseTotal, and combinedTotal in all three balance
@@ -22791,7 +22986,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>
                     💡 <strong>Before payout age</strong>: Pay, Bequest, Yield, and XIRR columns show "−" — payouts haven't started yet. &nbsp;
-                    The <strong>Lifetime Summary</strong> header above the table shows totals across your full life (age {inputs.currentAge} → 95). &nbsp;
+                    The <strong>Lifetime Summary</strong> header above the table shows totals across your full life (age {inputs.currentAge} → {maxPA}). &nbsp;
                     Use <strong>Download CSV</strong> to export all columns to a spreadsheet.
                   </p>
                 </div>
@@ -23979,11 +24174,11 @@ ${milestoneSnapshotHtml}
                     {strat.feasible ? (
                       <>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
-                          {strat.rstu != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>RSTU / yr<TooltipBox id={`t-gs-rstu-${letter}`} text="Retirement Sum Topping-Up Scheme (RSTU) — cash deposited directly into your SA (pre-55) or RA (55+), earning 4%/yr compound. Eligible for income tax relief up to $8,000/yr for your own account. Not counted toward the $37,740 CPF Annual Limit. Capped at FRS for SA, ERS for RA." /></span><br /><strong style={{ color }}>{fmt(strat.rstu)}</strong></div>}
-                          {strat.vc3a != null && strat.vc3a > 0 && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>VC3A / yr<TooltipBox id={`t-gs-vc3a-${letter}`} text="Voluntary Contribution to 3 Accounts (VC3A) — cash auto-split across OA/SA/MA by your age-band allocation rates. Counts toward the $37,740 CPF Annual Limit. No income tax relief for employees. Eligible SA/MA portions earn 4%/yr; OA portion earns 2.5%/yr." /></span><br /><strong style={{ color }}>{fmt(strat.vc3a)}</strong></div>}
-                          {strat.needed != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>{letter === "A" ? "RSTU" : "VC3A"} / yr<TooltipBox id={`t-gs-needed-${letter}`} text={letter === "A" ? "Annual RSTU top-up required to reach your target. Tax-relievable up to $8,000/yr. Capped at FRS (SA) or ERS (RA). Not in Annual Limit." : "Annual VC3A contribution required. Auto-split OA/SA/MA by age-band. Counts toward $37,740 Annual Limit. No tax relief for employees."} /></span><br /><strong style={{ color }}>{fmt(strat.needed)}</strong></div>}
-                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Total annual cash<TooltipBox id={`t-gs-total-${letter}`} text="Additional cash you need to set aside each year above your current voluntary contributions. This is the net cash outflow from your bank account before any tax savings." /></span><br /><strong style={{ color }}>{fmt(strat.totalCash)}</strong></div>
-                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Monthly equiv.<TooltipBox id={`t-gs-monthly-${letter}`} text="Total annual cash ÷ 12 — useful for budgeting your monthly cash flow. Divide this amount from your take-home pay each month to fund the strategy." /></span><br /><strong style={{ color }}>{fmt(strat.totalCash / 12)}/mo</strong></div>
+                          {strat.rstu != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>RSTU / yr</span><br /><strong style={{ color }}>{fmt(strat.rstu)}</strong></div>}
+                          {strat.vc3a != null && strat.vc3a > 0 && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>VC3A / yr</span><br /><strong style={{ color }}>{fmt(strat.vc3a)}</strong></div>}
+                          {strat.needed != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>{letter === "A" ? "RSTU" : "VC3A"} / yr</span><br /><strong style={{ color }}>{fmt(strat.needed)}</strong></div>}
+                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Total annual cash</span><br /><strong style={{ color }}>{fmt(strat.totalCash)}</strong></div>
+                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Monthly equiv.</span><br /><strong style={{ color }}>{fmt(strat.totalCash / 12)}/mo</strong></div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           <button
@@ -24035,7 +24230,7 @@ ${milestoneSnapshotHtml}
 
               // Gantt span: current age (min 25) to 95
               const ganttStart = Math.min(ca, 25);
-              const ganttEnd = 95;
+              const ganttEnd = maxPA; // F1
               const ganttSpan = ganttEnd - ganttStart;
               const ganttPct = (start, end) => ({
                 left: `${Math.max(0, ((Math.max(start, ganttStart) - ganttStart) / ganttSpan) * 100).toFixed(2)}%`,
@@ -24059,7 +24254,7 @@ ${milestoneSnapshotHtml}
                   }
                   return null;
                 })();
-                const rssEndStrat = rssDepAgeStrat || 95;
+                const rssEndStrat = rssDepAgeStrat || maxPA; // F1
                 if (rssMonthlyStrat > 0) {
                   summaryRows.push({
                     label: `RSS Drawdown`,
@@ -24262,13 +24457,12 @@ ${milestoneSnapshotHtml}
 
                         {/* ── Target input ─────────────────────────────── */}
                         <div>
-                          <p style={{ margin: "0 0 10px", fontWeight: 700, fontSize: 15, color: "var(--text-highlight)", display: "flex", alignItems: "center", gap: 4 }}>
+                          <p style={{ margin: "0 0 10px", fontWeight: 700, fontSize: 15, color: "var(--text-highlight)" }}>
                             {goalSimView === "combined"
                               ? "Set your combined household CPF target at payout ages"
                               : goalSimView === "spouse"
                               ? `Set your spouse's CPF target at their payout age (${spa})`
                               : "Set your CPF target at payout age"}
-                            <TooltipBox id="t-gs-target" text="The total CPF balance (OA + SA/RA + MA) you want to have at your payout age. The solver finds the minimum annual RSTU and/or VC3A top-ups needed to reach this number from your current baseline. Green preset pills are targets you have already met. Use the 🏆 Max achievable button to see the highest total reachable by maxing both levers (RSTU $8,000/yr + VC3A up to $37,740/yr). A good starting benchmark is 3× the current Full Retirement Sum (FRS $220,400 → benchmark ~$660k)." />
                           </p>
                           {goalSimView === "combined" ? (
                             /* Combined: separate target field + baseline display */
@@ -24296,23 +24490,6 @@ ${milestoneSnapshotHtml}
                                     style={{ width: 120, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 13, outline: "none" }} />
                                 </div>
                               </div>
-                              {/* Combined max achievable pill */}
-                              {goalSimMaxReachable && goalSimMaxReachableSpouse && (() => {
-                                const combinedMax = goalSimMaxReachable + goalSimMaxReachableSpouse;
-                                const alreadySet = goalTargetCombined === combinedMax;
-                                const alreadyMet = (baselinePrimary + baselineSpouse) >= combinedMax;
-                                return (
-                                  <button onClick={() => !alreadySet && !alreadyMet && setGoalTargetCombined(combinedMax)}
-                                    title="Sets the combined target to the highest total achievable by maxing RSTU + VC3A for both members"
-                                    style={{ alignSelf: "flex-start", padding: "6px 12px", borderRadius: 20, fontWeight: 700, fontSize: 12, border: "2px solid",
-                                      cursor: alreadySet || alreadyMet ? "default" : "pointer", pointerEvents: alreadySet || alreadyMet ? "none" : "auto",
-                                      borderColor: alreadyMet ? "#22c55e" : alreadySet ? "#f59e0b" : "rgba(245,158,11,0.5)",
-                                      background:  alreadyMet ? "#22c55e15" : alreadySet ? "rgba(245,158,11,0.15)" : "rgba(245,158,11,0.08)",
-                                      color:       alreadyMet ? "#22c55e"   : "#f59e0b", whiteSpace: "nowrap" }}>
-                                    {alreadyMet ? "✅ Max already met" : alreadySet ? "🏆 Max set" : `🏆 Combined max: ${fmtK(combinedMax)}`}
-                                  </button>
-                                );
-                              })()}
                               <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
                                 Combined baseline: <strong style={{ color: "var(--text-bright)" }}>{fmtK(baselinePrimary + baselineSpouse)}</strong>
                                 {" "}(Primary {fmtK(baselinePrimary)} at {pa} + Spouse {fmtK(baselineSpouse)} at {spa})
@@ -24350,27 +24527,6 @@ ${milestoneSnapshotHtml}
                                       placeholder="Custom amount"
                                       style={{ width: 130, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 13, outline: "none" }} />
                                   </div>
-                                  {/* Max achievable pill — computed reactively, no solver needed */}
-                                  {(() => {
-                                    const maxR = goalSimView === "spouse" ? goalSimMaxReachableSpouse : goalSimMaxReachable;
-                                    if (!maxR) return null;
-                                    const alreadySet = Number(inputs.goalTargetCPF) === maxR;
-                                    const alreadyMet = baseline >= maxR;
-                                    return (
-                                      <button
-                                        onClick={() => !alreadySet && !alreadyMet && setInputs(prev => ({ ...prev, goalTargetCPF: maxR }))}
-                                        title="Sets the custom target to the highest CPF total achievable by maxing both RSTU ($8,000/yr) and VC3A ($37,740/yr)"
-                                        style={{ padding: "7px 14px", borderRadius: 20, fontWeight: 700, fontSize: 12, border: "2px solid",
-                                          cursor: alreadySet || alreadyMet ? "default" : "pointer",
-                                          pointerEvents: alreadySet || alreadyMet ? "none" : "auto",
-                                          borderColor: alreadyMet ? "#22c55e" : alreadySet ? "#f59e0b" : "rgba(245,158,11,0.5)",
-                                          background:  alreadyMet ? "#22c55e15" : alreadySet ? "rgba(245,158,11,0.15)" : "rgba(245,158,11,0.08)",
-                                          color:       alreadyMet ? "#22c55e"   : alreadySet ? "#f59e0b"               : "#f59e0b",
-                                          whiteSpace: "nowrap", transition: "all .15s" }}>
-                                        {alreadyMet ? "✅ Max already met" : alreadySet ? "🏆 Max set" : `🏆 Max achievable: ${fmtK(maxR)}`}
-                                      </button>
-                                    );
-                                  })()}
                                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                     <span style={{ fontSize: 13, color: "var(--text-muted)" }}>at age</span>
                                     <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>{ageLbl}</span>
@@ -24390,7 +24546,7 @@ ${milestoneSnapshotHtml}
                         {/* ── Tax rate selector (Strategy D) ───────────── */}
                         {goalSimView !== "combined" && (
                           <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "12px 16px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>📊 Marginal tax rate (for Strategy D):<TooltipBox id="t-gs-taxrate" text="Your highest Singapore income tax bracket. RSTU cash top-ups are tax-relievable — each dollar invested in RSTU costs (1 − marginal rate) after tax. E.g. at 15% rate, $8,000 RSTU costs $6,800 net. Strategy D uses this to identify the cheapest after-tax combination from Strategies A, B, and C. Brackets: 7% ($80k–$120k chargeable income), 11.5% ($120k–$160k), 15% ($160k–$200k), 19.5% ($200k–$240k), 22% ($240k–$280k). Check your IRAS Notice of Assessment (NOA) or MyTax Portal." /></span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>📊 Marginal tax rate (for Strategy D):</span>
                             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                               {[7, 11.5, 15, 19.5, 22].map(r => (
                                 <button key={r} onClick={() => setMarginalTaxRate(r)}
@@ -24603,7 +24759,7 @@ ${milestoneSnapshotHtml}
                                       {stratD && (
                                         <div style={{ background: "var(--bg-input)", border: `2px solid ${CARD_COLORS.D}66`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
                                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                                            <span style={{ fontWeight: 800, fontSize: 14, color: CARD_COLORS.D }}>🏆 Strategy D: Tax-Optimised ({marginalTaxRate}% marginal rate)<TooltipBox id="t-gs-stratD" text="Strategy D is not a new lever — it is a meta-recommendation. It compares the effective after-tax annual cost of Strategies A, B, and C using your marginal income tax rate, then recommends whichever is cheapest on an after-tax basis. RSTU (Strategy A) gives tax relief at your marginal rate, so the higher your bracket the cheaper RSTU becomes relative to VC3A. At 15% marginal rate, $8,000 RSTU has an effective after-tax cost of $6,800. Strategy D surfaces which of A/B/C delivers the best CPF outcome per dollar of after-tax cash deployed." /></span>
+                                            <span style={{ fontWeight: 800, fontSize: 14, color: CARD_COLORS.D }}>🏆 Strategy D: Tax-Optimised ({marginalTaxRate}% marginal rate)</span>
                                             {appliedLetter === stratD.bestLetter && <span style={{ fontSize: 11, fontWeight: 700, color: CARD_COLORS.D, background: `${CARD_COLORS.D}20`, borderRadius: 6, padding: "2px 8px" }}>✓ Applied (via Strategy {stratD.bestLetter})</span>}
                                           </div>
                                           {stratD.bestEffCost === Infinity
@@ -25216,7 +25372,200 @@ ${milestoneSnapshotHtml}
                     })()}
                   </div>
 
-                  {/* ── SECTION 4: Lifetime Strategy Summary Table ── */}
+                  {/* ── SECTION 4: Inflation Stress Test (F2) ── */}
+                  <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showInflationStress ? 16 : 0 }}>
+                      <span style={{ fontSize: 15 }}>📉</span>
+                      <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Inflation Stress Test</h4>
+                      <button
+                        onClick={() => setShowInflationStress(v => !v)}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700,
+                          border: `1px solid ${showInflationStress ? "rgba(245,158,11,0.5)" : "var(--border-strong)"}`,
+                          background: showInflationStress ? "rgba(245,158,11,0.10)" : "var(--bg-input)",
+                          color: showInflationStress ? "var(--clr-amber)" : "var(--text-muted)", cursor: "pointer", transition: "all .15s" }}>
+                        {showInflationStress ? "Hide Analysis" : "Show Inflation Stress"}
+                      </button>
+                    </div>
+                    {showInflationStress && (() => {
+                      const baseRate = Number(debouncedInputs.inflationRate) || 0;
+                      return (
+                        <>
+                          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>
+                            Shows how higher long-run inflation erodes the real purchasing power of your CPF LIFE payout over time.
+                            CPF accounts earn guaranteed nominal rates — the monthly payout amount is fixed in nominal terms,
+                            so a higher CPI reduces what that payout buys each year.
+                          </p>
+                          {/* Controls */}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                            <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                Base CPI (your input)
+                              </p>
+                              <p style={{ fontSize: 18, fontWeight: 800, color: "var(--clr-blue)", margin: 0 }}>{baseRate}%</p>
+                              <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "3px 0 0" }}>Change in sidebar → Inflation Rate field</p>
+                            </div>
+                            <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${showInflationStress ? "rgba(245,158,11,0.3)" : "var(--border-subtle)"}` }}>
+                              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                Stress CPI: <strong style={{ color: "var(--clr-amber)" }}>{inflationStressRate}%</strong>
+                              </p>
+                              <input type="range" min={1} max={8} step={0.5} value={inflationStressRate}
+                                onChange={e => setInflationStressRate(Number(e.target.value))}
+                                style={{ width: "100%", accentColor: "var(--clr-amber)", marginTop: 2 }} />
+                              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>1%</span>
+                                <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>8%</span>
+                              </div>
+                            </div>
+                          </div>
+                          {inflationStressRate <= baseRate ? (
+                            <p style={{ fontSize: 12, color: "var(--clr-amber)", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}>
+                              ⚠ Stress CPI must be higher than your base CPI ({baseRate}%) to show an adverse scenario.
+                            </p>
+                          ) : !inflationStressData ? (
+                            <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>Configure a CPF LIFE payout age to run this analysis.</p>
+                          ) : (
+                            <>
+                              {/* Chart */}
+                              <div style={{ height: 200, marginBottom: 14 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart data={inflationStressData.rows} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                                    <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--chart-text)" }} label={{ value: "Age", position: "insideBottomRight", offset: -4, fontSize: 11, fill: "var(--chart-text)" }} />
+                                    <YAxis tickFormatter={v => `$${Math.round(v).toLocaleString()}`} tick={{ fontSize: 11, fill: "var(--chart-text)" }} width={72} />
+                                    <Tooltip
+                                      formatter={(v, name) => [`$${Math.round(v).toLocaleString()}/mo`, name]}
+                                      labelFormatter={l => `Age ${l}`}
+                                      contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }}
+                                    />
+                                    <Line type="monotone" dataKey="baseReal" stroke="var(--clr-blue)" strokeWidth={2} dot={false} name={`Base CPI ${baseRate}% — real payout`} />
+                                    <Line type="monotone" dataKey="stressReal" stroke="var(--clr-amber)" strokeWidth={2} strokeDasharray="6 3" dot={false} name={`Stress CPI ${inflationStressRate}% — real payout`} />
+                                    <Legend iconType="line" wrapperStyle={{ fontSize: 11 }} />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </div>
+                              {/* KPI grid */}
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+                                {[
+                                  { label: `Real payout at ${payoutAge65}`, base: inflationStressData.atPA.baseReal, stress: inflationStressData.atPA.stressReal },
+                                  { label: "Real payout at 80", base: inflationStressData.at80.baseReal, stress: inflationStressData.at80.stressReal },
+                                  { label: `Real payout at ${inflationStressData.lifeExp} (life exp.)`, base: inflationStressData.atLifeExp.baseReal, stress: inflationStressData.atLifeExp.stressReal },
+                                ].map(({ label, base, stress }) => base != null && (
+                                  <div key={label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+                                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", margin: "0 0 2px" }}>Base: {formatCurrency(base)}/mo</p>
+                                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-amber)", margin: 0 }}>Stress: {formatCurrency(stress)}/mo</p>
+                                  </div>
+                                ))}
+                                <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(245,158,11,0.3)" }}>
+                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Lifetime purchasing-power loss</p>
+                                  <p style={{ fontSize: 14, fontWeight: 800, color: "var(--clr-amber)", margin: "0 0 2px" }}>{formatCurrency(inflationStressData.lifetimeLoss)}</p>
+                                  <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>
+                                    Total real income lost vs base CPI to age {inflationStressData.lifeExp} at {inflationStressRate}% CPI
+                                  </p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* ── SECTION 5: Property Correction Stress (F4) ── */}
+                  {(Number(debouncedInputs.propertyValue) || 0) > 0 && (
+                    <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showPropertyStress ? 16 : 0 }}>
+                        <span style={{ fontSize: 15 }}>🏠</span>
+                        <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Property Correction Stress</h4>
+                        <button
+                          onClick={() => setShowPropertyStress(v => !v)}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700,
+                            border: `1px solid ${showPropertyStress ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`,
+                            background: showPropertyStress ? "rgba(239,68,68,0.10)" : "var(--bg-input)",
+                            color: showPropertyStress ? "var(--clr-red)" : "var(--text-muted)", cursor: "pointer", transition: "all .15s" }}>
+                          {showPropertyStress ? "Hide Analysis" : "Show Property Stress"}
+                        </button>
+                      </div>
+                      {showPropertyStress && (() => {
+                        const baseGrowth = Number(debouncedInputs.propertyGrowthRate) || 0;
+                        return (
+                          <>
+                            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>
+                              Shows how your property value changes at a stressed growth rate vs your base assumption.
+                              Particularly relevant for leasehold properties where value decays as lease shortens.
+                            </p>
+                            {/* Controls */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                              <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Base growth (your input)</p>
+                                <p style={{ fontSize: 18, fontWeight: 800, color: "var(--clr-blue)", margin: 0 }}>{baseGrowth}% p.a.</p>
+                                <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "3px 0 0" }}>Change in sidebar → Prop Growth field</p>
+                              </div>
+                              <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${showPropertyStress ? "rgba(239,68,68,0.3)" : "var(--border-subtle)"}` }}>
+                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                  Stress growth: <strong style={{ color: propertyStressGrowthRate < 0 ? "var(--clr-red)" : propertyStressGrowthRate === 0 ? "var(--clr-amber)" : "var(--clr-green)" }}>
+                                    {propertyStressGrowthRate}% p.a.
+                                  </strong>
+                                </p>
+                                <input type="range" min={-3} max={3} step={0.5} value={propertyStressGrowthRate}
+                                  onChange={e => setPropertyStressGrowthRate(Number(e.target.value))}
+                                  style={{ width: "100%", accentColor: "var(--clr-red)", marginTop: 2 }} />
+                                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                  <span style={{ fontSize: 10, color: "var(--clr-red)" }}>−3%</span>
+                                  <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>0%</span>
+                                  <span style={{ fontSize: 10, color: "var(--clr-green)" }}>+3%</span>
+                                </div>
+                              </div>
+                            </div>
+                            {!propertyStressData ? (
+                              <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>Enter a property value in the sidebar to run this analysis.</p>
+                            ) : (
+                              <>
+                                {/* Chart */}
+                                <div style={{ height: 200, marginBottom: 14 }}>
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={propertyStressData.rows} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                                      <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--chart-text)" }} label={{ value: "Age", position: "insideBottomRight", offset: -4, fontSize: 11, fill: "var(--chart-text)" }} />
+                                      <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: "var(--chart-text)" }} width={60} />
+                                      <Tooltip
+                                        formatter={(v, name) => [`$${Math.round(v).toLocaleString()}`, name]}
+                                        labelFormatter={l => `Age ${l}`}
+                                        contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }}
+                                      />
+                                      <Line type="monotone" dataKey="baseValue" stroke="var(--clr-blue)" strokeWidth={2} dot={false} name={`Base ${baseGrowth}% growth`} />
+                                      <Line type="monotone" dataKey="stressValue" stroke="var(--clr-red)" strokeWidth={2} strokeDasharray="6 3" dot={false} name={`Stress ${propertyStressGrowthRate}% growth`} />
+                                      <Legend iconType="line" wrapperStyle={{ fontSize: 11 }} />
+                                    </LineChart>
+                                  </ResponsiveContainer>
+                                </div>
+                                {/* KPI summary */}
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+                                  <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Property value at {propertyStressData.pa}</p>
+                                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", margin: "0 0 2px" }}>Base: {formatCurrency(propertyStressData.baseValueAtPA)}</p>
+                                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: 0 }}>Stress: {formatCurrency(propertyStressData.stressValueAtPA)}</p>
+                                  </div>
+                                  <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(239,68,68,0.3)" }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Value difference at {propertyStressData.pa}</p>
+                                    <p style={{ fontSize: 14, fontWeight: 800, color: propertyStressData.delta >= 0 ? "var(--clr-red)" : "var(--clr-green)", margin: "0 0 2px" }}>
+                                      {propertyStressData.delta >= 0 ? "−" : "+"}{formatCurrency(Math.abs(propertyStressData.delta))}
+                                    </p>
+                                    <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>
+                                      {propertyStressData.deltaPct}% {propertyStressData.delta >= 0 ? "lower" : "higher"} than base scenario
+                                    </p>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* ── SECTION 6: Lifetime Strategy Summary Table (was SECTION 4) ── */}
+
                   <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                       <TableIcon style={{ width: 15, height: 15, color: "var(--clr-emerald)" }} />
