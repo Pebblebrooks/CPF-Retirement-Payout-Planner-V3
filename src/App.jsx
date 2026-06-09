@@ -15239,6 +15239,31 @@ ${milestoneSnapshotHtml}
                       </p>
                     )}
                   </div>
+                  {/* B3: Planning Horizon — moved here from Property section; affects ALL projections not just property */}
+                  <div style={{ padding: "10px 12px", borderRadius: 10, background: "var(--bg-muted)", border: "1px solid rgba(139,92,246,0.25)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-purple)", textTransform: "uppercase" }}>Planning Horizon</span>
+                      <TooltipBox id="t-maxpa" text="Maximum age to which ALL projections, charts, and exports run — including accumulation, CPF LIFE payouts, Monte Carlo bands, SORR, inflation stress, and PDF. 95 is the CPF Board default. Choose 100 or 105 for longevity stress testing. This is a global projection parameter, not specific to property." />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                      {[95, 100, 105].map(opt => (
+                        <button key={opt}
+                          onClick={() => setInputs(p => ({ ...p, maxProjectionAge: opt }))}
+                          style={{ padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                            border: `1px solid ${(Number(inputs.maxProjectionAge) || 95) === opt ? "var(--clr-purple)" : "var(--border-strong)"}`,
+                            cursor: "pointer",
+                            background: (Number(inputs.maxProjectionAge) || 95) === opt ? "rgba(139,92,246,0.15)" : "var(--bg-input)",
+                            color: (Number(inputs.maxProjectionAge) || 95) === opt ? "var(--clr-purple)" : "var(--text-muted)",
+                            transition: "all .15s" }}>
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "5px 0 0" }}>
+                      Applies to all tabs · 95 = CPF default · 100/105 = longevity stress
+                    </p>
+                  </div>
+
                   {/* Q2: Milestone Ages — 3 slots, compact side-by-side */}
                   <div style={{ padding: "10px 12px", borderRadius: 10, background: "var(--bg-muted)", border: `1px solid ${inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3 || inputErrors.milestoneAge4 || inputErrors.milestoneAge5 ? "var(--clr-red)" : "rgba(34,211,238,0.25)"}` }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
@@ -16719,7 +16744,7 @@ ${milestoneSnapshotHtml}
                   <div>
                     <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-green)", textTransform: "uppercase", marginBottom: 4 }}>
                       <span>VCMA – Cash Top-up to MA <FreqToggle freqKey="vcMaFreq" durKey="vcMaDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-vcmacash" text="Voluntary Cash MediSave Top-up (VCMA) — direct annual cash deposit to your own MA. Credited each year, capped at the Basic Healthcare Sum (BHS, $79,000 in 2026). Not subject to the $37,740 Annual Limit. If you are eligible for MMSS (SC, age 55–70, MA below ½ BHS, income ≤ $4,000/mo), the government automatically matches your VCMA dollar-for-dollar up to $1,000/yr — the engine computes and credits the match automatically. No separate entry needed. Note: the property Annual Value (≤ $21,000) and single-property eligibility conditions are not modelled — the engine assumes these conditions are met." /></span>
+                      <TooltipBox id="t-vcmacash" text="Voluntary Cash MediSave Top-up (VCMA) — direct annual cash deposit to your own MA. Credited each year, capped at the Basic Healthcare Sum (BHS, $79,000 in 2026). Not subject to the $37,740 Annual Limit. Eligible for CPF Cash Top-Up Tax Relief — up to $8,000/yr for self (shared with RSTU; if you contribute $5k via RSTU, only $3k VCMA relief remains). If you are eligible for MMSS (SC, age 55–70, MA below ½ BHS, income ≤ $4,000/mo), the government automatically matches your VCMA dollar-for-dollar up to $1,000/yr — the engine computes and credits the match automatically. No separate entry needed. Note: the property Annual Value (≤ $21,000) and single-property eligibility conditions are not modelled — the engine assumes these conditions are met." /></span>
                       <FieldResetBtn name="vcMaCash" inputs={inputs} setInputs={setInputs} />
                     </div>
                     {(() => {
@@ -16737,7 +16762,7 @@ ${milestoneSnapshotHtml}
                           <p style={{ fontSize: 12, color: maHeadroom === 0 ? "var(--clr-red)" : "var(--text-muted)", marginTop: 3 }}>
                             MA headroom to BHS: <strong style={{ color: maHeadroom === 0 ? "var(--clr-red)" : "var(--clr-green)", fontFamily: "monospace" }}>{formatCurrency(maHeadroom)}</strong>
                             {maHeadroom === 0 && <span style={{ marginLeft: 4, fontWeight: 700 }}>BHS reached ✓</span>}
-                            {" "}· not in Annual Limit · no tax relief
+                            {" "}· not in Annual Limit · tax relief up to $8,000/yr combined with RSTU
                           </p>
                         </>
                       );
@@ -17735,26 +17760,6 @@ ${milestoneSnapshotHtml}
                     <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Inflation Rate (%)</label>
                     <input type="text" inputMode="decimal" name="inflationRate" value={inputs.inflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Inflation rate" className={fieldChanged("inflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.inflationRate ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     {inputErrors.inflationRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.inflationRate}</p>}
-                  </div>
-
-                  {/* F1: Planning Horizon */}
-                  <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
-                      Planning Horizon
-                      <TooltipBox id="t-maxpa" text="Maximum age to which all projections, charts, and exports run. 95 is the CPF Board default. Choose 100 or 105 for longevity stress testing." />
-                    </label>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                      {[95, 100, 105].map(opt => (
-                        <button key={opt}
-                          onClick={() => setInputs(p => ({ ...p, maxProjectionAge: opt }))}
-                          style={{ padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 700, border: `1px solid ${(Number(inputs.maxProjectionAge) || 95) === opt ? "var(--clr-purple)" : "var(--border-strong)"}`, cursor: "pointer", background: (Number(inputs.maxProjectionAge) || 95) === opt ? "rgba(139,92,246,0.15)" : "var(--bg-muted)", color: (Number(inputs.maxProjectionAge) || 95) === opt ? "var(--clr-purple)" : "var(--text-muted)", transition: "all .15s" }}>
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                    <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "4px 0 0" }}>
-                      Age all projections run to · 95 = CPF default
-                    </p>
                   </div>
 
                   {/* Property details */}
