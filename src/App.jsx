@@ -606,6 +606,7 @@ const DEFAULT_INPUTS = {
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
   propertyGoalValue: 0,       // optional target property value at payout age (0 = no goal; shows % of net worth instead)
   inflationRate: 2, includeProperty: true, maxProjectionAge: 95,
+  cpfOARateOverride: '', cpfSARateOverride: '', cpfMARateOverride: '', // '' = use CPF_RATES defaults; set to a number (e.g. 1.5) for Stress Centre override
   sellPropertyAge: 0,
   // Private Assets & Goals
   targetMonthlyIncome: 0,
@@ -8952,6 +8953,7 @@ export default function App() {
       lifeEvents, // Rev #D2
       cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer, // RSS fields + transfer toggle
       maxProjectionAge, // F1: planning horizon — changes here trigger full re-projection
+      cpfOARateOverride, cpfSARateOverride, cpfMARateOverride, // Stress Centre CPF rate overrides — must be here so engine recomputes when stress rates change
     } = debouncedInputs;
     // N-BUG-5 fix: lifeEvents objects carry a UUID `id` field generated at creation time.
     // Including raw lifeEvents in JSON.stringify means deleting+re-adding the same event
@@ -9000,6 +9002,7 @@ export default function App() {
       lifeEvents: lifeEventsForKey,
       cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer,
       maxProjectionAge,
+      cpfOARateOverride, cpfSARateOverride, cpfMARateOverride,
     });
   }, [debouncedInputs]); // eslint-disable-line react-hooks/exhaustive-deps
   const projection = useMemo(() => {
@@ -10632,6 +10635,57 @@ export default function App() {
   }, [showPropertyStress, propertyStressGrowthRate, debouncedInputs.propertyGrowthRate,
       debouncedInputs.propertyValue, debouncedInputs.currentAge, payoutAge65,
       debouncedInputs.propertyLeasehold, debouncedInputs.propertyLeaseYears]);
+
+  // ── F3: Tier Shock Analysis (App-level) ──────────────────────────────────
+  // Mirrors the identical useMemo inside ReadinessTab but lives here so the
+  // Strategy tab's Stress Centre can reference it directly.  ReadinessTab uses
+  // its own local copy (passed no props) for the Readiness dashboard card.
+  // All inputs read from debouncedInputs / payoutAge65 — zero extra engine cost.
+  const tierShockData = useMemo(() => {
+    const pa          = payoutAge65;
+    const isMale      = debouncedInputs.isMale !== false;
+    const rsGrowth    = (Number(debouncedInputs.retirementSumGrowth) || 3) / 100;
+    const ca          = Number(debouncedInputs.currentAge)  || 35;
+    const cy          = Number(debouncedInputs.currentYear) || 2026;
+    const yearsToPA   = Math.max(0, pa - ca);
+    const yearsFromNow = Math.max(0, (cy + yearsToPA) - 2026);
+    const projFRS = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const projBRS = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const projERS = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const raAtPA  = raAtPayout; // raAtPayout already uses projectionByAge.get(payoutAge65)?.ra
+    if (!raAtPA || raAtPA <= 0 || !projFRS || projFRS <= 0) return null;
+    let currentTier, tierFloor, lowerTierName, lowerTierFloor;
+    if (raAtPA >= projERS) {
+      currentTier = "ERS"; tierFloor = projERS;
+      lowerTierName = "FRS"; lowerTierFloor = projFRS;
+    } else if (raAtPA >= projFRS) {
+      currentTier = "FRS"; tierFloor = projFRS;
+      lowerTierName = "BRS"; lowerTierFloor = projBRS;
+    } else if (raAtPA >= projBRS) {
+      currentTier = "BRS"; tierFloor = projBRS;
+      lowerTierName = "Below BRS"; lowerTierFloor = projBRS * 0.5;
+    } else {
+      currentTier = "Below BRS"; tierFloor = 0;
+      lowerTierName = null; lowerTierFloor = null;
+    }
+    const currentMonthly = Math.round(interpolateCpfLife(raAtPA, 'std', isMale, pa));
+    const lowerMonthly   = lowerTierFloor != null
+      ? Math.round(interpolateCpfLife(Math.max(0, lowerTierFloor - 1), 'std', isMale, pa))
+      : 0;
+    const monthlyDelta = currentMonthly - lowerMonthly;
+    const deltaPct     = currentMonthly > 0 ? Math.round((monthlyDelta / currentMonthly) * 100) : 0;
+    const raBuf        = tierFloor > 0 ? Math.max(0, raAtPA - tierFloor) : raAtPA;
+    const brsMonthly   = Math.round(interpolateCpfLife(projBRS, 'std', isMale, pa));
+    const frsMonthly   = Math.round(interpolateCpfLife(projFRS, 'std', isMale, pa));
+    const ersMonthly   = Math.round(interpolateCpfLife(projERS, 'std', isMale, pa));
+    return {
+      currentTier, tierFloor, lowerTierName, lowerTierFloor,
+      currentMonthly, lowerMonthly, monthlyDelta, deltaPct, raBuf,
+      brsMonthly, frsMonthly, ersMonthly,
+      projBRS, projFRS, projERS,
+    };
+  }, [raAtPayout, payoutAge65, debouncedInputs.isMale, debouncedInputs.retirementSumGrowth,
+      debouncedInputs.currentAge, debouncedInputs.currentYear]);
 
   // OA Exhaustion Age: first projection age where OA balance falls to/below the bequest floor
   // during the drawdown window. null = OA sustains to age 95 (or drawdown not active).
