@@ -162,6 +162,8 @@ const LIFE_EVENT_TYPES = {
     description: "CPF contributions stop permanently from this age onward (overrides Contrib Stop Age if earlier)." },
   hyperinflation:   { label: "Hyperinflation",     color: "#eab308", icon: TrendingUp,   isPoint: false,
     description: "Temporarily override the inflation rate for the specified age range." },
+  salary_cut:       { label: "Salary Cut",          color: "#fb923c", icon: TrendingDown, isPoint: false,
+    description: "Reduce gross salary by a percentage for the specified age range. Affects mandatory contributions proportionally. Magnitude = % cut (e.g. 30 = 30% salary reduction, contributions at 70% of normal)." },
 };
 // Convenience: draw source options for medical_crisis
 const DRAW_SOURCE_LABELS = {
@@ -1589,6 +1591,8 @@ function runRSSEngine(inputs, {
     // Life events
     const activeEvents     = (inputs.lifeEvents || []).filter(e => e.enabled !== false && Number(e.startAge) <= age && age <= Number(e.endAge));
     const leContribPaused  = activeEvents.some(e => e.type === 'retrenchment' || e.type === 'career_break');
+    const leSalaryCut      = activeEvents.find(e => e.type === 'salary_cut');
+    const salaryCutFactor  = leSalaryCut ? Math.max(0, 1 - (Number(leSalaryCut.magnitude) || 0) / 100) : 1;
     const leEarlyRetire    = activeEvents.some(e => e.type === 'early_retirement');
     if (leEarlyRetire) earlyRetireFired = true;
     const leHyperinflation = activeEvents.find(e => e.type === 'hyperinflation');
@@ -1747,7 +1751,7 @@ function runRSSEngine(inputs, {
 
     // Contribution block
     if (age < contribStop && !isForeigner && !leEarlyRetire && !earlyRetireFired) {
-      const gf = leContribPaused ? 0 : computeGF(age, salaryBump);
+      const gf = leContribPaused ? 0 : computeGF(age, salaryBump) * salaryCutFactor;
       const mandatorySA_base = Math.round(baseSA_Emp * gf);
       if (isSEP) {
         const nti = Number(inputs.netTradeIncome) || 0;
@@ -1969,10 +1973,10 @@ function runRSSEngine(inputs, {
     // Interest (mid-year average-balance convention)
     const _band = (mcVariance / 100);
     const rateNoise = randomiseRates ? (Math.random() * _band * 2 - _band) : 0;
-    const rOA = CPF_RATES.OA + rateNoise;
-    const rSA = CPF_RATES.SA + rateNoise;
-    const rMA = CPF_RATES.MA + rateNoise;
-    const rRA = CPF_RATES.RA + rateNoise;
+    const rOA = _oaRateBase + rateNoise;
+    const rSA = _saRateBase + rateNoise;
+    const rMA = _maRateBase + rateNoise;
+    const rRA = _saRateBase + rateNoise; // RA earns same base as SA (Item 5)
     const oaAvg = (oaOpen + oa) / 2;
     const saAvg = (saOpen + sa) / 2;
     const maAvg = (maOpen + ma) / 2;
@@ -2290,6 +2294,11 @@ function runProjectionEngine(inputs, {
   const _cm_pe  = new Date().getMonth() + 1;                      // 1–12
   const _mn_pe  = (((_bm_pe - _cm_pe) % 12) + 12) % 12 || 12;  // months to next birthday; 0 → 12 (birthday this month = full year)
   const firstYearFraction = Math.max(1 / 12, Math.min(1, _mn_pe / 12));
+  // Item 5 — Deterministic CPF rate overrides. When set, override CPF_RATES.OA/SA/MA.
+  // Monte Carlo rateNoise is still applied on top. RA earns same as SA base.
+  const _oaRateBase = (inputs.cpfOARateOverride != null && inputs.cpfOARateOverride !== '') ? Number(inputs.cpfOARateOverride)/100 : CPF_RATES.OA;
+  const _saRateBase = (inputs.cpfSARateOverride != null && inputs.cpfSARateOverride !== '') ? Number(inputs.cpfSARateOverride)/100 : CPF_RATES.SA;
+  const _maRateBase = (inputs.cpfMARateOverride != null && inputs.cpfMARateOverride !== '') ? Number(inputs.cpfMARateOverride)/100 : CPF_RATES.MA;
   const salaryGrowth = (Number(inputs.salaryGrowthRate) || 0) / 100;
   const salaryBump = (overrideSalaryBump || 0) / 100;
   // Rev #22: phased salary & career break constants
@@ -6040,6 +6049,13 @@ export default function App() {
 
   const [showMonteCarlo, setShowMonteCarlo] = useState(false);
   const [showBaseline, setShowBaseline] = useState(false);
+  // Item 5 — CPF Rate Reduction (Stress Centre)
+  const [showCpfRateStress, setShowCpfRateStress] = useState(false);
+  // Item 8 — Healthcare Cost Surge (Stress Centre)
+  const [showHealthcareStress, setShowHealthcareStress] = useState(false);
+  const [hcStartAge, setHcStartAge]       = useState(75);
+  const [hcEndAge, setHcEndAge]           = useState(85);
+  const [hcMonthlyCost, setHcMonthlyCost] = useState(2000);
   const [showSorr, setShowSorr]               = useState(false);         // SORR stress-test panel
   const [sorrCrashYears, setSorrCrashYears]   = useState(5);             // years of bad returns (1–10)
   const [sorrCrashReturn, setSorrCrashReturn] = useState(-10);           // annual return during crash (%)
@@ -6153,7 +6169,7 @@ export default function App() {
   const [showDataTableGuide, setShowDataTableGuide] = useState(false);
   const [showWisEligibility, setShowWisEligibility] = useState(false); // WIS eligibility panel toggle — must be top-level (Rules of Hooks)
   // Goal Simulator state (Strategy tab → Goal sub-tab)
-  const [goalStratTab, setGoalStratTab] = useState("goal");           // "goal" | "roadmap"
+  const [goalStratTab, setGoalStratTab] = useState("goal");           // "goal" | "roadmap" | "stress"
   const [goalResult,   setGoalResult]   = useState(null);             // solver output object
   const [goalSolving,  setGoalSolving]  = useState(false);            // spinner while computing
   const [goalApplied,  setGoalApplied]  = useState(null);             // "A"|"B"|"C"|null last-applied strategy
@@ -7759,6 +7775,30 @@ export default function App() {
 
     return { baseline, targetAmt, gap: targetAmt - baseline, stratA, stratB, stratC, sensitivityRSTU, sensitivityVC3A };
   };
+
+  // Issue 4: reactive max-achievable ceiling — one extra engine call per debounce cycle.
+  const goalSimMaxReachable = useMemo(() => {
+    const pa = Number(debouncedInputs.payoutAge) || 65;
+    if (debouncedInputs.cpfScheme === 'rss') return null;
+    try {
+      const rows = runProjectionEngine({ ...debouncedInputs, vcSaTopup: GS_RSTU_CAP, vc3aCash: GS_VC3A_CAP });
+      const row  = rows.find(r => r.age === pa) || {};
+      const total = (row.oa||0) + (row.sa||0) + (row.ra||0) + (row.ma||0);
+      return total > 0 ? total : null;
+    } catch { return null; }
+  }, [debouncedInputs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const goalSimMaxReachableSpouse = useMemo(() => {
+    const spa = Number(debouncedSpouseInputs.payoutAge) || 65;
+    if (!householdEnabled || spouseProjection.length === 0) return null;
+    if (debouncedSpouseInputs.cpfScheme === 'rss') return null;
+    try {
+      const rows = runProjectionEngine({ ...debouncedSpouseInputs, vcSaTopup: GS_RSTU_CAP, vc3aCash: GS_VC3A_CAP });
+      const row  = rows.find(r => r.age === spa) || {};
+      const total = (row.oa||0) + (row.sa||0) + (row.ra||0) + (row.ma||0);
+      return total > 0 ? total : null;
+    } catch { return null; }
+  }, [debouncedSpouseInputs, householdEnabled, spouseProjection.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Primary solver ────────────────────────────────────────────────────────
   const solveGoal = () => {
@@ -9854,7 +9894,7 @@ export default function App() {
     // for RSS members already aged 68+ (loop runs 0 iterations), making the What-If chart
     // entirely blank. Use maxAge:95 for RSS (full drawdown window) as with the main projection.
     const isRSSWI = debouncedInputs.cpfScheme === 'rss';
-    const wiMaxAge = isRSSWI ? maxPA : effPA; // F1
+    const wiMaxAge = 95; // always full horizon — post-payout sliders need the full window (Issue 1 fix)
     const rows = isRSSWI
       ? runRSSEngine(wiInputs, {
           maxAge: wiMaxAge,
@@ -15960,10 +16000,10 @@ ${milestoneSnapshotHtml}
               {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Balance inputs — UX-10: each label row is cpf-field-row; ↺ appears on hover when changed */}
-                  {[["oaBalance", "Ordinary (OA)"], ["saBalance", is55Plus ? "Retirement (RA)" : "Special (SA)"], ["maBalance", "MediSave (MA)"]].map(([n, l]) => (
+                  {[["oaBalance","Ordinary (OA)","t-oa-bal","Ordinary Account — earns 2.5%/yr. Used for housing repayments, CPFIS, and the age-55 lump-sum withdrawal. Find your balance at cpf.gov.sg → My CPF."],["saBalance",is55Plus?"Retirement (RA)":"Special (SA)","t-sa-bal",is55Plus?"Retirement Account — created at 55 merging SA + OA up to FRS. Earns 4%/yr. Funds CPF LIFE premium. Find at cpf.gov.sg.":"Special Account — earns 4%/yr, primarily for retirement. Capped at FRS via OA→SA transfers; ERS via RSTU. Merges into RA at 55."],["maBalance","MediSave (MA)","t-ma-bal","MediSave Account — earns 4%/yr. Pays MediShield Life, IP premiums, and approved medical expenses. Capped at BHS ($79,000 in 2026). Excess flows to SA (pre-55) or RA (55+)."]].map(([n, l, tipId, tipText]) => (
                     <div key={n}>
                       <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-sky)", textTransform: "uppercase", marginBottom: 4 }}>
-                        <span>{l}</span>
+                        <span>{l}<TooltipBox id={tipId} text={tipText} /></span>
                         <FieldResetBtn name={n} inputs={inputs} setInputs={setInputs} />
                       </div>
                       <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l + ' balance'} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -16035,7 +16075,7 @@ ${milestoneSnapshotHtml}
                     <strong style={{ color: "var(--clr-orange)" }}>Self-Employed Member (SEP):</strong> No mandatory OA/SA contributions. Use the Inflows panel below to enter your VC3A (up to $37,740/yr). Funds are <strong style={{ color: "#fdba74" }}>proportionally allocated</strong> across OA/SA/MA using your age-based CPF rates. MA excess above BHS spills to SA/RA (capped at FRS); further excess flows to OA. MA contributions required if net trade income &gt; $6,000.
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 4 }}>Net Trade Income ($/yr)</label>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 4 }}>Net Trade Income ($/yr)<TooltipBox id="t-nti" text="Net trade income declared to IRAS — self-employment income after deducting allowable business expenses. MediSave contributions are mandatory for SEPs earning NTI > $6,000/yr (scaled by age band). No mandatory OA/SA contributions for SEPs; use VC3A to build OA/SA voluntarily." /></label>
                     <input type="text" inputMode="decimal" name="netTradeIncome" value={getDisplayValue("netTradeIncome", inputs.netTradeIncome)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Net Trade Income" onFocus={() => setFocusedField("netTradeIncome")} className={fieldChanged("netTradeIncome") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                   </div>
                   </div>
@@ -16045,8 +16085,8 @@ ${milestoneSnapshotHtml}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, padding: 10, borderRadius: 10, background: "var(--bg-muted)", border: "1px solid var(--border-strong)" }}>
                     <div style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 2 }}>Salary Inputs</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      {[["salaryGross", "OW / Monthly Gross ($)"], ["salaryBonus", "AW / Annual Bonus ($)"]].map(([n, l]) => (
-                        <div key={n}><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>{l}</label>
+                      {[["salaryGross","OW / Monthly Gross ($)","t-ow","Ordinary Wage (OW) — regular monthly gross pay. CPF contributions apply up to the OW Ceiling of $8,000/mo. Enter your full monthly gross; the engine caps it automatically. Used by Auto-Calc to compute mandatory contributions."],["salaryBonus","AW / Annual Bonus ($)","t-aw","Additional Wage (AW) — bonuses, commissions, irregular pay. AW Ceiling = max($102,000 − OW×12, 0). Enter the full annual amount; the engine applies the ceiling automatically."]].map(([n, l, tipId, tipText]) => (
+                        <div key={n}><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>{l}<TooltipBox id={tipId} text={tipText} /></label>
                           <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} /></div>
                       ))}
                     </div>
@@ -16998,9 +17038,9 @@ ${milestoneSnapshotHtml}
                     <span style={{ fontSize: 12, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.07em" }}>Medical</span>
                   </div>
 
-                  {[["medicalUsage", "Medical Usage (MA) — Annual", "annual"], ["medishieldIP", "MediShield Life / IP (MA) — Annual", "annual"], ["elderCareShield", "ElderShield / CareShield (MA) — Annual", "annual"]].map(([n, l, freq]) => (
+                  {[["medicalUsage","Medical Usage (MA) — Annual","annual","t-medical-usage","Annual MA withdrawal for approved medical expenses — GP, specialist, hospitalisation, day surgery. Deducted from MA each year. Grows with the Medical Inflation Rate. Excludes MediShield Life and CareShield premiums (enter those below). Check your CPF transaction history for a typical annual amount."],["medishieldIP","MediShield Life / IP (MA) — Annual","annual","t-medishield","Annual MediShield Life premium (compulsory) plus any Integrated Shield Plan rider deducted from MA. MediShield Life covers basic hospitalisation; IP riders upgrade to Class A ward or private hospital. Premiums escalate steeply with age — check your insurer's schedule."],["elderCareShield","ElderShield / CareShield (MA) — Annual","annual","t-careshield","Annual CareShield Life (or legacy ElderShield) premium deducted from MA. CareShield Life is compulsory for SC/PR born on or after 1 Oct 1980 from age 30, providing payouts for severe disability. Premium payable until age 67."]].map(([n, l, freq, tipId, tipText]) => (
                     <div key={n}><div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>{l.replace(" — Annual","")}</span>
+                      <span>{l.replace(" — Annual","")}<TooltipBox id={tipId} text={tipText} /></span>
                       <FieldResetBtn name={n} inputs={inputs} setInputs={setInputs} />
                     </div>
                       <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} /></div>
@@ -17792,10 +17832,10 @@ ${milestoneSnapshotHtml}
 
                   {/* Timelines */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {[["contributionStopAge", "Contrib Stop Age"], ["housingStopAge", "Housing Stop Age"]].map(([n, l]) => (
+                    {[["contributionStopAge","Contrib Stop Age","t-contrib-stop","Age at which mandatory CPF contributions (employer + employee) stop being modelled. Typically 65 or earlier if you plan to exit the workforce sooner. Existing balances continue earning interest after this age."],["housingStopAge","Housing Stop Age","t-housing-stop","Age at which your housing loan OA deductions stop — when your mortgage is fully repaid. After this age the engine stops deducting housingOutflow from OA, which accelerates OA accumulation."]].map(([n, l, tipId, tipText]) => (
                       <div key={n}>
                         <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                          {l}{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 11, color: "var(--clr-red)" }}>⚠</span>}
+                          {l}<TooltipBox id={tipId} text={tipText} />{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 11, color: "var(--clr-red)" }}>⚠</span>}
                         </label>
                         <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} aria-invalid={!!inputErrors[n]} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                       </div>
@@ -18224,16 +18264,16 @@ ${milestoneSnapshotHtml}
                   
                   {/* Private Assets */}
                   <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Current Private Assets ($)</label>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Current Private Assets ($)<TooltipBox id="t-priv-cur" text="Current market value of all non-CPF, non-property liquid assets — savings, equities, unit trusts, cash. This is the starting balance for your private assets projection. Exclude your primary residence (enter it in Property) and SRS (separate panel)." /></label>
                     <input type="text" inputMode="decimal" name="currentPrivateAssets" aria-label="Current private assets balance" value={getDisplayValue("currentPrivateAssets", inputs.currentPrivateAssets)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("currentPrivateAssets"); e.target.select(); }} className={fieldChanged("currentPrivateAssets") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <div>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Annual Saving</label>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Annual Saving<TooltipBox id="t-priv-saving" text="Annual cash added to your private investment portfolio from take-home pay (after tax and CPF). This is modelled as an end-of-year addition compounding at your Private Asset Growth Rate." /></label>
                       <input type="text" inputMode="decimal" name="annualPrivateSaving" value={getDisplayValue("annualPrivateSaving", inputs.annualPrivateSaving)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("annualPrivateSaving"); e.target.select(); }} className={fieldChanged("annualPrivateSaving") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Growth (%)</label>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Growth (%)<TooltipBox id="t-priv-growth" text="Annual nominal return on your private portfolio. A balanced (60/40) portfolio has historically returned ~6–7%/yr before fees. Use a lower figure (4–5%) for a conservative, fee-adjusted estimate. Set 0% to model cash savings only." /></label>
                       <input type="text" inputMode="decimal" name="privateAssetGrowthRate" value={inputs.privateAssetGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("privateAssetGrowthRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                   </div>
@@ -18325,7 +18365,7 @@ ${milestoneSnapshotHtml}
                           {inputErrors.srsContribStopAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsContribStopAge}</p>}
                         </div>
                         <div>
-                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Return Rate (%)</label>
+                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Return Rate (%)<TooltipBox id="t-srs-return" text="Annual return on SRS funds. Uninvested SRS cash earns ~0.05%/yr (bank deposit rate). To grow the balance meaningfully, SRS funds must be invested — ETFs, unit trusts, SGX-listed securities. A typical invested SRS portfolio earns 4–6%/yr. Set 0% to model cash-like uninvested SRS." /></label>
                           <input type="text" inputMode="decimal" name="srsReturnRate" value={inputs.srsReturnRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("srsReturnRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsReturnRate ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.srsReturnRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsReturnRate}</p>}
                         </div>
@@ -18460,7 +18500,7 @@ ${milestoneSnapshotHtml}
                                 <span style={{ fontSize: 13, fontWeight: 700, color: isEnabled ? (meta.color || "#ef4444") : "var(--text-muted)" }}>{ev.label || meta.label}</span>
                                 <span style={{ fontSize: 12, color: "var(--text-subtle)", marginLeft: 6 }}>
                                   Age {ev.startAge}{ev.type !== 'windfall' && ev.type !== 'early_retirement' && ev.endAge !== ev.startAge ? `–${ev.endAge}` : ""}
-                                  {ev.magnitude > 0 && ` · ${ev.type === 'hyperinflation' ? `${ev.magnitude}%` : `$${Number(ev.magnitude).toLocaleString()}`}${ev.type === 'medical_crisis' || ev.type === 'retrenchment' || ev.type === 'career_break' || ev.type === 'hyperinflation' ? '/yr' : ''}`}
+                                  {ev.magnitude > 0 && ` · ${ev.type === 'hyperinflation' || ev.type === 'salary_cut' ? `${ev.magnitude}%` : `$${Number(ev.magnitude).toLocaleString()}`}${ev.type === 'medical_crisis' || ev.type === 'retrenchment' || ev.type === 'career_break' || ev.type === 'hyperinflation' ? '/yr' : ''}${ev.type === 'salary_cut' ? ' cut' : ''}`}
                                 </span>
                               </div>
                               <button onClick={() => toggleEvent(ev.id)} title={isEnabled ? "Disable" : "Enable"} style={{ fontSize: 12, fontWeight: 800, padding: "2px 7px", borderRadius: 5, border: `1px solid ${isEnabled ? (meta.color || "#ef4444") + "60" : "var(--border-strong)"}`, background: isEnabled ? `${meta.color || "#ef4444"}18` : "transparent", color: isEnabled ? (meta.color || "#ef4444") : "var(--text-muted)", cursor: "pointer" }}>{isEnabled ? "ON" : "OFF"}</button>
@@ -20392,11 +20432,14 @@ ${milestoneSnapshotHtml}
                       const basePARow = accumulationByAge.get(effPA);
                       const _inclProp = debouncedInputs.includeProperty ?? true;
                       const baseTotal = (basePARow?.total || 0) + (basePARow?.privateAssets || 0) + (basePARow?.srsBalance || 0) + (_inclProp ? (basePARow?.propertyValue || 0) : 0);
-                      const wiLastRow = whatIfProjection?.rows[whatIfProjection.rows.length - 1];
+                      // Issue 1 fix: wiMaxAge is now 95; last row is age 95 not effPA.
+                      // Use a Map lookup at effPA so baseline and what-if compare at the same age.
+                      const _wiRowsByAge = new Map((whatIfProjection?.rows || []).map(r => [r.age, r]));
+                      const wiPARow = _wiRowsByAge.get(effPA) || whatIfProjection?.rows?.[whatIfProjection.rows.length - 1];
                       const _wiInflD = isRealDollars ? (Number(debouncedInputs.inflationRate) || 0) / 100 : 0;
                       const _wiCaD   = Number(debouncedInputs.currentAge) || 35;
                       const deflate  = (val) => (isRealDollars && val) ? Math.round(val / Math.pow(1 + _wiInflD, Math.max(0, effPA - _wiCaD))) : val;
-                      const whatIfTotal = wiLastRow ? deflate((wiLastRow.oa + wiLastRow.sa + wiLastRow.ma + wiLastRow.ra) + (wiLastRow.privateAssets || 0) + (wiLastRow.srsBalance || 0) + (_inclProp ? (wiLastRow.propertyValue || 0) : 0)) : 0;
+                      const whatIfTotal = wiPARow ? deflate((wiPARow.oa + wiPARow.sa + wiPARow.ma + wiPARow.ra) + (wiPARow.privateAssets || 0) + (wiPARow.srsBalance || 0) + (_inclProp ? (wiPARow.propertyValue || 0) : 0)) : 0;
                       const delta = whatIfTotal - baseTotal;
                       return (
                         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -24228,11 +24271,11 @@ ${milestoneSnapshotHtml}
                     {strat.feasible ? (
                       <>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
-                          {strat.rstu != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>RSTU / yr</span><br /><strong style={{ color }}>{fmt(strat.rstu)}</strong></div>}
-                          {strat.vc3a != null && strat.vc3a > 0 && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>VC3A / yr</span><br /><strong style={{ color }}>{fmt(strat.vc3a)}</strong></div>}
-                          {strat.needed != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>{letter === "A" ? "RSTU" : "VC3A"} / yr</span><br /><strong style={{ color }}>{fmt(strat.needed)}</strong></div>}
-                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Total annual cash</span><br /><strong style={{ color }}>{fmt(strat.totalCash)}</strong></div>
-                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Monthly equiv.</span><br /><strong style={{ color }}>{fmt(strat.totalCash / 12)}/mo</strong></div>
+                          {strat.rstu != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>RSTU / yr<TooltipBox id={`t-gs-rstu-${letter}`} text="Cash to SA (pre-55) or RA (55+) earning 4%/yr. Tax-relievable up to $8,000/yr. Exempt from the $37,740 Annual Limit. Capped at FRS for SA, ERS for RA." /></span><br /><strong style={{ color }}>{fmt(strat.rstu)}</strong></div>}
+                          {strat.vc3a != null && strat.vc3a > 0 && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>VC3A / yr<TooltipBox id={`t-gs-vc3a-${letter}`} text="Voluntary Contribution split across OA/SA/MA by age-band allocation. Counts toward the $37,740 Annual Limit. No income tax relief for employees. SA/MA earn 4%/yr; OA earns 2.5%/yr." /></span><br /><strong style={{ color }}>{fmt(strat.vc3a)}</strong></div>}
+                          {strat.needed != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>{letter === "A" ? "RSTU" : "VC3A"} / yr<TooltipBox id={`t-gs-needed-${letter}`} text={letter === "A" ? "Annual RSTU required to hit your target. Tax-relievable up to $8,000/yr. Exempt from the $37,740 Annual Limit." : "Annual VC3A required. Auto-split OA/SA/MA by age-band. Counts toward $37,740 Annual Limit. No tax relief."} /></span><br /><strong style={{ color }}>{fmt(strat.needed)}</strong></div>}
+                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Total annual cash<TooltipBox id={`t-gs-total-${letter}`} text="Additional cash outflow from your bank account each year above current contributions — before any tax savings." /></span><br /><strong style={{ color }}>{fmt(strat.totalCash)}</strong></div>
+                          <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Monthly equiv.<TooltipBox id={`t-gs-monthly-${letter}`} text="Total annual cash ÷ 12 — the monthly amount to budget from your take-home pay." /></span><br /><strong style={{ color }}>{fmt(strat.totalCash / 12)}/mo</strong></div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           <button
@@ -24385,6 +24428,7 @@ ${milestoneSnapshotHtml}
                     {[
                       { id: "goal",    label: "🎯 Goal Simulator"  },
                       { id: "roadmap", label: "📅 Income Roadmap"  },
+                      { id: "stress",  label: "🛡️ Stress Centre"   },
                     ].map(({ id, label }) => (
                       <button key={id} onClick={() => setGoalStratTab(id)}
                         style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
@@ -24517,6 +24561,7 @@ ${milestoneSnapshotHtml}
                               : goalSimView === "spouse"
                               ? `Set your spouse's CPF target at their payout age (${spa})`
                               : "Set your CPF target at payout age"}
+                            <TooltipBox id="t-gs-target" text="The total CPF balance (OA + SA/RA + MA) you want at payout age. The solver finds minimum annual RSTU and/or VC3A top-ups to reach it. Green preset pills are targets you already meet. Use 🏆 Max achievable to instantly set the ceiling. A solid benchmark is 3× FRS (~$660k)." />
                           </p>
                           {goalSimView === "combined" ? (
                             /* Combined: separate target field + baseline display */
@@ -24544,6 +24589,21 @@ ${milestoneSnapshotHtml}
                                     style={{ width: 120, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 13, outline: "none" }} />
                                 </div>
                               </div>
+                              {goalSimMaxReachable && goalSimMaxReachableSpouse && (() => {
+                                const combinedMax = goalSimMaxReachable + goalSimMaxReachableSpouse;
+                                const alreadySet = goalTargetCombined === combinedMax;
+                                const alreadyMet = (baselinePrimary + baselineSpouse) >= combinedMax;
+                                return (
+                                  <button onClick={() => !alreadySet && !alreadyMet && setGoalTargetCombined(combinedMax)}
+                                    style={{ alignSelf: "flex-start", padding: "6px 12px", borderRadius: 20, fontWeight: 700, fontSize: 12, border: "2px solid",
+                                      cursor: alreadySet || alreadyMet ? "default" : "pointer",
+                                      borderColor: alreadyMet ? "#22c55e" : "#f59e0b",
+                                      background:  alreadyMet ? "#22c55e15" : alreadySet ? "rgba(245,158,11,0.15)" : "rgba(245,158,11,0.08)",
+                                      color: alreadyMet ? "#22c55e" : "#f59e0b", whiteSpace: "nowrap" }}>
+                                    {alreadyMet ? "✅ Max already met" : alreadySet ? "🏆 Max set" : `🏆 Combined max: ${fmtK(combinedMax)}`}
+                                  </button>
+                                );
+                              })()}
                               <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
                                 Combined baseline: <strong style={{ color: "var(--text-bright)" }}>{fmtK(baselinePrimary + baselineSpouse)}</strong>
                                 {" "}(Primary {fmtK(baselinePrimary)} at {pa} + Spouse {fmtK(baselineSpouse)} at {spa})
@@ -24581,6 +24641,24 @@ ${milestoneSnapshotHtml}
                                       placeholder="Custom amount"
                                       style={{ width: 130, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 13, outline: "none" }} />
                                   </div>
+                                  {(() => {
+                                    const maxR = goalSimView === "spouse" ? goalSimMaxReachableSpouse : goalSimMaxReachable;
+                                    if (!maxR) return null;
+                                    const alreadySet = Number(inputs.goalTargetCPF) === maxR;
+                                    const alreadyMet = baseline >= maxR;
+                                    return (
+                                      <button onClick={() => !alreadySet && !alreadyMet && setInputs(prev => ({ ...prev, goalTargetCPF: maxR }))}
+                                        title="Max achievable with RSTU $8k/yr + VC3A $37,740/yr"
+                                        style={{ padding: "7px 14px", borderRadius: 20, fontWeight: 700, fontSize: 12, border: "2px solid",
+                                          cursor: alreadySet || alreadyMet ? "default" : "pointer",
+                                          borderColor: alreadyMet ? "#22c55e" : "#f59e0b",
+                                          background: alreadyMet ? "#22c55e15" : alreadySet ? "rgba(245,158,11,0.15)" : "rgba(245,158,11,0.08)",
+                                          color: alreadyMet ? "#22c55e" : "#f59e0b",
+                                          whiteSpace: "nowrap", transition: "all .15s" }}>
+                                        {alreadyMet ? "✅ Max already met" : alreadySet ? "🏆 Max set" : `🏆 Max achievable: ${fmtK(maxR)}`}
+                                      </button>
+                                    );
+                                  })()}
                                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                     <span style={{ fontSize: 13, color: "var(--text-muted)" }}>at age</span>
                                     <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-highlight)" }}>{ageLbl}</span>
@@ -24600,7 +24678,7 @@ ${milestoneSnapshotHtml}
                         {/* ── Tax rate selector (Strategy D) ───────────── */}
                         {goalSimView !== "combined" && (
                           <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "12px 16px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>📊 Marginal tax rate (for Strategy D):</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", whiteSpace: "nowrap" }}>📊 Marginal tax rate (for Strategy D):<TooltipBox id="t-gs-taxrate" text="Your highest Singapore income tax bracket. RSTU cash top-ups are tax-relievable — each $1 of RSTU costs (1 − rate) after tax. At 15%, $8,000 RSTU costs $6,800 net. Strategy D uses this to identify the cheapest after-tax option. Brackets: 7% ($80k–$120k), 11.5% ($120k–$160k), 15% ($160k–$200k), 19.5% ($200k–$240k), 22% ($240k–$280k). Check your IRAS NOA." /></span>
                             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                               {[7, 11.5, 15, 19.5, 22].map(r => (
                                 <button key={r} onClick={() => setMarginalTaxRate(r)}
@@ -24813,7 +24891,7 @@ ${milestoneSnapshotHtml}
                                       {stratD && (
                                         <div style={{ background: "var(--bg-input)", border: `2px solid ${CARD_COLORS.D}66`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
                                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                                            <span style={{ fontWeight: 800, fontSize: 14, color: CARD_COLORS.D }}>🏆 Strategy D: Tax-Optimised ({marginalTaxRate}% marginal rate)</span>
+                                            <span style={{ fontWeight: 800, fontSize: 14, color: CARD_COLORS.D }}>🏆 Strategy D: Tax-Optimised ({marginalTaxRate}% marginal rate)<TooltipBox id="t-gs-stratD" text="Compares the after-tax annual cost of Strategies A, B, C at your marginal rate, then recommends whichever is cheapest. RSTU (A) saves tax at your marginal rate; VC3A (B) has no tax benefit. At 15% rate, $8k RSTU after-tax = $6,800 vs $8,000 gross." /></span>
                                             {appliedLetter === stratD.bestLetter && <span style={{ fontSize: 11, fontWeight: 700, color: CARD_COLORS.D, background: `${CARD_COLORS.D}20`, borderRadius: 6, padding: "2px 8px" }}>✓ Applied (via Strategy {stratD.bestLetter})</span>}
                                           </div>
                                           {stratD.bestEffCost === Infinity
@@ -25301,324 +25379,19 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
 
-                  {/* ── SECTION 3: SORR Stress Test ── */}
-                  <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
-                    {/* Header + toggle button */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showSorr ? 16 : 0 }}>
-                      <Activity style={{ width: 15, height: 15, color: "#ef4444", flexShrink: 0 }} />
-                      <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>SORR Stress Test</h4>
-                      <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>Sequence of Returns Risk — decumulation phase</span>
-                      <button
-                        onClick={() => setShowSorr(v => !v)}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: `1px solid ${showSorr ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showSorr ? "rgba(239,68,68,0.10)" : "var(--bg-input)", color: showSorr ? "#ef4444" : "var(--text-muted)", cursor: "pointer", transition: "all .15s" }}>
-                        <Activity style={{ width: 12, height: 12 }} />
-                        {showSorr ? "Hide SORR" : "Show SORR Analysis"}
-                      </button>
-                    </div>
-
-                    {showSorr && (() => {
-                      const privAtPA = accumulationByAge.get(pa)?.privateAssets || 0;
-                      if (privAtPA === 0) return (
-                        <div style={{ padding: "12px 16px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", fontSize: 13, color: "var(--text-muted)" }}>
-                          <strong>No private assets modelled.</strong> SORR applies to market-dependent assets only — CPF accounts earn guaranteed rates and are unaffected. Add private assets in the sidebar to run this analysis.
-                        </div>
-                      );
-
-                      return (
-                        <>
-                          {/* Controls row */}
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16, padding: "12px 16px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                            <div style={{ flex: 1, minWidth: 180 }}>
-                              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 6px" }}>
-                                Crash Duration: <strong style={{ color: "var(--text-bright)" }}>{sorrCrashYears} yr{sorrCrashYears !== 1 ? "s" : ""}</strong>
-                              </p>
-                              <input type="range" min={1} max={10} step={1} value={sorrCrashYears}
-                                onChange={e => setSorrCrashYears(Number(e.target.value))}
-                                style={{ width: "100%", accentColor: "#ef4444" }} />
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 2 }}>
-                                <span>1 yr</span><span>10 yrs</span>
-                              </div>
-                            </div>
-                            <div style={{ flex: 1, minWidth: 180 }}>
-                              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 6px" }}>
-                                Annual Return During Crash: <strong style={{ color: "#ef4444" }}>{sorrCrashReturn}%</strong>
-                              </p>
-                              <input type="range" min={-30} max={0} step={1} value={sorrCrashReturn}
-                                onChange={e => setSorrCrashReturn(Number(e.target.value))}
-                                style={{ width: "100%", accentColor: "#ef4444" }} />
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 2 }}>
-                                <span>−30%</span><span>0%</span>
-                              </div>
-                            </div>
-                            <div style={{ alignSelf: "center", padding: "8px 12px", borderRadius: 8, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.25)", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, maxWidth: 220 }}>
-                              <strong style={{ color: "#ef4444" }}>CPF unaffected.</strong> OA earns 2.5%, SA/RA/MA earn 4% regardless of market conditions. Only private assets are stress-tested.
-                            </div>
-                          </div>
-
-                          {/* Impact chart */}
-                          {sorrData?.hasData && (
-                            <>
-                              <div style={{ height: 220, marginBottom: 12 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <ComposedChart data={sorrData.rows} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
-                                    <defs>
-                                      <linearGradient id="sorrGapGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
-                                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0.04} />
-                                      </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                                    <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickLine={false} axisLine={false} label={{ value: "Age", position: "insideBottomRight", offset: -4, fontSize: 11, fill: "var(--text-muted)" }} />
-                                    <YAxis tickFormatter={v => v >= 1e6 ? `$${(v/1e6).toFixed(1)}M` : `$${(v/1e3).toFixed(0)}k`} tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickLine={false} axisLine={false} width={56} />
-                                    <Tooltip
-                                      formatter={(v, name) => [`$${Math.round(v).toLocaleString()}`, name]}
-                                      contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }}
-                                      labelFormatter={l => `Age ${l}`}
-                                    />
-                                    {/* Crash period shading */}
-                                    <ReferenceArea x1={pa} x2={Math.min(sorrData.crashEndAge, 95)} fill="rgba(239,68,68,0.07)" stroke="rgba(239,68,68,0.25)" strokeDasharray="4 3" label={{ value: "Crash", position: "insideTopLeft", fontSize: 10, fill: "#ef4444" }} />
-                                    {/* Gap fill area */}
-                                    <Area type="monotone" dataKey="privGap" fill="url(#sorrGapGrad)" stroke="none" name="Private Shortfall" stackId={null} />
-                                    {/* Baseline and SORR lines */}
-                                    <Line type="monotone" dataKey="basePriv" stroke="var(--clr-emerald)" strokeWidth={2} dot={false} name="Baseline" />
-                                    <Line type="monotone" dataKey="sorrPriv" stroke="#ef4444" strokeWidth={2} strokeDasharray="6 3" dot={false} name="SORR Scenario" />
-                                    <Legend iconType="line" wrapperStyle={{ fontSize: 12 }} />
-                                  </ComposedChart>
-                                </ResponsiveContainer>
-                              </div>
-
-                              {/* KPI summary row */}
-                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-                                {[
-                                  {
-                                    label: "Private wealth at 80",
-                                    base: sorrData.rows.find(r => r.age === 80)?.basePriv,
-                                    sorr: sorrData.rows.find(r => r.age === 80)?.sorrPriv,
-                                  },
-                                  {
-                                    label: "Private wealth at 85",
-                                    base: sorrData.rows.find(r => r.age === 85)?.basePriv,
-                                    sorr: sorrData.rows.find(r => r.age === 85)?.sorrPriv,
-                                  },
-                                ].map(({ label, base, sorr }) => base != null && (
-                                  <div key={label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
-                                    <p style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-emerald)", margin: "0 0 2px" }}>Baseline: ${Math.round(base).toLocaleString()}</p>
-                                    <p style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", margin: 0 }}>SORR: ${Math.round(sorr).toLocaleString()}</p>
-                                    {base > 0 && <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "2px 0 0" }}>−{Math.round((1 - sorr / base) * 100)}% impact</p>}
-                                  </div>
-                                ))}
-                                <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Asset depletion age</p>
-                                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-emerald)", margin: "0 0 2px" }}>Baseline: {sorrData.baseDepletionAge ? `Age ${sorrData.baseDepletionAge}` : "Sustains to 95+"}</p>
-                                  <p style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", margin: 0 }}>SORR: {sorrData.sorrDepletionAge ? `Age ${sorrData.sorrDepletionAge}` : "Sustains to 95+"}</p>
-                                </div>
-                                <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Lifetime income at risk</p>
-                                  <p style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", margin: "0 0 2px" }}>${sorrData.lifetimeGap.toLocaleString()}</p>
-                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>total private income gap vs baseline due to early crash</p>
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </>
-                      );
-                    })()}
+                  {/* Stress tests moved to 🛡️ Stress Centre sub-tab */}
+                  <div style={{ background: "rgba(239,68,68,0.04)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <Activity style={{ width: 13, height: 13, color: "#ef4444", flexShrink: 0 }} />
+                    <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
+                      Stress tests (SORR, Inflation, Property, CPF Rate Reduction, Healthcare Surge, Planning Horizon, Tier Shock) are in the{" "}
+                      <button onClick={() => setGoalStratTab("stress")}
+                        style={{ background: "none", border: "none", color: "#f43f5e", fontWeight: 700, cursor: "pointer", fontSize: 13, padding: 0, textDecoration: "underline" }}>
+                        🛡️ Stress Centre
+                      </button>.
+                    </p>
                   </div>
 
-                  {/* ── SECTION 4: Inflation Stress Test (F2) ── */}
-                  <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showInflationStress ? 16 : 0 }}>
-                      <span style={{ fontSize: 15 }}>📉</span>
-                      <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Inflation Stress Test</h4>
-                      <button
-                        onClick={() => setShowInflationStress(v => !v)}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700,
-                          border: `1px solid ${showInflationStress ? "rgba(245,158,11,0.5)" : "var(--border-strong)"}`,
-                          background: showInflationStress ? "rgba(245,158,11,0.10)" : "var(--bg-input)",
-                          color: showInflationStress ? "var(--clr-amber)" : "var(--text-muted)", cursor: "pointer", transition: "all .15s" }}>
-                        {showInflationStress ? "Hide Analysis" : "Show Inflation Stress"}
-                      </button>
-                    </div>
-                    {showInflationStress && (() => {
-                      const baseRate = Number(debouncedInputs.inflationRate) || 0;
-                      return (
-                        <>
-                          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>
-                            Shows how higher long-run inflation erodes the real purchasing power of your CPF LIFE payout over time.
-                            CPF accounts earn guaranteed nominal rates — the monthly payout amount is fixed in nominal terms,
-                            so a higher CPI reduces what that payout buys each year.
-                          </p>
-                          {/* Controls */}
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                            <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                Base CPI (your input)
-                              </p>
-                              <p style={{ fontSize: 18, fontWeight: 800, color: "var(--clr-blue)", margin: 0 }}>{baseRate}%</p>
-                              <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "3px 0 0" }}>Change in sidebar → Inflation Rate field</p>
-                            </div>
-                            <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${showInflationStress ? "rgba(245,158,11,0.3)" : "var(--border-subtle)"}` }}>
-                              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                Stress CPI: <strong style={{ color: "var(--clr-amber)" }}>{inflationStressRate}%</strong>
-                              </p>
-                              <input type="range" min={1} max={8} step={0.5} value={inflationStressRate}
-                                onChange={e => setInflationStressRate(Number(e.target.value))}
-                                style={{ width: "100%", accentColor: "var(--clr-amber)", marginTop: 2 }} />
-                              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>1%</span>
-                                <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>8%</span>
-                              </div>
-                            </div>
-                          </div>
-                          {inflationStressRate <= baseRate ? (
-                            <p style={{ fontSize: 12, color: "var(--clr-amber)", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}>
-                              ⚠ Stress CPI must be higher than your base CPI ({baseRate}%) to show an adverse scenario.
-                            </p>
-                          ) : !inflationStressData ? (
-                            <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>Configure a CPF LIFE payout age to run this analysis.</p>
-                          ) : (
-                            <>
-                              {/* Chart */}
-                              <div style={{ height: 200, marginBottom: 14 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <LineChart data={inflationStressData.rows} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                                    <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--chart-text)" }} label={{ value: "Age", position: "insideBottomRight", offset: -4, fontSize: 11, fill: "var(--chart-text)" }} />
-                                    <YAxis tickFormatter={v => `$${Math.round(v).toLocaleString()}`} tick={{ fontSize: 11, fill: "var(--chart-text)" }} width={72} />
-                                    <Tooltip
-                                      formatter={(v, name) => [`$${Math.round(v).toLocaleString()}/mo`, name]}
-                                      labelFormatter={l => `Age ${l}`}
-                                      contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }}
-                                    />
-                                    <Line type="monotone" dataKey="baseReal" stroke="var(--clr-blue)" strokeWidth={2} dot={false} name={`Base CPI ${baseRate}% — real payout`} />
-                                    <Line type="monotone" dataKey="stressReal" stroke="var(--clr-amber)" strokeWidth={2} strokeDasharray="6 3" dot={false} name={`Stress CPI ${inflationStressRate}% — real payout`} />
-                                    <Legend iconType="line" wrapperStyle={{ fontSize: 11 }} />
-                                  </LineChart>
-                                </ResponsiveContainer>
-                              </div>
-                              {/* KPI grid */}
-                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-                                {[
-                                  { label: `Real payout at ${payoutAge65}`, base: inflationStressData.atPA.baseReal, stress: inflationStressData.atPA.stressReal },
-                                  { label: "Real payout at 80", base: inflationStressData.at80.baseReal, stress: inflationStressData.at80.stressReal },
-                                  { label: `Real payout at ${inflationStressData.lifeExp} (life exp.)`, base: inflationStressData.atLifeExp.baseReal, stress: inflationStressData.atLifeExp.stressReal },
-                                ].map(({ label, base, stress }) => base != null && (
-                                  <div key={label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
-                                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", margin: "0 0 2px" }}>Base: {formatCurrency(base)}/mo</p>
-                                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-amber)", margin: 0 }}>Stress: {formatCurrency(stress)}/mo</p>
-                                  </div>
-                                ))}
-                                <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(245,158,11,0.3)" }}>
-                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Lifetime purchasing-power loss</p>
-                                  <p style={{ fontSize: 14, fontWeight: 800, color: "var(--clr-amber)", margin: "0 0 2px" }}>{formatCurrency(inflationStressData.lifetimeLoss)}</p>
-                                  <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>
-                                    Total real income lost vs base CPI to age {inflationStressData.lifeExp} at {inflationStressRate}% CPI
-                                  </p>
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-
-                  {/* ── SECTION 5: Property Correction Stress (F4) ── */}
-                  {(Number(debouncedInputs.propertyValue) || 0) > 0 && (
-                    <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showPropertyStress ? 16 : 0 }}>
-                        <span style={{ fontSize: 15 }}>🏠</span>
-                        <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Property Correction Stress</h4>
-                        <button
-                          onClick={() => setShowPropertyStress(v => !v)}
-                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700,
-                            border: `1px solid ${showPropertyStress ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`,
-                            background: showPropertyStress ? "rgba(239,68,68,0.10)" : "var(--bg-input)",
-                            color: showPropertyStress ? "var(--clr-red)" : "var(--text-muted)", cursor: "pointer", transition: "all .15s" }}>
-                          {showPropertyStress ? "Hide Analysis" : "Show Property Stress"}
-                        </button>
-                      </div>
-                      {showPropertyStress && (() => {
-                        const baseGrowth = Number(debouncedInputs.propertyGrowthRate) || 0;
-                        return (
-                          <>
-                            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>
-                              Shows how your property value changes at a stressed growth rate vs your base assumption.
-                              Particularly relevant for leasehold properties where value decays as lease shortens.
-                            </p>
-                            {/* Controls */}
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                              <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Base growth (your input)</p>
-                                <p style={{ fontSize: 18, fontWeight: 800, color: "var(--clr-blue)", margin: 0 }}>{baseGrowth}% p.a.</p>
-                                <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "3px 0 0" }}>Change in sidebar → Prop Growth field</p>
-                              </div>
-                              <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${showPropertyStress ? "rgba(239,68,68,0.3)" : "var(--border-subtle)"}` }}>
-                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                  Stress growth: <strong style={{ color: propertyStressGrowthRate < 0 ? "var(--clr-red)" : propertyStressGrowthRate === 0 ? "var(--clr-amber)" : "var(--clr-green)" }}>
-                                    {propertyStressGrowthRate}% p.a.
-                                  </strong>
-                                </p>
-                                <input type="range" min={-3} max={3} step={0.5} value={propertyStressGrowthRate}
-                                  onChange={e => setPropertyStressGrowthRate(Number(e.target.value))}
-                                  style={{ width: "100%", accentColor: "var(--clr-red)", marginTop: 2 }} />
-                                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                  <span style={{ fontSize: 10, color: "var(--clr-red)" }}>−3%</span>
-                                  <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>0%</span>
-                                  <span style={{ fontSize: 10, color: "var(--clr-green)" }}>+3%</span>
-                                </div>
-                              </div>
-                            </div>
-                            {!propertyStressData ? (
-                              <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>Enter a property value in the sidebar to run this analysis.</p>
-                            ) : (
-                              <>
-                                {/* Chart */}
-                                <div style={{ height: 200, marginBottom: 14 }}>
-                                  <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={propertyStressData.rows} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                                      <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--chart-text)" }} label={{ value: "Age", position: "insideBottomRight", offset: -4, fontSize: 11, fill: "var(--chart-text)" }} />
-                                      <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: "var(--chart-text)" }} width={60} />
-                                      <Tooltip
-                                        formatter={(v, name) => [`$${Math.round(v).toLocaleString()}`, name]}
-                                        labelFormatter={l => `Age ${l}`}
-                                        contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }}
-                                      />
-                                      <Line type="monotone" dataKey="baseValue" stroke="var(--clr-blue)" strokeWidth={2} dot={false} name={`Base ${baseGrowth}% growth`} />
-                                      <Line type="monotone" dataKey="stressValue" stroke="var(--clr-red)" strokeWidth={2} strokeDasharray="6 3" dot={false} name={`Stress ${propertyStressGrowthRate}% growth`} />
-                                      <Legend iconType="line" wrapperStyle={{ fontSize: 11 }} />
-                                    </LineChart>
-                                  </ResponsiveContainer>
-                                </div>
-                                {/* KPI summary */}
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-                                  <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Property value at {propertyStressData.pa}</p>
-                                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", margin: "0 0 2px" }}>Base: {formatCurrency(propertyStressData.baseValueAtPA)}</p>
-                                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: 0 }}>Stress: {formatCurrency(propertyStressData.stressValueAtPA)}</p>
-                                  </div>
-                                  <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(239,68,68,0.3)" }}>
-                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Value difference at {propertyStressData.pa}</p>
-                                    <p style={{ fontSize: 14, fontWeight: 800, color: propertyStressData.delta >= 0 ? "var(--clr-red)" : "var(--clr-green)", margin: "0 0 2px" }}>
-                                      {propertyStressData.delta >= 0 ? "−" : "+"}{formatCurrency(Math.abs(propertyStressData.delta))}
-                                    </p>
-                                    <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>
-                                      {propertyStressData.deltaPct}% {propertyStressData.delta >= 0 ? "lower" : "higher"} than base scenario
-                                    </p>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
-
-                  {/* ── SECTION 6: Lifetime Strategy Summary Table (was SECTION 4) ── */}
+                                    {/* ── SECTION 6: Lifetime Strategy Summary Table (was SECTION 4) ── */}
 
                   <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
@@ -25707,6 +25480,583 @@ ${milestoneSnapshotHtml}
                   </div>
                 </div>
                   )}
+
+                  {/* ══ STRESS CENTRE ══════════════════════════════════════════════════════════
+                       All decumulation-phase and macro stress tests consolidated here.
+                       State (showSorr, showInflationStress, etc.) is top-level, so toggling
+                       here is reflected in PDF export and all downstream useMemos.
+                  ═══════════════════════════════════════════════════════════════════════════ */}
+                  {goalStratTab === "stress" && (() => {
+                    const pa = payoutAge65;
+                    const anyStressActive = showSorr || showInflationStress || showPropertyStress || showCpfRateStress || showHealthcareStress;
+                    const activeCount = [showSorr, showInflationStress, showPropertyStress, showCpfRateStress, showHealthcareStress].filter(Boolean).length;
+
+                    const applyWorstCase = () => {
+                      setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15);
+                      setShowInflationStress(true); setInflationStressRate(5);
+                      setShowPropertyStress(true); setPropertyStressGrowthRate(-2);
+                      setShowCpfRateStress(true);
+                      setInputs(p => ({ ...p, cpfOARateOverride: 1.5, cpfSARateOverride: 3.0, cpfMARateOverride: 3.0 }));
+                    };
+                    const resetAllStresses = () => {
+                      setShowSorr(false); setShowInflationStress(false); setShowPropertyStress(false);
+                      setShowCpfRateStress(false); setShowHealthcareStress(false);
+                      setInputs(p => ({ ...p, cpfOARateOverride: '', cpfSARateOverride: '', cpfMARateOverride: '' }));
+                    };
+
+                    return (
+                      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
+
+                        {/* ── How to use (collapsible) ──────────────────────────────── */}
+                        <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
+                          <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
+                            <ShieldCheck style={{ width: 13, height: 13, color: "#ef4444", flexShrink: 0 }} />
+                            <span style={{ fontWeight: 700, color: "var(--text-highlight)", fontSize: 14 }}>How to use the Stress Centre</span>
+                          </summary>
+                          <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+                            {[
+                              ["Planning Horizon", "Extend projection to age 100 or 105 to test longevity risk. 95 is the CPF Board default."],
+                              ["FRS Growth Rate", "Raise the rate at which CPF targets (FRS/BRS/ERS) grow to test accelerated policy tightening. 5% is the stress case."],
+                              ["CPF Rate Reduction", "Override OA/SA/MA rates permanently to test a lower-rate environment. 1.5%/3%/3% is the pessimistic scenario."],
+                              ["Monte Carlo", "200 simulated rate environments showing P10/P50/P90 confidence band. Enable in Growth tab for the full chart."],
+                              ["SORR", "Sequence of Returns Risk — private assets hit by a market crash in early retirement. Configure crash duration and depth."],
+                              ["Inflation Stress", "Tests how higher CPI erodes the real purchasing power of your fixed nominal CPF LIFE payout."],
+                              ["Property Correction", "Stress-tests your property value trajectory at a different growth rate (−3% to +3%/yr)."],
+                              ["Tier Shock", "CPF LIFE payout if your RA falls to a lower tier at payout age — computed from your current projection."],
+                              ["Healthcare Cost Surge", "Models extended long-term care costs drawing from private assets and MA above your base medical inputs."],
+                              ["⚡ Worst Case", "Simultaneously applies SORR + Inflation 5% + Property −2% + CPF rates 1.5%/3%/3%."],
+                            ].map(([t, d]) => (
+                              <div key={t} style={{ display: "flex", gap: 10, padding: "5px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
+                                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-highlight)", margin: 0, minWidth: 150, whiteSpace: "nowrap" }}>{t}</p>
+                                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>{d}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+
+                        {/* ── ITEM 2: Stress Assumptions panel ─────────────────────── */}
+                        <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+                            <SlidersHorizontal style={{ width: 15, height: 15, color: "var(--clr-purple)", flexShrink: 0 }} />
+                            <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Stress Assumptions</h4>
+                            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Controls that shift the entire projection baseline</span>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                            {/* Planning Horizon */}
+                            <div>
+                              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 8px" }}>
+                                Planning Horizon
+                                <TooltipBox id="t-sc-maxpa" text="Maximum age all projections run to. 95 = CPF Board default. Choose 100 or 105 for longevity stress testing." />
+                              </p>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                                {[{ val: 95, label: "95", sub: "default", clr: "var(--clr-blue)" },
+                                  { val: 100, label: "100", sub: "longevity", clr: "var(--clr-amber)" },
+                                  { val: 105, label: "105", sub: "extreme", clr: "var(--clr-red)" }].map(({ val, label, sub, clr }) => {
+                                  const active = (Number(inputs.maxProjectionAge) || 95) === val;
+                                  return (
+                                    <button key={val} onClick={() => setInputs(p => ({ ...p, maxProjectionAge: val }))}
+                                      style={{ padding: "10px 4px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: `1px solid ${active ? clr : "var(--border-strong)"}`, cursor: "pointer", background: active ? `${clr}22` : "var(--bg-input)", color: active ? clr : "var(--text-muted)", transition: "all .15s", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                                      <span style={{ fontSize: 15, fontWeight: 900 }}>{label}</span>
+                                      <span style={{ fontSize: 10 }}>{sub}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            {/* FRS Growth Rate */}
+                            <div>
+                              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 8px" }}>
+                                FRS / BHS Target Growth Rate
+                                <TooltipBox id="t-sc-rsg" text="Annual rate at which CPF raises the Retirement Sums. 3% = CPF Board historical average. 4–5% stress-tests accelerated policy tightening." />
+                              </p>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 }}>
+                                {[{ val: 2, label: "2%", sub: "easy", clr: "var(--clr-emerald)" },
+                                  { val: 3, label: "3%", sub: "base", clr: "var(--clr-blue)" },
+                                  { val: 4, label: "4%", sub: "stress", clr: "var(--clr-amber)" },
+                                  { val: 5, label: "5%", sub: "severe", clr: "var(--clr-red)" }].map(({ val, label, sub, clr }) => {
+                                  const active = (Number(inputs.retirementSumGrowth) || 3) === val;
+                                  return (
+                                    <button key={val} onClick={() => setInputs(p => ({ ...p, retirementSumGrowth: val }))}
+                                      style={{ padding: "10px 4px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? clr : "var(--border-strong)"}`, cursor: "pointer", background: active ? `${clr}22` : "var(--bg-input)", color: active ? clr : "var(--text-muted)", transition: "all .15s", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                                      <span style={{ fontSize: 14, fontWeight: 900 }}>{label}</span>
+                                      <span style={{ fontSize: 10 }}>{sub}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ── ITEM 4: Combined Shock control strip ─────────────────────── */}
+                        <div style={{ background: "var(--bg-muted)", border: `1px solid ${anyStressActive ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}`, borderRadius: 18, padding: 20 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                            <ShieldCheck style={{ width: 15, height: 15, color: "#ef4444", flexShrink: 0 }} />
+                            <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Combined Shock</h4>
+                            {anyStressActive && (
+                              <span style={{ fontSize: 11, fontWeight: 700, color: "#ef4444", background: "rgba(239,68,68,0.12)", borderRadius: 20, padding: "3px 10px", border: "1px solid rgba(239,68,68,0.3)" }}>
+                                {activeCount} stress{activeCount !== 1 ? "es" : ""} active
+                              </span>
+                            )}
+                            <button onClick={applyWorstCase}
+                              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: "1px solid rgba(239,68,68,0.5)", background: "rgba(239,68,68,0.10)", color: "#ef4444", cursor: "pointer" }}>
+                              ⚡ Apply Worst Case
+                            </button>
+                            {anyStressActive && (
+                              <button onClick={resetAllStresses}
+                                style={{ padding: "8px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
+                                Reset All
+                              </button>
+                            )}
+                          </div>
+                          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "10px 0 0", lineHeight: 1.6 }}>
+                            <strong>⚡ Worst Case:</strong> SORR (5yr, −15%) + Inflation 5% CPI + Property −2%/yr + CPF rates 1.5%/3%/3%. Toggle individual tests below.
+                          </p>
+                          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                            {[
+                              { label: "SORR",          active: showSorr,             toggle: () => setShowSorr(v => !v),                   color: "#ef4444" },
+                              { label: "Inflation",     active: showInflationStress,  toggle: () => setShowInflationStress(v => !v),         color: "var(--clr-amber)" },
+                              { label: "Property",      active: showPropertyStress,   toggle: () => setShowPropertyStress(v => !v),          color: "var(--clr-red)", disabled: (Number(debouncedInputs.propertyValue)||0) === 0 },
+                              { label: "CPF Rates",     active: showCpfRateStress,    toggle: () => setShowCpfRateStress(v => !v),           color: "var(--clr-purple)" },
+                              { label: "Healthcare",    active: showHealthcareStress, toggle: () => setShowHealthcareStress(v => !v),        color: "#f97316" },
+                            ].map(({ label, active, toggle, color, disabled }) => (
+                              <button key={label} onClick={!disabled ? toggle : undefined}
+                                title={disabled ? "Enter a property value in the sidebar to enable this test" : undefined}
+                                style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? color : "var(--border-strong)"}`, background: active ? `${color}18` : "var(--bg-input)", color: active ? color : disabled ? "var(--text-subtle)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, transition: "all .15s" }}>
+                                <span style={{ width: 7, height: 7, borderRadius: "50%", background: active ? color : "var(--border-strong)", flexShrink: 0 }} />
+                                {label} {active ? "ON" : "OFF"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* ── ITEM 3: Monte Carlo summary card ─────────────────────────── */}
+                        <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                            <Activity style={{ width: 15, height: 15, color: "var(--clr-violet)", flexShrink: 0 }} />
+                            <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Monte Carlo — Rate Uncertainty</h4>
+                            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>200 simulated CPF rate environments</span>
+                          </div>
+                          {!showMonteCarlo || !monteCarloData ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 16px", borderRadius: 12, background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.2)" }}>
+                              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
+                                Monte Carlo runs 200 projections with randomly varied CPF interest rates. The P10–P90 band shows the full range of plausible outcomes.
+                                Enable it in the <strong style={{ color: "var(--clr-violet)" }}>Growth tab</strong> to see the full chart.
+                              </p>
+                              <button onClick={() => { setActiveTab("accumulation"); setShowMonteCarlo(true); }}
+                                style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: "1px solid rgba(139,92,246,0.5)", background: "rgba(139,92,246,0.12)", color: "var(--clr-violet)", cursor: "pointer" }}>
+                                <Activity style={{ width: 13, height: 13 }} />
+                                Enable Monte Carlo in Growth tab →
+                              </button>
+                            </div>
+                          ) : (() => {
+                            const mcRowAtPA = monteCarloData.rows?.find(r => r.age === pa);
+                            const prob = monteCarloData.probSufficiency;
+                            const probColor = prob >= 80 ? "var(--clr-emerald)" : prob >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
+                            return (
+                              <>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, marginBottom: 14 }}>
+                                  {[
+                                    { label: `P10 (bad luck) at ${pa}`,  value: mcRowAtPA?.p10, color: "var(--clr-red)" },
+                                    { label: `P50 (median) at ${pa}`,    value: mcRowAtPA?.p50, color: "var(--clr-violet)" },
+                                    { label: `P90 (lucky) at ${pa}`,     value: mcRowAtPA?.p90, color: "var(--clr-emerald)" },
+                                  ].map(({ label, value, color }) => value != null && (
+                                    <div key={label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${color}44` }}>
+                                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px" }}>{label}</p>
+                                      <p style={{ fontSize: 14, fontWeight: 800, color, margin: 0 }}>{formatCurrency(value)}</p>
+                                    </div>
+                                  ))}
+                                  <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${probColor}44` }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px" }}>Prob. of Sufficiency</p>
+                                    <p style={{ fontSize: 22, fontWeight: 900, color: probColor, margin: 0, fontFamily: "monospace" }}>{prob}%</p>
+                                    <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>of 200 runs met FRS at {pa}</p>
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 8, background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.18)" }}>
+                                  <span style={{ fontSize: 12, color: "var(--clr-violet)", fontWeight: 700 }}>±{Number(inputs.mcVariancePct)||1}% rate variance</span>
+                                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>·</span>
+                                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>FRS target at {pa}: {formatCurrency(monteCarloData.frsAtPayout)}</span>
+                                  <button onClick={() => setActiveTab("accumulation")} style={{ marginLeft: "auto", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, border: "1px solid rgba(139,92,246,0.4)", background: "transparent", color: "var(--clr-violet)", cursor: "pointer" }}>
+                                    View full chart →
+                                  </button>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        {/* ── ITEM 5: CPF Rate Reduction ──────────────────────────────── */}
+                        <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showCpfRateStress ? 16 : 0 }}>
+                            <span style={{ fontSize: 15 }}>📉</span>
+                            <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>CPF Rate Reduction</h4>
+                            <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>Deterministic permanent rate override</span>
+                            <button onClick={() => setShowCpfRateStress(v => !v)}
+                              style={{ padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: `1px solid ${showCpfRateStress ? "rgba(139,92,246,0.5)" : "var(--border-strong)"}`, background: showCpfRateStress ? "rgba(139,92,246,0.10)" : "var(--bg-input)", color: showCpfRateStress ? "var(--clr-violet)" : "var(--text-muted)", cursor: "pointer" }}>
+                              {showCpfRateStress ? "Hide" : "Show CPF Rate Stress"}
+                            </button>
+                          </div>
+                          {showCpfRateStress && (
+                            <>
+                              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>
+                                Override CPF account interest rates with a permanent lower-rate scenario. Unlike Monte Carlo (random annual noise), this tests a structural rate reduction.
+                                The projection immediately updates — compare the chart against your base projection.
+                              </p>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+                                {[
+                                  { label: "OA Rate", key: "cpfOARateOverride", defaultRate: 2.5, stressRate: 1.5, color: "var(--clr-blue)" },
+                                  { label: "SA/RA Rate", key: "cpfSARateOverride", defaultRate: 4.0, stressRate: 3.0, color: "var(--clr-emerald)" },
+                                  { label: "MA Rate", key: "cpfMARateOverride", defaultRate: 4.0, stressRate: 3.0, color: "#f472b6" },
+                                ].map(({ label, key, defaultRate, stressRate, color }) => {
+                                  const cur = inputs[key] !== '' && inputs[key] != null ? Number(inputs[key]) : defaultRate;
+                                  const isOverridden = inputs[key] !== '' && inputs[key] != null && Number(inputs[key]) !== defaultRate;
+                                  return (
+                                    <div key={key} style={{ padding: "12px 14px", borderRadius: 12, background: "var(--bg-panel)", border: `1px solid ${isOverridden ? color : "var(--border-subtle)"}` }}>
+                                      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", margin: "0 0 8px", letterSpacing: "0.05em" }}>
+                                        {label}{isOverridden && <span style={{ marginLeft: 6, fontSize: 10, color, fontWeight: 900 }}>STRESSED</span>}
+                                      </p>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                        <input type="number" min={0} max={defaultRate} step={0.1}
+                                          value={inputs[key] !== '' && inputs[key] != null ? inputs[key] : defaultRate}
+                                          onChange={e => setInputs(p => ({ ...p, [key]: e.target.value }))}
+                                          style={{ width: 60, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 13, fontWeight: 700 }} />
+                                        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>%/yr</span>
+                                        <span style={{ fontSize: 12, color: "var(--text-subtle)", marginLeft: "auto" }}>default: {defaultRate}%</span>
+                                      </div>
+                                      <div style={{ display: "flex", gap: 6 }}>
+                                        <button onClick={() => setInputs(p => ({ ...p, [key]: stressRate }))}
+                                          style={{ flex: 1, padding: "5px 6px", borderRadius: 7, fontSize: 11, fontWeight: 700, border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.08)", color: "#ef4444", cursor: "pointer" }}>
+                                          {stressRate}% stress
+                                        </button>
+                                        <button onClick={() => setInputs(p => ({ ...p, [key]: '' }))}
+                                          style={{ flex: 1, padding: "5px 6px", borderRadius: 7, fontSize: 11, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
+                                          Reset
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <button onClick={() => setInputs(p => ({ ...p, cpfOARateOverride: 1.5, cpfSARateOverride: 3.0, cpfMARateOverride: 3.0 }))}
+                                style={{ padding: "8px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.08)", color: "#ef4444", cursor: "pointer", marginRight: 8 }}>
+                                ⚡ Apply Pessimistic (1.5%/3%/3%)
+                              </button>
+                              <button onClick={() => setInputs(p => ({ ...p, cpfOARateOverride: '', cpfSARateOverride: '', cpfMARateOverride: '' }))}
+                                style={{ padding: "8px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
+                                Reset to Default (2.5%/4%/4%)
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        {/* ── ITEM 7: Tier Shock (cross-reference, data from ReadinessDashboard) ── */}
+                        {tierShockData && (
+                          <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                              <span style={{ fontSize: 15 }}>⚡</span>
+                              <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Tier Shock Analysis</h4>
+                              <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>CPF LIFE payout if RA misses a tier at payout age</span>
+                              <button onClick={() => setActiveTab("summary")}
+                                style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
+                                Full analysis in Summary →
+                              </button>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
+                              {[
+                                { label: "ERS tier", value: tierShockData.ersMonthly, color: "var(--clr-emerald)" },
+                                { label: "FRS tier", value: tierShockData.frsMonthly, color: "var(--clr-blue)" },
+                                { label: "BRS tier", value: tierShockData.brsMonthly, color: "var(--clr-amber)" },
+                              ].filter(r => r.value).map(({ label, value, color }) => (
+                                <div key={label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${color}44` }}>
+                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+                                  <p style={{ fontSize: 14, fontWeight: 800, color, margin: 0 }}>{formatCurrency(value)}/mo</p>
+                                </div>
+                              ))}
+                              <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Projected tier</p>
+                                <p style={{ fontSize: 14, fontWeight: 800, color: tierShockData.currentTier === "ERS" ? "var(--clr-emerald)" : tierShockData.currentTier === "FRS" ? "var(--clr-blue)" : "var(--clr-amber)", margin: 0 }}>{tierShockData.currentTier}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── ITEM 8: Healthcare Cost Surge ────────────────────────────── */}
+                        <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showHealthcareStress ? 16 : 0 }}>
+                            <span style={{ fontSize: 15 }}>🏥</span>
+                            <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Healthcare Cost Surge</h4>
+                            <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>Long-term care cost above base medical inputs</span>
+                            <button onClick={() => setShowHealthcareStress(v => !v)}
+                              style={{ padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: `1px solid ${showHealthcareStress ? "rgba(249,115,22,0.5)" : "var(--border-strong)"}`, background: showHealthcareStress ? "rgba(249,115,22,0.10)" : "var(--bg-input)", color: showHealthcareStress ? "#f97316" : "var(--text-muted)", cursor: "pointer" }}>
+                              {showHealthcareStress ? "Hide" : "Show Healthcare Surge"}
+                            </button>
+                          </div>
+                          {showHealthcareStress && (() => {
+                            const baseMA  = displayAccumulation.find(r => r.age === hcStartAge)?.ma || 0;
+                            const basePriv = displayAccumulation.find(r => r.age === hcStartAge)?.privateAssets || 0;
+                            const annualHC = (hcMonthlyCost || 0) * 12;
+                            const durationYrs = Math.max(1, (hcEndAge || 85) - (hcStartAge || 75));
+                            const totalCost = annualHC * durationYrs;
+                            const maCanCover = Math.min(baseMA, totalCost);
+                            const privNeeded = Math.max(0, totalCost - maCanCover);
+                            const privRatio = basePriv > 0 ? Math.round(privNeeded / basePriv * 100) : null;
+                            return (
+                              <>
+                                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>
+                                  Models a sustained period of long-term care costs above your base medical inputs — e.g. home care nursing, assisted living, or dementia care.
+                                  Costs drawn from MA first, then private assets.
+                                </p>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+                                  {[
+                                    { label: "Start Age", val: hcStartAge, set: setHcStartAge, min: 60, max: 90 },
+                                    { label: "End Age",   val: hcEndAge,   set: setHcEndAge,   min: 61, max: 105 },
+                                    { label: "Monthly Cost ($)", val: hcMonthlyCost, set: setHcMonthlyCost, min: 500, max: 10000, step: 500 },
+                                  ].map(({ label, val, set, min, max, step = 1 }) => (
+                                    <div key={label}>
+                                      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", margin: "0 0 4px", letterSpacing: "0.05em" }}>{label}</p>
+                                      <input type="number" min={min} max={max} step={step} value={val}
+                                        onChange={e => set(Number(e.target.value))}
+                                        style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontWeight: 700 }} />
+                                    </div>
+                                  ))}
+                                </div>
+                                {/* Quick presets */}
+                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                                  {[
+                                    { label: "Home Care ($1.5k/mo, 78–88)", s: 78, e: 88, m: 1500 },
+                                    { label: "Nursing Home ($3k/mo, 80–90)", s: 80, e: 90, m: 3000 },
+                                    { label: "High-Dependency ($5k/mo, 82–88)", s: 82, e: 88, m: 5000 },
+                                  ].map(({ label, s, e, m }) => (
+                                    <button key={label} onClick={() => { setHcStartAge(s); setHcEndAge(e); setHcMonthlyCost(m); }}
+                                      style={{ padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
+                                      {label}
+                                    </button>
+                                  ))}
+                                </div>
+                                {/* Impact summary */}
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+                                  <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px" }}>Total surge cost</p>
+                                    <p style={{ fontSize: 14, fontWeight: 800, color: "#f97316", margin: 0 }}>{formatCurrency(totalCost)}</p>
+                                    <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "2px 0 0" }}>${(hcMonthlyCost||0).toLocaleString()}/mo × {durationYrs} yrs</p>
+                                  </div>
+                                  <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px" }}>MA can absorb</p>
+                                    <p style={{ fontSize: 14, fontWeight: 800, color: "#f472b6", margin: 0 }}>{formatCurrency(maCanCover)}</p>
+                                    <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "2px 0 0" }}>from MA balance at age {hcStartAge}</p>
+                                  </div>
+                                  <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${privNeeded > 0 ? "rgba(239,68,68,0.3)" : "var(--border-subtle)"}` }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px" }}>Private assets draw</p>
+                                    <p style={{ fontSize: 14, fontWeight: 800, color: privNeeded > 0 ? "#ef4444" : "var(--clr-emerald)", margin: 0 }}>{formatCurrency(privNeeded)}</p>
+                                    <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "2px 0 0" }}>
+                                      {privRatio !== null ? `${privRatio}% of private assets at age ${hcStartAge}` : "No private assets modelled"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        {/* ── SORR Test (moved from Income Roadmap) ────────────────────── */}
+                        <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showSorr ? 16 : 0 }}>
+                            <Activity style={{ width: 15, height: 15, color: "#ef4444", flexShrink: 0 }} />
+                            <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>SORR Stress Test</h4>
+                            <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>Sequence of Returns Risk — private assets only</span>
+                            <button onClick={() => setShowSorr(v => !v)}
+                              style={{ padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: `1px solid ${showSorr ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showSorr ? "rgba(239,68,68,0.10)" : "var(--bg-input)", color: showSorr ? "#ef4444" : "var(--text-muted)", cursor: "pointer" }}>
+                              {showSorr ? "Hide SORR" : "Show SORR Analysis"}
+                            </button>
+                          </div>
+                          {showSorr && (() => {
+                            const privAtPA = accumulationByAge.get(pa)?.privateAssets || 0;
+                            if (privAtPA === 0) return (
+                              <div style={{ padding: "12px 16px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", fontSize: 13, color: "var(--text-muted)" }}>
+                                <strong>No private assets modelled.</strong> SORR applies to market-dependent assets only — CPF accounts earn guaranteed rates. Add private assets in the sidebar.
+                              </div>
+                            );
+                            return (
+                              <>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16, padding: "12px 16px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                  <div style={{ flex: 1, minWidth: 180 }}>
+                                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 6px" }}>
+                                      Crash Duration: <strong style={{ color: "var(--text-bright)" }}>{sorrCrashYears} yr{sorrCrashYears !== 1 ? "s" : ""}</strong>
+                                    </p>
+                                    <input type="range" min={1} max={10} step={1} value={sorrCrashYears} onChange={e => setSorrCrashYears(Number(e.target.value))} style={{ width: "100%", accentColor: "#ef4444" }} />
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 2 }}>
+                                      <span>1 yr</span><span>10 yrs</span>
+                                    </div>
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 180 }}>
+                                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 6px" }}>
+                                      Annual Return During Crash: <strong style={{ color: "#ef4444" }}>{sorrCrashReturn}%</strong>
+                                    </p>
+                                    <input type="range" min={-30} max={0} step={1} value={sorrCrashReturn} onChange={e => setSorrCrashReturn(Number(e.target.value))} style={{ width: "100%", accentColor: "#ef4444" }} />
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-subtle)", marginTop: 2 }}>
+                                      <span>−30%</span><span>0%</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                {sorrData?.hasData && (
+                                  <>
+                                    <div style={{ height: 220, marginBottom: 12 }}>
+                                      <ResponsiveContainer width="100%" height="100%">
+                                        <ComposedChart data={sorrData.rows} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+                                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                                          <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickLine={false} axisLine={false} />
+                                          <YAxis tickFormatter={v => v >= 1e6 ? `$${(v/1e6).toFixed(1)}M` : `$${(v/1e3).toFixed(0)}k`} tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickLine={false} axisLine={false} width={56} />
+                                          <Tooltip formatter={(v, name) => [`$${Math.round(v).toLocaleString()}`, name]} contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }} labelFormatter={l => `Age ${l}`} />
+                                          <Line type="monotone" dataKey="basePriv" stroke="var(--clr-emerald)" strokeWidth={2} dot={false} name="Baseline" />
+                                          <Line type="monotone" dataKey="sorrPriv" stroke="#ef4444" strokeWidth={2} strokeDasharray="6 3" dot={false} name="SORR Scenario" />
+                                          <Legend iconType="line" wrapperStyle={{ fontSize: 12 }} />
+                                        </ComposedChart>
+                                      </ResponsiveContainer>
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+                                      <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                        <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Asset depletion age</p>
+                                        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-emerald)", margin: "0 0 2px" }}>Baseline: {sorrData.baseDepletionAge ? `Age ${sorrData.baseDepletionAge}` : "Sustains to 95+"}</p>
+                                        <p style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", margin: 0 }}>SORR: {sorrData.sorrDepletionAge ? `Age ${sorrData.sorrDepletionAge}` : "Sustains to 95+"}</p>
+                                      </div>
+                                      <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(239,68,68,0.3)" }}>
+                                        <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Lifetime income at risk</p>
+                                        <p style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", margin: 0 }}>{formatCurrency(sorrData.lifetimeGap)}</p>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        {/* ── Inflation Stress (moved from Income Roadmap) ──────────────── */}
+                        <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showInflationStress ? 16 : 0 }}>
+                            <span style={{ fontSize: 15 }}>📉</span>
+                            <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Inflation Stress Test</h4>
+                            <button onClick={() => setShowInflationStress(v => !v)}
+                              style={{ padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: `1px solid ${showInflationStress ? "rgba(245,158,11,0.5)" : "var(--border-strong)"}`, background: showInflationStress ? "rgba(245,158,11,0.10)" : "var(--bg-input)", color: showInflationStress ? "var(--clr-amber)" : "var(--text-muted)", cursor: "pointer" }}>
+                              {showInflationStress ? "Hide Analysis" : "Show Inflation Stress"}
+                            </button>
+                          </div>
+                          {showInflationStress && (() => {
+                            const baseRate = Number(debouncedInputs.inflationRate) || 0;
+                            return (
+                              <>
+                                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>Shows how higher long-run CPI erodes the real purchasing power of your fixed nominal CPF LIFE payout.</p>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                                  <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Base CPI (sidebar)</p>
+                                    <p style={{ fontSize: 18, fontWeight: 800, color: "var(--clr-blue)", margin: 0 }}>{baseRate}%</p>
+                                  </div>
+                                  <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${showInflationStress ? "rgba(245,158,11,0.3)" : "var(--border-subtle)"}` }}>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Stress CPI: <strong style={{ color: "var(--clr-amber)" }}>{inflationStressRate}%</strong></p>
+                                    <input type="range" min={1} max={8} step={0.5} value={inflationStressRate} onChange={e => setInflationStressRate(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-amber)" }} />
+                                    <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 10, color: "var(--text-subtle)" }}>1%</span><span style={{ fontSize: 10, color: "var(--text-subtle)" }}>8%</span></div>
+                                  </div>
+                                </div>
+                                {inflationStressRate <= baseRate ? (
+                                  <p style={{ fontSize: 12, color: "var(--clr-amber)", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}>⚠ Stress CPI must exceed base CPI ({baseRate}%).</p>
+                                ) : !inflationStressData ? (
+                                  <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>Configure a CPF LIFE payout age to run this analysis.</p>
+                                ) : (
+                                  <>
+                                    <div style={{ height: 200, marginBottom: 14 }}>
+                                      <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={inflationStressData.rows} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                                          <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--chart-text)" }} />
+                                          <YAxis tickFormatter={v => `$${Math.round(v).toLocaleString()}`} tick={{ fontSize: 11, fill: "var(--chart-text)" }} width={72} />
+                                          <Tooltip formatter={(v, name) => [`$${Math.round(v).toLocaleString()}/mo`, name]} labelFormatter={l => `Age ${l}`} contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }} />
+                                          <Line type="monotone" dataKey="baseReal" stroke="var(--clr-blue)" strokeWidth={2} dot={false} name={`Base ${baseRate}%`} />
+                                          <Line type="monotone" dataKey="stressReal" stroke="var(--clr-amber)" strokeWidth={2} strokeDasharray="6 3" dot={false} name={`Stress ${inflationStressRate}%`} />
+                                          <Legend iconType="line" wrapperStyle={{ fontSize: 11 }} />
+                                        </LineChart>
+                                      </ResponsiveContainer>
+                                    </div>
+                                    <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(245,158,11,0.3)", display: "inline-block" }}>
+                                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Lifetime purchasing-power loss</p>
+                                      <p style={{ fontSize: 14, fontWeight: 800, color: "var(--clr-amber)", margin: 0 }}>{formatCurrency(inflationStressData.lifetimeLoss)}</p>
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        {/* ── Property Correction Stress (moved from Income Roadmap) ───── */}
+                        {(Number(debouncedInputs.propertyValue)||0) > 0 && (
+                          <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showPropertyStress ? 16 : 0 }}>
+                              <span style={{ fontSize: 15 }}>🏠</span>
+                              <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Property Correction Stress</h4>
+                              <button onClick={() => setShowPropertyStress(v => !v)}
+                                style={{ padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: `1px solid ${showPropertyStress ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showPropertyStress ? "rgba(239,68,68,0.10)" : "var(--bg-input)", color: showPropertyStress ? "var(--clr-red)" : "var(--text-muted)", cursor: "pointer" }}>
+                                {showPropertyStress ? "Hide Analysis" : "Show Property Stress"}
+                              </button>
+                            </div>
+                            {showPropertyStress && (() => {
+                              const baseGrowth = Number(debouncedInputs.propertyGrowthRate) || 0;
+                              return (
+                                <>
+                                  <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>Shows how your property value changes at a stressed growth rate vs your base assumption.</p>
+                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                                    <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Base growth (sidebar)</p>
+                                      <p style={{ fontSize: 18, fontWeight: 800, color: "var(--clr-blue)", margin: 0 }}>{baseGrowth}% p.a.</p>
+                                    </div>
+                                    <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${showPropertyStress ? "rgba(239,68,68,0.3)" : "var(--border-subtle)"}` }}>
+                                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Stress growth: <strong style={{ color: propertyStressGrowthRate < 0 ? "var(--clr-red)" : "var(--clr-green)" }}>{propertyStressGrowthRate}% p.a.</strong></p>
+                                      <input type="range" min={-3} max={3} step={0.5} value={propertyStressGrowthRate} onChange={e => setPropertyStressGrowthRate(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-red)" }} />
+                                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 10, color: "var(--clr-red)" }}>−3%</span><span style={{ fontSize: 10, color: "var(--clr-green)" }}>+3%</span></div>
+                                    </div>
+                                  </div>
+                                  {!propertyStressData ? (
+                                    <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>Enter a property value in the sidebar to run this analysis.</p>
+                                  ) : (
+                                    <>
+                                      <div style={{ height: 200, marginBottom: 14 }}>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <LineChart data={propertyStressData.rows} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                                            <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--chart-text)" }} />
+                                            <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: "var(--chart-text)" }} width={60} />
+                                            <Tooltip formatter={(v, name) => [`$${Math.round(v).toLocaleString()}`, name]} labelFormatter={l => `Age ${l}`} contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }} />
+                                            <Line type="monotone" dataKey="baseValue" stroke="var(--clr-blue)" strokeWidth={2} dot={false} name={`Base ${baseGrowth}%`} />
+                                            <Line type="monotone" dataKey="stressValue" stroke="var(--clr-red)" strokeWidth={2} strokeDasharray="6 3" dot={false} name={`Stress ${propertyStressGrowthRate}%`} />
+                                            <Legend iconType="line" wrapperStyle={{ fontSize: 11 }} />
+                                          </LineChart>
+                                        </ResponsiveContainer>
+                                      </div>
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+                                        <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Value at age {propertyStressData.pa}</p>
+                                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", margin: "0 0 2px" }}>Base: {formatCurrency(propertyStressData.baseValueAtPA)}</p>
+                                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: 0 }}>Stress: {formatCurrency(propertyStressData.stressValueAtPA)}</p>
+                                        </div>
+                                        <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(239,68,68,0.3)" }}>
+                                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Delta at age {propertyStressData.pa}</p>
+                                          <p style={{ fontSize: 14, fontWeight: 800, color: propertyStressData.delta >= 0 ? "var(--clr-red)" : "var(--clr-green)", margin: 0 }}>
+                                            {propertyStressData.delta >= 0 ? "−" : "+"}{formatCurrency(Math.abs(propertyStressData.delta))}
+                                          </p>
+                                          <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "2px 0 0" }}>{propertyStressData.deltaPct}% {propertyStressData.delta >= 0 ? "lower" : "higher"} than base</p>
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
+
+                      </div>
+                    );
+                  })()}
+
                 </div>
               );
             })()}
