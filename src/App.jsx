@@ -7788,18 +7788,6 @@ export default function App() {
     } catch { return null; }
   }, [debouncedInputs]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const goalSimMaxReachableSpouse = useMemo(() => {
-    const spa = Number(debouncedSpouseInputs.payoutAge) || 65;
-    if (!householdEnabled || spouseProjection.length === 0) return null;
-    if (debouncedSpouseInputs.cpfScheme === 'rss') return null;
-    try {
-      const rows = runProjectionEngine({ ...debouncedSpouseInputs, vcSaTopup: GS_RSTU_CAP, vc3aCash: GS_VC3A_CAP });
-      const row  = rows.find(r => r.age === spa) || {};
-      const total = (row.oa||0) + (row.sa||0) + (row.ra||0) + (row.ma||0);
-      return total > 0 ? total : null;
-    } catch { return null; }
-  }, [debouncedSpouseInputs, householdEnabled, spouseProjection.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Primary solver ────────────────────────────────────────────────────────
   const solveGoal = () => {
     const targetAmt = Number(inputs.goalTargetCPF) || 0;
@@ -9134,6 +9122,20 @@ export default function App() {
   const spouseProjectionByAge = useMemo(
     () => new Map(spouseProjection.map(r => [r.age, r])),
     [spouseProjection]);
+
+  // Issue 4 fix: goalSimMaxReachableSpouse placed HERE (after spouseProjection declaration)
+  // to avoid TDZ. The deps array accesses spouseProjection which must exist at render time.
+  const goalSimMaxReachableSpouse = useMemo(() => {
+    const spa = Number(debouncedSpouseInputs.payoutAge) || 65;
+    if (!householdEnabled || spouseProjection.length === 0) return null;
+    if (debouncedSpouseInputs.cpfScheme === 'rss') return null;
+    try {
+      const rows = runProjectionEngine({ ...debouncedSpouseInputs, vcSaTopup: GS_RSTU_CAP, vc3aCash: GS_VC3A_CAP });
+      const row  = rows.find(r => r.age === spa) || {};
+      const total = (row.oa||0) + (row.sa||0) + (row.ra||0) + (row.ma||0);
+      return total > 0 ? total : null;
+    } catch { return null; }
+  }, [debouncedSpouseInputs, householdEnabled, spouseProjection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // II-5 fix: deflated spouse accumulation Map — mirrors the displayAccumulation/accumulationByAge
   // pattern for the primary member. Used by the Household tab KPI "Combined CPF at Later Payout Age"
