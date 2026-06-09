@@ -1331,6 +1331,33 @@ function makeComputeGF(startAge, salaryGrowth, salaryPhaseAge, salaryGrowthRate2
   };
 }
 
+// ─── B1: Bala's Curve / SLA Leasehold Value Table ────────────────────────────
+// Leasehold property value as a % of equivalent freehold value, indexed by
+// remaining lease years.  Official SLA anchor points (Singapore Land Authority):
+//   0yr=0%  1yr=2%  15yr=40%  30yr=60%  60yr=80%  90yr=92%  99yr=96%
+// Intermediate values use piecewise-linear interpolation between these anchors.
+// Reference: Singapore Land Authority Leasehold Table (Bala's Curve, 2000).
+const BALA_TABLE = (() => {
+  const anchors = [[0, 0], [1, 2], [15, 40], [30, 60], [60, 80], [90, 92], [99, 96]];
+  const tbl = new Array(100).fill(0);
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const [y0, v0] = anchors[i];
+    const [y1, v1] = anchors[i + 1];
+    for (let y = y0; y <= y1; y++) {
+      // Round to 1 decimal to match SLA table precision
+      tbl[y] = Math.round((v0 + ((y - y0) / (y1 - y0)) * (v1 - v0)) * 10) / 10;
+    }
+  }
+  return tbl; // tbl[n] = % of freehold value for n remaining lease years
+})();
+
+// Returns Bala ratio (0–1) for given remaining lease years.
+// Examples: balaRatio(99)=0.96  balaRatio(60)=0.80  balaRatio(30)=0.60  balaRatio(15)=0.40
+const balaRatio = (remainingYears) => {
+  const y = Math.max(0, Math.min(99, Math.round(remainingYears)));
+  return BALA_TABLE[y] / 100;
+};
+
 function runRSSEngine(inputs, {
   overrideContribStop,
   overrideVcSA,
@@ -1444,8 +1471,15 @@ function runRSSEngine(inputs, {
   const medInfl     = (Number(inputs.medicalInflationRate) || 0) / 100;
   const isSEP       = inputs.isSelfEmployed === true;
   const isLeasehold = inputs.propertyLeasehold === true;
-  const totalLease  = Math.max(30, Number(inputs.propertyLeaseYears) || 99);
+  const totalLease  = Math.max(1, Number(inputs.propertyLeaseYears) || 99);
   const propGrowth  = (Number(inputs.propertyGrowthRate) || 0) / 100;
+  // B1: Bala Curve — freehold-equivalent value anchored at projection start.
+  // For leasehold: divide current value by balaRatio(remaining lease) to derive
+  // the freehold equivalent; market growth is then applied to THAT base, and
+  // the Bala ratio for the current remaining lease is applied each year.
+  // For freehold: freeholdEquiv === propertyValue (ratio always 1.0).
+  const _initBalaR   = isLeasehold ? balaRatio(totalLease) : 1;
+  const freeholdEquiv = (_initBalaR > 0) ? (Number(inputs.propertyValue) || 0) / _initBalaR : (Number(inputs.propertyValue) || 0);
   const usePropertyPledge = inputs.usePropertyPledge === true;
   let privateAssets    = Number(inputs.currentPrivateAssets) || 0;
   const privateGrowth  = overridePrivGrowthRate !== undefined ? overridePrivGrowthRate / 100 : (Number(inputs.privateAssetGrowthRate) || 0) / 100;
@@ -2057,18 +2091,18 @@ function runRSSEngine(inputs, {
       privateAssets += rentalAnnual; yearInflow += rentalAnnual; totalInjected += rentalAnnual;
     }
 
-    // Property growth
+    // B1: Property value — Bala Curve model for leasehold; pure market growth for freehold.
+    // Leasehold: propValue = freeholdEquiv × (1+growth)^yrsSinceStart × balaRatio(leaseRemaining)
+    // Freehold:  propValue = propValue × (1 + growth)  [unchanged from prior model]
     if (!refundApplied) {
       leaseRemaining = Math.max(0, totalLease - yrSince);
-      let effPropGrowth = propGrowth;
-      if (isLeasehold && leaseRemaining < 60) effPropGrowth = propGrowth + Math.max(-0.05, -0.002 * (60 - leaseRemaining) / 10);
-      currentPropValue = Math.max(0, currentPropValue * (1 + effPropGrowth));
+      if (isLeasehold) {
+        const mktFactor = Math.pow(1 + propGrowth, yrSince + 1);
+        currentPropValue = Math.max(0, Math.round(freeholdEquiv * mktFactor * balaRatio(leaseRemaining)));
+      } else {
+        currentPropValue = Math.max(0, Math.round(currentPropValue * (1 + propGrowth)));
+      }
     }
-
-    // PR tenure advancement
-    if (isPR && currentPrYear < 3) currentPrYear++;
-
-    // Life events
     for (const ev of leMedicalEvents) {
       const amt = Number(ev.magnitude) || 0; if (amt <= 0) continue;
       const src = ev.drawSource || 'oa_then_private'; let actualOut = 0;
@@ -2351,8 +2385,11 @@ function runProjectionEngine(inputs, {
   const medInfl = (Number(inputs.medicalInflationRate) || 0) / 100;
   const isSEP = inputs.isSelfEmployed === true;
   const isLeasehold = inputs.propertyLeasehold === true;
-  const totalLease = Math.max(30, Number(inputs.propertyLeaseYears) || 99);
+  const totalLease = Math.max(1, Number(inputs.propertyLeaseYears) || 99);
   const propGrowth = (Number(inputs.propertyGrowthRate) || 0) / 100;
+  // B1: Bala Curve — freehold-equivalent anchor (mirrors runRSSEngine logic above)
+  const _initBalaR2    = isLeasehold ? balaRatio(totalLease) : 1;
+  const freeholdEquiv2 = (_initBalaR2 > 0) ? (Number(inputs.propertyValue) || 0) / _initBalaR2 : (Number(inputs.propertyValue) || 0);
   const usePropertyPledge = inputs.usePropertyPledge === true;
 
   // Phase 2: Private Assets & Housing Downpayment
@@ -3371,16 +3408,17 @@ function runProjectionEngine(inputs, {
       privateAssets += rentalAnnual; yearInflow += rentalAnnual; totalInjected += rentalAnnual;
     }
 
-    // Property
-    // REM-3 fix: once the property has been sold (refundApplied=true, currentPropValue=0),
-    // stop recomputing leaseRemaining and effPropGrowth. The multiplication was a no-op
-    // (0 * X = 0) so there is no current output difference, but any future feature reading
-    // leaseRemaining post-sale (e.g. a lease-decay warning) would silently receive a stale value.
+    // B1: Property value — Bala Curve model (mirrors runRSSEngine). freeholdEquiv2 is
+    // the freehold-equivalent anchor computed at projection start (above).
+    // REM-3 fix retained: skip update after refundApplied to avoid stale leaseRemaining.
     if (!refundApplied) {
       leaseRemaining = Math.max(0, totalLease - yrSince);
-      let effPropGrowth = propGrowth;
-      if (isLeasehold && leaseRemaining < 60) effPropGrowth = propGrowth + Math.max(-0.05, -0.002 * (60 - leaseRemaining) / 10);
-      currentPropValue = Math.max(0, currentPropValue * (1 + effPropGrowth));
+      if (isLeasehold) {
+        const mktFactor = Math.pow(1 + propGrowth, yrSince + 1);
+        currentPropValue = Math.max(0, Math.round(freeholdEquiv2 * mktFactor * balaRatio(leaseRemaining)));
+      } else {
+        currentPropValue = Math.max(0, Math.round(currentPropValue * (1 + propGrowth)));
+      }
     }
 
     // PR tenure advancement: each projection year advances the PR rate tier by 1,
@@ -10527,13 +10565,21 @@ export default function App() {
     const stressGrowth = propertyStressGrowthRate / 100;
     const ca           = Number(debouncedInputs.currentAge) || 35;
     const pa           = payoutAge65;
+    // B1: For leasehold, apply Bala ratio to each year's value so stress chart
+    // reflects true lease decay on top of market growth assumptions.
+    const isLH      = debouncedInputs.propertyLeasehold === true;
+    const leaseSt   = Math.max(1, Number(debouncedInputs.propertyLeaseYears) || 99);
+    const initBala  = isLH ? balaRatio(leaseSt) : 1;
+    const fhEquiv   = (isLH && initBala > 0) ? propValue / initBala : propValue;
     const rows = [];
     for (let age = ca; age <= pa; age++) {
-      const yrs = age - ca;
+      const yrs          = age - ca;
+      const leaseNow     = Math.max(0, leaseSt - yrs);
+      const bala         = isLH ? balaRatio(leaseNow) : 1;
       rows.push({
         age,
-        baseValue:   Math.round(propValue * Math.pow(1 + baseGrowth,   yrs)),
-        stressValue: Math.round(propValue * Math.pow(1 + stressGrowth, yrs)),
+        baseValue:   Math.round(fhEquiv * Math.pow(1 + baseGrowth,   yrs) * bala),
+        stressValue: Math.round(fhEquiv * Math.pow(1 + stressGrowth, yrs) * bala),
       });
     }
     const baseValueAtPA   = rows[rows.length - 1]?.baseValue   || 0;
@@ -10542,7 +10588,8 @@ export default function App() {
     const deltaPct        = baseValueAtPA > 0 ? Math.round(Math.abs(delta / baseValueAtPA) * 100) : 0;
     return { rows, baseValueAtPA, stressValueAtPA, delta, deltaPct, propValue, pa, ca };
   }, [showPropertyStress, propertyStressGrowthRate, debouncedInputs.propertyGrowthRate,
-      debouncedInputs.propertyValue, debouncedInputs.currentAge, payoutAge65]);
+      debouncedInputs.propertyValue, debouncedInputs.currentAge, payoutAge65,
+      debouncedInputs.propertyLeasehold, debouncedInputs.propertyLeaseYears]);
 
   // OA Exhaustion Age: first projection age where OA balance falls to/below the bequest floor
   // during the drawdown window. null = OA sustains to age 95 (or drawdown not active).
@@ -17782,7 +17829,7 @@ ${milestoneSnapshotHtml}
                         <div>
                           <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                             Type
-                            <TooltipBox id="t-leasehold" text="Freehold: no lease decay. Leasehold: enter remaining lease years — property growth decelerates when lease falls below 60 years." />
+                            <TooltipBox id="t-leasehold" text="Freehold: no lease decay — property grows at your specified rate. Leasehold: enter remaining lease years and the Bala Curve (SLA official table) is applied. Property value = freehold equivalent × market growth × Bala ratio for remaining lease. Key reference points: 99yr=96%, 60yr=80%, 30yr=60%, 15yr=40% of equivalent freehold value. Decay accelerates sharply below 30 years." />
                           </div>
                           <button onClick={() => setInputs(p => ({ ...p, propertyLeasehold: !p.propertyLeasehold }))} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px solid var(--border-strong)", cursor: "pointer", background: inputs.propertyLeasehold ? "rgba(var(--clr-blue-rgb),0.15)" : "var(--bg-muted)", color: inputs.propertyLeasehold ? "var(--clr-blue)" : "var(--text-muted)" }}>
                             {inputs.propertyLeasehold ? "Leasehold" : "Freehold"}
@@ -17793,7 +17840,7 @@ ${milestoneSnapshotHtml}
                         <div>
                           <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Remaining Lease (years)</div>
                           <input type="text" inputMode="decimal" name="propertyLeaseYears" value={inputs.propertyLeaseYears} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} className={fieldChanged("propertyLeaseYears") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Growth decelerates when lease &lt; 60 yrs</p>
+                          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Bala Curve applied · decay accelerates below 30 yrs</p>
                         </div>
                       )}
                       {/* Property Goal — optional target value for Summary card progress bar */}
