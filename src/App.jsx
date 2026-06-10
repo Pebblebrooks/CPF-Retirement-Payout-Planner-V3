@@ -16711,17 +16711,18 @@ ${milestoneSnapshotHtml}
                   {/* Monthly living expenses */}
                   <label style={{ display: "block" }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Monthly living expenses</span>
-                    <input type="number" min={0} max={20000} step={100}
-                      name="budgetLivingExpenses" value={inputs.budgetLivingExpenses}
-                      onChange={handleChange} onBlur={handleBlur}
-                      style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontWeight: 700 }} />
+                    <input type="text" inputMode="decimal"
+                      name="budgetLivingExpenses" value={getDisplayValue("budgetLivingExpenses", inputs.budgetLivingExpenses)}
+                      onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                      onFocus={(e) => { setFocusedField("budgetLivingExpenses"); e.target.select(); }}
+                      style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>Rent/mortgage (cash), food, transport, dependants — monthly</span>
                   </label>
 
                   {/* Marginal tax rate */}
                   <label style={{ display: "block" }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Marginal income tax rate</span>
-                    <select name="budgetTaxRate" value={inputs.budgetTaxRate} onChange={handleChange}
+                    <select name="budgetTaxRate" value={inputs.budgetTaxRate} onChange={handleInputChange}
                       style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontWeight: 700 }}>
                       {[0, 3.5, 7, 11.5, 15, 18, 22].map(r => (
                         <option key={r} value={r}>{r === 0 ? "0% (no tax / exempt)" : `${r}%`}</option>
