@@ -20524,7 +20524,7 @@ ${milestoneSnapshotHtml}
                               ...(!_isRSSForTransfer ? [{ label: "Payout age", unit: "yrs", min: 65, max: 70, step: 1, val: effPA, set: setWhatIfPayoutAge, base: Number(debouncedInputs.payoutAge)||65, fmt: v=>`${v}` }] : []),
                               { label: "Annual SA/RA top-up (RSTU)", unit: "$", min: 0, max: 37740, step: 100, val: effST, set: setWhatIfSaTopup, base: Number(debouncedInputs.vcSaTopup)||0, fmt: formatCurrency },
                               { label: "Annual housing outflow", unit: "$", min: 0, max: 30000, step: 100, val: effH, set: setWhatIfHousing, base: Number(debouncedInputs.housingOutflow)||0, fmt: formatCurrency },
-                              { label: "Salary bump", unit: "$", min: 0, max: 5000, step: 100, val: effSB, set: setWhatIfSalaryBump, base: 0, fmt: v=>v>0?`+${formatCurrency(v)}/mo`:"No change" },
+                              { label: "Salary bump", unit: "%", min: 0, max: 50, step: 1, val: effSB, set: setWhatIfSalaryBump, base: 0, fmt: v=>v>0?`+${v}%`:"No change" },
                               { label: "Contribution stop age", unit: "yrs", min: Number(debouncedInputs.currentAge)||35, max: 75, step: 1, val: effCS, set: setWhatIfContribStop, base: Number(debouncedInputs.contributionStopAge)||65, fmt: v=>`${v}` },
                               { label: "Monthly OA drawdown", unit: "$", min: 0, max: 5000, step: 50, val: effOAD, set: setWhatIfOaDrawdown, base: Number(debouncedInputs.oaDrawdownMonthly)||0, fmt: v=>v>0?`${formatCurrency(v)}/mo`:"Off" },
                               { label: "Annual SRS contribution", unit: "$", min: 0, max: 15300, step: 100, val: effSRS, set: setWhatIfSrsContrib, base: Number(debouncedInputs.srsAnnualContribution)||0, fmt: formatCurrency },
@@ -23806,7 +23806,7 @@ ${milestoneSnapshotHtml}
                               <li><strong>Payout Age</strong> (65–70): Each year deferred adds approximately +7% to CPF LIFE monthly payouts.</li>
                               <li><strong>Annual SA/RA Top-up (RSTU)</strong>: Extra voluntary top-up — shows how consistent annual top-ups compound over time.</li>
                               <li><strong>Annual Housing Outflow</strong>: Reduce or increase to model mortgage overpayments or downsizing.</li>
-                              <li><strong>One-time Salary Increase</strong>: A one-off salary bump applied from the current age — raises mandatory contribution projections.</li>
+                              <li><strong>Salary Bump (%)</strong>: A permanent percentage increase applied on top of your current salary from the current age (e.g. +20% = employer contributions computed on 1.2× your current OW/AW). Raises mandatory CPF contributions accordingly — capped at the prevailing Annual Limit and OW Ceiling.</li>
                               <li><strong>Contribution Stop Age</strong>: How long you keep contributing — directly controls the accumulation runway.</li>
                               <li><strong>Monthly OA Drawdown</strong>: Draw from OA after CPF LIFE starts — higher draw reduces OA but raises monthly cash income.</li>
                               <li><strong>Annual SRS Contribution</strong>: Additional tax-deferred savings — modelled separately from CPF balances.</li>
