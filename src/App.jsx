@@ -4949,6 +4949,8 @@ function ReadinessTab({
   monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
   // Q2: wizard completion flag — gates placeholder states on KPI tiles
   wizardCompleted,
+  // SRS CTA: opens + scrolls to Private Assets section in the sidebar
+  onSrsCtaClick,
 }) {
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
@@ -5915,9 +5917,12 @@ function ReadinessTab({
       {/* ── ROW 5: Action priority queue (full-width) — Phase 3 ── */}
       {actionItems.length > 0 && (
         <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <p style={labelStyle}>Action priority queue</p>
-            <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <p style={labelStyle}>Action priority queue</p>
+              <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "2px 0 0" }}>+pts = estimated improvement to your Readiness Score (0–100)</p>
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-subtle)", whiteSpace: "nowrap", marginTop: 2 }}>
               {actionItems.length} action{actionItems.length !== 1 ? "s" : ""} · highest impact first
             </span>
           </div>
@@ -5944,7 +5949,14 @@ function ReadinessTab({
                   <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.desc}</div>
                 </div>
                 <button
-                  onClick={() => { setActiveTab(a.tab); if (a.openSidebar) setSidebarOpen(true); }}
+                  onClick={() => {
+                    if (a.id === "srs" && onSrsCtaClick) {
+                      onSrsCtaClick();
+                    } else {
+                      setActiveTab(a.tab);
+                      if (a.openSidebar) setSidebarOpen(true);
+                    }
+                  }}
                   style={{ flexShrink: 0, padding: "5px 12px", borderRadius: 7, cursor: "pointer",
                     background: a.urgent ? "rgba(245,158,11,0.14)" : "rgba(59,130,246,0.14)",
                     border: `1px solid ${a.urgent ? "rgba(245,158,11,0.4)" : "rgba(59,130,246,0.4)"}`,
@@ -5984,6 +5996,7 @@ function findScrollContainer(el) {
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
+  const privateAssetsRef = useRef(null); // scroll target for "SRS panel ↗" Readiness action CTA
   const kpiHeaderRef     = useRef(null); // measures cpf-tabs-kpi-header height → --kpi-header-h
   const strategySubnavRef = useRef(null); // measures strategy-subnav height → --strategy-subnav-h
   const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
@@ -15035,7 +15048,7 @@ ${milestoneSnapshotHtml}
       <div className="cpf-mobile-tabstrip-spacer" style={{ display: "none" }} />
       {isVcOverLimit && (
         <div style={{ background: "rgba(234,88,12,0.2)", borderBottom: "1px solid rgba(234,88,12,0.5)", padding: "8px 20px", textAlign: "center", color: "#fdba74", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <AlertTriangle style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />VC Exceeds Available Limit ({formatCurrency(maxAllowableVC)})
+          <AlertTriangle style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />VC3A Capped to {formatCurrency(maxAllowableVC)}/yr — Projection Already Applies Limit
         </div>
       )}
 
@@ -16640,7 +16653,7 @@ ${milestoneSnapshotHtml}
                   </div>
                 )}
                 {isVcOverLimit && <div style={{ background: "rgba(249,115,22,0.15)", color: "#fdba74", fontSize: 12, fontWeight: 700, padding: 10, borderRadius: 8, marginBottom: 10, display: "flex", gap: 6 }}>
-                  <AlertTriangle style={{ width: 12, height: 12, flexShrink: 0, marginTop: 1 }} />VC3A exceeds available limit ({formatCurrency(maxAllowableVC)}/yr). Contributions will be scaled down.
+                  <AlertTriangle style={{ width: 12, height: 12, flexShrink: 0, marginTop: 1 }} />VC3A capped to {formatCurrency(maxAllowableVC)}/yr in projection (Annual Limit after mandatory contributions). Projection is already correct — no input change required.
                 </div>}
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -18319,7 +18332,7 @@ ${milestoneSnapshotHtml}
             {showAdvanced && (
             <>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
+            <div ref={privateAssetsRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader id="privateAssets" label="Private Assets" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & contributions" />
               {openSections.has("privateAssets") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -18900,6 +18913,12 @@ ${milestoneSnapshotHtml}
                 monteCarloData={monteCarloData}
                 effectiveOaDrawMonthly={effectiveOaDrawMonthly}
                 effectiveOaDrawStartAge={effectiveOaDrawStartAge}
+                onSrsCtaClick={() => {
+                  setActiveTab("summary");
+                  setSidebarOpen(true);
+                  setOpenSections(prev => new Set([...prev, "privateAssets"]));
+                  setTimeout(() => privateAssetsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+                }}
                 wizardCompleted={(() => { try { return !!localStorage.getItem('cpf_planner_setup_done'); } catch { return true; } })()}
               />
             )}
@@ -25866,36 +25885,103 @@ ${milestoneSnapshotHtml}
                           )}
                         </div>
 
-                        {/* ── ITEM 7: Tier Shock (cross-reference, data from ReadinessDashboard) ── */}
-                        {tierShockData && (
-                          <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                              <span style={{ fontSize: 15 }}>⚡</span>
-                              <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Tier Shock Analysis</h4>
-                              <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>CPF LIFE payout if RA misses a tier at payout age</span>
-                              <button onClick={() => setActiveTab("summary")}
-                                style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
-                                Full analysis in Summary →
-                              </button>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
-                              {[
-                                { label: "ERS tier", value: tierShockData.ersMonthly, color: "var(--clr-emerald)" },
-                                { label: "FRS tier", value: tierShockData.frsMonthly, color: "var(--clr-blue)" },
-                                { label: "BRS tier", value: tierShockData.brsMonthly, color: "var(--clr-amber)" },
-                              ].filter(r => r.value).map(({ label, value, color }) => (
-                                <div key={label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${color}44` }}>
-                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
-                                  <p style={{ fontSize: 14, fontWeight: 800, color, margin: 0 }}>{formatCurrency(value)}/mo</p>
-                                </div>
-                              ))}
-                              <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Projected tier</p>
-                                <p style={{ fontSize: 14, fontWeight: 800, color: tierShockData.currentTier === "ERS" ? "var(--clr-emerald)" : tierShockData.currentTier === "FRS" ? "var(--clr-blue)" : "var(--clr-amber)", margin: 0 }}>{tierShockData.currentTier}</p>
+                        {/* ── ITEM 7: Tier Shock — full inline analysis (mirrors Readiness tab) ── */}
+                        {tierShockData && (() => {
+                          const _pa  = payoutAge65;
+                          const _ra  = raAtPayout;
+                          const _le  = (debouncedInputs.isMale !== false) ? 85 : 88;
+                          const tierColor = (t) =>
+                            t === "ERS" ? "var(--clr-emerald)" : t === "FRS" ? "var(--clr-blue)" : t === "BRS" ? "var(--clr-amber)" : "var(--clr-red)";
+                          const tierBg = (t) =>
+                            t === "ERS" ? "rgba(16,185,129,0.12)" : t === "FRS" ? "rgba(59,130,246,0.12)" : t === "BRS" ? "rgba(245,158,11,0.12)" : "rgba(239,68,68,0.12)";
+                          return (
+                            <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                              {/* Header */}
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                                <span style={{ fontSize: 15 }}>⚡</span>
+                                <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Tier Shock Analysis</h4>
+                                <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                  background: tierBg(tierShockData.currentTier),
+                                  color: tierColor(tierShockData.currentTier) }}>
+                                  Projected: {tierShockData.currentTier} tier
+                                </span>
                               </div>
+
+                              {/* Tier ladder — progress bars for BRS / FRS / ERS vs projected RA */}
+                              <div style={{ marginBottom: 16 }}>
+                                {[
+                                  { label: "ERS", value: tierShockData.projERS, monthly: tierShockData.ersMonthly, color: "var(--clr-emerald)" },
+                                  { label: "FRS", value: tierShockData.projFRS, monthly: tierShockData.frsMonthly, color: "var(--clr-blue)" },
+                                  { label: "BRS", value: tierShockData.projBRS, monthly: tierShockData.brsMonthly, color: "var(--clr-amber)" },
+                                ].map(({ label, value, monthly, color }) => {
+                                  const pct    = Math.min(100, Math.round((_ra / value) * 100));
+                                  const reached = _ra >= value;
+                                  return (
+                                    <div key={label} style={{ marginBottom: 8 }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: reached ? color : "var(--text-subtle)" }}>
+                                          {reached ? "✓ " : ""}{label} — {formatCurrency(value)}
+                                        </span>
+                                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                                          Standard: <strong style={{ color: reached ? color : "var(--text-subtle)" }}>{formatCurrency(monthly)}/mo</strong>
+                                        </span>
+                                      </div>
+                                      <div style={{ height: 6, borderRadius: 99, background: "var(--bg-input)", overflow: "hidden" }}>
+                                        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: reached ? color : "rgba(100,100,120,0.4)", transition: "width 0.4s" }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                {/* RA marker + buffer */}
+                                <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-muted)" }}>
+                                  Your projected RA at age {_pa}:{" "}
+                                  <strong style={{ color: "var(--text-bright)" }}>{formatCurrency(_ra)}</strong>
+                                  {tierShockData.raBuf > 0 && tierShockData.tierFloor > 0 && (
+                                    <span style={{ marginLeft: 8, color: "var(--clr-green)", fontWeight: 600 }}>
+                                      +{formatCurrency(tierShockData.raBuf)} above {tierShockData.currentTier} floor
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Tier-drop consequence — only when a lower tier exists */}
+                              {tierShockData.lowerTierName && tierShockData.monthlyDelta > 0 && (
+                                <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: "0 0 6px" }}>
+                                    If RA drops to {tierShockData.lowerTierName} tier at age {_pa}:
+                                  </p>
+                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                                    {[
+                                      { label: "Current payout",   value: `${formatCurrency(tierShockData.currentMonthly)}/mo`, color: "var(--clr-green)" },
+                                      { label: "Tier-drop payout", value: `${formatCurrency(tierShockData.lowerMonthly)}/mo`,   color: "var(--clr-red)"   },
+                                      { label: "Monthly shortfall",value: `−${formatCurrency(tierShockData.monthlyDelta)}/mo (−${tierShockData.deltaPct}%)`, color: "var(--clr-red)" },
+                                    ].map(({ label, value, color }) => (
+                                      <div key={label} style={{ textAlign: "center" }}>
+                                        <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 3px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+                                        <p style={{ fontSize: 13, fontWeight: 800, color, margin: 0 }}>{value}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "8px 0 0" }}>
+                                    Lifetime impact (to age {_le}): {formatCurrency(tierShockData.monthlyDelta * 12 * Math.max(0, _le - _pa))} less in total CPF LIFE payouts
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Below BRS warning */}
+                              {tierShockData.currentTier === "Below BRS" && (
+                                <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: "0 0 4px" }}>
+                                    Projected RA is below BRS — CPF LIFE auto-enrolment minimum not met
+                                  </p>
+                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+                                    Gap to BRS: {formatCurrency(Math.max(0, tierShockData.projBRS - _ra))} · consider topping up SA/RA via RSTU or VC3A
+                                  </p>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* ── ITEM 8: Healthcare Cost Surge ────────────────────────────── */}
                         <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
