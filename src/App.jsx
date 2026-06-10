@@ -4949,8 +4949,6 @@ function ReadinessTab({
   monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
   // Q2: wizard completion flag — gates placeholder states on KPI tiles
   wizardCompleted,
-  // SRS CTA: opens + scrolls to Private Assets section in the sidebar
-  onSrsCtaClick,
 }) {
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
@@ -5917,12 +5915,9 @@ function ReadinessTab({
       {/* ── ROW 5: Action priority queue (full-width) — Phase 3 ── */}
       {actionItems.length > 0 && (
         <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-            <div>
-              <p style={labelStyle}>Action priority queue</p>
-              <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "2px 0 0" }}>+pts = estimated improvement to your Readiness Score (0–100)</p>
-            </div>
-            <span style={{ fontSize: 11, color: "var(--text-subtle)", whiteSpace: "nowrap", marginTop: 2 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <p style={labelStyle}>Action priority queue</p>
+            <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>
               {actionItems.length} action{actionItems.length !== 1 ? "s" : ""} · highest impact first
             </span>
           </div>
@@ -5949,14 +5944,7 @@ function ReadinessTab({
                   <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.desc}</div>
                 </div>
                 <button
-                  onClick={() => {
-                    if (a.id === "srs" && onSrsCtaClick) {
-                      onSrsCtaClick();
-                    } else {
-                      setActiveTab(a.tab);
-                      if (a.openSidebar) setSidebarOpen(true);
-                    }
-                  }}
+                  onClick={() => { setActiveTab(a.tab); if (a.openSidebar) setSidebarOpen(true); }}
                   style={{ flexShrink: 0, padding: "5px 12px", borderRadius: 7, cursor: "pointer",
                     background: a.urgent ? "rgba(245,158,11,0.14)" : "rgba(59,130,246,0.14)",
                     border: `1px solid ${a.urgent ? "rgba(245,158,11,0.4)" : "rgba(59,130,246,0.4)"}`,
@@ -5996,7 +5984,6 @@ function findScrollContainer(el) {
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
-  const privateAssetsRef = useRef(null); // scroll target for "SRS panel ↗" Readiness action CTA
   const kpiHeaderRef     = useRef(null); // measures cpf-tabs-kpi-header height → --kpi-header-h
   const strategySubnavRef = useRef(null); // measures strategy-subnav height → --strategy-subnav-h
   const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
@@ -6143,7 +6130,11 @@ export default function App() {
     try { return !!localStorage.getItem('cpf_planner_wizard_tip_done'); }
     catch { return true; }
   });
-  const [gapAlertDismissed, setGapAlertDismissed] = useState(false);
+  const [gapAlertDismissed,     setGapAlertDismissed]     = useState(false);
+  // Strategy tab gap alert has its own dismiss state so Summary and Strategy
+  // dismissals are fully independent. Resets automatically when the gap size
+  // changes by >= $1,000 (same bucketing used for the Summary alert key).
+  const [gapAlertStratDismissed, setGapAlertStratDismissed] = useState(false);
   // guideView: sub-tab within the merged Docs tab. 'quickstart' shows Welcome onboarding cards;
   // 'reference' shows the full reference manual with sticky anchor nav.
   // Defaults to 'reference' for returning users (setup done) and 'quickstart' for first-timers.
@@ -6484,27 +6475,27 @@ export default function App() {
     const ma_val = Number(inp.milestoneAge) || 0;
     if (ma_val !== 0) {
       if (ma_val <= ca) errs.milestoneAge = "Milestone age must be greater than current age";
-      else if (ma_val > 95) errs.milestoneAge = "Milestone age must be ≤ 95";
+      else if (ma_val > maxPAv) errs.milestoneAge = `Milestone age must be ≤ ${maxPAv}`;
     }
     const ma2_val = Number(inp.milestoneAge2) || 0;
     if (ma2_val !== 0) {
       if (ma2_val <= ca) errs.milestoneAge2 = "Milestone age must be greater than current age";
-      else if (ma2_val > 95) errs.milestoneAge2 = "Milestone age must be ≤ 95";
+      else if (ma2_val > maxPAv) errs.milestoneAge2 = `Milestone age must be ≤ ${maxPAv}`;
     }
     const ma3_val = Number(inp.milestoneAge3) || 0;
     if (ma3_val !== 0) {
       if (ma3_val <= ca) errs.milestoneAge3 = "Milestone age must be greater than current age";
-      else if (ma3_val > 95) errs.milestoneAge3 = "Milestone age must be ≤ 95";
+      else if (ma3_val > maxPAv) errs.milestoneAge3 = `Milestone age must be ≤ ${maxPAv}`;
     }
     const ma4_val = Number(inp.milestoneAge4) || 0;
     if (ma4_val !== 0) {
       if (ma4_val <= ca) errs.milestoneAge4 = "Milestone age must be greater than current age";
-      else if (ma4_val > 95) errs.milestoneAge4 = "Milestone age must be ≤ 95";
+      else if (ma4_val > maxPAv) errs.milestoneAge4 = `Milestone age must be ≤ ${maxPAv}`;
     }
     const ma5_val = Number(inp.milestoneAge5) || 0;
     if (ma5_val !== 0) {
       if (ma5_val <= ca) errs.milestoneAge5 = "Milestone age must be greater than current age";
-      else if (ma5_val > 95) errs.milestoneAge5 = "Milestone age must be ≤ 95";
+      else if (ma5_val > maxPAv) errs.milestoneAge5 = `Milestone age must be ≤ ${maxPAv}`;
     }
     // BUG-6 fix: cross-field duplicate check — flag any milestone that repeats another
     {
@@ -6583,7 +6574,7 @@ export default function App() {
       const pwa       = Number(inp.pledgeWithdrawalAge) || 55;
       const caNow_pwa = Number(inp.currentAge) || 35;
       if (pwa < 55) errs.pledgeWithdrawalAge = "Min age 55";
-      else if (pwa > 95) errs.pledgeWithdrawalAge = "Max age 95";
+      else if (pwa > maxPAv) errs.pledgeWithdrawalAge = `Max age ${maxPAv}`;
       else if (pwa < caNow_pwa) errs.pledgeWithdrawalAge = `Age ${pwa} is before your current age (${caNow_pwa}) — the engine treats this as already applied; no RA deduction will occur in the projection.`;
     }
     // CPF balances: 0 – $5,000,000
@@ -6659,7 +6650,7 @@ export default function App() {
       if (isNaN(sa) || sa < ca || sa > maxPAv) evErrs.startAge = `Must be ${ca}–${maxPAv}`;
       if (!isPoint) {
         if (isNaN(ea) || ea < sa) evErrs.endAge = "Must be ≥ start age";
-        if (ea > 95) evErrs.endAge = "Must be ≤ 95";
+        if (ea > maxPAv) evErrs.endAge = `Must be ≤ ${maxPAv}`;
       }
       // NEW-1 fix: only require magnitude > 0 for event types that consume it.
       // retrenchment / career_break / early_retirement drive behaviour through type flags
@@ -6865,13 +6856,13 @@ export default function App() {
       }
     }
     // Contrib stop and housing stop age bounds
-    if (cs > 95) errs.contributionStopAge = "Must be ≤ 95";
-    if (hs > 95) errs.housingStopAge = "Must be ≤ 95";
+    if (cs > maxPAv) errs.contributionStopAge = `Must be ≤ ${maxPAv}`;
+    if (hs > maxPAv) errs.housingStopAge = `Must be ≤ ${maxPAv}`;
     // OA Drawdown validation
     const oaDrawStart = Number(inp.oaDrawdownStartAge) || 0;
     const pa2 = Number(inp.payoutAge) || 65;
     if (oaDrawStart > 0 && oaDrawStart < pa2) errs.oaDrawdownStartAge = `Must be ≥ payout age (${pa2})`;
-    if (oaDrawStart > 95) errs.oaDrawdownStartAge = "Must be ≤ 95";
+    if (oaDrawStart > maxPAv) errs.oaDrawdownStartAge = `Must be ≤ ${maxPAv}`;
     const oaDrawAmt = Number(inp.oaDrawdownMonthly) || 0;
     if (oaDrawAmt < 0 || oaDrawAmt > 50000) errs.oaDrawdownMonthly = "0 – $50,000/mo";
     const oaFloor = Number(inp.oaDrawdownFloor) || 0;
@@ -6904,7 +6895,7 @@ export default function App() {
       if (dwzA <= dwzFloor) errs.dieWithZeroAge = isRSSdwz
         ? `Must be after current age (${dwzFloor})`
         : `Must be after payout age (${dwzFloor})`;
-      else if (dwzA > 95) errs.dieWithZeroAge = "Must be ≤ 95";
+      else if (dwzA > maxPAv) errs.dieWithZeroAge = `Must be ≤ ${maxPAv}`;
     }
     // Property Monetisation validation — Q1: LBS and SHB are HDB/CPF schemes, SC/PR only; foreigners cannot use them
     if (inp.propMonetiseEnabled && (inp.citizenStatus || 'SC') !== 'foreigner') {
@@ -6951,9 +6942,9 @@ export default function App() {
     const srsRate = Number(inp.srsReturnRate) || 0;
     if (srsRate < 0 || srsRate > 30) errs.srsReturnRate = "0–30%";
     const srsStop = Number(inp.srsContribStopAge) || 63;
-    if (srsStop < (Number(inp.currentAge) || 35) || srsStop > 95) errs.srsContribStopAge = `${Number(inp.currentAge) || 35}–95`;
+    if (srsStop < (Number(inp.currentAge) || 35) || srsStop > maxPAv) errs.srsContribStopAge = `${Number(inp.currentAge) || 35}–${maxPAv}`;
     const srsDraw = Number(inp.srsDrawdownStartAge) || 63;
-    if (srsDraw < 63 || srsDraw > 95) errs.srsDrawdownStartAge = "Min age 63 (statutory retirement age)";
+    if (srsDraw < 63 || srsDraw > maxPAv) errs.srsDrawdownStartAge = `Min age 63 — max age ${maxPAv} (planning horizon)`;
     // BUG-17 fix: cross-field check — contributions must stop before or at drawdown start
     if (!errs.srsContribStopAge && !errs.srsDrawdownStartAge && srsStop > srsDraw) {
       errs.srsContribStopAge = `Must be ≤ drawdown start age (${srsDraw}). SRS contributions cannot run past the drawdown start.`;
@@ -7991,6 +7982,7 @@ export default function App() {
         // Gap alert — re-enable so it evaluates fresh against the default profile.
         // If dismissed before reset, it would never reappear for the new inputs.
         setGapAlertDismissed(false);
+        setGapAlertStratDismissed(false);
         // Chart view state — reset all toggles so the user sees a clean chart
         // immediately after reset rather than inheriting a prior display mode.
         setHighlightPlan("standard");
@@ -8067,6 +8059,7 @@ export default function App() {
         setLeFormState({});
         // Re-enable gap alert so it evaluates fresh against the new blank profile.
         setGapAlertDismissed(false);
+        setGapAlertStratDismissed(false);
         // Reset chart view state to clean defaults.
         setHighlightPlan("standard");
         setPrimaryLifePlan("standard");
@@ -8914,7 +8907,7 @@ export default function App() {
         });
         return [row.age, fmt(baseRow.oa), fmt(baseRow.ma), fmt(raSaBal), fmt(baseRow.injected), fmt(baseRow.outflow), isPA ? fmt(row.basicAnnual) : "-", fmt(row.basicBequest), isPA ? fmt(row.standardAnnual) : "-", fmt(row.standardBequest), isPA ? fmt(row.escalatingAnnual) : "-", fmt(row.escalatingBequest), fmt(row[`${highlightPlan}Total`]), tEffRate, ...xirrVals, ...lifeIrrVals].join("\t");
       }).join("\n");
-      setExportModal({ type: "print", content: `CPF Projection — ${memberName} (Age ${startAge} to 95)\n${"=".repeat(60)}\n${headers}\n${textRows}` });
+      setExportModal({ type: "print", content: `CPF Projection — ${memberName} (Age ${startAge} to ${maxPA})\n${"=".repeat(60)}\n${headers}\n${textRows}` });
     }
   };
 
@@ -10114,7 +10107,7 @@ export default function App() {
             bal = bal * (1 + CPF_RATES.RA) - annual;
             if (bal <= 0) { depAge = age; break; }
           }
-          row.cols.push({ ra, depAge: depAge || '>95' });
+          row.cols.push({ ra, depAge: depAge || `>${maxPA}` });
         });
         return row;
       });
@@ -10135,7 +10128,7 @@ export default function App() {
       // N2 fix: removed dead raOaTransferSens / _sensRawTransfer / _sensTransferPct /
       // raTransferBaseSens / _sensBirthYear variables — all were computed but never consumed
       // (computeSensitivityRow always received raVal regardless). pAge now passed for deferral bonus.
-      return computeSensitivityRow(pAge, raVal, isMaleSens); // deferral mult applied inside via pAge
+      return computeSensitivityRow(pAge, raVal, isMaleSens, maxPA); // F1: pass planning horizon so cumulative payout/breakeven uses correct age ceiling
     });
   }, [projection, projectionByAge, debouncedInputs.isMale,
       debouncedInputs.cpfScheme, debouncedInputs.rssMonthlyPayout,
@@ -11744,18 +11737,18 @@ ${(() => {
 
 <h3 style="margin-top:10px">CPF LIFE Payout Estimates (Monthly, from Age ${pa})</h3>
 <table>
-  <thead><tr><th>Plan</th><th style="text-align:right">Monthly</th><th style="text-align:right">Annual</th><th>Payout Type</th><th style="text-align:right">Bequest @ 95</th><th style="text-align:right">Lifetime Total</th><th style="text-align:right">Net Worth @ 95</th></tr></thead>
+  <thead><tr><th>Plan</th><th style="text-align:right">Monthly</th><th style="text-align:right">Annual</th><th>Payout Type</th><th style="text-align:right">Bequest @ ${maxPA}</th><th style="text-align:right">Lifetime Total</th><th style="text-align:right">Net Worth @ ${maxPA}</th></tr></thead>
   <tbody>
-    <tr style="background:${highlightPlan==='standard'?'#f0fdf4':''}"><td><strong>Standard Plan</strong>${highlightPlan==='standard'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#059669">${fc(stdMonthly)}/mo</td><td style="text-align:right">${fc(stdMonthly*12)}/yr</td><td>Level payouts for life</td><td style="text-align:right">${fc(payoutByAge.get(95)?.standardBequest||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.standardTotal||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.standardNetWorth||0)}</td></tr>
-    <tr style="background:${highlightPlan==='escalating'?'#eff6ff':''}"><td><strong>Escalating Plan</strong>${highlightPlan==='escalating'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#1d4ed8">${fc(escMonthly)}/mo</td><td style="text-align:right">${fc(escMonthly*12)}/yr</td><td>+2% per year</td><td style="text-align:right">${fc(payoutByAge.get(95)?.escalatingBequest||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.escalatingTotal||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.escalatingNetWorth||0)}</td></tr>
-    <tr style="background:${highlightPlan==='basic'?'#fffbeb':''}"><td><strong>Basic Plan</strong>${highlightPlan==='basic'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#b45309">${fc(basMonthly)}/mo</td><td style="text-align:right">${fc(basMonthly*12)}/yr</td><td>RA drawdown ~90, pool</td><td style="text-align:right">${fc(payoutByAge.get(95)?.basicBequest||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.basicTotal||0)}</td><td style="text-align:right">${fc(payoutByAge.get(95)?.basicNetWorth||0)}</td></tr>
+    <tr style="background:${highlightPlan==='standard'?'#f0fdf4':''}"><td><strong>Standard Plan</strong>${highlightPlan==='standard'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#059669">${fc(stdMonthly)}/mo</td><td style="text-align:right">${fc(stdMonthly*12)}/yr</td><td>Level payouts for life</td><td style="text-align:right">${fc(payoutByAge.get(maxPA)?.standardBequest||0)}</td><td style="text-align:right">${fc(payoutByAge.get(maxPA)?.standardTotal||0)}</td><td style="text-align:right">${fc(payoutByAge.get(maxPA)?.standardNetWorth||0)}</td></tr>
+    <tr style="background:${highlightPlan==='escalating'?'#eff6ff':''}"><td><strong>Escalating Plan</strong>${highlightPlan==='escalating'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#1d4ed8">${fc(escMonthly)}/mo</td><td style="text-align:right">${fc(escMonthly*12)}/yr</td><td>+2% per year</td><td style="text-align:right">${fc(payoutByAge.get(maxPA)?.escalatingBequest||0)}</td><td style="text-align:right">${fc(payoutByAge.get(maxPA)?.escalatingTotal||0)}</td><td style="text-align:right">${fc(payoutByAge.get(maxPA)?.escalatingNetWorth||0)}</td></tr>
+    <tr style="background:${highlightPlan==='basic'?'#fffbeb':''}"><td><strong>Basic Plan</strong>${highlightPlan==='basic'?' ◄ Selected':''}</td><td style="text-align:right;font-weight:700;color:#b45309">${fc(basMonthly)}/mo</td><td style="text-align:right">${fc(basMonthly*12)}/yr</td><td>RA drawdown ~90, pool</td><td style="text-align:right">${fc(payoutByAge.get(maxPA)?.basicBequest||0)}</td><td style="text-align:right">${fc(payoutByAge.get(maxPA)?.basicTotal||0)}</td><td style="text-align:right">${fc(payoutByAge.get(maxPA)?.basicNetWorth||0)}</td></tr>
   </tbody>
 </table>
 </div>
 
 <!-- ═══════════════════════════ 2. CHARTS ══════════════════════════════ -->
 <div class="chapter-break">
-<div class="sec-hdr sec-hdr-teal"><span class="sec-ico">📈</span><span class="sec-title" style="color:#0e7490">2 &nbsp;·&nbsp; CPF Balance Accumulation (Age ${ca} to 95)</span></div>
+<div class="sec-hdr sec-hdr-teal"><span class="sec-ico">📈</span><span class="sec-title" style="color:#0e7490">2 &nbsp;·&nbsp; CPF Balance Accumulation (Age ${ca} to ${maxPA})</span></div>
 ${(() => {
           // Area chart with stacked polygon fills.
           // Chart resolution: every year (was every 2 years — changed so single-year lump sums and
@@ -11868,7 +11861,7 @@ ${ageLabels}
 </div></div>`;
         })()}
 
-<div class="sec-hdr sec-hdr-teal" style="margin-top:12px"><span class="sec-ico">💰</span><span class="sec-title" style="color:#0e7490">CPF LIFE Payout Comparison (Age ${pa} to 95)</span></div>
+<div class="sec-hdr sec-hdr-teal" style="margin-top:12px"><span class="sec-ico">💰</span><span class="sec-title" style="color:#0e7490">CPF LIFE Payout Comparison (Age ${pa} to ${maxPA})</span></div>
 ${(() => {
           const lifeRows = payoutProjection.filter(r => r.age >= pa && r.age <= maxPA);
           if (lifeRows.length < 2) return '<p style="color:#94a3b8;font-size:9px">Insufficient data for chart.</p>';
@@ -11900,7 +11893,7 @@ ${poly('basicTotal','#f59e0b', highlightPlan==='basic'?2.2:1.3)}
 </div></div>`;
         })()}
 
-<div class="sec-hdr sec-hdr-teal" style="margin-top:10px"><span class="sec-ico">📊</span><span class="sec-title" style="color:#0e7490">Net Worth Comparison (Age ${pa} to 95)</span></div>
+<div class="sec-hdr sec-hdr-teal" style="margin-top:10px"><span class="sec-ico">📊</span><span class="sec-title" style="color:#0e7490">Net Worth Comparison (Age ${pa} to ${maxPA})</span></div>
 ${(() => {
           const nwRows = payoutProjection.filter(r => r.age >= pa && r.age <= maxPA);
           if (nwRows.length < 2) return '';
@@ -11980,7 +11973,7 @@ ${payAgeSensHtml}
 
 <h3>Income Stream Summary</h3>
 <table>
-  <thead><tr><th>Income Stream</th><th style="text-align:right">Start Age</th><th style="text-align:right">End Age</th><th style="text-align:right">Monthly</th><th style="text-align:right">Lifetime Total (to 95)</th></tr></thead>
+  <thead><tr><th>Income Stream</th><th style="text-align:right">Start Age</th><th style="text-align:right">End Age</th><th style="text-align:right">Monthly</th><th style="text-align:right">Lifetime Total (to ${maxPA})</th></tr></thead>
   <tbody>
     ${stratRows.map(r => `<tr><td style="color:${r.color};font-weight:700">${r.label}</td><td style="text-align:right">${r.start}</td><td style="text-align:right">${r.end}</td><td style="text-align:right;font-weight:700">${fc(r.mo)}/mo</td><td style="text-align:right">${typeof r.end==='number'?fc(r.mo*12*(Math.min(r.end,95)-r.start+1)):fc(r.mo*12*(95-r.start+1))}</td></tr>`).join('')}
     <tr style="background:#f1f5f9;font-weight:900"><td colspan="3">Combined Monthly Income</td><td style="text-align:right;font-size:11px;color:#0f172a">${fc(totalMoPdf2)}/mo</td><td style="text-align:right;font-size:9px;color:#64748b">${targetMo > 0 ? `Target: ${fc(targetMo)}/mo` : ''}</td></tr>
@@ -11997,7 +11990,7 @@ ${estimatedTaxSavings > 0 ? `<div class="box" style="margin-top:8px;background:#
 
 <!-- ═══════════════════ 5. YEAR-BY-YEAR PROJECTION ══════════════════════ -->
 <div class="chapter-break">
-<div class="sec-hdr sec-hdr-green"><span class="sec-ico">📋</span><span class="sec-title" style="color:#065f46">5 &nbsp;·&nbsp; Year-by-Year Projection (Age ${ca} to 95)</span></div>
+<div class="sec-hdr sec-hdr-green"><span class="sec-ico">📋</span><span class="sec-title" style="color:#065f46">5 &nbsp;·&nbsp; Year-by-Year Projection (Age ${ca} to ${maxPA})</span></div>
 <p style="font-size:8px;color:#64748b;margin:0 0 6px">Key ages at 5-year intervals + age 55 + payout age · green row = payout age ${pa} · all values in ${isRealDollars ? 'real (inflation-adjusted)' : 'nominal'} dollars · see Section 6 for full year-by-year cashflow</p>
 ${(() => {
   // XIRR KPI cards — mirrors the Data Table tab's XIRR summary cards
@@ -12049,7 +12042,7 @@ ${(() => {
 
 <!-- ═══════════════════ 6. CASHFLOW LEDGER ═══════════════════════════════ -->
 <div class="chapter-break">
-<div class="sec-hdr sec-hdr-green"><span class="sec-ico">💰</span><span class="sec-title" style="color:#065f46">6 &nbsp;·&nbsp; Annual Cashflow Ledger (Age ${ca} to 95)</span></div>
+<div class="sec-hdr sec-hdr-green"><span class="sec-ico">💰</span><span class="sec-title" style="color:#065f46">6 &nbsp;·&nbsp; Annual Cashflow Ledger (Age ${ca} to ${maxPA})</span></div>
 <p style="font-size:8px;color:#64748b;margin:0 0 6px">Inflows: Mandatory · Voluntary VC · Gov Grants · Interest · Events In &nbsp;|&nbsp; Outflows: Housing · Medical · OA Draw · Other · Events Out &nbsp;|&nbsp; Net = Total In − Total Out &nbsp;|&nbsp; Matches in-app Data Table exactly</p>
 <table class="ledger-table" style="font-size:7.5px">
   <thead><tr>
@@ -12105,7 +12098,7 @@ isRSSPdf ? (() => {
   const rssDepRow    = projection.find(r => r.rssDepletionAge != null && r.rssDepletionAge > 0);
   const depAge       = rssDepRow?.rssDepletionAge || null;
   // RA balance over payout years for the drawdown SVG chart
-  const rssChartRows = projection.filter(r => r.age >= rssStartAge && r.age <= 95);
+  const rssChartRows = projection.filter(r => r.age >= rssStartAge && r.age <= maxPA);
   const rssMaxRA     = Math.max(...rssChartRows.map(r => r.ra || 0)) || 1;
   const W2=680, H2=150, PL2=55, PB2=24, PT2=10, PR2=10, CW2=W2-PL2-PR2, CH2=H2-PB2-PT2;
   const baseY2 = H2 - PB2;
@@ -15042,7 +15035,7 @@ ${milestoneSnapshotHtml}
       <div className="cpf-mobile-tabstrip-spacer" style={{ display: "none" }} />
       {isVcOverLimit && (
         <div style={{ background: "rgba(234,88,12,0.2)", borderBottom: "1px solid rgba(234,88,12,0.5)", padding: "8px 20px", textAlign: "center", color: "#fdba74", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <AlertTriangle style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />VC3A Capped to {formatCurrency(maxAllowableVC)}/yr — Projection Already Applies Limit
+          <AlertTriangle style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />VC Exceeds Available Limit ({formatCurrency(maxAllowableVC)})
         </div>
       )}
 
@@ -16647,7 +16640,7 @@ ${milestoneSnapshotHtml}
                   </div>
                 )}
                 {isVcOverLimit && <div style={{ background: "rgba(249,115,22,0.15)", color: "#fdba74", fontSize: 12, fontWeight: 700, padding: 10, borderRadius: 8, marginBottom: 10, display: "flex", gap: 6 }}>
-                  <AlertTriangle style={{ width: 12, height: 12, flexShrink: 0, marginTop: 1 }} />VC3A capped to {formatCurrency(maxAllowableVC)}/yr in projection (Annual Limit after mandatory contributions). Projection is already correct — no input change required.
+                  <AlertTriangle style={{ width: 12, height: 12, flexShrink: 0, marginTop: 1 }} />VC3A exceeds available limit ({formatCurrency(maxAllowableVC)}/yr). Contributions will be scaled down.
                 </div>}
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -17574,7 +17567,7 @@ ${milestoneSnapshotHtml}
                                 <div style={{ background: exhaustAge ? "rgba(244,63,94,0.07)" : "rgba(var(--clr-emerald-rgb),0.07)", border: `1px solid ${exhaustAge ? "rgba(244,63,94,0.25)" : "rgba(var(--clr-emerald-rgb),0.25)"}`, borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                   <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>OA Exhaustion</span>
                                   <span style={{ fontSize: 13, fontWeight: 900, fontFamily: "monospace", color: exhaustAge ? "#f43f5e" : "var(--clr-emerald)" }}>
-                                    {exhaustAge ? `Age ${exhaustAge}` : "Sustains to 95+"}
+                                    {exhaustAge ? `Age ${exhaustAge}` : `Sustains to ${maxPA}+`}
                                   </span>
                                 </div>
                                 {isEroding && (
@@ -18326,7 +18319,7 @@ ${milestoneSnapshotHtml}
             {showAdvanced && (
             <>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
-            <div ref={privateAssetsRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
+            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader id="privateAssets" label="Private Assets" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & contributions" />
               {openSections.has("privateAssets") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -18829,10 +18822,10 @@ ${milestoneSnapshotHtml}
                         for (let i = projection.length - 1; i >= 0; i--) {
                           if (projection[i]?.rssDepletionAge != null) return projection[i].rssDepletionAge;
                         }
-                        return ">95";
+                        return `>${maxPA}`;
                       })();
                       // rssIsGrowing: RA can never deplete when annual draw < RA interest at current balance.
-                      const rssIsGrowing = rssDepEst === ">95" && rssAnnual > 0 && rssAnnual < rssCurrentRa * CPF_RATES.RA;
+                      const rssIsGrowing = typeof rssDepEst === "string" && rssDepEst.startsWith(">") && rssAnnual > 0 && rssAnnual < rssCurrentRa * CPF_RATES.RA;
                       return isRSSKpi ? [
                         { label: "Current RA", value: formatCurrency(rssCurrentRa), color: "var(--clr-blue)", tip: "Current Retirement Account balance — this is drawn down each month under RSS" },
                         { label: "RSS Payout", value: inputs.rssMonthlyPayout > 0 ? formatCurrency(Number(inputs.rssMonthlyPayout)) + "/mo" : "Not set", color: inputs.rssMonthlyPayout > 0 ? "var(--clr-green)" : "var(--clr-red)", tip: "Your fixed CPF Board monthly payout under RSS" },
@@ -18907,12 +18900,6 @@ ${milestoneSnapshotHtml}
                 monteCarloData={monteCarloData}
                 effectiveOaDrawMonthly={effectiveOaDrawMonthly}
                 effectiveOaDrawStartAge={effectiveOaDrawStartAge}
-                onSrsCtaClick={() => {
-                  setActiveTab("summary");
-                  setSidebarOpen(true);
-                  setOpenSections(prev => new Set([...prev, "privateAssets"]));
-                  setTimeout(() => privateAssetsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
-                }}
                 wizardCompleted={(() => { try { return !!localStorage.getItem('cpf_planner_setup_done'); } catch { return true; } })()}
               />
             )}
@@ -19099,12 +19086,16 @@ ${milestoneSnapshotHtml}
                     $1-$5 across projection re-runs (Math.round rounding in fvAnnuityFactor),
                     causing the dismissed alert to spuriously re-appear. Bucketing to $1k means
                     only a genuine gap change of >=$1,000 resets the dismissal. */}
+                {/* UX-OPT-B: Summary gap alert — slim diagnostic card only (no Apply action).
+                    The "Apply top-up" action has moved to Strategy → Goal sub-tab where the
+                    full solver context lives. This card shows the gap and routes the user there.
+                    Dismiss state (gapAlertDismissed) is separate from Strategy (gapAlertStratDismissed). */}
                 {gapAlert && !gapAlertDismissed && (
                   <div data-zone="gap-alert" key={Math.round(gapAlert.frsGap / 1000)}
                     style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
                       borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.35)" : "rgba(var(--clr-amber3-rgb),0.35)"}`,
                       background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.07)" }}>
-                    <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 1 }} />
+                    <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 2 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                         <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>
@@ -19119,16 +19110,12 @@ ${milestoneSnapshotHtml}
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {gapAlert.annualTopUp > 0 && (
                         <button type="button"
-                          onClick={() => {
-                            setInputs(prev => ({ ...prev, vcSaTopup: gapAlert.newTopUp }));
-                            showToast(`✓ RSTU set to ${formatCurrency(gapAlert.newTopUp)}/yr — gap closed`);
-                            setGapAlertDismissed(true);
-                          }}
+                          onClick={() => { setActiveTab("strategy"); setGoalStratTab("goal"); }}
                           style={{ padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
                             border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
                             background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)",
                             color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Apply top-up
+                          <Target style={{ width: 11, height: 11, flexShrink: 0 }} />Fix in Strategy →
                         </button>
                       )}
                       <button type="button" onClick={() => setGapAlertDismissed(true)}
@@ -19984,11 +19971,11 @@ ${milestoneSnapshotHtml}
                     let bal = Number(inputs.saBalance) || 0;
                     const annual = rssMonSum * 12;
                     if (annual <= 0) return null;
-                    for (let age = Number(inputs.currentAge) || 68; age <= 95; age++) {
+                    for (let age = Number(inputs.currentAge) || 68; age <= maxPA; age++) {
                       bal = bal * (1 + CPF_RATES.RA) - annual;
                       if (bal <= 0) return age;
                     }
-                    return ">95";
+                    return `>${maxPA}`;
                   })();
                   return (
                     <div data-zone="rss" style={{ background: "var(--bg-panel)", border: "1px solid rgba(var(--clr-blue-rgb),0.3)", borderRadius: 20, padding: 24 }}>
@@ -19997,7 +19984,7 @@ ${milestoneSnapshotHtml}
                         {[
                           ["Monthly Payout", rssMonSum > 0 ? formatCurrency(rssMonSum) + "/mo" : "Not set", rssMonSum > 0 ? "var(--clr-green)" : "var(--clr-red)"],
                           ["Payout Start Age", `Age ${rssStSum}`, "var(--clr-amber)"],
-                          ["Est. Depletion Age", rssDepSum ? `Age ${rssDepSum}` : "—", rssDepSum && rssDepSum !== ">95" && rssDepSum < 85 ? "var(--clr-red)" : "var(--clr-green)"],
+                          ["Est. Depletion Age", rssDepSum ? `Age ${rssDepSum}` : "—", rssDepSum && typeof rssDepSum === "number" && rssDepSum < 85 ? "var(--clr-red)" : "var(--clr-green)"],
                         ].map(([label, val, color]) => (
                           <div key={label} style={{ background: "var(--bg-muted)", padding: 16, borderRadius: 12, border: "1px solid var(--border-strong)" }}>
                             <p style={{ fontSize: 12, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 800, marginBottom: 8 }}>{label}</p>
@@ -20154,9 +20141,9 @@ ${milestoneSnapshotHtml}
                   const rssNW = isRSSMode
                     ? ((projectionByAge.get(summaryRefAge)?.oa || 0) + (projectionByAge.get(summaryRefAge)?.ma || 0) + (projectionByAge.get(summaryRefAge)?.ra || 0))
                     : (payoutByAge.get(summaryRefAge)?.[`${highlightPlan}NetWorth`] || 0);
-                  const nw95 = payoutByAge.get(95)?.[`${highlightPlan}NetWorth`] || 0;
+                  const nw95 = payoutByAge.get(maxPA)?.[`${highlightPlan}NetWorth`] || 0;
                   const nw95Real = nw95 > 0
-                    ? Math.round(nw95 / Math.pow(1 + ((Number(inputs.inflationRate)||2)/100), Math.max(0, 95 - (Number(inputs.currentAge)||35))))
+                    ? Math.round(nw95 / Math.pow(1 + ((Number(inputs.inflationRate)||2)/100), Math.max(0, maxPA - (Number(inputs.currentAge)||35))))
                     : 0;
                   const rssNWReal = rssNW > 0
                     ? Math.round(rssNW / Math.pow(1 + ((Number(inputs.inflationRate)||2)/100), Math.max(0, summaryRefAge - (Number(inputs.currentAge)||35))))
@@ -20168,7 +20155,7 @@ ${milestoneSnapshotHtml}
                   const cumOutflow = _z6AccRow.cumulativeOutflow  || 0;
                   const tooltips = {
                     nwPayout: `OA + MA + RA + Property + Private Assets at age ${summaryRefAge} under the ${highlightPlan} plan`,
-                    nw95:     "OA + MA + RA + Property + Private Assets at age 95 under the selected plan",
+                    nw95:     `OA + MA + RA + Property + Private Assets at age ${maxPA} under the selected plan`,
                     topups:   `All contributions + inflows from age ${Number(inputs.currentAge)||35} to age ${summaryRefAge}`,
                     outflow:  `All housing and medical deductions from age ${Number(inputs.currentAge)||35} to age ${summaryRefAge}`,
                     rstu:     "Annual tax relief from RSTU cash top-up, capped at $8,000 and FRS headroom",
@@ -20537,7 +20524,7 @@ ${milestoneSnapshotHtml}
                               ...(!_isRSSForTransfer ? [{ label: "Payout age", unit: "yrs", min: 65, max: 70, step: 1, val: effPA, set: setWhatIfPayoutAge, base: Number(debouncedInputs.payoutAge)||65, fmt: v=>`${v}` }] : []),
                               { label: "Annual SA/RA top-up (RSTU)", unit: "$", min: 0, max: 37740, step: 100, val: effST, set: setWhatIfSaTopup, base: Number(debouncedInputs.vcSaTopup)||0, fmt: formatCurrency },
                               { label: "Annual housing outflow", unit: "$", min: 0, max: 30000, step: 100, val: effH, set: setWhatIfHousing, base: Number(debouncedInputs.housingOutflow)||0, fmt: formatCurrency },
-                              { label: "Salary bump", unit: "%", min: 0, max: 50, step: 1, val: effSB, set: setWhatIfSalaryBump, base: 0, fmt: v=>v>0?`+${v}%`:"No change", note: "Permanent % increase from current age — scales mandatory CPF contributions proportionally" },
+                              { label: "Salary bump", unit: "$", min: 0, max: 5000, step: 100, val: effSB, set: setWhatIfSalaryBump, base: 0, fmt: v=>v>0?`+${formatCurrency(v)}/mo`:"No change" },
                               { label: "Contribution stop age", unit: "yrs", min: Number(debouncedInputs.currentAge)||35, max: 75, step: 1, val: effCS, set: setWhatIfContribStop, base: Number(debouncedInputs.contributionStopAge)||65, fmt: v=>`${v}` },
                               { label: "Monthly OA drawdown", unit: "$", min: 0, max: 5000, step: 50, val: effOAD, set: setWhatIfOaDrawdown, base: Number(debouncedInputs.oaDrawdownMonthly)||0, fmt: v=>v>0?`${formatCurrency(v)}/mo`:"Off" },
                               { label: "Annual SRS contribution", unit: "$", min: 0, max: 15300, step: 100, val: effSRS, set: setWhatIfSrsContrib, base: Number(debouncedInputs.srsAnnualContribution)||0, fmt: formatCurrency },
@@ -20942,7 +20929,7 @@ ${milestoneSnapshotHtml}
                     {(() => {
                       // ── Stacked data (bridging row at 54.999 + null SA/RA) ─────────
                       const isRSSChart = debouncedInputs.cpfScheme === 'rss';
-                      const ageLimit = isRSSChart ? 95 : payoutAge65;
+                      const ageLimit = isRSSChart ? maxPA : payoutAge65;
                       const filtered55 = displayAccumulation.filter(d => d.age <= ageLimit);
                       const base = [];
                       for (let i = 0; i < filtered55.length; i++) {
@@ -21351,7 +21338,7 @@ ${milestoneSnapshotHtml}
                     [raAtPayoutStartIsCurrent ? "Current RA" : "RA at Payout Start", formatCurrency(raAtPayoutStart), "var(--clr-blue)", raAtPayoutStartIsCurrent ? `Current RA balance (payout started at age ${rssStartAge}, before the simulation window — using current balance as proxy)` : `RA balance at age ${rssStartAge} when drawdowns began`],
                     ["Monthly Payout", rssMonthlyAmt > 0 ? formatCurrency(rssMonthlyAmt) + "/mo" : "Not set", rssMonthlyAmt > 0 ? "var(--clr-green)" : "var(--clr-red)", "Fixed CPF Board RSS monthly amount"],
                     ["Annual Drawdown", rssMonthlyAmt > 0 ? formatCurrency(rssMonthlyAmt * 12) + "/yr" : "—", "var(--clr-blue)", "Total annual RA debit"],
-                    ["Est. Depletion Age", depletionAge != null ? `Age ${depletionAge}` : rssMonthlyAmt > 0 ? ">95" : "Set payout", depletionAge != null && depletionAge < 85 ? "var(--clr-red)" : "var(--clr-green)", "Age when RA balance hits $0"],
+                    ["Est. Depletion Age", depletionAge != null ? `Age ${depletionAge}` : rssMonthlyAmt > 0 ? `>${maxPA}` : "Set payout", depletionAge != null && depletionAge < 85 ? "var(--clr-red)" : "var(--clr-green)", "Age when RA balance hits $0"],
                   ].map(([label, val, col, tip]) => (
                     <div key={label} title={tip} style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "12px 14px", border: "1px solid var(--border-subtle)", cursor: "help" }}>
                       <p className="cpf-label" style={{ margin: "0 0 4px" }}>{label}</p>
@@ -21893,12 +21880,12 @@ ${milestoneSnapshotHtml}
                         <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
                           <div>
                             <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 2 }}>⚖️ Total Yield</p>
-                            <p style={{ fontSize: 20, fontWeight: 900, fontFamily: "monospace", color }}>{yieldAge ? `Age ${yieldAge}` : ">95"}</p>
+                            <p style={{ fontSize: 20, fontWeight: 900, fontFamily: "monospace", color }}>{yieldAge ? `Age ${yieldAge}` : `>${maxPA}`}</p>
                           </div>
                           {cashAge !== null && (
                             <div>
                               <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 2 }}>📈 Cumulative Payout</p>
-                              <p style={{ fontSize: 20, fontWeight: 900, fontFamily: "monospace", color: cashColor }}>{cashAge ? `Age ${cashAge}` : ">95"}</p>
+                              <p style={{ fontSize: 20, fontWeight: 900, fontFamily: "monospace", color: cashColor }}>{cashAge ? `Age ${cashAge}` : `>${maxPA}`}</p>
                             </div>
                           )}
                         </div>
@@ -21933,9 +21920,9 @@ ${milestoneSnapshotHtml}
                           <td style={{ padding: "8px", textAlign: "right", color: "var(--text-highlight)" }}>{row.stdMonthly > 0 ? `$${row.stdMonthly.toLocaleString()}` : "—"}</td>
                           <td style={{ padding: "8px", textAlign: "right", color: "var(--clr-green)" }}>{row.escMonthly > 0 ? `$${row.escMonthly.toLocaleString()}` : "—"}</td>
                           <td style={{ padding: "8px", textAlign: "right", color: "var(--clr-orange)" }}>{row.basMonthly > 0 ? `$${row.basMonthly.toLocaleString()}` : "—"}</td>
-                          <td style={{ padding: "8px", textAlign: "right", color: "var(--clr-amber)", fontWeight: 700 }}>{row.escVsStd ? `Age ${row.escVsStd}` : ">95"}</td>
-                          <td style={{ padding: "8px", textAlign: "right", color: "#93c5fd", fontWeight: 700 }}>{row.stdVsBasic ? `Age ${row.stdVsBasic}` : ">95"}</td>
-                          <td style={{ padding: "8px", textAlign: "right", color: "#d8b4fe", fontWeight: 700 }}>{row.escVsBasic ? `Age ${row.escVsBasic}` : ">95"}</td>
+                          <td style={{ padding: "8px", textAlign: "right", color: "var(--clr-amber)", fontWeight: 700 }}>{row.escVsStd ? `Age ${row.escVsStd}` : `>${maxPA}`}</td>
+                          <td style={{ padding: "8px", textAlign: "right", color: "#93c5fd", fontWeight: 700 }}>{row.stdVsBasic ? `Age ${row.stdVsBasic}` : `>${maxPA}`}</td>
+                          <td style={{ padding: "8px", textAlign: "right", color: "#d8b4fe", fontWeight: 700 }}>{row.escVsBasic ? `Age ${row.escVsBasic}` : `>${maxPA}`}</td>
                         </tr>);
                       })}</tbody>
                     </table>
@@ -22458,7 +22445,7 @@ ${milestoneSnapshotHtml}
                       { label: "Combined CPF at Later Payout Age", value: fmtM((pAtPA.total || 0) + (sAtPA.total || 0)), sub: `At age ${combinedPA}`, color: "#8b5cf6", tip: "Sum of both members' total CPF at the later of the two payout ages. Each member's projection runs independently." },
                       { label: "Est. Combined CPF LIFE", value: `${fmt(combinedMonthly)}/mo`, sub: `${pName}: ${pPlanLabel} · ${sName}: ${sPlanLabel}`, color: "var(--clr-green)", tip: "Sum of each member's CPF LIFE monthly payout under each member's independently selected plan. Female payouts are ~7% lower. Both members must meet RA ≥ $60,000 threshold." },
                       { label: "Income Coverage", value: coveragePct != null ? `${coveragePct}%` : "—", sub: coveragePct != null ? `${fmt(combinedMonthly)}/mo vs ${fmt(targetMo)} target` : "Enter target in sidebar", color: coverageColor, tip: "Combined monthly CPF LIFE vs the primary member's Target Monthly Income. Green ≥ 100%, amber ≥ 75%, red < 75%. Set your Target in the Decumulation & Goals section." },
-                      { label: "Combined Net Worth at 95", value: fmtM(hAt95.combinedTotal || 0), sub: "Private + CPF both members", color: "var(--clr-blue2)", tip: "Sum of CPF balances and private assets for both members at age 95, after all outflows and drawdowns." },
+                      { label: `Combined Net Worth at ${maxPA}`, value: fmtM(hAt95.combinedTotal || 0), sub: "Private + CPF both members", color: "var(--clr-blue2)", tip: `Sum of CPF balances and private assets for both members at age ${maxPA}, after all outflows and drawdowns.` },
                       { label: "OA Depletion Risk", value: deplLabel, sub: deplSub, color: deplColor, tip: "Flags if either member's OA drawdown reaches its floor before age 90. Only shown when OA Drawdown is configured. Green = no risk through 90." },
                     ];
                     return (
@@ -22908,7 +22895,7 @@ ${milestoneSnapshotHtml}
                     <TableIcon style={{ width: 16, height: 16, color: "var(--clr-green)" }} />
                     <div>
                       <h3 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "var(--text-bright)" }}>Data Table</h3>
-                      <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Year-by-year balances, cashflows and payout projections from age {inputs.currentAge} to 95</p>
+                      <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Year-by-year balances, cashflows and payout projections from age {inputs.currentAge} to {maxPA}</p>
                     </div>
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text-muted)", background: "var(--bg-muted)", padding: "6px 12px", borderRadius: 8, lineHeight: 1.5, display: "flex", alignItems: "center", gap: 5 }}>
@@ -23819,7 +23806,7 @@ ${milestoneSnapshotHtml}
                               <li><strong>Payout Age</strong> (65–70): Each year deferred adds approximately +7% to CPF LIFE monthly payouts.</li>
                               <li><strong>Annual SA/RA Top-up (RSTU)</strong>: Extra voluntary top-up — shows how consistent annual top-ups compound over time.</li>
                               <li><strong>Annual Housing Outflow</strong>: Reduce or increase to model mortgage overpayments or downsizing.</li>
-                              <li><strong>Salary Bump (%)</strong>: A permanent percentage increase applied to your base salary from the current age onwards — scales mandatory CPF contribution projections proportionally. E.g., +10% on a $5,500/mo salary adds ~$550/mo to the projection base.</li>
+                              <li><strong>One-time Salary Increase</strong>: A one-off salary bump applied from the current age — raises mandatory contribution projections.</li>
                               <li><strong>Contribution Stop Age</strong>: How long you keep contributing — directly controls the accumulation runway.</li>
                               <li><strong>Monthly OA Drawdown</strong>: Draw from OA after CPF LIFE starts — higher draw reduces OA but raises monthly cash income.</li>
                               <li><strong>Annual SRS Contribution</strong>: Additional tax-deferred savings — modelled separately from CPF balances.</li>
@@ -24431,7 +24418,7 @@ ${milestoneSnapshotHtml}
                   summaryRows.push({
                     label: `RSS Drawdown`,
                     startAge: rssStartStrat,
-                    endAge:   rssDepAgeStrat || ">95",
+                    endAge:   rssDepAgeStrat || `>${maxPA}`,
                     monthly:  rssMonthlyStrat,
                     total:    rssMonthlyStrat * 12 * (rssEndStrat - rssStartStrat + 1),
                     color:    "var(--clr-blue)",
@@ -24443,11 +24430,11 @@ ${milestoneSnapshotHtml}
               // responds to the Nom/Real$ toggle correctly.
               const cpfLifeMonthly = !isForeigner ? (displayProjectionByAge.get(pa)?.[`${highlightPlan}Monthly`] || 0) : 0;
               if (cpfLifeMonthly > 0) {
-                summaryRows.push({ label: `CPF LIFE (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`, startAge: pa, endAge: "Life", monthly: cpfLifeMonthly, total: cpfLifeMonthly * 12 * (95 - pa + 1), color: "var(--clr-purple)" });
+                summaryRows.push({ label: `CPF LIFE (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`, startAge: pa, endAge: "Life", monthly: cpfLifeMonthly, total: cpfLifeMonthly * 12 * (maxPA - pa + 1), color: "var(--clr-purple)" });
               }
               if (oaDrawStart > 0 && effectiveOaDrawMonthly > 0) {
                 const oaMo = effectiveOaDrawMonthly;
-                const oaEnd = oaExhaustAge ?? 95;
+                const oaEnd = oaExhaustAge ?? maxPA;
                 summaryRows.push({ label: "OA Drawdown", startAge: oaDrawStart, endAge: oaEnd, monthly: oaMo, total: oaMo * 12 * (oaEnd - oaDrawStart + 1), color: "var(--clr-amber)" });
               }
               const hasSRS = Number(inputs.srsBalance) > 0 || Number(inputs.srsAnnualContribution) > 0;
@@ -24604,6 +24591,61 @@ ${milestoneSnapshotHtml}
 
                     return (
                       <div style={{ padding: "24px 24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
+
+                        {/* ── UX-OPT-B: Full actionable gap alert — Strategy/Goal is the action centre.
+                            Uses gapAlertStratDismissed (independent from Summary's gapAlertDismissed)
+                            so dismissing in one tab does not affect the other. Apply top-up wires
+                            directly to vcSaTopup just like the old Summary version did. ── */}
+                        {gapAlert && !gapAlertStratDismissed && (
+                          <div key={Math.round(gapAlert.frsGap / 1000)}
+                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px",
+                              borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
+                              background: gapAlert.isUrgent ? "rgba(239,68,68,0.09)" : "rgba(var(--clr-amber3-rgb),0.08)" }}>
+                            <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 2 }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>
+                                  Contribution gap — {gapAlert.raLabel}
+                                </span>
+                              </div>
+                              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 8px", lineHeight: 1.55 }}>
+                                Projected {gapAlert.raLabel} of{" "}
+                                <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.raForAlert)}</strong> is{" "}
+                                <strong style={{ color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>{formatCurrency(gapAlert.frsGap)}</strong>{" "}
+                                short of FRS ({formatCurrency(gapAlert.projFRS55)}).{" "}
+                                Suggested top-up:{" "}
+                                <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.annualTopUp)}/yr</strong>{" "}
+                                ({formatCurrency(gapAlert.monthlyTopUp)}/mo) over {gapAlert.yearsToGo} yrs.
+                              </p>
+                              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, opacity: 0.75 }}>
+                                Use the Goal Simulator below to model strategies, or click Apply top-up to set the suggested RSTU directly.
+                              </p>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center", marginLeft: 4 }}>
+                              {gapAlert.annualTopUp > 0 && (
+                                <button type="button"
+                                  onClick={() => {
+                                    setInputs(prev => ({ ...prev, vcSaTopup: gapAlert.newTopUp }));
+                                    showToast(`✓ RSTU set to ${formatCurrency(gapAlert.newTopUp)}/yr — gap closed`);
+                                    setGapAlertStratDismissed(true);
+                                    setGapAlertDismissed(true);
+                                  }}
+                                  style={{ padding: "7px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                                    border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.45)" : "rgba(var(--clr-amber3-rgb),0.45)"}`,
+                                    background: gapAlert.isUrgent ? "rgba(239,68,68,0.14)" : "rgba(var(--clr-amber3-rgb),0.14)",
+                                    color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer",
+                                    whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                  <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Apply top-up
+                                </button>
+                              )}
+                              <button type="button" onClick={() => setGapAlertStratDismissed(true)}
+                                style={{ padding: "6px 8px", borderRadius: 8, fontSize: 14, fontWeight: 500,
+                                  border: "1px solid var(--border-subtle)", background: "transparent",
+                                  color: "var(--text-muted)", cursor: "pointer", lineHeight: 1 }}
+                                aria-label="Dismiss alert">✕</button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* ── How to use guide ──────────────────────────── */}
                         <GoalSimGuide />
@@ -25085,7 +25127,7 @@ ${milestoneSnapshotHtml}
                             ? "SRS + Private Assets · No CPF account — CPF LIFE not applicable"
                             : isRSSStrategy
                               ? `All income streams · Age ${Number(debouncedInputs.rssPayoutStartAge) || 65}–95 · RSS drawdown active`
-                              : `All income streams · Age ${pa}–95 · ${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} CPF LIFE plan active`}
+                              : `All income streams · Age ${pa}–${maxPA} · ${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)} CPF LIFE plan active`}
                         </p>
                       </div>
                     </div>
@@ -25303,7 +25345,7 @@ ${milestoneSnapshotHtml}
                     <div style={{ display: "flex", marginBottom: 4 }}>
                       <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0 }} />
                       <div style={{ flex: 1, position: "relative", height: 18 }}>
-                        {[25, 35, 45, 55, 65, 75, 85, 95].filter(a => a >= ganttStart && a <= ganttEnd).map(a => (
+                        {[25, 35, 45, 55, 65, 75, 85, 95, ...(maxPA > 95 ? [maxPA] : [])].filter(a => a >= ganttStart && a <= ganttEnd).map(a => (
                           <span key={a} style={{ position: "absolute", fontSize: 10, color: "var(--text-subtle)", fontFamily: "monospace", fontWeight: 700, transform: "translateX(-50%)", ...ganttDot(a) }}>{a}</span>
                         ))}
                       </div>
@@ -25315,14 +25357,14 @@ ${milestoneSnapshotHtml}
                       { label: "Housing Loan", color: "#64748b", bands: [{ start: ca, end: Number(inputs.housingStopAge) || 55 }] },
                       ...(hasSRS ? [{ label: "SRS Contribs", color: "#38bdf8", bands: [{ start: ca, end: Number(inputs.srsContribStopAge) || 63 }] }] : []),
                       ...(hasSRS ? [{ label: "SRS Drawdown", color: "#0369a1", bands: [{ start: srsStart, end: srsStart + srsYears - 1 }] }] : []),
-                      ...(oaDrawStart > 0 && effectiveOaDrawMonthly > 0 ? [{ label: "OA Drawdown", color: "var(--clr-amber2)", bands: [{ start: oaDrawStart, end: 95 }] }] : []),
+                      ...(oaDrawStart > 0 && effectiveOaDrawMonthly > 0 ? [{ label: "OA Drawdown", color: "var(--clr-amber2)", bands: [{ start: oaDrawStart, end: maxPA }] }] : []),
                       // R3 Gantt fix: show RSS drawdown bar for RSS members instead of CPF LIFE bar.
                       // Both are mutually exclusive — RSS members never have a CPF LIFE payout row.
                       ...(isRSSStrategy
                         ? (Number(debouncedInputs.rssMonthlyPayout) > 0
-                            ? [{ label: "RSS Drawdown", color: "var(--clr-blue)", bands: [{ start: Number(debouncedInputs.rssPayoutStartAge) || 65, end: 95 }] }]
+                            ? [{ label: "RSS Drawdown", color: "var(--clr-blue)", bands: [{ start: Number(debouncedInputs.rssPayoutStartAge) || 65, end: maxPA }] }]
                             : [])
-                        : [{ label: `CPF LIFE (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`, color: "var(--clr-purple2)", bands: [{ start: pa, end: 95 }] }]),
+                        : [{ label: `CPF LIFE (${highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1)})`, color: "var(--clr-purple2)", bands: [{ start: pa, end: maxPA }] }]),
                     ].map(({ label, color, bands }) => (
                       <div key={label} style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
                         <div style={{ width: "clamp(90px, 22vw, 160px)", flexShrink: 0, fontSize: 12, fontWeight: 600, color: "var(--text-muted)", paddingRight: 10, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
@@ -25824,103 +25866,36 @@ ${milestoneSnapshotHtml}
                           )}
                         </div>
 
-                        {/* ── ITEM 7: Tier Shock — full inline analysis (mirrors Readiness tab) ── */}
-                        {tierShockData && (() => {
-                          const _pa  = payoutAge65;
-                          const _ra  = raAtPayout;
-                          const _le  = (debouncedInputs.isMale !== false) ? 85 : 88;
-                          const tierColor = (t) =>
-                            t === "ERS" ? "var(--clr-emerald)" : t === "FRS" ? "var(--clr-blue)" : t === "BRS" ? "var(--clr-amber)" : "var(--clr-red)";
-                          const tierBg = (t) =>
-                            t === "ERS" ? "rgba(16,185,129,0.12)" : t === "FRS" ? "rgba(59,130,246,0.12)" : t === "BRS" ? "rgba(245,158,11,0.12)" : "rgba(239,68,68,0.12)";
-                          return (
-                            <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
-                              {/* Header */}
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                                <span style={{ fontSize: 15 }}>⚡</span>
-                                <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Tier Shock Analysis</h4>
-                                <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                                  background: tierBg(tierShockData.currentTier),
-                                  color: tierColor(tierShockData.currentTier) }}>
-                                  Projected: {tierShockData.currentTier} tier
-                                </span>
-                              </div>
-
-                              {/* Tier ladder — progress bars for BRS / FRS / ERS vs projected RA */}
-                              <div style={{ marginBottom: 16 }}>
-                                {[
-                                  { label: "ERS", value: tierShockData.projERS, monthly: tierShockData.ersMonthly, color: "var(--clr-emerald)" },
-                                  { label: "FRS", value: tierShockData.projFRS, monthly: tierShockData.frsMonthly, color: "var(--clr-blue)" },
-                                  { label: "BRS", value: tierShockData.projBRS, monthly: tierShockData.brsMonthly, color: "var(--clr-amber)" },
-                                ].map(({ label, value, monthly, color }) => {
-                                  const pct    = Math.min(100, Math.round((_ra / value) * 100));
-                                  const reached = _ra >= value;
-                                  return (
-                                    <div key={label} style={{ marginBottom: 8 }}>
-                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: reached ? color : "var(--text-subtle)" }}>
-                                          {reached ? "✓ " : ""}{label} — {formatCurrency(value)}
-                                        </span>
-                                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                                          Standard: <strong style={{ color: reached ? color : "var(--text-subtle)" }}>{formatCurrency(monthly)}/mo</strong>
-                                        </span>
-                                      </div>
-                                      <div style={{ height: 6, borderRadius: 99, background: "var(--bg-input)", overflow: "hidden" }}>
-                                        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: reached ? color : "rgba(100,100,120,0.4)", transition: "width 0.4s" }} />
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                                {/* RA marker + buffer */}
-                                <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-muted)" }}>
-                                  Your projected RA at age {_pa}:{" "}
-                                  <strong style={{ color: "var(--text-bright)" }}>{formatCurrency(_ra)}</strong>
-                                  {tierShockData.raBuf > 0 && tierShockData.tierFloor > 0 && (
-                                    <span style={{ marginLeft: 8, color: "var(--clr-green)", fontWeight: 600 }}>
-                                      +{formatCurrency(tierShockData.raBuf)} above {tierShockData.currentTier} floor
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Tier-drop consequence — only when a lower tier exists */}
-                              {tierShockData.lowerTierName && tierShockData.monthlyDelta > 0 && (
-                                <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
-                                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: "0 0 6px" }}>
-                                    If RA drops to {tierShockData.lowerTierName} tier at age {_pa}:
-                                  </p>
-                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                                    {[
-                                      { label: "Current payout",   value: `${formatCurrency(tierShockData.currentMonthly)}/mo`, color: "var(--clr-green)" },
-                                      { label: "Tier-drop payout", value: `${formatCurrency(tierShockData.lowerMonthly)}/mo`,   color: "var(--clr-red)"   },
-                                      { label: "Monthly shortfall",value: `−${formatCurrency(tierShockData.monthlyDelta)}/mo (−${tierShockData.deltaPct}%)`, color: "var(--clr-red)" },
-                                    ].map(({ label, value, color }) => (
-                                      <div key={label} style={{ textAlign: "center" }}>
-                                        <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 3px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
-                                        <p style={{ fontSize: 13, fontWeight: 800, color, margin: 0 }}>{value}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "8px 0 0" }}>
-                                    Lifetime impact (to age {_le}): {formatCurrency(tierShockData.monthlyDelta * 12 * Math.max(0, _le - _pa))} less in total CPF LIFE payouts
-                                  </p>
-                                </div>
-                              )}
-
-                              {/* Below BRS warning */}
-                              {tierShockData.currentTier === "Below BRS" && (
-                                <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
-                                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: "0 0 4px" }}>
-                                    Projected RA is below BRS — CPF LIFE auto-enrolment minimum not met
-                                  </p>
-                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
-                                    Gap to BRS: {formatCurrency(Math.max(0, tierShockData.projBRS - _ra))} · consider topping up SA/RA via RSTU or VC3A
-                                  </p>
-                                </div>
-                              )}
+                        {/* ── ITEM 7: Tier Shock (cross-reference, data from ReadinessDashboard) ── */}
+                        {tierShockData && (
+                          <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                              <span style={{ fontSize: 15 }}>⚡</span>
+                              <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Tier Shock Analysis</h4>
+                              <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>CPF LIFE payout if RA misses a tier at payout age</span>
+                              <button onClick={() => setActiveTab("summary")}
+                                style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
+                                Full analysis in Summary →
+                              </button>
                             </div>
-                          );
-                        })()}
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
+                              {[
+                                { label: "ERS tier", value: tierShockData.ersMonthly, color: "var(--clr-emerald)" },
+                                { label: "FRS tier", value: tierShockData.frsMonthly, color: "var(--clr-blue)" },
+                                { label: "BRS tier", value: tierShockData.brsMonthly, color: "var(--clr-amber)" },
+                              ].filter(r => r.value).map(({ label, value, color }) => (
+                                <div key={label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${color}44` }}>
+                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+                                  <p style={{ fontSize: 14, fontWeight: 800, color, margin: 0 }}>{formatCurrency(value)}/mo</p>
+                                </div>
+                              ))}
+                              <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
+                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Projected tier</p>
+                                <p style={{ fontSize: 14, fontWeight: 800, color: tierShockData.currentTier === "ERS" ? "var(--clr-emerald)" : tierShockData.currentTier === "FRS" ? "var(--clr-blue)" : "var(--clr-amber)", margin: 0 }}>{tierShockData.currentTier}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* ── ITEM 8: Healthcare Cost Surge ────────────────────────────── */}
                         <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
@@ -26058,7 +26033,7 @@ ${milestoneSnapshotHtml}
                                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
                                       <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
                                         <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Asset depletion age</p>
-                                        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-emerald)", margin: "0 0 2px" }}>Baseline: {sorrData.baseDepletionAge ? `Age ${sorrData.baseDepletionAge}` : "Sustains to 95+"}</p>
+                                        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-emerald)", margin: "0 0 2px" }}>Baseline: {sorrData.baseDepletionAge ? `Age ${sorrData.baseDepletionAge}` : `Sustains to ${maxPA}+`}</p>
                                         <p style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", margin: 0 }}>SORR: {sorrData.sorrDepletionAge ? `Age ${sorrData.sorrDepletionAge}` : "Sustains to 95+"}</p>
                                       </div>
                                       <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(239,68,68,0.3)" }}>
