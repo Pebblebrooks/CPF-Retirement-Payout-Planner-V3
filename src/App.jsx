@@ -733,6 +733,11 @@ const DEFAULT_INPUTS = {
   milestoneAge3: 0,
   milestoneAge4: 0,
   milestoneAge5: 0,
+  // ── Cash Budget: pre-retirement cashflow model ───────────────────────────
+  // budgetLivingExpenses — monthly spend: rent, food, transport, dependants
+  // budgetTaxRate        — marginal Singapore income tax rate (%)
+  budgetLivingExpenses: 3000,
+  budgetTaxRate: 0,
 };
 
 // ── Household: spouse/partner default inputs ──────────────────────────────────
@@ -1208,6 +1213,7 @@ const INPUT_LABELS = {
   lifePlanAtMigration: "CPF LIFE Plan at Migration",
   applyRaOaTransfer: "Apply RA→OA Transfer at Payout/Migration Age",
   milestoneAge: "Milestone Age 1", milestoneAge2: "Milestone Age 2", milestoneAge3: "Milestone Age 3", milestoneAge4: "Milestone Age 4", milestoneAge5: "Milestone Age 5",
+  budgetLivingExpenses: "Monthly Living Expenses", budgetTaxRate: "Marginal Tax Rate (%)",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
@@ -6077,6 +6083,7 @@ export default function App() {
   const [inflationStressRate, setInflationStressRate]         = useState(4);     // F2: stress CPI % (default 4%)
   const [showPropertyStress, setShowPropertyStress]           = useState(false); // F4: property correction toggle
   const [propertyStressGrowthRate, setPropertyStressGrowthRate] = useState(0);  // F4: stressed growth rate %
+  const [showPerfectStorm, setShowPerfectStorm]               = useState(false); // Perfect Storm: combined stressor engine run
   const [showLifeEventMarkers, setShowLifeEventMarkers] = useState(true); // Rev #D2: default ON so events are visible immediately
   // accumChartMode: 'stacked' = AreaChart (wealth composition); 'lines' = LineChart (individual accounts, no MA stacking artifact)
   const [accumChartMode, setAccumChartMode] = useState('stacked');
@@ -6222,7 +6229,7 @@ export default function App() {
   // All section IDs — used for expand-all default and expandAllSections helper
   // BUG-2b fix: "lifeevents" was missing — section never opened on fresh load, was excluded
   // from Expand All, and its open/closed state was not persisted in localStorage.
-  const ALL_SECTION_IDS = ["profile", "cpfBalances", "contribs", "topups", "outflows", "transfers", "investments", "property", "privateAssets", "lifeevents", "decumulation"];
+  const ALL_SECTION_IDS = ["profile", "cpfBalances", "contribs", "cashBudget", "topups", "outflows", "transfers", "investments", "property", "privateAssets", "lifeevents", "decumulation"];
   // Item 28: use localStorage (persists across tab closes) with a versioned key so
   // a future schema change can bump to 'cpf_planner_v2_sections' without reading stale data.
   const SECTIONS_STORAGE_KEY = 'cpf_planner_v1_sections';
@@ -7747,7 +7754,11 @@ export default function App() {
   //
   // Shared constants
   const GS_RSTU_CAP = 8000;
-  const GS_VC3A_CAP = 37740;
+  // GS_VC3A_CAP is bounded by maxAllowableVC (Annual Limit minus mandatory contributions)
+  // so Strategy B never recommends more VC3A than the member can actually contribute.
+  // Without this cap the solver could return e.g. $25,000/yr when only $17,740 is available,
+  // and the engine would silently use the lower figure — misleading the user.
+  const GS_VC3A_CAP = Math.min(37740, maxAllowableVC);
   const GS_ITER     = 30;  // iterations → precision ~$0.008 on any range
 
   // ── Shared binary-search helper ──────────────────────────────────────────
@@ -10718,6 +10729,68 @@ export default function App() {
     }
     return null;
   }, [projection, effectiveOaDrawStartAge, effectiveOaDrawMonthly, effectiveOaDrawFloor]);
+
+  // ── Cash Budget: derive take-home, estimated tax, and voluntary surplus ─────
+  const budgetTakeHome = useMemo(() => {
+    const grossMonthly = Number(debouncedInputs.salaryGross) || 0;
+    if (grossMonthly <= 0) return { grossMonthly: 0, cpfEmployee: 0, takeHome: 0, estimatedMonthlyTax: 0, livingExpenses: 0, surplus: 0, empRatePct: 0 };
+    const ca = Number(debouncedInputs.currentAge) || 35;
+    // Standard SC/PR Year 3+ employee CPF rate by age bracket
+    const empRate = ca <= 55 ? 0.20 : ca <= 60 ? 0.13 : ca <= 65 ? 0.075 : 0.05;
+    const cappedOW = Math.min(grossMonthly, 8000); // CPF ordinary wage ceiling
+    const cpfEmployee = Math.round(cappedOW * empRate);
+    const takeHome = grossMonthly - cpfEmployee;
+    // Tax estimate: marginal rate applied to annual chargeable income (after employee CPF + $1k EIR)
+    const taxRate = (Number(debouncedInputs.budgetTaxRate) || 0) / 100;
+    const annualChargeable = Math.max(0, grossMonthly * 12 - cpfEmployee * 12 - 1000);
+    const estimatedMonthlyTax = Math.round(annualChargeable * taxRate / 12);
+    const livingExpenses = Number(debouncedInputs.budgetLivingExpenses) || 0;
+    const surplus = Math.max(0, takeHome - estimatedMonthlyTax - livingExpenses);
+    return { grossMonthly, cpfEmployee, takeHome, estimatedMonthlyTax, livingExpenses, surplus, empRatePct: Math.round(empRate * 100) };
+  }, [debouncedInputs.salaryGross, debouncedInputs.currentAge, debouncedInputs.budgetTaxRate, debouncedInputs.budgetLivingExpenses]);
+
+  // ── Perfect Storm: single combined engine run across all active stressors ──
+  // Gated by showPerfectStorm toggle; runs at most 1 extra engine call.
+  const perfectStormData = useMemo(() => {
+    if (!showPerfectStorm) return null;
+    const anyActive = showSorr || showInflationStress || showPropertyStress || showCpfRateStress || showHealthcareStress;
+    if (!anyActive) return null;
+    const pa = payoutAge65;
+    const isMaleVal = debouncedInputs.isMale !== false;
+    const lifeExp = isMaleVal ? 85 : 88;
+    // Build combined-override inputs: CPF rate stress + all others remain in debouncedInputs
+    const psInputs = {
+      ...debouncedInputs,
+      cpfOARateOverride: showCpfRateStress ? 1.5 : (debouncedInputs.cpfOARateOverride || ''),
+      cpfSARateOverride: showCpfRateStress ? 3.0 : (debouncedInputs.cpfSARateOverride || ''),
+      cpfMARateOverride: showCpfRateStress ? 3.0 : (debouncedInputs.cpfMARateOverride || ''),
+    };
+    let psRows;
+    try { psRows = runProjectionEngine(psInputs); } catch { return null; }
+    const psRow    = psRows.find(r => r.age === pa) || {};
+    const psTotalCPF = (psRow.oa||0) + (psRow.sa||0) + (psRow.ra||0) + (psRow.ma||0);
+    const psPriv   = psRow.privateAssets || 0;
+    // Baseline from main projection (accumulationByAge may already include user-set rate overrides)
+    const baseRow  = accumulationByAge.get(pa) || {};
+    const baseTotalCPF = (baseRow.oa||0) + (baseRow.sa||0) + (baseRow.ra||0) + (baseRow.ma||0);
+    const basePriv = baseRow.privateAssets || 0;
+    // Property: use stressed value if property stress is active
+    const baseProp   = propertyStressData?.baseValueAtPA ?? (Number(debouncedInputs.includeProperty) !== 0 ? (accumulationByAge.get(pa)?.propertyValue || 0) : 0);
+    const stressProp = showPropertyStress && propertyStressData ? propertyStressData.stressValueAtPA : baseProp;
+    // Healthcare: total surge cost drawn from private assets
+    const annualHC = showHealthcareStress ? (hcMonthlyCost || 0) * 12 : 0;
+    const hcDuration = Math.max(1, (hcEndAge || 85) - (hcStartAge || 75));
+    const hcTotal  = annualHC * hcDuration;
+    // Combined stressed net worth
+    const psNetWorth   = psTotalCPF + Math.max(0, psPriv - hcTotal) + stressProp;
+    const baseNetWorth = baseTotalCPF + basePriv + baseProp;
+    const delta    = Math.max(0, baseNetWorth - psNetWorth);
+    const deltaPct = baseNetWorth > 0 ? Math.round(delta / baseNetWorth * 100) : 0;
+    const cpfDelta = Math.max(0, baseTotalCPF - psTotalCPF);
+    return { pa, psTotalCPF, psPriv, stressProp, baseTotalCPF, basePriv, baseProp, psNetWorth, baseNetWorth, delta, deltaPct, cpfDelta, hcTotal, lifeExp };
+  }, [showPerfectStorm, showSorr, showInflationStress, showPropertyStress, showCpfRateStress,
+      showHealthcareStress, debouncedInputs, payoutAge65, accumulationByAge,
+      propertyStressData, hcMonthlyCost, hcStartAge, hcEndAge]);
 
   const generatePDF = async (orientOverride) => {
     setIsGeneratingPdf(true);
@@ -16599,6 +16672,94 @@ ${milestoneSnapshotHtml}
               </div>}
             </div>{/* /contribs inner */}
             </div>{/* /contribs gate wrapper */}
+
+            {/* ── Cash Budget ─────────────────────────────────────────────── */}
+            {/* Take-home · Living expenses · Tax estimate · Available surplus  */}
+            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
+              <SidebarSectionHeader
+                id="cashBudget" label="Cash Budget"
+                icon={<DollarSign style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />}
+                color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)"
+                isOpen={openSections.has("cashBudget")} onToggle={() => toggleSection("cashBudget")}
+                badge={budgetTakeHome.surplus > 0 ? (
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+                    background: "rgba(56,189,248,0.15)", color: "var(--clr-sky)", whiteSpace: "nowrap" }}>
+                    {formatCurrency(budgetTakeHome.surplus)}/mo surplus
+                  </span>
+                ) : null}
+                collapsedHint="Take-home · Living expenses · Tax rate · Available for voluntary contributions"
+              />
+              {openSections.has("cashBudget") && (
+                <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+
+                  {/* Read-only income bridge: Gross → Employee CPF → Take-home */}
+                  <div style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", flexDirection: "column", gap: 5 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "var(--text-muted)" }}>Monthly gross salary</span>
+                      <span style={{ fontWeight: 700, color: "var(--text-bright)" }}>{formatCurrency(budgetTakeHome.grossMonthly)}/mo</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "var(--text-muted)" }}>Less: employee CPF ({budgetTakeHome.empRatePct}%)</span>
+                      <span style={{ fontWeight: 700, color: "var(--clr-amber)" }}>−{formatCurrency(budgetTakeHome.cpfEmployee)}/mo</span>
+                    </div>
+                    <div style={{ borderTop: "0.5px solid var(--border-subtle)", paddingTop: 5, display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "var(--text-muted)" }}>Estimated take-home</span>
+                      <span style={{ fontWeight: 700, color: "var(--clr-emerald)" }}>{formatCurrency(budgetTakeHome.takeHome)}/mo</span>
+                    </div>
+                  </div>
+
+                  {/* Monthly living expenses */}
+                  <label style={{ display: "block" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Monthly living expenses</span>
+                    <input type="number" min={0} max={20000} step={100}
+                      name="budgetLivingExpenses" value={inputs.budgetLivingExpenses}
+                      onChange={handleChange} onBlur={handleBlur}
+                      style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontWeight: 700 }} />
+                    <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>Rent/mortgage (cash), food, transport, dependants — monthly</span>
+                  </label>
+
+                  {/* Marginal tax rate */}
+                  <label style={{ display: "block" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Marginal income tax rate</span>
+                    <select name="budgetTaxRate" value={inputs.budgetTaxRate} onChange={handleChange}
+                      style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontWeight: 700 }}>
+                      {[0, 3.5, 7, 11.5, 15, 18, 22].map(r => (
+                        <option key={r} value={r}>{r === 0 ? "0% (no tax / exempt)" : `${r}%`}</option>
+                      ))}
+                    </select>
+                    <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>Applied to chargeable income (gross − employee CPF − $1k relief). 0% if annual income ≤$20k</span>
+                  </label>
+
+                  {/* Estimated monthly tax (show when tax rate > 0) */}
+                  {Number(inputs.budgetTaxRate) > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                      <span style={{ color: "var(--text-muted)" }}>Estimated monthly income tax</span>
+                      <span style={{ fontWeight: 700, color: "var(--clr-amber)" }}>−{formatCurrency(budgetTakeHome.estimatedMonthlyTax)}/mo</span>
+                    </div>
+                  )}
+
+                  {/* Surplus / Available for voluntary top-ups */}
+                  <div style={{
+                    background: budgetTakeHome.surplus > 0 ? "rgba(56,189,248,0.08)" : "rgba(239,68,68,0.06)",
+                    borderRadius: 10,
+                    border: `1px solid ${budgetTakeHome.surplus > 0 ? "rgba(56,189,248,0.3)" : "rgba(239,68,68,0.2)"}`,
+                    padding: "10px 14px"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>Available for voluntary top-ups</span>
+                      <span style={{ fontSize: 16, fontWeight: 900, color: budgetTakeHome.surplus > 0 ? "var(--clr-sky)" : "var(--clr-red)" }}>
+                        {formatCurrency(budgetTakeHome.surplus)}/mo
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>
+                      {formatCurrency(budgetTakeHome.surplus * 12)}/yr · take-home minus living{Number(inputs.budgetTaxRate) > 0 ? " & estimated tax" : ""}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+            </div>
+
               </div>{/* /sidebar-col-1-body */}
             </div>{/* /sidebar-col-1 */}
 
@@ -24357,7 +24518,34 @@ ${milestoneSnapshotHtml}
                           {strat.needed != null && <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>{letter === "A" ? "RSTU" : "VC3A"} / yr<TooltipBox id={`t-gs-needed-${letter}`} text={letter === "A" ? "Annual RSTU required to hit your target. Tax-relievable up to $8,000/yr. Exempt from the $37,740 Annual Limit." : "Annual VC3A required. Auto-split OA/SA/MA by age-band. Counts toward $37,740 Annual Limit. No tax relief."} /></span><br /><strong style={{ color }}>{fmt(strat.needed)}</strong></div>}
                           <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Total annual cash<TooltipBox id={`t-gs-total-${letter}`} text="Additional cash outflow from your bank account each year above current contributions — before any tax savings." /></span><br /><strong style={{ color }}>{fmt(strat.totalCash)}</strong></div>
                           <div style={{ fontSize: 13 }}><span style={{ color: "var(--text-muted)" }}>Monthly equiv.<TooltipBox id={`t-gs-monthly-${letter}`} text="Total annual cash ÷ 12 — the monthly amount to budget from your take-home pay." /></span><br /><strong style={{ color }}>{fmt(strat.totalCash / 12)}/mo</strong></div>
+                          {letter === "B" && maxAllowableVC < 37740 && (
+                            <div style={{ fontSize: 11, color: "var(--clr-amber)", display: "flex", alignItems: "center", gap: 5 }}>
+                              <AlertTriangle style={{ width: 11, height: 11, flexShrink: 0 }} />
+                              VC3A ceiling: {formatCurrency(maxAllowableVC)}/yr after mandatory contributions ({formatCurrency(37740 - maxAllowableVC)}/yr consumed by mandatory)
+                            </div>
+                          )}
                         </div>
+                        {/* ── Affordability gate vs Cash Budget surplus ── */}
+                        {budgetTakeHome.surplus > 0 && strat.feasible && (() => {
+                          const monthlyNeeded = strat.totalCash / 12;
+                          const ratio  = monthlyNeeded / budgetTakeHome.surplus;
+                          const isComf = ratio <= 0.8;
+                          const isTght = ratio <= 1.0;
+                          const label  = isComf ? "✅ Comfortable" : isTght ? "⚠️ Tight" : "🚫 Exceeds surplus";
+                          const clr    = isComf ? "#22c55e" : isTght ? "var(--clr-amber)" : "#ef4444";
+                          const bgClr  = isComf ? "rgba(34,197,94,0.08)" : isTght ? "rgba(245,158,11,0.10)" : "rgba(239,68,68,0.08)";
+                          return (
+                            <div style={{ fontSize: 11, display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 10px", borderRadius: 8, background: bgClr, border: `1px solid ${clr}44`, marginTop: 6 }}>
+                              <span style={{ fontWeight: 700, color: clr, whiteSpace: "nowrap" }}>{label}</span>
+                              <span style={{ color: "var(--text-muted)", lineHeight: 1.4 }}>
+                                {isTght
+                                  ? `${formatCurrency(monthlyNeeded)}/mo = ${Math.round(ratio * 100)}% of your ${formatCurrency(budgetTakeHome.surplus)}/mo Cash Budget surplus`
+                                  : `${formatCurrency(monthlyNeeded)}/mo exceeds your ${formatCurrency(budgetTakeHome.surplus)}/mo surplus by ${formatCurrency(monthlyNeeded - budgetTakeHome.surplus)}`
+                                }
+                              </span>
+                            </div>
+                          );
+                        })()}
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           <button
                             onClick={() => applied ? null : onApply()}
@@ -25669,6 +25857,135 @@ ${milestoneSnapshotHtml}
                             ))}
                           </div>
                         </details>
+
+                        {/* ── Stressor Impact Summary (Tornado Chart) ──────────────── */}
+                        {anyStressActive && (() => {
+                          const baseRow  = accumulationByAge.get(pa) || {};
+                          const baseCPF  = (baseRow.oa||0) + (baseRow.sa||0) + (baseRow.ra||0) + (baseRow.ma||0);
+                          const baseProp = baseRow.propertyValue || 0;
+                          const basePriv = baseRow.privateAssets || 0;
+                          const baseNW   = Math.max(1, baseCPF + baseProp + basePriv);
+
+                          const impacts = [];
+                          if (showSorr && sorrData?.hasData && (sorrData.lifetimeGap||0) > 0)
+                            impacts.push({ label: "SORR", color: "#ef4444",
+                              metric: "Lifetime private asset income gap",
+                              value: sorrData.lifetimeGap });
+                          if (showInflationStress && (inflationStressData?.lifetimeLoss||0) > 0)
+                            impacts.push({ label: "Inflation", color: "var(--clr-amber)",
+                              metric: `Lifetime CPF LIFE purchasing-power loss at ${inflationStressRate}% CPI`,
+                              value: inflationStressData.lifetimeLoss });
+                          if (showPropertyStress && (propertyStressData?.delta||0) > 0)
+                            impacts.push({ label: "Property", color: "var(--clr-red)",
+                              metric: `Property value loss at age ${pa}`,
+                              value: propertyStressData.delta });
+                          if (showHealthcareStress) {
+                            const totalCostHC = (hcMonthlyCost||0) * 12 * Math.max(1, (hcEndAge||85) - (hcStartAge||75));
+                            if (totalCostHC > 0)
+                              impacts.push({ label: "Healthcare", color: "#f97316",
+                                metric: `Surge cost age ${hcStartAge}–${hcEndAge}`,
+                                value: totalCostHC });
+                          }
+                          if (showCpfRateStress)
+                            impacts.push({ label: "CPF Rate", color: "var(--clr-purple)",
+                              metric: "OA 1.5% · SA/RA 3% · MA 3% — impact in projection", value: null });
+
+                          impacts.sort((a, b) => (b.value||0) - (a.value||0));
+                          const maxVal = Math.max(1, ...impacts.filter(i => i.value).map(i => i.value));
+
+                          return (
+                            <div style={{ background: "var(--bg-muted)", border: "1px solid rgba(239,68,68,0.28)", borderRadius: 18, padding: 20 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                                <BarChart3 style={{ width: 15, height: 15, color: "#ef4444", flexShrink: 0 }} />
+                                <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Stressor Impact Summary</h4>
+                                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{activeCount} active · sorted by magnitude</span>
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                {impacts.map(({ label, color, metric, value }) => (
+                                  <div key={label}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 }}>
+                                      <span style={{ fontSize: 12, fontWeight: 700, color }}>{label}</span>
+                                      <span style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "right", maxWidth: "65%" }}>
+                                        {value != null
+                                          ? `${formatCurrency(value)} (~${Math.round(value/baseNW*100)}% of net worth)`
+                                          : metric}
+                                      </span>
+                                    </div>
+                                    <div style={{ height: 8, borderRadius: 99, background: "var(--bg-input)", overflow: "hidden" }}>
+                                      {value != null
+                                        ? <div style={{ height:"100%", width:`${Math.round(value/maxVal*100)}%`, borderRadius:99, background:color, transition:"width 0.4s" }} />
+                                        : <div style={{ height:"100%", width:"100%", borderRadius:99, background:`repeating-linear-gradient(45deg,${color}55,${color}55 4px,transparent 4px,transparent 8px)` }} />
+                                      }
+                                    </div>
+                                    {value != null && <div style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 2 }}>{metric}</div>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* ── Perfect Storm — combined stressor engine run ──────────── */}
+                        {activeCount >= 2 && (
+                          <div style={{ background: showPerfectStorm ? "rgba(239,68,68,0.05)" : "var(--bg-muted)", border: `1px solid ${showPerfectStorm ? "rgba(239,68,68,0.45)" : "var(--border-strong)"}`, borderRadius: 18, padding: 20 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showPerfectStorm && perfectStormData ? 16 : 0 }}>
+                              <Zap style={{ width: 15, height: 15, color: "#ef4444", flexShrink: 0 }} />
+                              <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>
+                                Perfect Storm — All Stressors Combined
+                              </h4>
+                              <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>
+                                {activeCount} active stressors applied simultaneously
+                              </span>
+                              <button onClick={() => setShowPerfectStorm(v => !v)}
+                                style={{ padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700,
+                                  border: `1px solid ${showPerfectStorm ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`,
+                                  background: showPerfectStorm ? "rgba(239,68,68,0.14)" : "var(--bg-input)",
+                                  color: showPerfectStorm ? "#ef4444" : "var(--text-muted)", cursor: "pointer" }}>
+                                {showPerfectStorm ? "Hide" : "Show Perfect Storm →"}
+                              </button>
+                            </div>
+
+                            {showPerfectStorm && perfectStormData && (() => {
+                              const { psTotalCPF, baseTotalCPF, psPriv, basePriv,
+                                      stressProp, baseProp, psNetWorth, baseNetWorth,
+                                      delta, deltaPct, cpfDelta, hcTotal } = perfectStormData;
+                              const cards = [
+                                { label: "Total CPF at payout", base: baseTotalCPF, stressed: psTotalCPF },
+                                { label: "Private assets at payout", base: basePriv, stressed: Math.max(0, psPriv - hcTotal), note: hcTotal > 0 ? `incl. ${formatCurrency(hcTotal)} healthcare draw` : null },
+                                ...(baseProp > 0 ? [{ label: "Property at payout", base: baseProp, stressed: stressProp }] : []),
+                              ];
+                              return (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(170px,1fr))", gap: 10 }}>
+                                    {cards.map(({ label, base, stressed, note }) => {
+                                      const d = Math.max(0, base - stressed);
+                                      const p = base > 0 ? Math.round(d/base*100) : 0;
+                                      return (
+                                        <div key={label} style={{ padding:"10px 14px", borderRadius:10, background:"var(--bg-panel)", border:"1px solid rgba(239,68,68,0.2)" }}>
+                                          <p style={{ fontSize:11, color:"var(--text-muted)", margin:"0 0 4px" }}>{label}</p>
+                                          <p style={{ fontSize:15, fontWeight:800, color:"#ef4444", margin:0 }}>{formatCurrency(stressed)}</p>
+                                          <p style={{ fontSize:10, color:"var(--text-subtle)", margin:"2px 0 0" }}>Base: {formatCurrency(base)}{d > 0 ? ` · −${p}%` : " · unchanged"}</p>
+                                          {note && <p style={{ fontSize:10, color:"var(--text-subtle)", margin:"1px 0 0" }}>{note}</p>}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  {/* Combined impact banner */}
+                                  <div style={{ padding:"12px 16px", borderRadius:12, background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.3)" }}>
+                                    <p style={{ fontSize:12, fontWeight:700, color:"#ef4444", margin:"0 0 2px" }}>Combined Net Worth Reduction at Age {perfectStormData.pa}</p>
+                                    <p style={{ fontSize:18, fontWeight:900, color:"#ef4444", margin:0 }}>
+                                      −{formatCurrency(delta)}&nbsp;<span style={{ fontSize:13, fontWeight:600 }}>({deltaPct}% of baseline net worth)</span>
+                                    </p>
+                                    <p style={{ fontSize:11, color:"var(--text-subtle)", margin:"4px 0 0" }}>
+                                      CPF impact: −{formatCurrency(cpfDelta)} · Life expectancy used: age {perfectStormData.lifeExp}
+                                      {hcTotal > 0 ? ` · Healthcare surge: ${formatCurrency(hcTotal)}` : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
 
                         {/* ── ITEM 2: Stress Assumptions panel ─────────────────────── */}
                         <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
