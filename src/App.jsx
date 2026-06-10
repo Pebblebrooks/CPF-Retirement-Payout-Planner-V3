@@ -4949,6 +4949,8 @@ function ReadinessTab({
   monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
   // Q2: wizard completion flag — gates placeholder states on KPI tiles
   wizardCompleted,
+  // SRS CTA: opens + scrolls to Private Assets section in the sidebar
+  onSrsCtaClick,
 }) {
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
@@ -5915,9 +5917,12 @@ function ReadinessTab({
       {/* ── ROW 5: Action priority queue (full-width) — Phase 3 ── */}
       {actionItems.length > 0 && (
         <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <p style={labelStyle}>Action priority queue</p>
-            <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <p style={labelStyle}>Action priority queue</p>
+              <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "2px 0 0" }}>+pts = estimated improvement to your Readiness Score (0–100)</p>
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-subtle)", whiteSpace: "nowrap", marginTop: 2 }}>
               {actionItems.length} action{actionItems.length !== 1 ? "s" : ""} · highest impact first
             </span>
           </div>
@@ -5944,7 +5949,14 @@ function ReadinessTab({
                   <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{a.desc}</div>
                 </div>
                 <button
-                  onClick={() => { setActiveTab(a.tab); if (a.openSidebar) setSidebarOpen(true); }}
+                  onClick={() => {
+                    if (a.id === "srs" && onSrsCtaClick) {
+                      onSrsCtaClick();
+                    } else {
+                      setActiveTab(a.tab);
+                      if (a.openSidebar) setSidebarOpen(true);
+                    }
+                  }}
                   style={{ flexShrink: 0, padding: "5px 12px", borderRadius: 7, cursor: "pointer",
                     background: a.urgent ? "rgba(245,158,11,0.14)" : "rgba(59,130,246,0.14)",
                     border: `1px solid ${a.urgent ? "rgba(245,158,11,0.4)" : "rgba(59,130,246,0.4)"}`,
@@ -5984,6 +5996,7 @@ function findScrollContainer(el) {
 export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
+  const privateAssetsRef = useRef(null); // scroll target for "SRS panel ↗" Readiness action CTA
   const kpiHeaderRef     = useRef(null); // measures cpf-tabs-kpi-header height → --kpi-header-h
   const strategySubnavRef = useRef(null); // measures strategy-subnav height → --strategy-subnav-h
   const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
@@ -6130,11 +6143,7 @@ export default function App() {
     try { return !!localStorage.getItem('cpf_planner_wizard_tip_done'); }
     catch { return true; }
   });
-  const [gapAlertDismissed,     setGapAlertDismissed]     = useState(false);
-  // Strategy tab gap alert has its own dismiss state so Summary and Strategy
-  // dismissals are fully independent. Resets automatically when the gap size
-  // changes by >= $1,000 (same bucketing used for the Summary alert key).
-  const [gapAlertStratDismissed, setGapAlertStratDismissed] = useState(false);
+  const [gapAlertDismissed, setGapAlertDismissed] = useState(false);
   // guideView: sub-tab within the merged Docs tab. 'quickstart' shows Welcome onboarding cards;
   // 'reference' shows the full reference manual with sticky anchor nav.
   // Defaults to 'reference' for returning users (setup done) and 'quickstart' for first-timers.
@@ -7982,7 +7991,6 @@ export default function App() {
         // Gap alert — re-enable so it evaluates fresh against the default profile.
         // If dismissed before reset, it would never reappear for the new inputs.
         setGapAlertDismissed(false);
-        setGapAlertStratDismissed(false);
         // Chart view state — reset all toggles so the user sees a clean chart
         // immediately after reset rather than inheriting a prior display mode.
         setHighlightPlan("standard");
@@ -8059,7 +8067,6 @@ export default function App() {
         setLeFormState({});
         // Re-enable gap alert so it evaluates fresh against the new blank profile.
         setGapAlertDismissed(false);
-        setGapAlertStratDismissed(false);
         // Reset chart view state to clean defaults.
         setHighlightPlan("standard");
         setPrimaryLifePlan("standard");
@@ -15035,7 +15042,7 @@ ${milestoneSnapshotHtml}
       <div className="cpf-mobile-tabstrip-spacer" style={{ display: "none" }} />
       {isVcOverLimit && (
         <div style={{ background: "rgba(234,88,12,0.2)", borderBottom: "1px solid rgba(234,88,12,0.5)", padding: "8px 20px", textAlign: "center", color: "#fdba74", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <AlertTriangle style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />VC Exceeds Available Limit ({formatCurrency(maxAllowableVC)})
+          <AlertTriangle style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />VC3A Capped to {formatCurrency(maxAllowableVC)}/yr — Projection Already Applies Limit
         </div>
       )}
 
@@ -16640,7 +16647,7 @@ ${milestoneSnapshotHtml}
                   </div>
                 )}
                 {isVcOverLimit && <div style={{ background: "rgba(249,115,22,0.15)", color: "#fdba74", fontSize: 12, fontWeight: 700, padding: 10, borderRadius: 8, marginBottom: 10, display: "flex", gap: 6 }}>
-                  <AlertTriangle style={{ width: 12, height: 12, flexShrink: 0, marginTop: 1 }} />VC3A exceeds available limit ({formatCurrency(maxAllowableVC)}/yr). Contributions will be scaled down.
+                  <AlertTriangle style={{ width: 12, height: 12, flexShrink: 0, marginTop: 1 }} />VC3A capped to {formatCurrency(maxAllowableVC)}/yr in projection (Annual Limit after mandatory contributions). Projection is already correct — no input change required.
                 </div>}
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -18319,7 +18326,7 @@ ${milestoneSnapshotHtml}
             {showAdvanced && (
             <>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
+            <div ref={privateAssetsRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader id="privateAssets" label="Private Assets" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & contributions" />
               {openSections.has("privateAssets") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -18900,6 +18907,12 @@ ${milestoneSnapshotHtml}
                 monteCarloData={monteCarloData}
                 effectiveOaDrawMonthly={effectiveOaDrawMonthly}
                 effectiveOaDrawStartAge={effectiveOaDrawStartAge}
+                onSrsCtaClick={() => {
+                  setActiveTab("summary");
+                  setSidebarOpen(true);
+                  setOpenSections(prev => new Set([...prev, "privateAssets"]));
+                  setTimeout(() => privateAssetsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+                }}
                 wizardCompleted={(() => { try { return !!localStorage.getItem('cpf_planner_setup_done'); } catch { return true; } })()}
               />
             )}
@@ -19086,16 +19099,12 @@ ${milestoneSnapshotHtml}
                     $1-$5 across projection re-runs (Math.round rounding in fvAnnuityFactor),
                     causing the dismissed alert to spuriously re-appear. Bucketing to $1k means
                     only a genuine gap change of >=$1,000 resets the dismissal. */}
-                {/* UX-OPT-B: Summary gap alert — slim diagnostic card only (no Apply action).
-                    The "Apply top-up" action has moved to Strategy → Goal sub-tab where the
-                    full solver context lives. This card shows the gap and routes the user there.
-                    Dismiss state (gapAlertDismissed) is separate from Strategy (gapAlertStratDismissed). */}
                 {gapAlert && !gapAlertDismissed && (
                   <div data-zone="gap-alert" key={Math.round(gapAlert.frsGap / 1000)}
                     style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
                       borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.35)" : "rgba(var(--clr-amber3-rgb),0.35)"}`,
                       background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.07)" }}>
-                    <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 2 }} />
+                    <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 1 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                         <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>
@@ -19110,12 +19119,16 @@ ${milestoneSnapshotHtml}
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {gapAlert.annualTopUp > 0 && (
                         <button type="button"
-                          onClick={() => { setActiveTab("strategy"); setGoalStratTab("goal"); }}
+                          onClick={() => {
+                            setInputs(prev => ({ ...prev, vcSaTopup: gapAlert.newTopUp }));
+                            showToast(`✓ RSTU set to ${formatCurrency(gapAlert.newTopUp)}/yr — gap closed`);
+                            setGapAlertDismissed(true);
+                          }}
                           style={{ padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
                             border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
                             background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)",
                             color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <Target style={{ width: 11, height: 11, flexShrink: 0 }} />Fix in Strategy →
+                          <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Apply top-up
                         </button>
                       )}
                       <button type="button" onClick={() => setGapAlertDismissed(true)}
@@ -20524,7 +20537,7 @@ ${milestoneSnapshotHtml}
                               ...(!_isRSSForTransfer ? [{ label: "Payout age", unit: "yrs", min: 65, max: 70, step: 1, val: effPA, set: setWhatIfPayoutAge, base: Number(debouncedInputs.payoutAge)||65, fmt: v=>`${v}` }] : []),
                               { label: "Annual SA/RA top-up (RSTU)", unit: "$", min: 0, max: 37740, step: 100, val: effST, set: setWhatIfSaTopup, base: Number(debouncedInputs.vcSaTopup)||0, fmt: formatCurrency },
                               { label: "Annual housing outflow", unit: "$", min: 0, max: 30000, step: 100, val: effH, set: setWhatIfHousing, base: Number(debouncedInputs.housingOutflow)||0, fmt: formatCurrency },
-                              { label: "Salary bump", unit: "$", min: 0, max: 5000, step: 100, val: effSB, set: setWhatIfSalaryBump, base: 0, fmt: v=>v>0?`+${formatCurrency(v)}/mo`:"No change" },
+                              { label: "Salary bump", unit: "%", min: 0, max: 50, step: 1, val: effSB, set: setWhatIfSalaryBump, base: 0, fmt: v=>v>0?`+${v}%`:"No change", note: "Permanent % increase from current age — scales mandatory CPF contributions proportionally" },
                               { label: "Contribution stop age", unit: "yrs", min: Number(debouncedInputs.currentAge)||35, max: 75, step: 1, val: effCS, set: setWhatIfContribStop, base: Number(debouncedInputs.contributionStopAge)||65, fmt: v=>`${v}` },
                               { label: "Monthly OA drawdown", unit: "$", min: 0, max: 5000, step: 50, val: effOAD, set: setWhatIfOaDrawdown, base: Number(debouncedInputs.oaDrawdownMonthly)||0, fmt: v=>v>0?`${formatCurrency(v)}/mo`:"Off" },
                               { label: "Annual SRS contribution", unit: "$", min: 0, max: 15300, step: 100, val: effSRS, set: setWhatIfSrsContrib, base: Number(debouncedInputs.srsAnnualContribution)||0, fmt: formatCurrency },
@@ -23806,7 +23819,7 @@ ${milestoneSnapshotHtml}
                               <li><strong>Payout Age</strong> (65–70): Each year deferred adds approximately +7% to CPF LIFE monthly payouts.</li>
                               <li><strong>Annual SA/RA Top-up (RSTU)</strong>: Extra voluntary top-up — shows how consistent annual top-ups compound over time.</li>
                               <li><strong>Annual Housing Outflow</strong>: Reduce or increase to model mortgage overpayments or downsizing.</li>
-                              <li><strong>One-time Salary Increase</strong>: A one-off salary bump applied from the current age — raises mandatory contribution projections.</li>
+                              <li><strong>Salary Bump (%)</strong>: A permanent percentage increase applied to your base salary from the current age onwards — scales mandatory CPF contribution projections proportionally. E.g., +10% on a $5,500/mo salary adds ~$550/mo to the projection base.</li>
                               <li><strong>Contribution Stop Age</strong>: How long you keep contributing — directly controls the accumulation runway.</li>
                               <li><strong>Monthly OA Drawdown</strong>: Draw from OA after CPF LIFE starts — higher draw reduces OA but raises monthly cash income.</li>
                               <li><strong>Annual SRS Contribution</strong>: Additional tax-deferred savings — modelled separately from CPF balances.</li>
@@ -24591,61 +24604,6 @@ ${milestoneSnapshotHtml}
 
                     return (
                       <div style={{ padding: "24px 24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
-
-                        {/* ── UX-OPT-B: Full actionable gap alert — Strategy/Goal is the action centre.
-                            Uses gapAlertStratDismissed (independent from Summary's gapAlertDismissed)
-                            so dismissing in one tab does not affect the other. Apply top-up wires
-                            directly to vcSaTopup just like the old Summary version did. ── */}
-                        {gapAlert && !gapAlertStratDismissed && (
-                          <div key={Math.round(gapAlert.frsGap / 1000)}
-                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px",
-                              borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
-                              background: gapAlert.isUrgent ? "rgba(239,68,68,0.09)" : "rgba(var(--clr-amber3-rgb),0.08)" }}>
-                            <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 2 }} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                                <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>
-                                  Contribution gap — {gapAlert.raLabel}
-                                </span>
-                              </div>
-                              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 8px", lineHeight: 1.55 }}>
-                                Projected {gapAlert.raLabel} of{" "}
-                                <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.raForAlert)}</strong> is{" "}
-                                <strong style={{ color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>{formatCurrency(gapAlert.frsGap)}</strong>{" "}
-                                short of FRS ({formatCurrency(gapAlert.projFRS55)}).{" "}
-                                Suggested top-up:{" "}
-                                <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.annualTopUp)}/yr</strong>{" "}
-                                ({formatCurrency(gapAlert.monthlyTopUp)}/mo) over {gapAlert.yearsToGo} yrs.
-                              </p>
-                              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, opacity: 0.75 }}>
-                                Use the Goal Simulator below to model strategies, or click Apply top-up to set the suggested RSTU directly.
-                              </p>
-                            </div>
-                            <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center", marginLeft: 4 }}>
-                              {gapAlert.annualTopUp > 0 && (
-                                <button type="button"
-                                  onClick={() => {
-                                    setInputs(prev => ({ ...prev, vcSaTopup: gapAlert.newTopUp }));
-                                    showToast(`✓ RSTU set to ${formatCurrency(gapAlert.newTopUp)}/yr — gap closed`);
-                                    setGapAlertStratDismissed(true);
-                                    setGapAlertDismissed(true);
-                                  }}
-                                  style={{ padding: "7px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-                                    border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.45)" : "rgba(var(--clr-amber3-rgb),0.45)"}`,
-                                    background: gapAlert.isUrgent ? "rgba(239,68,68,0.14)" : "rgba(var(--clr-amber3-rgb),0.14)",
-                                    color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer",
-                                    whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                                  <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Apply top-up
-                                </button>
-                              )}
-                              <button type="button" onClick={() => setGapAlertStratDismissed(true)}
-                                style={{ padding: "6px 8px", borderRadius: 8, fontSize: 14, fontWeight: 500,
-                                  border: "1px solid var(--border-subtle)", background: "transparent",
-                                  color: "var(--text-muted)", cursor: "pointer", lineHeight: 1 }}
-                                aria-label="Dismiss alert">✕</button>
-                            </div>
-                          </div>
-                        )}
 
                         {/* ── How to use guide ──────────────────────────── */}
                         <GoalSimGuide />
@@ -25866,36 +25824,103 @@ ${milestoneSnapshotHtml}
                           )}
                         </div>
 
-                        {/* ── ITEM 7: Tier Shock (cross-reference, data from ReadinessDashboard) ── */}
-                        {tierShockData && (
-                          <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                              <span style={{ fontSize: 15 }}>⚡</span>
-                              <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Tier Shock Analysis</h4>
-                              <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>CPF LIFE payout if RA misses a tier at payout age</span>
-                              <button onClick={() => setActiveTab("summary")}
-                                style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
-                                Full analysis in Summary →
-                              </button>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
-                              {[
-                                { label: "ERS tier", value: tierShockData.ersMonthly, color: "var(--clr-emerald)" },
-                                { label: "FRS tier", value: tierShockData.frsMonthly, color: "var(--clr-blue)" },
-                                { label: "BRS tier", value: tierShockData.brsMonthly, color: "var(--clr-amber)" },
-                              ].filter(r => r.value).map(({ label, value, color }) => (
-                                <div key={label} style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${color}44` }}>
-                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
-                                  <p style={{ fontSize: 14, fontWeight: 800, color, margin: 0 }}>{formatCurrency(value)}/mo</p>
-                                </div>
-                              ))}
-                              <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
-                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Projected tier</p>
-                                <p style={{ fontSize: 14, fontWeight: 800, color: tierShockData.currentTier === "ERS" ? "var(--clr-emerald)" : tierShockData.currentTier === "FRS" ? "var(--clr-blue)" : "var(--clr-amber)", margin: 0 }}>{tierShockData.currentTier}</p>
+                        {/* ── ITEM 7: Tier Shock — full inline analysis (mirrors Readiness tab) ── */}
+                        {tierShockData && (() => {
+                          const _pa  = payoutAge65;
+                          const _ra  = raAtPayout;
+                          const _le  = (debouncedInputs.isMale !== false) ? 85 : 88;
+                          const tierColor = (t) =>
+                            t === "ERS" ? "var(--clr-emerald)" : t === "FRS" ? "var(--clr-blue)" : t === "BRS" ? "var(--clr-amber)" : "var(--clr-red)";
+                          const tierBg = (t) =>
+                            t === "ERS" ? "rgba(16,185,129,0.12)" : t === "FRS" ? "rgba(59,130,246,0.12)" : t === "BRS" ? "rgba(245,158,11,0.12)" : "rgba(239,68,68,0.12)";
+                          return (
+                            <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
+                              {/* Header */}
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                                <span style={{ fontSize: 15 }}>⚡</span>
+                                <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Tier Shock Analysis</h4>
+                                <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                  background: tierBg(tierShockData.currentTier),
+                                  color: tierColor(tierShockData.currentTier) }}>
+                                  Projected: {tierShockData.currentTier} tier
+                                </span>
                               </div>
+
+                              {/* Tier ladder — progress bars for BRS / FRS / ERS vs projected RA */}
+                              <div style={{ marginBottom: 16 }}>
+                                {[
+                                  { label: "ERS", value: tierShockData.projERS, monthly: tierShockData.ersMonthly, color: "var(--clr-emerald)" },
+                                  { label: "FRS", value: tierShockData.projFRS, monthly: tierShockData.frsMonthly, color: "var(--clr-blue)" },
+                                  { label: "BRS", value: tierShockData.projBRS, monthly: tierShockData.brsMonthly, color: "var(--clr-amber)" },
+                                ].map(({ label, value, monthly, color }) => {
+                                  const pct    = Math.min(100, Math.round((_ra / value) * 100));
+                                  const reached = _ra >= value;
+                                  return (
+                                    <div key={label} style={{ marginBottom: 8 }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: reached ? color : "var(--text-subtle)" }}>
+                                          {reached ? "✓ " : ""}{label} — {formatCurrency(value)}
+                                        </span>
+                                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                                          Standard: <strong style={{ color: reached ? color : "var(--text-subtle)" }}>{formatCurrency(monthly)}/mo</strong>
+                                        </span>
+                                      </div>
+                                      <div style={{ height: 6, borderRadius: 99, background: "var(--bg-input)", overflow: "hidden" }}>
+                                        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: reached ? color : "rgba(100,100,120,0.4)", transition: "width 0.4s" }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                {/* RA marker + buffer */}
+                                <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-muted)" }}>
+                                  Your projected RA at age {_pa}:{" "}
+                                  <strong style={{ color: "var(--text-bright)" }}>{formatCurrency(_ra)}</strong>
+                                  {tierShockData.raBuf > 0 && tierShockData.tierFloor > 0 && (
+                                    <span style={{ marginLeft: 8, color: "var(--clr-green)", fontWeight: 600 }}>
+                                      +{formatCurrency(tierShockData.raBuf)} above {tierShockData.currentTier} floor
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Tier-drop consequence — only when a lower tier exists */}
+                              {tierShockData.lowerTierName && tierShockData.monthlyDelta > 0 && (
+                                <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: "0 0 6px" }}>
+                                    If RA drops to {tierShockData.lowerTierName} tier at age {_pa}:
+                                  </p>
+                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                                    {[
+                                      { label: "Current payout",   value: `${formatCurrency(tierShockData.currentMonthly)}/mo`, color: "var(--clr-green)" },
+                                      { label: "Tier-drop payout", value: `${formatCurrency(tierShockData.lowerMonthly)}/mo`,   color: "var(--clr-red)"   },
+                                      { label: "Monthly shortfall",value: `−${formatCurrency(tierShockData.monthlyDelta)}/mo (−${tierShockData.deltaPct}%)`, color: "var(--clr-red)" },
+                                    ].map(({ label, value, color }) => (
+                                      <div key={label} style={{ textAlign: "center" }}>
+                                        <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "0 0 3px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+                                        <p style={{ fontSize: 13, fontWeight: 800, color, margin: 0 }}>{value}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "8px 0 0" }}>
+                                    Lifetime impact (to age {_le}): {formatCurrency(tierShockData.monthlyDelta * 12 * Math.max(0, _le - _pa))} less in total CPF LIFE payouts
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Below BRS warning */}
+                              {tierShockData.currentTier === "Below BRS" && (
+                                <div style={{ padding: "12px 16px", borderRadius: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: "0 0 4px" }}>
+                                    Projected RA is below BRS — CPF LIFE auto-enrolment minimum not met
+                                  </p>
+                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+                                    Gap to BRS: {formatCurrency(Math.max(0, tierShockData.projBRS - _ra))} · consider topping up SA/RA via RSTU or VC3A
+                                  </p>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* ── ITEM 8: Healthcare Cost Surge ────────────────────────────── */}
                         <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 18, padding: 20 }}>
