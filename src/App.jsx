@@ -6130,7 +6130,11 @@ export default function App() {
     try { return !!localStorage.getItem('cpf_planner_wizard_tip_done'); }
     catch { return true; }
   });
-  const [gapAlertDismissed, setGapAlertDismissed] = useState(false);
+  const [gapAlertDismissed,     setGapAlertDismissed]     = useState(false);
+  // Strategy tab gap alert has its own dismiss state so Summary and Strategy
+  // dismissals are fully independent. Resets automatically when the gap size
+  // changes by >= $1,000 (same bucketing used for the Summary alert key).
+  const [gapAlertStratDismissed, setGapAlertStratDismissed] = useState(false);
   // guideView: sub-tab within the merged Docs tab. 'quickstart' shows Welcome onboarding cards;
   // 'reference' shows the full reference manual with sticky anchor nav.
   // Defaults to 'reference' for returning users (setup done) and 'quickstart' for first-timers.
@@ -7978,6 +7982,7 @@ export default function App() {
         // Gap alert — re-enable so it evaluates fresh against the default profile.
         // If dismissed before reset, it would never reappear for the new inputs.
         setGapAlertDismissed(false);
+        setGapAlertStratDismissed(false);
         // Chart view state — reset all toggles so the user sees a clean chart
         // immediately after reset rather than inheriting a prior display mode.
         setHighlightPlan("standard");
@@ -8054,6 +8059,7 @@ export default function App() {
         setLeFormState({});
         // Re-enable gap alert so it evaluates fresh against the new blank profile.
         setGapAlertDismissed(false);
+        setGapAlertStratDismissed(false);
         // Reset chart view state to clean defaults.
         setHighlightPlan("standard");
         setPrimaryLifePlan("standard");
@@ -19080,12 +19086,16 @@ ${milestoneSnapshotHtml}
                     $1-$5 across projection re-runs (Math.round rounding in fvAnnuityFactor),
                     causing the dismissed alert to spuriously re-appear. Bucketing to $1k means
                     only a genuine gap change of >=$1,000 resets the dismissal. */}
+                {/* UX-OPT-B: Summary gap alert — slim diagnostic card only (no Apply action).
+                    The "Apply top-up" action has moved to Strategy → Goal sub-tab where the
+                    full solver context lives. This card shows the gap and routes the user there.
+                    Dismiss state (gapAlertDismissed) is separate from Strategy (gapAlertStratDismissed). */}
                 {gapAlert && !gapAlertDismissed && (
                   <div data-zone="gap-alert" key={Math.round(gapAlert.frsGap / 1000)}
                     style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
                       borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.35)" : "rgba(var(--clr-amber3-rgb),0.35)"}`,
                       background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.07)" }}>
-                    <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 1 }} />
+                    <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 2 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                         <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>
@@ -19100,16 +19110,12 @@ ${milestoneSnapshotHtml}
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {gapAlert.annualTopUp > 0 && (
                         <button type="button"
-                          onClick={() => {
-                            setInputs(prev => ({ ...prev, vcSaTopup: gapAlert.newTopUp }));
-                            showToast(`✓ RSTU set to ${formatCurrency(gapAlert.newTopUp)}/yr — gap closed`);
-                            setGapAlertDismissed(true);
-                          }}
+                          onClick={() => { setActiveTab("strategy"); setGoalStratTab("goal"); }}
                           style={{ padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
                             border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
                             background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)",
                             color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Apply top-up
+                          <Target style={{ width: 11, height: 11, flexShrink: 0 }} />Fix in Strategy →
                         </button>
                       )}
                       <button type="button" onClick={() => setGapAlertDismissed(true)}
@@ -24585,6 +24591,61 @@ ${milestoneSnapshotHtml}
 
                     return (
                       <div style={{ padding: "24px 24px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
+
+                        {/* ── UX-OPT-B: Full actionable gap alert — Strategy/Goal is the action centre.
+                            Uses gapAlertStratDismissed (independent from Summary's gapAlertDismissed)
+                            so dismissing in one tab does not affect the other. Apply top-up wires
+                            directly to vcSaTopup just like the old Summary version did. ── */}
+                        {gapAlert && !gapAlertStratDismissed && (
+                          <div key={Math.round(gapAlert.frsGap / 1000)}
+                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px",
+                              borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
+                              background: gapAlert.isUrgent ? "rgba(239,68,68,0.09)" : "rgba(var(--clr-amber3-rgb),0.08)" }}>
+                            <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 2 }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>
+                                  Contribution gap — {gapAlert.raLabel}
+                                </span>
+                              </div>
+                              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 8px", lineHeight: 1.55 }}>
+                                Projected {gapAlert.raLabel} of{" "}
+                                <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.raForAlert)}</strong> is{" "}
+                                <strong style={{ color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>{formatCurrency(gapAlert.frsGap)}</strong>{" "}
+                                short of FRS ({formatCurrency(gapAlert.projFRS55)}).{" "}
+                                Suggested top-up:{" "}
+                                <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.annualTopUp)}/yr</strong>{" "}
+                                ({formatCurrency(gapAlert.monthlyTopUp)}/mo) over {gapAlert.yearsToGo} yrs.
+                              </p>
+                              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, opacity: 0.75 }}>
+                                Use the Goal Simulator below to model strategies, or click Apply top-up to set the suggested RSTU directly.
+                              </p>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center", marginLeft: 4 }}>
+                              {gapAlert.annualTopUp > 0 && (
+                                <button type="button"
+                                  onClick={() => {
+                                    setInputs(prev => ({ ...prev, vcSaTopup: gapAlert.newTopUp }));
+                                    showToast(`✓ RSTU set to ${formatCurrency(gapAlert.newTopUp)}/yr — gap closed`);
+                                    setGapAlertStratDismissed(true);
+                                    setGapAlertDismissed(true);
+                                  }}
+                                  style={{ padding: "7px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                                    border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.45)" : "rgba(var(--clr-amber3-rgb),0.45)"}`,
+                                    background: gapAlert.isUrgent ? "rgba(239,68,68,0.14)" : "rgba(var(--clr-amber3-rgb),0.14)",
+                                    color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer",
+                                    whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                  <Zap style={{ width: 11, height: 11, flexShrink: 0 }} />Apply top-up
+                                </button>
+                              )}
+                              <button type="button" onClick={() => setGapAlertStratDismissed(true)}
+                                style={{ padding: "6px 8px", borderRadius: 8, fontSize: 14, fontWeight: 500,
+                                  border: "1px solid var(--border-subtle)", background: "transparent",
+                                  color: "var(--text-muted)", cursor: "pointer", lineHeight: 1 }}
+                                aria-label="Dismiss alert">✕</button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* ── How to use guide ──────────────────────────── */}
                         <GoalSimGuide />
