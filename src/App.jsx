@@ -3553,18 +3553,13 @@ function runProjectionEngine(inputs, {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-export const TooltipContext = createContext({ show: null, set: () => {}, rect: null, setRect: () => {}, isDark: true });
+export const TooltipContext = createContext({ show: null, set: () => {}, isDark: true });
 
 export const TooltipBox = ({ id, text }) => {
-  // rect is stored in TooltipContext (App-level state) rather than local state.
-  // Reason: StrategyCard is defined inside the Goal Simulator render IIFE, which means
-  // a new component-type reference is created on every parent re-render. React then
-  // unmounts + remounts StrategyCard's children (including TooltipBox), resetting any
-  // local useState back to null. By keeping rect in context, it survives the remount
-  // and the portal renders correctly after the hover-triggered re-render.
-  const { show, set, rect, setRect, isDark } = useContext(TooltipContext);
+  const { show, set, isDark } = useContext(TooltipContext);
   const isOpen = show === id;
   const iconRef = useRef(null);
+  const [rect, setRect] = useState(null);
 
   const handleToggle = (e) => { 
     e.preventDefault(); 
@@ -6067,7 +6062,6 @@ export default function App() {
   const [spouseLifePlan,  setSpouseLifePlan]  = useState("standard");
   const [viewMode, setViewMode] = useState("bequest");
   const [showTooltipId, setShowTooltipId] = useState(null);
-  const [tooltipRect,   setTooltipRect]   = useState(null); // lifted from TooltipBox — survives StrategyCard remounts
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isRealDollars, setIsRealDollars] = useState(false);
   const [saveStatus, setSaveStatus] = useState("Saved");
@@ -12377,7 +12371,7 @@ ${milestoneSnapshotHtml}
   }, [execDashMode]);
 
   return (
-    <TooltipContext.Provider value={{ show: showTooltipId, set: setShowTooltipId, rect: tooltipRect, setRect: setTooltipRect, isDark }}>
+    <TooltipContext.Provider value={{ show: showTooltipId, set: setShowTooltipId, isDark }}>
       <ErrorBoundary>
       <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{ width: "100%", display: "flex", flexDirection: "column", background: "var(--bg-base)", color: "var(--text-main)", fontFamily: "system-ui,sans-serif" }}>
       <style>{`
@@ -20786,8 +20780,8 @@ ${milestoneSnapshotHtml}
                             <span style={{ fontSize: 13, color: "var(--text-muted)", flexShrink: 0 }}>Override SA/RA top-up (exact amount):</span>
                             <input type="number" min={0} max={37740} step={100}
                               aria-label="Override SA/RA top-up amount (max $37,740)" autoComplete="off"
-                              value={whatIfSaTopup !== null ? whatIfSaTopup : (Number(debouncedInputs.vcSaTopup) || 0)}
-                              onChange={e => setWhatIfSaTopup(Math.max(0, Math.min(37740, Number(e.target.value) || 0)))}
+                              value={whatIfSaTopup !== null ? (whatIfSaTopup || "") : (Number(debouncedInputs.vcSaTopup) || "")}
+                              onChange={e => { const v = e.target.value; setWhatIfSaTopup(v === "" ? 0 : Math.max(0, Math.min(37740, Number(v)||0))); }}
                               style={{ width: 120, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontFamily: "monospace" }} />
                             <span style={{ fontSize: 12, color: "var(--text-subtle)" }}>Max $37,740</span>
                           </div>
@@ -23018,9 +23012,9 @@ ${milestoneSnapshotHtml}
                                 style={{ flex: 1, padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontWeight: 700, outline: "none" }} />
                               <label style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
                                 Born
-                                <input type="number" min="2000" max={currentYear} value={child.birthYear}
+                                <input type="number" min="2000" max={currentYear} value={child.birthYear || ""}
                                   aria-label="Child's birth year" autoComplete="off"
-                                  onChange={e => setHouseholdChildren(prev => prev.map(c => c.id === child.id ? { ...c, birthYear: Number(e.target.value) } : c))}
+                                  onChange={e => { const v = e.target.value; setHouseholdChildren(prev => prev.map(c => c.id === child.id ? { ...c, birthYear: v === "" ? "" : Number(v) } : c)); }}
                                   style={{ width: 70, padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, outline: "none" }} />
                               </label>
                               <button onClick={() => setHouseholdChildren(prev => prev.filter(c => c.id !== child.id))}
@@ -24617,14 +24611,6 @@ ${milestoneSnapshotHtml}
                         Maximum reachable with this lever alone: <strong style={{ color: "var(--text-bright)" }}>{fmtK(strat.maxTotal)}</strong><br />
                         Remaining gap after cap: <strong style={{ color: "#ef4444" }}>{fmtK(goalResult.targetAmt - strat.maxTotal)}</strong><br />
                         Try Strategy C (Blended) to combine levers.
-                        {budgetTakeHome.surplus > 0 && strat.maxTotal > 0 && (
-                          <div style={{ marginTop: 6, fontSize: 11, padding: "5px 9px", borderRadius: 7,
-                            background: "rgba(100,100,120,0.10)", border: "1px solid var(--border-subtle)",
-                            color: "var(--text-subtle)" }}>
-                            Cash Budget: <strong style={{ color: "var(--text-muted)" }}>{formatCurrency(budgetTakeHome.surplus)}/mo surplus</strong>
-                            {" · "}Max lever ≈ <strong style={{ color: "var(--text-muted)" }}>{formatCurrency(strat.maxTotal / 12)}/mo</strong>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
@@ -24734,12 +24720,11 @@ ${milestoneSnapshotHtml}
                 <div className="fhd-tab-inner strategy-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
 
                   {/* ── Sub-navigation: Goal Simulator | Income Roadmap ── */}
-                  {/* strategy-subnav: CSS class handles sticky + opaque bg on all viewports.
-                      The CSS background:var(--bg-panel) !important overrides the inline muted
-                      value to prevent scroll-bleed content showing through. overflow:clip (not
-                      hidden) preserves border-radius without creating a new stacking context
+                  {/* strategy-subnav: inline bg is var(--bg-panel) — fully opaque — so
+                      scrolling content cannot bleed through when the bar sticks. overflow:clip
+                      (not hidden) preserves border-radius without creating a stacking context
                       that would break position:sticky inside the scroll container. */}
-                  <div ref={strategySubnavRef} className="strategy-subnav" style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel-muted)", borderRadius: "24px 24px 0 0", overflow: "clip" }}>
+                  <div ref={strategySubnavRef} className="strategy-subnav" style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel)", borderRadius: "24px 24px 0 0", overflow: "clip" }}>
                     {[
                       { id: "goal",    label: "🎯 Goal Simulator"  },
                       { id: "roadmap", label: "📅 Income Roadmap"  },
@@ -25061,8 +25046,8 @@ ${milestoneSnapshotHtml}
                                 </button>
                               ))}
                               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "2px 8px" }}>
-                                <input type="number" min={0} max={30} step={0.5} value={marginalTaxRate}
-                                  onChange={e => setMarginalTaxRate(Math.min(30, Math.max(0, Number(e.target.value)||0)))}
+                                <input type="number" min={0} max={30} step={0.5} value={marginalTaxRate || ""}
+                                  onChange={e => { const v = e.target.value; setMarginalTaxRate(Math.min(30, Math.max(0, v === "" ? 0 : Number(v)||0))); }}
                                   style={{ width: 40, border: "none", background: "transparent", color: "var(--text-bright)", fontSize: 12, outline: "none", textAlign: "center" }} />
                                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>%</span>
                               </div>
@@ -26381,8 +26366,9 @@ ${milestoneSnapshotHtml}
                                   ].map(({ label, val, set, min, max, step = 1 }) => (
                                     <div key={label}>
                                       <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", margin: "0 0 4px", letterSpacing: "0.05em" }}>{label}</p>
-                                      <input type="number" min={min} max={max} step={step} value={val}
-                                        onChange={e => set(Number(e.target.value))}
+                                      <input type="number" min={min} max={max} step={step} value={val || ""}
+                                        onChange={e => { const v = e.target.value; set(v === "" ? 0 : Number(v)); }}
+                                        onBlur={() => { if (!val || Number(val) < min) set(min); }}
                                         style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-bright)", fontSize: 14, fontWeight: 700 }} />
                                     </div>
                                   ))}
