@@ -1367,6 +1367,23 @@ const balaRatio = (remainingYears) => {
   return BALA_TABLE[y] / 100;
 };
 
+// ── Shared engine initialisation ─────────────────────────────────────────────
+// Variables required by BOTH runRSSEngine and runProjectionEngine with identical
+// logic. Defined once here — adding a future shared variable requires ONE edit.
+// Call pattern in each engine: const { srsCap, _oaRateBase, ... } = _cpfEngineInit(inputs);
+function _cpfEngineInit(inputs) {
+  const _c = (inputs.citizenStatus || 'SC').toLowerCase();
+  return {
+    // SRS annual contribution cap: foreigners $35,700/yr; SC/PR $15,300/yr (POL-3 / BUG-9)
+    srsCap:      _c === 'foreigner' ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR,
+    // Deterministic CPF rate bases — override CPF_RATES.OA/SA/MA when stress-testing.
+    // Monte Carlo rateNoise is layered on top inside each engine loop (Item 5).
+    _oaRateBase: (inputs.cpfOARateOverride != null && inputs.cpfOARateOverride !== '') ? Number(inputs.cpfOARateOverride) / 100 : CPF_RATES.OA,
+    _saRateBase: (inputs.cpfSARateOverride != null && inputs.cpfSARateOverride !== '') ? Number(inputs.cpfSARateOverride) / 100 : CPF_RATES.SA,
+    _maRateBase: (inputs.cpfMARateOverride != null && inputs.cpfMARateOverride !== '') ? Number(inputs.cpfMARateOverride) / 100 : CPF_RATES.MA,
+  };
+}
+
 function runRSSEngine(inputs, {
   overrideContribStop,
   overrideVcSA,
@@ -1502,9 +1519,8 @@ function runRSSEngine(inputs, {
   // Insurance deductions from OA — dpsMode drives whether/how DPS is applied
   const _dpsMode = inputs.dpsMode || 'auto'; // "auto"|"optout"|"custom"
   const _hpsAnnual = Number(inputs.hpsAnnualPremium) || 0;
-  // RSS-FIX: srsCap was missing from runRSSEngine — caused blank page for RSS sample.
-  // runProjectionEngine defines srsCap at its own init; runRSSEngine must define it independently.
-  const srsCap = ((inputs.citizenStatus || 'SC').toLowerCase() === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
+  // Shared CPF rate bases + SRS cap — from centralised helper (see _cpfEngineInit above)
+  const { srsCap, _oaRateBase, _saRateBase, _maRateBase } = _cpfEngineInit(inputs);
   const srsContrib     = overrideSrsContrib !== undefined ? Math.min(overrideSrsContrib, srsCap) : Math.min(Number(inputs.srsAnnualContribution) || 0, srsCap);
   const srsContribStop = Number(inputs.srsContribStopAge)    || 63;
   const srsReturn      = (Number(inputs.srsReturnRate) || 0) / 100;
@@ -2304,11 +2320,9 @@ function runProjectionEngine(inputs, {
   const _cm_pe  = new Date().getMonth() + 1;                      // 1–12
   const _mn_pe  = (((_bm_pe - _cm_pe) % 12) + 12) % 12 || 12;  // months to next birthday; 0 → 12 (birthday this month = full year)
   const firstYearFraction = Math.max(1 / 12, Math.min(1, _mn_pe / 12));
-  // Item 5 — Deterministic CPF rate overrides. When set, override CPF_RATES.OA/SA/MA.
-  // Monte Carlo rateNoise is still applied on top. RA earns same as SA base.
-  const _oaRateBase = (inputs.cpfOARateOverride != null && inputs.cpfOARateOverride !== '') ? Number(inputs.cpfOARateOverride)/100 : CPF_RATES.OA;
-  const _saRateBase = (inputs.cpfSARateOverride != null && inputs.cpfSARateOverride !== '') ? Number(inputs.cpfSARateOverride)/100 : CPF_RATES.SA;
-  const _maRateBase = (inputs.cpfMARateOverride != null && inputs.cpfMARateOverride !== '') ? Number(inputs.cpfMARateOverride)/100 : CPF_RATES.MA;
+  // Item 5 + SRS cap — from shared _cpfEngineInit helper (defined before runRSSEngine).
+  // srsCap pulled here (early) so only one declaration exists in this function.
+  const { _oaRateBase, _saRateBase, _maRateBase, srsCap } = _cpfEngineInit(inputs);
   const salaryGrowth = (Number(inputs.salaryGrowthRate) || 0) / 100;
   const salaryBump = (overrideSalaryBump || 0) / 100;
   // Rev #22: phased salary & career break constants
@@ -2422,13 +2436,9 @@ function runProjectionEngine(inputs, {
   // Contributions grow at srsReturnRate. At srsDrawdownStartAge the balance is drawn down
   // evenly over srsDrawdownYears (must deplete within 10 yrs of first withdrawal per IRAS rules).
   // Only 50% of each annual withdrawal is taxable income (statutory retirement age concession).
-  // POL-3 fix: foreigners have a higher SRS cap ($35,700/yr) than SC/PR ($15,300/yr).
-  // citizenStatus 'foreigner' → $35,700; 'SC' or 'PR' (or undefined/legacy) → $15,300.
-  // Q1 note: `inputs` here is the runProjectionEngine function parameter (line 495),
-  // NOT the React component's live inputs state. validateInputs uses `inp` for the
-  // same cap — both correctly read from their own function parameter; the naming
-  // difference (inputs vs inp) is stylistic only and carries no runtime risk.
-  const srsCap = ((inputs.citizenStatus || 'SC').toLowerCase() === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR; // BUG-9 fix + P2 fix
+  // srsCap comes from _cpfEngineInit (called at the rate-override block above).
+  // Foreigner $35,700/yr · SC/PR $15,300/yr (POL-3 / BUG-9). validateInputs independently
+  // derives the same cap from `inp` — both read their own function parameter, no shared state.
   const srsContrib = overrideSrsContrib !== undefined ? Math.min(overrideSrsContrib, srsCap) : Math.min(Number(inputs.srsAnnualContribution) || 0, srsCap);
   const srsContribStop = Number(inputs.srsContribStopAge) || 63;
   const srsReturn = (Number(inputs.srsReturnRate) || 0) / 100;
@@ -20491,7 +20501,7 @@ ${milestoneSnapshotHtml}
                                 </div>
                                 {cagrRaw6 !== null && (
                                   <div style={mRow(!contribMul6 && !xirrStd6 && !xirrEsc6 && !xirrBas6)}>
-                                    <p style={mLabel}>Implied CPF CAGR<TooltipBox id="t-cagr6" text={`Approximate effective annual growth rate of your CPF from age ${Number(inputs.currentAge)||35} to ${summaryRefAge}. Computed as (total balance ÷ total put in)^(1/years) − 1. For a time-weighted return use Yield IRR% in the Data Table tab.`} /></p>
+                                    <p style={mLabel}>Implied CPF CAGR<TooltipBox id="t-cagr6" text={`Approximate effective annual growth rate of your CPF from age ${Number(inputs.currentAge)||35} to ${summaryRefAge}. Computed as (total balance ÷ total put in)^(1/years) − 1. For a time-weighted return use Yield IRR% in the Table tab.`} /></p>
                                     <p style={mVal("var(--clr-blue)")}>{cagrRaw6.toFixed(2)}%</p>
                                     <p style={mSub}>over {years6} yrs · contributions → balance</p>
                                   </div>
@@ -20519,7 +20529,7 @@ ${milestoneSnapshotHtml}
                                 )}
                                 {xirrBas6 !== null && (
                                   <div style={mRow(true)}>
-                                    <p style={mLabel}>XIRR · Basic<TooltipBox id="t-xirr-bas6" text={`XIRR for the Basic plan at age ${summaryRefAge}. Basic has two phases which can prevent solver convergence — use the Data Table Yield IRR% column for per-age detail.${isRealDollars ? " Always a nominal rate." : ""}`} /></p>
+                                    <p style={mLabel}>XIRR · Basic<TooltipBox id="t-xirr-bas6" text={`XIRR for the Basic plan at age ${summaryRefAge}. Basic has two phases which can prevent solver convergence — use the Table tab Yield IRR% column for per-age detail.${isRealDollars ? " Always a nominal rate." : ""}`} /></p>
                                     <p style={mVal(xirrCol6(xirrBas6))}>{xirrBas6.toFixed(2)}%</p>
                                     <p style={mSub}>{isRealDollars ? "nominal rate · not inflation-adjusted" : "annualised return on all contributions"}</p>
                                   </div>
@@ -23737,7 +23747,7 @@ ${milestoneSnapshotHtml}
                         ["Milestone Snapshots row", "The Milestone Snapshots bar under the gauge shows your projected CPF balance at age 55 (SA lock-in), your payout age, and age 95 (longevity benchmark). Each snapshot shows OA, SA/RA, and MA individually. Balances are shown in nominal dollars by default — toggle Real ($) in Display settings to deflate for inflation."],
                         ["Setting your target income", "The Target Monthly Income field in the sidebar (Private Assets & Goals section) drives the Income Coverage card, the income roadmap, and the Goal Simulator. Set it to your desired post-retirement monthly household spend. A typical Singapore benchmark is $3,000–$5,000/mo for a single individual, or $5,000–$8,000/mo for a couple."],
                         ["Sidebar auto-opens on Readiness (desktop)", "On desktop (viewport > 1,024px), the sidebar opens automatically when you first land on the Readiness tab so you can immediately adjust inputs and see the gauges update. On mobile and tablet the sidebar collapses to give full dashboard space. Your manual open/close choice is remembered for the rest of the session."],
-                        ["RSS and Foreigner mode", "The Readiness tab is hidden for RSS members (born before 1958) and for Foreigners, since both groups have no CPF LIFE entitlement. RSS members see the RSS Drawdown tab instead; Foreigners see only the Summary, Strategy, Accumulation, Compare, Household, Data Table, and Docs tabs."],
+                        ["RSS and Foreigner mode", "The Readiness tab is hidden for RSS members (born before 1958) and for Foreigners, since both groups have no CPF LIFE entitlement. RSS members see the RSS Drawdown tab instead; Foreigners see only the Summary, Strategy, Accumulation, Compare, Household, Table, and Docs tabs."],
                       ].map(([title, desc]) => (
                         <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
                           <div style={{ background: "rgba(var(--clr-emerald-rgb),0.08)", borderBottom: "1px solid rgba(var(--clr-emerald-rgb),0.2)", borderLeft: "4px solid var(--clr-emerald)", padding: "9px 16px" }}>
@@ -24381,9 +24391,9 @@ ${milestoneSnapshotHtml}
                     {/* ── XIRR sub-section ── */}
                     <h4 style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-violet)", marginBottom: 10, marginTop: 20, display: "flex", alignItems: "center", gap: 8 }}><Percent style={{ width: 16, height: 16 }} />XIRR — Internal Rate of Return</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
-                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What XIRR measures:</strong> The XIRR column in the Data Table shows the <em>Extended Internal Rate of Return</em> of the highlighted CPF LIFE plan at each projection age. It answers: <em>"If I treat all my CPF contributions as money out and all my payouts + final bequest as money in, what annual return did I earn on the whole strategy?"</em> A positive XIRR above the CPF SA/RA rate (4%) means your overall strategy is generating value faster than simply leaving money in SA/RA. <strong style={{ color: "var(--clr-amber)" }}>Important:</strong> XIRR covers your <em>entire contribution history</em> from your current age — not just the CPF LIFE payout phase. A member aged 35 includes 30 years of accumulation outflows in the denominator, which depresses XIRR values relative to "effective returns from payout age" figures sometimes shown in financial articles. Those article figures treat the RA at payout age as the starting investment; CPF Planner Pro's XIRR is the more conservative, whole-of-strategy measure.</p>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What XIRR measures:</strong> The XIRR column in the Table tab shows the <em>Extended Internal Rate of Return</em> of the highlighted CPF LIFE plan at each projection age. It answers: <em>"If I treat all my CPF contributions as money out and all my payouts + final bequest as money in, what annual return did I earn on the whole strategy?"</em> A positive XIRR above the CPF SA/RA rate (4%) means your overall strategy is generating value faster than simply leaving money in SA/RA. <strong style={{ color: "var(--clr-amber)" }}>Important:</strong> XIRR covers your <em>entire contribution history</em> from your current age — not just the CPF LIFE payout phase. A member aged 35 includes 30 years of accumulation outflows in the denominator, which depresses XIRR values relative to "effective returns from payout age" figures sometimes shown in financial articles. Those article figures treat the RA at payout age as the starting investment; CPF Planner Pro's XIRR is the more conservative, whole-of-strategy measure.</p>
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>How it is computed:</strong> The engine builds a cashflow timeline: contributions made each year are negative (money leaving your pocket), and CPF LIFE payouts received each year plus the terminal bequest value are positive (money coming back). Newton-Raphson iteration then finds the single discount rate that makes the net present value of that entire cashflow stream equal to zero. That rate is the XIRR. Up to 100 iterations per age-point are run; if it fails to converge, the cell shows <strong>—</strong>.</p>
-                      <p style={{ marginBottom: 12 }}><strong style={{ color: "var(--text-highlight)" }}>Colour coding in the Data Table:</strong></p>
+                      <p style={{ marginBottom: 12 }}><strong style={{ color: "var(--text-highlight)" }}>Colour coding in the Table:</strong></p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                         {[
                           ["🟢  > 4%", "Beats the SA/RA base rate. Your contributions have compounded at a rate better than what CPF would have earned passively in SA or RA. This is the target zone.", "var(--clr-green)", "rgba(var(--clr-green-rgb),0.07)", "rgba(var(--clr-green-rgb),0.3)"],
