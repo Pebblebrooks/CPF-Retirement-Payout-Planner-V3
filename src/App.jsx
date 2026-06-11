@@ -3553,13 +3553,18 @@ function runProjectionEngine(inputs, {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-export const TooltipContext = createContext({ show: null, set: () => {}, isDark: true });
+export const TooltipContext = createContext({ show: null, set: () => {}, rect: null, setRect: () => {}, isDark: true });
 
 export const TooltipBox = ({ id, text }) => {
-  const { show, set, isDark } = useContext(TooltipContext);
+  // rect is stored in TooltipContext (App-level state) rather than local state.
+  // Reason: StrategyCard is defined inside the Goal Simulator render IIFE, which means
+  // a new component-type reference is created on every parent re-render. React then
+  // unmounts + remounts StrategyCard's children (including TooltipBox), resetting any
+  // local useState back to null. By keeping rect in context, it survives the remount
+  // and the portal renders correctly after the hover-triggered re-render.
+  const { show, set, rect, setRect, isDark } = useContext(TooltipContext);
   const isOpen = show === id;
   const iconRef = useRef(null);
-  const [rect, setRect] = useState(null);
 
   const handleToggle = (e) => { 
     e.preventDefault(); 
@@ -6062,6 +6067,7 @@ export default function App() {
   const [spouseLifePlan,  setSpouseLifePlan]  = useState("standard");
   const [viewMode, setViewMode] = useState("bequest");
   const [showTooltipId, setShowTooltipId] = useState(null);
+  const [tooltipRect,   setTooltipRect]   = useState(null); // lifted from TooltipBox — survives StrategyCard remounts
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isRealDollars, setIsRealDollars] = useState(false);
   const [saveStatus, setSaveStatus] = useState("Saved");
@@ -12371,7 +12377,7 @@ ${milestoneSnapshotHtml}
   }, [execDashMode]);
 
   return (
-    <TooltipContext.Provider value={{ show: showTooltipId, set: setShowTooltipId, isDark }}>
+    <TooltipContext.Provider value={{ show: showTooltipId, set: setShowTooltipId, rect: tooltipRect, setRect: setTooltipRect, isDark }}>
       <ErrorBoundary>
       <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{ width: "100%", display: "flex", flexDirection: "column", background: "var(--bg-base)", color: "var(--text-main)", fontFamily: "system-ui,sans-serif" }}>
       <style>{`
@@ -24611,6 +24617,14 @@ ${milestoneSnapshotHtml}
                         Maximum reachable with this lever alone: <strong style={{ color: "var(--text-bright)" }}>{fmtK(strat.maxTotal)}</strong><br />
                         Remaining gap after cap: <strong style={{ color: "#ef4444" }}>{fmtK(goalResult.targetAmt - strat.maxTotal)}</strong><br />
                         Try Strategy C (Blended) to combine levers.
+                        {budgetTakeHome.surplus > 0 && strat.maxTotal > 0 && (
+                          <div style={{ marginTop: 6, fontSize: 11, padding: "5px 9px", borderRadius: 7,
+                            background: "rgba(100,100,120,0.10)", border: "1px solid var(--border-subtle)",
+                            color: "var(--text-subtle)" }}>
+                            Cash Budget: <strong style={{ color: "var(--text-muted)" }}>{formatCurrency(budgetTakeHome.surplus)}/mo surplus</strong>
+                            {" · "}Max lever ≈ <strong style={{ color: "var(--text-muted)" }}>{formatCurrency(strat.maxTotal / 12)}/mo</strong>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
