@@ -4970,6 +4970,8 @@ function ReadinessTab({
   wizardCompleted,
   // SRS CTA: opens + scrolls to Private Assets section in the sidebar
   onSrsCtaClick,
+  // Inflows CTA: opens + scrolls to Inflows (topups) section in the sidebar
+  onInflowsCtaClick,
 }) {
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
@@ -5971,6 +5973,8 @@ function ReadinessTab({
                   onClick={() => {
                     if (a.id === "srs" && onSrsCtaClick) {
                       onSrsCtaClick();
+                    } else if (a.id === "frs" && onInflowsCtaClick) {
+                      onInflowsCtaClick();
                     } else {
                       setActiveTab(a.tab);
                       if (a.openSidebar) setSidebarOpen(true);
@@ -6016,6 +6020,9 @@ export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
   const privateAssetsRef = useRef(null); // scroll target for "SRS panel ↗" Readiness action CTA
+  const topupsSectionRef       = useRef(null); // scroll target for "Inflows ↗" (APQ) & "Add voluntary top-ups" (plan-ready CTA)
+  const lifeEventsSectionRef   = useRef(null); // scroll target for "Add a life event →" (plan-ready CTA)
+  const decumulationSectionRef = useRef(null); // scroll target for "Set drawdown goals →" (plan-ready CTA)
   const kpiHeaderRef     = useRef(null); // measures cpf-tabs-kpi-header height → --kpi-header-h
   const strategySubnavRef = useRef(null); // measures strategy-subnav height → --strategy-subnav-h
   const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
@@ -16799,7 +16806,7 @@ ${milestoneSnapshotHtml}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
 
             {/* Inflows */}
-            <div style={{ position: "relative" }}>
+            <div ref={topupsSectionRef} style={{ position: "relative" }}>
             {isForeigner && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
                 <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
@@ -17612,7 +17619,7 @@ ${milestoneSnapshotHtml}
             </div>{/* /transfers gate wrapper */}
 
             {/* Decumulation & Goals — income targets, OA drawdown, Die with Zero */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
+            <div ref={decumulationSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
               {openSections.has("decumulation") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -18725,7 +18732,7 @@ ${milestoneSnapshotHtml}
               };
               const isPoint = leFormState.type === 'windfall' || leFormState.type === 'early_retirement';
               return (
-                <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
+                <div ref={lifeEventsSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
                   {/* Header */}
                   <SidebarSectionHeader id="lifeevents" label="Life Events" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Stress-test retrenchment, windfall, career break, medical crisis…"} />
 
@@ -19102,6 +19109,12 @@ ${milestoneSnapshotHtml}
                   setOpenSections(prev => new Set([...prev, "privateAssets"]));
                   setTimeout(() => privateAssetsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
                 }}
+                onInflowsCtaClick={() => {
+                  setActiveTab("summary");
+                  setSidebarOpen(true);
+                  setOpenSections(prev => new Set([...prev, "topups"]));
+                  setTimeout(() => topupsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+                }}
                 wizardCompleted={(() => { try { return !!localStorage.getItem('cpf_planner_setup_done'); } catch { return true; } })()}
               />
             )}
@@ -19349,6 +19362,9 @@ ${milestoneSnapshotHtml}
                             onClick={() => {
                               setOpenSections(prev => { const n = new Set(prev); n.add(section); return n; });
                               setSidebarOpen(true);
+                              const refMap = { topups: topupsSectionRef, lifeevents: lifeEventsSectionRef, decumulation: decumulationSectionRef };
+                              const sRef = refMap[section];
+                              if (sRef) setTimeout(() => sRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
                             }}
                             style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px",
                               borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
@@ -26011,7 +26027,7 @@ ${milestoneSnapshotHtml}
                             <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Stress Assumptions</h4>
                             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Controls that shift the entire projection baseline</span>
                           </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20 }}>
                             {/* Planning Horizon */}
                             <div>
                               <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 8px" }}>
