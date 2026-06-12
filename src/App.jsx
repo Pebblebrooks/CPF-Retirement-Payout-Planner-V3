@@ -7415,6 +7415,15 @@ export default function App() {
     'oaEduLoan',                                  // BUG-H fix: corrected from oaEduLoanAnnual
     'cpfisOaAmount','cpfisSaAmount',
     'rssMonthlyPayout',                             // RSS: fixed monthly payout in $ — display formatted
+    // Rev #14 — App_95: currency-format audit (Issue 1) — 13 fields added.
+    // 9 already called getDisplayValue() but were missing from this Set;
+    // 4 (dpsAnnualPremium, hpsAnnualPremium, plannedDownpaymentOA, pledgeWithdrawalAmount)
+    // also needed their inputs wired to getDisplayValue + setFocusedField — see those inputs.
+    'budgetLivingExpenses','propertyGoalValue','privateAssetGoal',
+    'ehgAmount','cpfHousingGrantResale','phgAmount','stepUpGrantAmount',
+    'dpsAnnualPremium','hpsAnnualPremium',
+    'lbsMonthlyPayout','rentalIncome',
+    'plannedDownpaymentOA','pledgeWithdrawalAmount',
   ]);
   // Returns formatted display value: $X,XXX when not focused, raw number string when focused.
   const getDisplayValue = (name, rawValue) => {
@@ -17683,7 +17692,7 @@ ${milestoneSnapshotHtml}
                           <TooltipBox id="t-oa-draw-amt" text="Monthly cash drawn from OA to supplement CPF LIFE. OA continues earning 2.5%/yr on the remaining balance. Draw stops automatically when OA hits the bequest floor. Use ⚡ Fill Gap to auto-calculate the exact amount needed to meet your retirement income target." /></span>
                           <FieldResetBtn name="oaDrawdownMonthly" inputs={inputs} setInputs={setInputs} />
                         </div>
-                        <input type="text" inputMode="decimal" name="oaDrawdownMonthly" aria-label="OA monthly drawdown amount" value={inputs.oaDrawdownMonthly} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownMonthly") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownMonthly ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
+                        <input type="text" inputMode="decimal" name="oaDrawdownMonthly" aria-label="OA monthly drawdown amount" value={getDisplayValue("oaDrawdownMonthly", inputs.oaDrawdownMonthly)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("oaDrawdownMonthly"); e.target.select(); }} readOnly={dwzOn} tabIndex={dwzOn ? -1 : undefined} className={fieldChanged("oaDrawdownMonthly") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.oaDrawdownMonthly ? "var(--clr-red)" : "rgba(var(--clr-amber-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box", cursor: dwzOn ? "not-allowed" : "text" }} />
                         {inputErrors.oaDrawdownMonthly && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaDrawdownMonthly}</p>}
                       </div>
                     </div>
@@ -18186,7 +18195,7 @@ ${milestoneSnapshotHtml}
                       <TooltipBox id="t-dp-prop" text="One-time OA deduction for property purchase downpayment. Applied once at the specified age if OA balance permits." />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      <input type="text" inputMode="decimal" name="plannedDownpaymentOA" aria-label="Planned OA downpayment amount" placeholder="Amount ($)" value={inputs.plannedDownpaymentOA} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} className={fieldChanged("plannedDownpaymentOA") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                      <input type="text" inputMode="decimal" name="plannedDownpaymentOA" aria-label="Planned OA downpayment amount" placeholder="Amount ($)" value={getDisplayValue("plannedDownpaymentOA", inputs.plannedDownpaymentOA)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("plannedDownpaymentOA")} className={fieldChanged("plannedDownpaymentOA") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                       <input type="text" inputMode="decimal" name="downpaymentAge" placeholder="Age" value={inputs.downpaymentAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} className={fieldChanged("downpaymentAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                     <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Amount ($) · Age of purchase</p>
@@ -18280,8 +18289,9 @@ ${milestoneSnapshotHtml}
                       {(inputs.dpsMode || "auto") === "custom" && (
                         <div>
                           <input type="text" inputMode="decimal" name="dpsAnnualPremium" placeholder="0"
-                            value={inputs.dpsAnnualPremium || ""}
+                            value={getDisplayValue("dpsAnnualPremium", inputs.dpsAnnualPremium)}
                             onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                            onFocus={() => setFocusedField("dpsAnnualPremium")}
                             aria-label="DPS Annual Premium (custom)"
                             className={fieldChanged("dpsAnnualPremium") ? "cpf-fc" : undefined}
                             style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -18299,8 +18309,9 @@ ${milestoneSnapshotHtml}
                         <TooltipBox id="t-hpsAnnualPremium" text="Home Protection Scheme — HDB flat owners using CPF for mortgage instalments only. Mortgage-reducing insurance that clears your outstanding HDB loan on death, terminal illness, or TPD. Deducted annually from OA. Coverage ends at 65 or when loan is fully paid (Housing Stop Age), whichever is earlier. Does not apply to private property or ECs. Enter your annual premium from your CPF statement." />
                       </div>
                       <input type="text" inputMode="decimal" name="hpsAnnualPremium" placeholder="0"
-                        value={inputs.hpsAnnualPremium || ""}
+                        value={getDisplayValue("hpsAnnualPremium", inputs.hpsAnnualPremium)}
                         onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        onFocus={() => setFocusedField("hpsAnnualPremium")}
                         aria-label="HPS Annual Premium"
                         className={fieldChanged("hpsAnnualPremium") ? "cpf-fc" : undefined}
                         style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -18347,7 +18358,7 @@ ${milestoneSnapshotHtml}
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                             <div>
                               <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Withdrawal Amount ($)</label>
-                              <input type="text" inputMode="decimal" name="pledgeWithdrawalAmount" value={inputs.pledgeWithdrawalAmount} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Pledge RA withdrawal amount" className={fieldChanged("pledgeWithdrawalAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(var(--clr-blue-rgb),0.05)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                              <input type="text" inputMode="decimal" name="pledgeWithdrawalAmount" value={getDisplayValue("pledgeWithdrawalAmount", inputs.pledgeWithdrawalAmount)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("pledgeWithdrawalAmount")} aria-label="Pledge RA withdrawal amount" className={fieldChanged("pledgeWithdrawalAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(var(--clr-blue-rgb),0.05)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                               <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Max = RA − BRS at withdrawal age</p>
                             </div>
                             <div>
@@ -19110,13 +19121,11 @@ ${milestoneSnapshotHtml}
                 effectiveOaDrawMonthly={effectiveOaDrawMonthly}
                 effectiveOaDrawStartAge={effectiveOaDrawStartAge}
                 onSrsCtaClick={() => {
-                  setActiveTab("summary");
                   setSidebarOpen(true);
                   setOpenSections(prev => new Set([...prev, "privateAssets"]));
                   setTimeout(() => privateAssetsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
                 }}
                 onInflowsCtaClick={() => {
-                  setActiveTab("summary");
                   setSidebarOpen(true);
                   setOpenSections(prev => new Set([...prev, "topups"]));
                   setTimeout(() => topupsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
