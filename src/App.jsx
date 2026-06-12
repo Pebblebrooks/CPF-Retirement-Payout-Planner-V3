@@ -5431,6 +5431,13 @@ function ReadinessTab({
               </div>
             ))}
           </div>
+          {/* Scoring note: only FRS Coverage + Income Coverage feed the 100-pt total.
+              P10 and Longevity Cover are informational — they appear here for context
+              but do not reduce the score if below 100. */}
+          <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4, textAlign: "center" }}>
+            Score = FRS Coverage + Income Coverage (50 / 50).{" "}
+            P10 &amp; Longevity are informational — enable Monte Carlo for live P10.
+          </p>
         </div>
 
         {/* 5-col KPI hero — Phase 3: P10 Downside + OA Depletes added */}
@@ -13211,6 +13218,9 @@ ${milestoneSnapshotHtml}
            mobile/tablet the scroll container is the body (overflow:visible), so padding
            has no sticky-gap effect there. */
         .cpf-tab-content[data-tab="guide"] { padding-top: 0 !important; }
+        /* Strategy tab: same flush-top fix — eliminates the 12px padding gap where
+           Stress Centre button rows bleed into view above the sticky sub-nav. */
+        .cpf-tab-content[data-tab="strategy"] { padding-top: 0 !important; }
         /* ─── DESKTOP VIEWPORT MODES (HD and below — unchanged) ─────── */
         .cpf-layout[data-mode="hd"] { grid-template-columns: 360px 1fr; max-width: 1440px; gap: 24px; padding: 24px 16px; }
         @media (min-width: 1440px) and (max-width: 1919px) { .cpf-layout[data-mode="auto"] { grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 16px; } }
@@ -13952,7 +13962,7 @@ ${milestoneSnapshotHtml}
           flex-direction: column;
           height: auto;
           overflow-y: visible;
-          overflow-x: clip; /* clip not hidden — hidden promotes overflow-y:visible to auto, making fhd-tab-inner an implicit scroll container and breaking position:sticky on .strategy-subnav */
+          overflow-x: hidden;
         }
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-chart-grow {
           flex: 1 1 0 !important;
@@ -13971,7 +13981,7 @@ ${milestoneSnapshotHtml}
             flex-direction: column;
             height: auto;
             overflow-y: visible;
-            overflow-x: clip; /* clip not hidden — see FHD block comment above */
+            overflow-x: hidden;
           }
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-chart-grow {
             flex: 1 1 0 !important;
@@ -26385,7 +26395,7 @@ ${milestoneSnapshotHtml}
                                   {[
                                     { label: "Start Age", val: hcStartAge, set: setHcStartAge, min: 60, max: 90 },
                                     { label: "End Age",   val: hcEndAge,   set: setHcEndAge,   min: 61, max: 105 },
-                                    { label: "Monthly Cost ($)", val: hcMonthlyCost, set: setHcMonthlyCost, min: 500, max: 10000, step: 500 },
+                                    { label: "Monthly ($)", val: hcMonthlyCost, set: setHcMonthlyCost, min: 500, max: 10000, step: 500 },
                                   ].map(({ label, val, set, min, max, step = 1 }) => (
                                     <div key={label}>
                                       <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", margin: "0 0 4px", letterSpacing: "0.05em" }}>{label}</p>
