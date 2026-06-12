@@ -919,7 +919,6 @@ const PRESET_PROFILES = [
       empOaCont: 17640, empSaCont: 5040, empMaCont: 5040,
       // Housing: 5-room HDB $1,800/mo combined; primary pays 55% = ~$990/mo = $11,880/yr
       housingOutflow: 21600,   // full household amount — housingSharePct=55 splits it in household view
-      housingStopAge: 55,
       // MediShield Life + IP rider (Integrated Shield)
       medicalUsage: 600, medishieldIP: 1200, elderCareShield: 500,
       // HDB 5-room: est. $650k, leasehold 99yr, not selling near-term
@@ -6129,7 +6128,7 @@ function findScrollContainer(el) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function App() {
+function CPFPlannerApp() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
   const privateAssetsRef = useRef(null); // scroll target for "SRS panel ↗" Readiness action CTA
@@ -26809,3 +26808,145 @@ ${milestoneSnapshotHtml}
 }
 
 
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SOFT ACCESS GATE — secondary friction layer in front of CPFPlannerApp.
+//
+// This is NOT a security boundary: the bundle (including this code) is
+// downloaded to the browser regardless, and the passphrases below are
+// plain strings visible via DevTools. The actual access control is
+// Cloudflare Access + KV-based expiry enforced at the edge
+// (functions/_middleware.js). This gate exists purely to deter casual use
+// of a leaked link (e.g. a Pages preview-deployment URL not covered by
+// Access) and to mirror the admin / beta-tester expiry split at the edge.
+//
+// Storage key 'cpf_access_gate' -> JSON { role: 'admin' | 'beta', unlockedAt }
+//   - role 'admin' : never re-locks once entered
+//   - role 'beta'  : re-locks 7 days after unlockedAt
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ACCESS_GATE_KEY = 'cpf_access_gate';
+const ACCESS_GATE_BETA_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const ACCESS_GATE_PASSPHRASES = { admin: 'admin$$1188$$', beta: 'beta$$2026$$' };
+
+function readAccessGate() {
+  try {
+    const raw = localStorage.getItem(ACCESS_GATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.role || !parsed.unlockedAt) return null;
+    if (parsed.role === 'beta' && (Date.now() - parsed.unlockedAt) > ACCESS_GATE_BETA_WINDOW_MS) {
+      return { expired: true };
+    }
+    if (parsed.role === 'admin' || parsed.role === 'beta') return { role: parsed.role };
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeAccessGate(role) {
+  try {
+    localStorage.setItem(ACCESS_GATE_KEY, JSON.stringify({ role, unlockedAt: Date.now() }));
+  } catch {}
+}
+
+function LockScreen({ initiallyExpired, onUnlock }) {
+  const [value, setValue] = useState('');
+  const [error, setError] = useState(false);
+  const [expired, setExpired] = useState(!!initiallyExpired);
+
+  const submit = () => {
+    const v = value.trim();
+    if (v === ACCESS_GATE_PASSPHRASES.admin) {
+      writeAccessGate('admin');
+      onUnlock();
+    } else if (v === ACCESS_GATE_PASSPHRASES.beta) {
+      writeAccessGate('beta');
+      onUnlock();
+    } else {
+      setError(true);
+      setExpired(false);
+      setValue('');
+    }
+  };
+
+  return (
+    <div style={{
+      minHeight: '100vh', width: '100%',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'linear-gradient(135deg, #0d1424 0%, #131c33 100%)',
+      fontFamily: 'system-ui, -apple-system, sans-serif', padding: 16,
+      boxSizing: 'border-box',
+    }}>
+      <style>{`
+        .cpf-gate-input:focus { outline: none; border-color: #4f8cff !important; }
+        .cpf-gate-btn:hover { background: #3d6fd6 !important; }
+      `}</style>
+      <div style={{
+        background: '#161f38', border: '1px solid #28324f', borderRadius: 12,
+        padding: '32px 28px', maxWidth: 360, width: '100%', textAlign: 'center',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+      }}>
+        <div style={{ fontSize: 28, marginBottom: 8 }}>{'\u{1F512}'}</div>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e6e9ef', margin: '0 0 6px' }}>
+          CPF Planner Pro
+        </h1>
+        <p style={{ fontSize: 13, color: '#9aa4b8', margin: '0 0 20px', lineHeight: 1.5 }}>
+          {expired
+            ? 'Your beta access window has ended. Enter a valid access code to continue.'
+            : 'This app is in private beta. Enter your access code to continue.'}
+        </p>
+        <input
+          className="cpf-gate-input"
+          type="password"
+          value={value}
+          placeholder="Access code"
+          onChange={(e) => { setValue(e.target.value); setError(false); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          style={{
+            width: '100%', boxSizing: 'border-box', padding: '10px 12px',
+            borderRadius: 8, border: `1px solid ${error ? '#e05252' : '#3a4566'}`,
+            background: '#0d1424', color: '#e6e9ef', fontSize: 14, marginBottom: 12,
+          }}
+          autoFocus
+        />
+        {error && (
+          <div style={{ color: '#e05252', fontSize: 12, marginBottom: 12, marginTop: -4 }}>
+            Incorrect access code.
+          </div>
+        )}
+        <button
+          className="cpf-gate-btn"
+          onClick={submit}
+          style={{
+            width: '100%', padding: '10px 12px', borderRadius: 8, border: 'none',
+            background: '#4f8cff', color: '#fff', fontSize: 14, fontWeight: 600,
+            cursor: 'pointer', transition: 'background 0.15s',
+          }}
+        >
+          Unlock
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [gate, setGate] = useState(() => {
+    const g = readAccessGate();
+    if (!g) return { status: 'locked' };
+    if (g.expired) return { status: 'expired' };
+    return { status: 'unlocked' };
+  });
+
+  if (gate.status === 'unlocked') return <CPFPlannerApp />;
+
+  return (
+    <LockScreen
+      initiallyExpired={gate.status === 'expired'}
+      onUnlock={() => setGate({ status: 'unlocked' })}
+    />
+  );
+}
