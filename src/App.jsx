@@ -4987,31 +4987,121 @@ function ReadinessTab({
   const yearsToPA    = Math.max(0, pa - ca);
   const yearsFromNow = Math.max(0, (cy + yearsToPA) - 2026);
 
-  // ── Readiness score ──────────────────────────────────────────────────────
-  // IMPORTANT: raAtPA_nominal MUST come from nominalAccumulationByAge (raw engine output,
-  // always nominal future dollars), NOT from accumulationByAge (which is deflated when
-  // isRealDollars=true). The score compares RA against FRS — both are nominal future values.
-  // Mixing real RA with nominal FRS would produce a spuriously low ratio (e.g. 55% vs 100%).
-  const { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color: scoreColor, label: scoreLabel } = useMemo(() => {
+  // ── Readiness score (5-dimension, age-banded weights) ────────────────────
+  // All five sub-scores computed in one useMemo for atomic consistency.
+  // IMPORTANT: raAtPA MUST come from nominalAccumulationByAge (always nominal future dollars),
+  // not accumulationByAge (deflated when isRealDollars=true). FRS comparison requires nominal.
+  //
+  // Sub-scores & base weights (adjusted by age band — see AGE_WEIGHTS table below):
+  //   1. FRS Coverage        (30–35%) — RA at payout vs projected FRS
+  //   2. Income Adequacy     (20–25%) — CPF LIFE payout vs target; null when no target set
+  //   3. Downside Resilience (15–20%) — P10 Monte Carlo total vs base case; null when MC off
+  //   4. Longevity Cover     (15–25%) — real purchasing power of CPF LIFE at age 90 vs BRS floor
+  //   5. Healthcare Shield   (10–30%) — MA at payout vs projected BHS; escalates sharply with age
+  //
+  // Graceful degradation: null sub-scores are excluded; remaining weights renormalised to 100%.
+  // Income fallback: when no target set, incomeSubScore=null (not a frsRatio proxy).
+  const {
+    score, frsRatio, incomeRatio,
+    raAtPA, projFRS, stdMonthly,
+    p10SubScore, longevitySubScore, maSubScore,
+    color: scoreColor, label: scoreLabel,
+  } = useMemo(() => {
+    // ── 1. FRS Coverage ───────────────────────────────────────────────────
     const nomMap  = nominalAccumulationByAge || accumulationByAge;
-    const raAtPA  = nomMap.get(pa)?.ra || 0;  // always nominal
+    const nomPayD = nomMap.get(pa) || {};
+    const raAtPA  = nomPayD.ra || 0;    // always nominal
     const projFRS = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
-    const frsRatio = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
+    const projBRS = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const frsRatio    = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
+    const frsSubScore = Math.min(100, Math.round(frsRatio * 100));
 
+    // ── 2. Income Adequacy ─────────────────────────────────────────────────
     const activePlanObj = lifePlans?.[highlightPlan || "standard"];
-    const rawPayout = activePlanObj ? (isMale ? activePlanObj.startM : activePlanObj.startF) : 0;
-    const stdMonthly = (highlightPlan === "basic" && rawPayout > 0)
+    const rawPayout     = activePlanObj ? (isMale ? activePlanObj.startM : activePlanObj.startF) : 0;
+    const stdMonthly    = (highlightPlan === "basic" && rawPayout > 0)
       ? rawPayout * (1 - basicPremiumPct / 100) / 0.90
       : rawPayout;
+    // incomeRatio kept for sub-bar display; incomeSubScore is null when no target (no fallback to frsRatio)
+    const incomeRatio    = target > 0 ? Math.min(1, stdMonthly / target) : null;
+    const incomeSubScore = target > 0 ? Math.min(100, Math.round((stdMonthly / target) * 100)) : null;
 
-    const incomeRatio = target > 0 ? Math.min(1, stdMonthly / target) : frsRatio;
-    // Score formula unchanged from Phase 1/2 — new sub-scores are additive info only
-    const score = Math.round((frsRatio * 0.5 + incomeRatio * 0.5) * 100);
+    // ── 3. Downside Resilience (P10 Monte Carlo) ───────────────────────────
+    const totalCPFNom_ = (nomPayD.oa || 0) + (nomPayD.sa || 0) + (nomPayD.ma || 0) + (nomPayD.ra || 0);
+    const p10RowAtPA_  = monteCarloData?.rows?.find(r => r.age === pa);
+    const p10Total_    = p10RowAtPA_?.p10 || 0;
+    const p10SubScore  = (monteCarloData && totalCPFNom_ > 0 && p10Total_ > 0)
+      ? Math.min(100, Math.round((p10Total_ / totalCPFNom_) * 100))
+      : null;  // null when MC off → excluded from score; weight redistributed to remaining sub-scores
+
+    // ── 4. Longevity Cover ─────────────────────────────────────────────────
+    // For CPF LIFE members: measures real purchasing power of the flat nominal payout at age 90
+    //   vs the BRS-level payout (minimum adequate standard). At 2 % inflation over 25 yrs the
+    //   nominal payout loses ~39 % of real value — this sub-score captures that decay.
+    // For OA-drawdown members: measures coverage years vs age-90 planning benchmark.
+    const oaDrawActiveL  = (effectiveOaDrawMonthly || 0) > 0 && (effectiveOaDrawStartAge || 0) > 0;
+    const oaDepMilL      = milestones.find(m =>
+      m.label?.toLowerCase().includes('drawdown exhaust') || m.label?.toLowerCase().includes('oa depletion')
+    );
+    const oaDepAgeL      = oaDepMilL?.age || null;
+    const inflRate_      = (Number(inputs.inflationRate) || 2) / 100;
+    const yearsTo90_     = Math.max(0, 90 - pa);
+    const realPayAt90_   = stdMonthly > 0 ? stdMonthly / Math.pow(1 + inflRate_, yearsTo90_) : 0;
+    const brsThreshold_  = interpolateCpfLife(projBRS, 'std', isMale, pa);
+    const longevitySubScore = !oaDrawActiveL
+      ? (brsThreshold_ > 0 ? Math.min(100, Math.round((realPayAt90_ / brsThreshold_) * 100)) : 100)
+      : (oaDepAgeL
+          ? Math.min(100, Math.round(((oaDepAgeL - pa) / Math.max(1, 90 - pa)) * 100))
+          : 100);
+
+    // ── 5. Healthcare Shield ───────────────────────────────────────────────
+    // MA at payout age vs projected Basic Healthcare Sum (BHS). MA reaching BHS means
+    // MediShield Life premiums and moderate medical costs are fully covered.
+    const projBHS_   = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const maAtPA_    = nomPayD.ma || 0;
+    const maSubScore = projBHS_ > 0 ? Math.min(100, Math.round((maAtPA_ / projBHS_) * 100)) : 0;
+
+    // ── Age-banded weights ─────────────────────────────────────────────────
+    // Rationale: FRS weight steps down post-retirement (RA locked in, can't be changed).
+    // Healthcare weight escalates sharply — medical costs accelerate from 65+ at 5 %/yr.
+    // Longevity weight escalates post-65 — each remaining year of income matters more.
+    const AGE_WEIGHTS = [
+      { maxAge: 40,  frs: 0.35, inc: 0.25, p10: 0.15, long: 0.15, ma: 0.10 },
+      { maxAge: 54,  frs: 0.30, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.10 },
+      { maxAge: 64,  frs: 0.25, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.15 },
+      { maxAge: 74,  frs: 0.15, inc: 0.25, p10: 0.20, long: 0.20, ma: 0.20 },
+      { maxAge: 999, frs: 0.10, inc: 0.20, p10: 0.15, long: 0.25, ma: 0.30 },
+    ];
+    const wt = AGE_WEIGHTS.find(b => ca <= b.maxAge) || AGE_WEIGHTS[4];
+
+    // ── Weighted composite with graceful degradation ───────────────────────
+    const subScores = [
+      { val: frsSubScore,       wt: wt.frs  },
+      { val: incomeSubScore,    wt: wt.inc  },  // null when no target
+      { val: p10SubScore,       wt: wt.p10  },  // null when MC off
+      { val: longevitySubScore, wt: wt.long },
+      { val: maSubScore,        wt: wt.ma   },
+    ];
+    const active  = subScores.filter(s => s.val !== null);
+    const totalWt = active.reduce((acc, s) => acc + s.wt, 0);
+    const score   = active.length > 0
+      ? Math.round(active.reduce((acc, s) => acc + (s.val * s.wt), 0) / totalWt)
+      : 0;
 
     const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
     const label = score >= 75 ? "On Track" : score >= 50 ? "Needs Attention" : "At Risk";
-    return { score, frsRatio, incomeRatio, raAtPA, projFRS, stdMonthly, color, label };
-  }, [nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow, lifePlans, highlightPlan, isMale, basicPremiumPct, target]);
+    return {
+      score, frsRatio, incomeRatio,
+      raAtPA, projFRS, stdMonthly,
+      p10SubScore, longevitySubScore, maSubScore,
+      color, label,
+    };
+  }, [
+    nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
+    lifePlans, highlightPlan, isMale, basicPremiumPct, target,
+    monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
+    milestones, inputs.inflationRate, ca,
+  ]);
 
   // ── Derived metrics ──────────────────────────────────────────────────────
   const payoutData   = accumulationByAge.get(pa) || {};  // display values — respects Nom/Real toggle
@@ -5026,6 +5116,21 @@ function ReadinessTab({
   const frsBarPct    = projFRS > 0 ? Math.min(100, Math.round((raAtPA / projFRS) * 100)) : 0;
   const brsBarPct    = projBRS > 0 ? Math.min(100, Math.round((raAtPA / projBRS) * 100)) : 0;
   const ersBarPct    = projERS > 0 ? Math.min(100, Math.round((raAtPA / projERS) * 100)) : 0;
+
+  // Income tier context — where projected CPF LIFE payout sits vs BRS/FRS/ERS thresholds.
+  // Used in Income Coverage sub-bar tooltip and as advisory text.
+  const brsPayoutAtPA   = Math.round(interpolateCpfLife(projBRS, 'std', isMale, pa));
+  const frsPayoutAtPA   = Math.round(interpolateCpfLife(projFRS, 'std', isMale, pa));
+  const ersPayoutAtPA   = Math.round(interpolateCpfLife(projERS, 'std', isMale, pa));
+  const incomeTierLabel = stdMonthly >= ersPayoutAtPA ? "✨ Active retirement"
+    : stdMonthly >= frsPayoutAtPA  ? "🟢 Comfortable baseline"
+    : stdMonthly >= brsPayoutAtPA  ? "🟡 Basic coverage"
+    : "🔴 Below basic needs";
+  // Real purchasing power preview for longevity sub-bar tooltip
+  const inflRateVal    = (Number(inputs.inflationRate) || 2) / 100;
+  const realPayoutAt90 = pa < 90
+    ? Math.round(stdMonthly / Math.pow(1 + inflRateVal, 90 - pa))
+    : stdMonthly;
 
   // Income coverage for the hero tile
   const displayPayout = isRealDollars ? applyInflation(stdMonthly, pa) : stdMonthly;
@@ -5044,6 +5149,7 @@ function ReadinessTab({
 
   // ── Phase 3: P10 downside & probability of sufficiency ──────────────────
   // monteCarloData is null when MC toggle is off — all P10 fields degrade gracefully to null/—
+  // p10SubScore (for the sub-bar) is returned from the readinessScore useMemo above.
   const nomMap         = nominalAccumulationByAge || accumulationByAge;
   const nomPayoutData  = nomMap.get(pa) || {};
   const totalCPFNom    = (nomPayoutData.oa || 0) + (nomPayoutData.sa || 0) + (nomPayoutData.ma || 0) + (nomPayoutData.ra || 0);
@@ -5053,14 +5159,8 @@ function ReadinessTab({
     ? Math.round((1 - p10TotalAtPA / totalCPFNom) * 100)
     : null;
   const probSufficiency = monteCarloData?.probSufficiency ?? null;
-  // P10 sub-score: p10 total as a fraction of base-case total (how much of base survives bad luck)
-  const p10SubScore    = (monteCarloData && totalCPFNom > 0 && p10TotalAtPA > 0)
-    ? Math.min(100, Math.round((p10TotalAtPA / totalCPFNom) * 100))
-    : null;
 
   // ── Phase 3: OA depletion age (sourced from milestones computed in App) ──
-  // The milestones array already contains an "OA Drawdown exhausted" entry when applicable,
-  // so there is no new computation here — just a lookup.
   const oaDepletionMilestone = milestones.find(m =>
     m.label?.toLowerCase().includes('drawdown exhaust') || m.label?.toLowerCase().includes('oa depletion')
   );
@@ -5068,14 +5168,9 @@ function ReadinessTab({
   const lifeExpectancy   = isMale ? 85 : 88;
   const planningHorizon  = Math.max(pa + 25, 90);
   const oaIncomeGapYrs   = oaDepletionAge ? Math.max(0, lifeExpectancy - oaDepletionAge) : 0;
-
-  // Longevity sub-score: years of OA draw coverage vs expected retirement years.
-  // If there is no OA draw active, CPF LIFE is a lifelong annuity → longevity fully covered.
-  const oaDrawActive      = (effectiveOaDrawMonthly || 0) > 0 && (effectiveOaDrawStartAge || 0) > 0;
-  const retirementYears   = Math.max(1, lifeExpectancy - pa);
-  const longevitySubScore = (!oaDrawActive || !oaDepletionAge)
-    ? 100
-    : Math.min(100, Math.round(((oaDepletionAge - pa) / retirementYears) * 100));
+  // oaDrawActive: used by income waterfall, timeline, and action queue
+  // (longevitySubScore version lives inside readinessScore useMemo as oaDrawActiveL)
+  const oaDrawActive     = (effectiveOaDrawMonthly || 0) > 0 && (effectiveOaDrawStartAge || 0) > 0;
 
   // ── Phase 3: Income waterfall — mirrors strategyChartData logic exactly ──
   // SRS: replicate the PMT formula from strategyChartData so display matches projection.
@@ -5360,7 +5455,7 @@ function ReadinessTab({
         </summary>
         <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[
-            ["🎯 Readiness Score", "The arc gauge is a weighted composite of four sub-scores: FRS Coverage, Income Coverage, P10 Downside, and Longevity. Green ≥ 75, amber 50–74, red < 50. The score updates live as you change inputs."],
+            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Downside Resilience (P10), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Null sub-scores (no income target, Monte Carlo off) are excluded and remaining weights renormalised. Green ≥ 75, amber 50–74, red < 50."],
             ["📊 KPI Tiles", "Five headline numbers: total CPF at payout age, monthly CPF LIFE payout, income coverage %, P10 downside (bad-luck scenario), and OA depletion age. Enable Monte Carlo in the Accumulation tab to unlock the downside tile."],
             ["📈 RA vs Retirement Sums", "A progress bar comparing your projected RA at payout age against BRS, FRS, and ERS. These targets grow at the retirement-sum growth rate you set in the sidebar (default 3%/yr)."],
             ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
@@ -5396,10 +5491,10 @@ function ReadinessTab({
               },
               {
                 label: "Income Coverage",
-                pct: target > 0 ? Math.round(incomeRatio * 100) : null,
+                pct: incomeRatio !== null ? Math.round(incomeRatio * 100) : null,
                 tip: target > 0
-                  ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target`
-                  : "Set a Target Monthly Income in the sidebar to enable",
+                  ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target · ${incomeTierLabel}`
+                  : `${incomeTierLabel} · Set a Target Monthly Income in the sidebar to compare`,
               },
               {
                 label: "Downside (P10)",
@@ -5413,9 +5508,14 @@ function ReadinessTab({
                 pct: longevitySubScore,
                 tip: oaDrawActive
                   ? (oaDepletionAge
-                      ? `OA drawdown covers to age ${oaDepletionAge} vs ${isMale ? "male" : "female"} life expectancy ${lifeExpectancy}`
+                      ? `OA covers to age ${oaDepletionAge} vs age-90 planning benchmark`
                       : "OA drawdown sustained to planning horizon")
-                  : "CPF LIFE is a lifelong annuity — income continues regardless of longevity",
+                  : `Real CPF LIFE at age 90: ${formatCurrency(realPayoutAt90)}/mo vs BRS payout floor ${formatCurrency(brsPayoutAtPA)}/mo (${inflRateVal * 100}% inflation)`,
+              },
+              {
+                label: "Healthcare Shield",
+                pct: maSubScore,
+                tip: `MA at payout age vs projected Basic Healthcare Sum (BHS) of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}`,
               },
             ].map(({ label, pct, tip }) => (
               <div key={label} title={tip}>
@@ -5431,12 +5531,13 @@ function ReadinessTab({
               </div>
             ))}
           </div>
-          {/* Scoring note: only FRS Coverage + Income Coverage feed the 100-pt total.
-              P10 and Longevity Cover are informational — they appear here for context
-              but do not reduce the score if below 100. */}
+          {/* Scoring note: 5-dimension age-banded weighted composite.
+              Weights shift by age band — healthcare escalates for seniors (up to 30% at 75+);
+              FRS steps down post-retirement (10% at 75+). Null sub-scores (no income target,
+              MC off) are excluded and remaining weights renormalised to 100%. */}
           <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4, textAlign: "center" }}>
-            Score = FRS Coverage + Income Coverage (50 / 50).{" "}
-            P10 &amp; Longevity are informational — enable Monte Carlo for live P10.
+            5-dimension score: FRS · Income · P10 · Longevity · Healthcare.{" "}
+            Weights shift by age band — enable Monte Carlo for P10.
           </p>
         </div>
 
@@ -14789,7 +14890,7 @@ ${milestoneSnapshotHtml}
               {welcomeStep === 2 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {[
-                    ["Readiness", Activity, "var(--clr-emerald)", "Your Retirement Readiness Score (0–100) shown as an arc gauge — a weighted composite of CPF Adequacy, Income Coverage, Net Worth, and Healthcare Coverage sub-scores. Below the gauge: an Action Priority Queue listing the five highest-impact actions ranked by urgency, plus FRS/BRS/ERS progress bars, CPF LIFE payout card, and Milestone Summary chart. Hidden for RSS members and Foreigners."],
+                    ["Readiness", Activity, "var(--clr-emerald)", "Your Retirement Readiness Score (0–100) shown as an arc gauge — a 5-dimension age-banded weighted composite of FRS Coverage, Income Adequacy, Downside Resilience, Longevity Cover, and Healthcare Shield. Below the gauge: an Action Priority Queue listing the five highest-impact actions ranked by urgency, plus FRS/BRS/ERS progress bars, CPF LIFE payout card, and Milestone Summary chart. Hidden for RSS members and Foreigners."],
                     ["Summary", PieChart, "var(--clr-blue2)", "Key metrics at a glance: total CPF at payout age, Tier Shock notice, RA-to-OA transfer notice, net worth breakdown, milestone alerts, and the What-If Explorer sliders."],
                     ["Strategy", Target, "#f43f5e", "Two tools in one tab. (1) Income Roadmap — set a Target Monthly Income, use ⚡ Fill Gap to auto-calculate the exact OA Drawdown needed to close the shortfall. Gantt timeline and income table show CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets side by side. (2) Goal Simulator — enter a CPF balance target at payout age and click ⚡ Calculate Strategies for three solver-generated plans: Strategy A (RSTU only), Strategy B (VC3A only), Strategy C (blended). Each card shows feasibility, required annual cash, monthly equivalent, and an Apply to Profile button that instantly writes the values to the sidebar. Clear Simulator always reverts to your original baseline even after applying multiple strategies."],
                     ["Accumulation", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance — the active band is shown on the Probability of Sufficiency badge."],
@@ -23782,9 +23883,9 @@ ${milestoneSnapshotHtml}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
-                        ["Readiness Gauge & Action Queue", "The arc gauge shows your Retirement Readiness Score (0–100) — a weighted composite of CPF Adequacy, Income Coverage, Net Worth Position, and Healthcare Coverage. Colour: green ≥ 75, amber 50–74, red < 50. Below the gauge, the Action Priority Queue lists the five highest-impact actions (FRS gap, plan switch, income gap, OA depletion risk, SRS setup) ranked by urgency, each showing an estimated +pts score improvement and linking directly to the relevant tab or sidebar section."],
-                        ["Four sub-score cards", "Below the gauge, four cards expand on each dimension with the raw numbers behind the score: projected CPF total and its percentage of the FRS-based target, monthly CPF LIFE payout vs target, net worth composition, and MA adequacy. Each card shows a progress bar and a one-line plain-language status — 'On track', 'Needs attention', or 'At risk'."],
-                        ["What counts as 'on track'?", "CPF Adequacy: CPF total at payout age ≥ 3 × FRS (approximately $661,200 in 2026). Income Coverage: monthly CPF LIFE ≥ your configured Target Monthly Income. Net Worth: total assets (CPF + SRS + property + private) ≥ 20× target monthly income. Healthcare: MA balance ≥ estimated 1-year healthcare costs (medical usage + MediShield IP + CareShield premiums). These thresholds are configurable guidelines, not CPF Board rules."],
+                        ["Readiness Gauge & Action Queue", "The arc gauge shows your Retirement Readiness Score (0–100) — a 5-dimension age-banded weighted composite: FRS Coverage (10–35%), Income Adequacy (20–25%), Downside Resilience P10 (15–20%), Longevity Cover (15–25%), and Healthcare Shield (10–30%). Weights shift by age band — healthcare escalates to 30% for members 75+; FRS steps down to 10% post-retirement when the RA is locked in. Null sub-scores (no income target, Monte Carlo off) are excluded and remaining weights renormalised to 100%. Colour: green ≥ 75, amber 50–74, red < 50. Below the gauge, the Action Priority Queue lists the five highest-impact actions ranked by urgency, each showing an estimated +pts score improvement and linking directly to the relevant tab or sidebar section."],
+                        ["Five sub-score bars", "Below the gauge arc, five bars break down each dimension: FRS Coverage (RA vs projected FRS), Income Adequacy (CPF LIFE payout vs your target with income tier label), Downside Resilience (P10 Monte Carlo total vs base case — shows '—' when Monte Carlo is off), Longevity Cover (real purchasing power of CPF LIFE at age 90 vs BRS-payout floor, or OA coverage years vs age-90 benchmark for drawdown members), and Healthcare Shield (MA at payout vs projected BHS)."],
+                        ["What counts as 'on track'?", "FRS Coverage: RA at payout ≥ projected FRS. Income Adequacy: CPF LIFE payout ≥ your Target Monthly Income (income tier: Basic ≥ BRS payout, Comfortable ≥ FRS payout, Active ≥ ERS payout). Downside Resilience: P10 scenario CPF total ≥ base case (100% = no downside). Longevity Cover: real CPF LIFE payout at age 90 ≥ BRS-level payout floor; or OA draw lasts to age 90+. Healthcare Shield: MA at payout ≥ projected Basic Healthcare Sum (BHS). These are planning benchmarks, not CPF Board rules."],
                         ["Milestone Snapshots row", "The Milestone Snapshots bar under the gauge shows your projected CPF balance at age 55 (SA lock-in), your payout age, and age 95 (longevity benchmark). Each snapshot shows OA, SA/RA, and MA individually. Balances are shown in nominal dollars by default — toggle Real ($) in Display settings to deflate for inflation."],
                         ["Setting your target income", "The Target Monthly Income field in the sidebar (Private Assets & Goals section) drives the Income Coverage card, the income roadmap, and the Goal Simulator. Set it to your desired post-retirement monthly household spend. A typical Singapore benchmark is $3,000–$5,000/mo for a single individual, or $5,000–$8,000/mo for a couple."],
                         ["Sidebar auto-opens on Readiness (desktop)", "On desktop (viewport > 1,024px), the sidebar opens automatically when you first land on the Readiness tab so you can immediately adjust inputs and see the gauges update. On mobile and tablet the sidebar collapses to give full dashboard space. Your manual open/close choice is remembered for the rest of the session."],
