@@ -13952,7 +13952,7 @@ ${milestoneSnapshotHtml}
           flex-direction: column;
           height: auto;
           overflow-y: visible;
-          overflow-x: hidden;
+          overflow-x: clip; /* clip not hidden — hidden promotes overflow-y:visible to auto, making fhd-tab-inner an implicit scroll container and breaking position:sticky on .strategy-subnav */
         }
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-chart-grow {
           flex: 1 1 0 !important;
@@ -13971,7 +13971,7 @@ ${milestoneSnapshotHtml}
             flex-direction: column;
             height: auto;
             overflow-y: visible;
-            overflow-x: hidden;
+            overflow-x: clip; /* clip not hidden — see FHD block comment above */
           }
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-chart-grow {
             flex: 1 1 0 !important;
