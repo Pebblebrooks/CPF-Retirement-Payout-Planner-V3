@@ -1,16 +1,3 @@
-/**
- * CPF Planner Pro
- * ------------------------------------------------------------------------
- * Copyright (c) 2026 Michael Tan. All rights reserved.
- *
- * This source code and the software it forms part of are the proprietary
- * and confidential property of Michael Tan (owner & developer). No part of
- * this file may be copied, reproduced, distributed, or used to create
- * derivative works, in whole or in part, without prior written permission
- * from the owner.
- * ------------------------------------------------------------------------
- */
-
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -751,6 +738,15 @@ const DEFAULT_INPUTS = {
   // budgetTaxRate        — marginal Singapore income tax rate (%)
   budgetLivingExpenses: 3000,
   budgetTaxRate: 0,
+  // ── MAS Financial Health (Tier 2 advisory scores) ────────────────────────
+  // emergencyFundMonths  — months of liquid savings set aside for emergencies (MAS: 3–6 months)
+  // hasWill              — has a valid Will been prepared?
+  // hasCPFNomination     — CPF nomination (CSNB) completed?
+  // hasLPA               — Lasting Power of Attorney registered with OPG?
+  emergencyFundMonths: 0,
+  hasWill: false,
+  hasCPFNomination: false,
+  hasLPA: false,
 };
 
 // ── Household: spouse/partner default inputs ──────────────────────────────────
@@ -932,6 +928,7 @@ const PRESET_PROFILES = [
       empOaCont: 17640, empSaCont: 5040, empMaCont: 5040,
       // Housing: 5-room HDB $1,800/mo combined; primary pays 55% = ~$990/mo = $11,880/yr
       housingOutflow: 21600,   // full household amount — housingSharePct=55 splits it in household view
+      housingStopAge: 55,
       // MediShield Life + IP rider (Integrated Shield)
       medicalUsage: 600, medishieldIP: 1200, elderCareShield: 500,
       // HDB 5-room: est. $650k, leasehold 99yr, not selling near-term
@@ -1226,6 +1223,7 @@ const INPUT_LABELS = {
   applyRaOaTransfer: "Apply RA→OA Transfer at Payout/Migration Age",
   milestoneAge: "Milestone Age 1", milestoneAge2: "Milestone Age 2", milestoneAge3: "Milestone Age 3", milestoneAge4: "Milestone Age 4", milestoneAge5: "Milestone Age 5",
   budgetLivingExpenses: "Monthly Living Expenses", budgetTaxRate: "Marginal Tax Rate (%)",
+  emergencyFundMonths: "Emergency Fund (months)", hasWill: "Has Will", hasCPFNomination: "Has CPF Nomination", hasLPA: "Has LPA",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
@@ -1396,6 +1394,19 @@ function _cpfEngineInit(inputs) {
   };
 }
 
+// ── Seeded PRNG (mulberry32) ─────────────────────────────────────────────────
+// Deterministic pseudo-random number generator seeded by profile inputs.
+// Used in Monte Carlo so P10/P90 bands are consistent across sessions for the
+// same profile. Seed changes when currentAge or payoutAge changes.
+function seededRandom(seed) {
+  let s = (seed >>> 0) + 1;   // +1 avoids degenerate seed=0 case
+  return () => {
+    s = (Math.imul(s ^ (s >>> 15), 0xd35a2d97) >>> 0);
+    s = (Math.imul(s ^ (s >>> 13), 0x96556abd) >>> 0);
+    return ((s ^ (s >>> 12)) >>> 0) / 0xFFFFFFFF;
+  };
+}
+
 function runRSSEngine(inputs, {
   overrideContribStop,
   overrideVcSA,
@@ -1409,8 +1420,8 @@ function runRSSEngine(inputs, {
   maxAge = 95,          // F1: configurable horizon (95/100/105)
   randomiseRates = false,
   mcVariance = 1,
+  rng = null,           // Seeded PRNG — pass seededRandom(seed)() for deterministic MC
 } = {}) {
-  // ─── RSS-SPECIFIC CONSTANTS ─────────────────────────────────────────────────
   // These are the only additions vs runProjectionEngine setup.
   const rssPayoutStart  = Number(inputs.rssPayoutStartAge) || 65;
   const rssMonthly      = Number(inputs.rssMonthlyPayout)  || 0;
@@ -2010,7 +2021,8 @@ function runRSSEngine(inputs, {
 
     // Interest (mid-year average-balance convention)
     const _band = (mcVariance / 100);
-    const rateNoise = randomiseRates ? (Math.random() * _band * 2 - _band) : 0;
+    const _rand = rng ?? Math.random;
+    const rateNoise = randomiseRates ? (_rand() * _band * 2 - _band) : 0;
     const rOA = _oaRateBase + rateNoise;
     const rSA = _saRateBase + rateNoise;
     const rMA = _maRateBase + rateNoise;
@@ -2318,6 +2330,7 @@ function runProjectionEngine(inputs, {
   maxAge = 95,          // F1: configurable horizon (95/100/105)
   randomiseRates = false,          // Monte Carlo mode: rate variance applied per year
   mcVariance = 1,                  // Rev #MC: variance band in % (e.g. 1 = ±1%). Sourced from inputs.mcVariancePct.
+  rng = null,                      // Seeded PRNG — pass seededRandom(seed) for deterministic MC
 } = {}) {
   const startAge = Math.max(0, Number(inputs.currentAge) || 0);
   const baseYear = Number(inputs.currentYear) || 2026;
@@ -3250,8 +3263,9 @@ function runProjectionEngine(inputs, {
     // Interest (annual rates, randomised ±1% in Monte Carlo mode)
     // Rev #MC: variance band sourced from mcVariance parameter (in %). Inflation noise is half the rate noise.
     const _band = (mcVariance / 100);
-    const rateNoise = randomiseRates ? (Math.random() * _band * 2 - _band) : 0;
-    const inflNoise = randomiseRates ? (Math.random() * _band - _band / 2) : 0; // ±half-band inflation variance
+    const _rand = rng ?? Math.random;
+    const rateNoise = randomiseRates ? (_rand() * _band * 2 - _band) : 0;
+    const inflNoise = randomiseRates ? (_rand() * _band - _band / 2) : 0; // ±half-band inflation variance
     const rOA = CPF_RATES.OA + rateNoise;
     const rSA = CPF_RATES.SA + rateNoise;
     const rMA = CPF_RATES.MA + rateNoise;
@@ -3577,6 +3591,13 @@ export const TooltipBox = ({ id, text }) => {
   const { show, set, rect, setRect, isDark } = useContext(TooltipContext);
   const isOpen = show === id;
   const iconRef = useRef(null);
+
+  // Portal-leak guard: if this tooltip is visible when the parent component unmounts
+  // (fast tab switch, conditional render), the pointerLeave event never fires and the
+  // portal div is orphaned on screen. Clearing show on cleanup prevents ghost tooltips.
+  useEffect(() => {
+    return () => { if (show === id) set(null); };
+  }, [show, id, set]);
 
   const handleToggle = (e) => { 
     e.preventDefault(); 
@@ -4983,6 +5004,8 @@ function ReadinessTab({
   setSidebarOpen, basicPremiumPct, isRealDollars, applyInflation,
   // Phase 3: already-computed in App — zero additional engine cost
   monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
+  // Stress Resilience: Perfect Storm data from Strategy tab (null when not computed)
+  perfectStormData,
   // Q2: wizard completion flag — gates placeholder states on KPI tiles
   wizardCompleted,
   // SRS CTA: opens + scrolls to Private Assets section in the sidebar
@@ -5038,13 +5061,25 @@ function ReadinessTab({
     const incomeRatio    = target > 0 ? Math.min(1, stdMonthly / target) : null;
     const incomeSubScore = target > 0 ? Math.min(100, Math.round((stdMonthly / target) * 100)) : null;
 
-    // ── 3. Downside Resilience (P10 Monte Carlo) ───────────────────────────
+    // ── 3. Stress Resilience ───────────────────────────────────────────────
+    // Primary signal: Perfect Storm deterministic worst-case (SORR + inflation surge +
+    //   property stress + CPF rate cut + healthcare surge, all combined).
+    //   perfectStormScore = 100 − deltaPct  (e.g. 30% net-worth drop → score 70)
+    // Fallback: P10 Monte Carlo 10th-percentile total vs base case.
+    // Combined (both available): perfectStorm × 0.6 + p10 × 0.4 — named risk outweighs stats.
+    // null when both are unavailable → weight redistributed to other sub-scores.
     const totalCPFNom_ = (nomPayD.oa || 0) + (nomPayD.sa || 0) + (nomPayD.ma || 0) + (nomPayD.ra || 0);
     const p10RowAtPA_  = monteCarloData?.rows?.find(r => r.age === pa);
     const p10Total_    = p10RowAtPA_?.p10 || 0;
-    const p10SubScore  = (monteCarloData && totalCPFNom_ > 0 && p10Total_ > 0)
+    const p10Score_    = (monteCarloData && totalCPFNom_ > 0 && p10Total_ > 0)
       ? Math.min(100, Math.round((p10Total_ / totalCPFNom_) * 100))
-      : null;  // null when MC off → excluded from score; weight redistributed to remaining sub-scores
+      : null;
+    const psScore_     = perfectStormData
+      ? Math.max(0, 100 - (perfectStormData.deltaPct || 0))
+      : null;
+    const p10SubScore  =   // returned as p10SubScore for KPI tile backward-compatibility
+      (psScore_ !== null && p10Score_ !== null) ? Math.round(psScore_ * 0.6 + p10Score_ * 0.4)
+      : psScore_ ?? p10Score_ ?? null;
 
     // ── 4. Longevity Cover ─────────────────────────────────────────────────
     // For CPF LIFE members: measures real purchasing power of the flat nominal payout at age 90
@@ -5112,7 +5147,7 @@ function ReadinessTab({
     nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
     lifePlans, highlightPlan, isMale, basicPremiumPct, target,
     monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
-    milestones, inputs.inflationRate, ca,
+    milestones, inputs.inflationRate, ca, perfectStormData,
   ]);
 
   // ── Derived metrics ──────────────────────────────────────────────────────
@@ -5467,7 +5502,7 @@ function ReadinessTab({
         </summary>
         <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[
-            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Downside Resilience (P10), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Null sub-scores (no income target, Monte Carlo off) are excluded and remaining weights renormalised. Green ≥ 75, amber 50–74, red < 50."],
+            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Stress Resilience (Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Activate the Stress Centre (⚡ Worst Case) for the most meaningful Stress Resilience signal. Below the gauge: a MAS Financial Health advisory panel with 5 non-scoring tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness)."],
             ["📊 KPI Tiles", "Five headline numbers: total CPF at payout age, monthly CPF LIFE payout, income coverage %, P10 downside (bad-luck scenario), and OA depletion age. Enable Monte Carlo in the Accumulation tab to unlock the downside tile."],
             ["📈 RA vs Retirement Sums", "A progress bar comparing your projected RA at payout age against BRS, FRS, and ERS. These targets grow at the retirement-sum growth rate you set in the sidebar (default 3%/yr)."],
             ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
@@ -5509,11 +5544,13 @@ function ReadinessTab({
                   : `${incomeTierLabel} · Set a Target Monthly Income in the sidebar to compare`,
               },
               {
-                label: "Downside (P10)",
+                label: "Stress Resilience",
                 pct: p10SubScore,
                 tip: p10SubScore != null
-                  ? `P10 bad-luck scenario total CPF at ${pa}: ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)}`
-                  : "Enable Monte Carlo in the Accumulation tab for live P10 downside figures",
+                  ? perfectStormData
+                    ? `Perfect Storm: −${perfectStormData.deltaPct}% net worth (SORR+inflation+property+CPF rate+healthcare). ${monteCarloData ? "Combined with P10 Monte Carlo." : ""}`
+                    : `P10 Monte Carlo: ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} at age ${pa}`
+                  : "Enable Stress Centre (⚡ Worst Case) or Monte Carlo for live stress resilience figures",
               },
               {
                 label: "Longevity Cover",
@@ -5548,8 +5585,8 @@ function ReadinessTab({
               FRS steps down post-retirement (10% at 75+). Null sub-scores (no income target,
               MC off) are excluded and remaining weights renormalised to 100%. */}
           <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4, textAlign: "center" }}>
-            5-dimension score: FRS · Income · P10 · Longevity · Healthcare.{" "}
-            Weights shift by age band — enable Monte Carlo for P10.
+            5-dimension score: FRS · Income · Stress · Longevity · Healthcare.{" "}
+            Weights shift by age band — activate Stress Centre for resilience score.
           </p>
         </div>
 
@@ -5661,6 +5698,93 @@ function ReadinessTab({
           </div>
         </div>
       </div>
+
+      {/* ── MAS FINANCIAL HEALTH PANEL (Tier 2 advisory) ─────────────────────
+          Five tiles aligned to the MAS Basic Financial Planning Guide pillars.
+          These are ADVISORY ONLY — they do not feed into the 100-pt gauge score.
+          Data is derived from existing inputs + 3 new boolean legacy fields.      */}
+      {(() => {
+        // ── Tile 1: Emergency Buffer ──────────────────────────────────────────
+        const livingExp    = Number(inputs.budgetLivingExpenses) || 0;
+        const emMonths     = Number(inputs.emergencyFundMonths) || 0;
+        const emScore      = emMonths >= 6 ? 100 : emMonths >= 3 ? 60 : emMonths > 0 ? 25 : 0;
+        const emStatus     = emMonths >= 6 ? "green" : emMonths >= 3 ? "amber" : "red";
+        const emLabel      = emMonths >= 6 ? `${emMonths}mo ✓` : emMonths >= 3 ? `${emMonths}mo (min met)` : emMonths > 0 ? `${emMonths}mo (low)` : "Not set";
+        const emTip        = `MAS guideline: 3–6 months liquid savings. ${emMonths > 0 ? `Approx. ${formatCurrency(emMonths * livingExp)}/mo×${emMonths}.` : "Set via Profile sidebar."}`;
+
+        // ── Tile 2: Savings Rate ─────────────────────────────────────────────
+        const grossSalary  = Number(inputs.salaryGross) || 0;          // monthly
+        const annualMand   = (Number(inputs.empOaCont)||0) + (Number(inputs.empSaCont)||0) + (Number(inputs.empMaCont)||0);
+        const annualVC     = (Number(inputs.vc3aCash)||0) + (Number(inputs.vcSaTopup)||0) + (Number(inputs.vcMaCash)||0);
+        const annualGross  = grossSalary * 12;
+        const savingsRate  = annualGross > 0 ? Math.round((annualMand + annualVC) / annualGross * 100) : null;
+        const srStatus     = savingsRate == null ? "grey" : savingsRate >= 20 ? "green" : savingsRate >= 10 ? "amber" : "red";
+        const srLabel      = savingsRate == null ? "Add salary" : `${savingsRate}%`;
+        const srTip        = `MAS guideline: ≥10% of income to retirement. CPF mandatory: ${formatCurrency(annualMand)}/yr + voluntary: ${formatCurrency(annualVC)}/yr = ${formatCurrency(annualMand+annualVC)}/yr. Annual gross: ${formatCurrency(annualGross)}.`;
+
+        // ── Tile 3: Inflation Hedge ──────────────────────────────────────────
+        const inflPct      = Number(inputs.inflationRate) || 2;
+        const isEscalating = highlightPlan === "escalating";
+        const privReturn   = Number(inputs.privateAssetGrowthRate) || 0;
+        const hedgeScore   = isEscalating ? 100 : (privReturn >= inflPct + 1 ? 80 : privReturn >= inflPct ? 60 : 35);
+        const hedgeStatus  = hedgeScore >= 80 ? "green" : hedgeScore >= 60 ? "amber" : "red";
+        const hedgeLabel   = isEscalating ? "Escalating plan" : privReturn >= inflPct ? `+${(privReturn - inflPct).toFixed(1)}% real return` : `−${(inflPct - privReturn).toFixed(1)}% real`;
+        const hedgeTip     = `Inflation: ${inflPct}%/yr. CPF LIFE Standard plan: flat nominal payout loses ~${Math.round((1 - 1/Math.pow(1+inflPct/100,25))*100)}% purchasing power over 25 yrs. Escalating plan (+2%/yr) hedges inflation. Private assets yielding ${privReturn}%/yr vs ${inflPct}% inflation.`;
+
+        // ── Tile 4: Liquidity Ratio ──────────────────────────────────────────
+        const paRow        = accumulationByAge.get(pa) || {};
+        const liquidAtPA   = (paRow.oa||0) + (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
+        const propAtPA     = paRow.propertyValue || 0;
+        const totalWealthPA = liquidAtPA + propAtPA;
+        const propPct      = totalWealthPA > 0 ? Math.round(propAtPA / totalWealthPA * 100) : 0;
+        const liqScore     = propPct <= 50 ? 100 : propPct <= 75 ? 65 : 30;
+        const liqStatus    = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
+        const liqLabel     = totalWealthPA > 0 ? `${100 - propPct}% liquid` : "No data";
+        const liqTip       = `At payout age ${pa}: liquid assets (CPF+SRS+private) ${formatCurrency(liquidAtPA)} vs property ${formatCurrency(propAtPA)}. Property >75% of total wealth raises cash-flow risk in retirement.`;
+
+        // ── Tile 5: Legacy Readiness ─────────────────────────────────────────
+        const legacyChecks = [inputs.hasWill, inputs.hasCPFNomination, inputs.hasLPA].filter(Boolean).length;
+        const legacyScore  = Math.round((legacyChecks / 3) * 100);
+        const legacyStatus = legacyChecks === 3 ? "green" : legacyChecks >= 1 ? "amber" : "red";
+        const legacyLabel  = legacyChecks === 3 ? "All 3 ✓" : `${legacyChecks}/3 done`;
+        const legacyTip    = `Will: ${inputs.hasWill ? "✓" : "✗"}  ·  CPF Nomination: ${inputs.hasCPFNomination ? "✓" : "✗"}  ·  LPA: ${inputs.hasLPA ? "✓" : "✗"}. Set in Profile sidebar. MAS recommends all three for complete estate readiness.`;
+
+        const clr = { green: "var(--clr-green)", amber: "var(--clr-amber)", red: "var(--clr-red)", grey: "var(--text-muted)" };
+        const tiles = [
+          { icon: "🏦", title: "Emergency Buffer",  label: emLabel,      status: emStatus,     score: emScore,     tip: emTip,     pillar: "Emergency Funds"  },
+          { icon: "💰", title: "Savings Rate",       label: srLabel,      status: srStatus,     score: savingsRate, tip: srTip,     pillar: "Investments"      },
+          { icon: "📈", title: "Inflation Hedge",    label: hedgeLabel,   status: hedgeStatus,  score: hedgeScore,  tip: hedgeTip,  pillar: "Investments"      },
+          { icon: "💧", title: "Liquidity Ratio",    label: liqLabel,     status: liqStatus,    score: liqScore,    tip: liqTip,    pillar: "Protection"       },
+          { icon: "📋", title: "Legacy Readiness",   label: legacyLabel,  status: legacyStatus, score: legacyScore, tip: legacyTip, pillar: "Legacy Planning"  },
+        ];
+        return (
+          <div style={{ marginTop: 2 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <p style={{ ...labelStyle, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                MAS Financial Health <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-subtle)", textTransform: "none" }}>(advisory · not in 100-pt score)</span>
+              </p>
+              <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection." />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
+              {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
+                <div key={title} title={tip} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, borderColor: score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
+                  <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ fontSize: 16 }}>{icon}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>{title}</span>
+                  </div>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: clr[status], margin: "2px 0 0" }}>{label}</p>
+                  {score != null && (
+                    <div style={{ height: 3, borderRadius: 3, background: "var(--border-subtle)", overflow: "hidden", marginTop: 2 }}>
+                      <div style={{ height: "100%", width: `${score}%`, borderRadius: 3, background: clr[status], transition: "width 0.5s ease" }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── ROW 2: Scenario strip + RS bars + Income waterfall ── */}
       <div className="rd-row2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
@@ -6141,7 +6265,7 @@ function findScrollContainer(el) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CPFPlannerApp() {
+export default function App() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
   const privateAssetsRef = useRef(null); // scroll target for "SRS panel ↗" Readiness action CTA
@@ -9058,16 +9182,29 @@ function CPFPlannerApp() {
 </body></html>`;
 
     try {
-      const blob = new Blob([html], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      const win = window.open(url, "_blank");
-      if (win) {
-        win.onload = () => { setTimeout(() => { win.focus(); win.print(); URL.revokeObjectURL(url); }, 400); };
-        showToast("Data table opened — use print dialog to save as PDF or print");
-      } else {
-        URL.revokeObjectURL(url);
-        showToast("Pop-up blocked — please allow pop-ups for this site and try again");
-      }
+      // Popup-blocker-safe print: inject content into a hidden iframe on the current page
+      // rather than opening a new window. Browsers treat iframe printing as same-page and
+      // never block it, unlike window.open which is blocked after async/blob operations.
+      const iframeId = "__cpf_print_iframe__";
+      let printFrame = document.getElementById(iframeId);
+      if (printFrame) printFrame.remove();
+      printFrame = document.createElement("iframe");
+      printFrame.id = iframeId;
+      printFrame.style.cssText = "position:fixed;width:0;height:0;border:0;top:-9999px;left:-9999px;";
+      document.body.appendChild(printFrame);
+      const doc = printFrame.contentDocument || printFrame.contentWindow?.document;
+      if (!doc) throw new Error("iframe document unavailable");
+      doc.open(); doc.write(html); doc.close();
+      printFrame.contentWindow.focus();
+      setTimeout(() => {
+        try {
+          printFrame.contentWindow.print();
+          showToast("Data table opened — use print dialog to save as PDF or print");
+        } catch (printErr) {
+          showToast("⚠️ Print failed — try the CSV export instead");
+        }
+        setTimeout(() => { try { printFrame.remove(); } catch {} }, 2000);
+      }, 400);
     } catch (e) {
       // Fallback to text modal
       // R2 fix: derive is55Plus from debouncedInputs so the SA/RA column label
@@ -9993,11 +10130,15 @@ function CPFPlannerApp() {
     for (let age = ca; age <= endAge; age++) ageTotals[age] = [];
     const mcVar = Math.max(0.1, Number(debouncedInputs.mcVariancePct) || 1); // Rev #MC: user-controlled band
     for (let run = 0; run < RUNS; run++) {
+      // Seeded RNG: seed is unique per run but deterministic across sessions for the same profile.
+      // Seed formula: profile fingerprint (ca × 7919 + pa × 97) XOR run index.
+      // Same inputs → same P10/P90 bands every session; different inputs → different bands.
+      const runRng   = seededRandom((ca * 7919 + pa * 97) ^ run);
       const _inflBand = (mcVar / 100) / 2;
-      const mcInflRate = (Number(debouncedInputs.inflationRate) || 2) / 100 + (Math.random() * _inflBand * 2 - _inflBand);
+      const mcInflRate = (Number(debouncedInputs.inflationRate) || 2) / 100 + (runRng() * _inflBand * 2 - _inflBand);
       const mcRows = isRSSMC
-        ? runRSSEngine(debouncedInputs, { maxAge: endAge, randomiseRates: true, mcVariance: mcVar })
-        : runProjectionEngine(debouncedInputs, { maxAge: endAge, randomiseRates: true, mcVariance: mcVar });
+        ? runRSSEngine(debouncedInputs, { maxAge: endAge, randomiseRates: true, mcVariance: mcVar, rng: runRng })
+        : runProjectionEngine(debouncedInputs, { maxAge: endAge, randomiseRates: true, mcVariance: mcVar, rng: runRng });
       for (const row of mcRows) {
         if (ageTotals[row.age] !== undefined) {
           // Deflate by this run's inflation so MC bands reflect real-dollar uncertainty
@@ -15856,6 +15997,46 @@ ${milestoneSnapshotHtml}
                     </div>
                   )}
 
+                  {/* ── MAS Financial Health — Legacy Planning + Emergency Fund ── */}
+                  {/* These feed the Tier 2 advisory panel on the Readiness tab.      */}
+                  <div style={{ marginTop: 10, padding: "9px 10px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-highlight)", textTransform: "uppercase", letterSpacing: "0.04em" }}>MAS Financial Health</span>
+                      <TooltipBox id="t-masHealth" text="These fields power the MAS Financial Health advisory panel on the Readiness tab. They do not affect CPF projections. Emergency Fund tracks liquid reserves vs the MAS 3–6 month guideline. Legacy Planning confirms you have a Will, CPF nomination (CSNB), and Lasting Power of Attorney (LPA) registered with OPG — all strongly recommended by MAS for holistic retirement planning." />
+                    </div>
+                    {/* Emergency Fund slider */}
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Emergency Fund</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: (inputs.emergencyFundMonths || 0) >= 6 ? "var(--clr-green)" : (inputs.emergencyFundMonths || 0) >= 3 ? "var(--clr-amber)" : "var(--clr-red)" }}>
+                          {inputs.emergencyFundMonths || 0} months
+                        </span>
+                      </div>
+                      <input type="range" min={0} max={24} step={1}
+                        value={inputs.emergencyFundMonths || 0}
+                        onChange={e => setInputs(p => ({ ...p, emergencyFundMonths: Number(e.target.value) }))}
+                        style={{ width: "100%", accentColor: (inputs.emergencyFundMonths || 0) >= 6 ? "var(--clr-green)" : (inputs.emergencyFundMonths || 0) >= 3 ? "var(--clr-amber)" : "var(--clr-red)" }}
+                      />
+                      <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "2px 0 0" }}>MAS guideline: 3–6 months of living expenses in liquid savings</p>
+                    </div>
+                    {/* Legacy Planning checkboxes */}
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 5px" }}>Legacy Planning</p>
+                    {[
+                      ["hasWill",          "Will",            "A legally valid will prepared with witnesses"],
+                      ["hasCPFNomination", "CPF Nomination",  "CPF nomination (CSNB) filed — bypasses probate for CPF assets"],
+                      ["hasLPA",           "LPA",             "Lasting Power of Attorney registered with OPG Singapore"],
+                    ].map(([key, label, tip]) => (
+                      <div key={key} title={tip}
+                        onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", cursor: "pointer" }}>
+                        <span style={{ fontSize: 12, color: "var(--text-main)" }}>{label}</span>
+                        <div style={{ width: 28, height: 16, borderRadius: 8, background: inputs[key] ? "var(--clr-green)" : "var(--bg-panel)", border: `1px solid ${inputs[key] ? "var(--clr-green)" : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                          <div style={{ position: "absolute", top: 2, left: inputs[key] ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: inputs[key] ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
                   {/* ── CPF SCHEME — RSS vs CPF LIFE (SC/PR only; foreigners have no CPF) ── */}
                   {/* Birth-year auto-suggest banner: shown when estimated birth year < 1958    */}
                   {!isForeigner && (() => {
@@ -19243,6 +19424,7 @@ ${milestoneSnapshotHtml}
                 monteCarloData={monteCarloData}
                 effectiveOaDrawMonthly={effectiveOaDrawMonthly}
                 effectiveOaDrawStartAge={effectiveOaDrawStartAge}
+                perfectStormData={perfectStormData}
                 onSrsCtaClick={() => {
                   setSidebarOpen(true);
                   setOpenSections(prev => new Set([...prev, "privateAssets"]));
@@ -23895,9 +24077,10 @@ ${milestoneSnapshotHtml}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
-                        ["Readiness Gauge & Action Queue", "The arc gauge shows your Retirement Readiness Score (0–100) — a 5-dimension age-banded weighted composite: FRS Coverage (10–35%), Income Adequacy (20–25%), Downside Resilience P10 (15–20%), Longevity Cover (15–25%), and Healthcare Shield (10–30%). Weights shift by age band — healthcare escalates to 30% for members 75+; FRS steps down to 10% post-retirement when the RA is locked in. Null sub-scores (no income target, Monte Carlo off) are excluded and remaining weights renormalised to 100%. Colour: green ≥ 75, amber 50–74, red < 50. Below the gauge, the Action Priority Queue lists the five highest-impact actions ranked by urgency, each showing an estimated +pts score improvement and linking directly to the relevant tab or sidebar section."],
-                        ["Five sub-score bars", "Below the gauge arc, five bars break down each dimension: FRS Coverage (RA vs projected FRS), Income Adequacy (CPF LIFE payout vs your target with income tier label), Downside Resilience (P10 Monte Carlo total vs base case — shows '—' when Monte Carlo is off), Longevity Cover (real purchasing power of CPF LIFE at age 90 vs BRS-payout floor, or OA coverage years vs age-90 benchmark for drawdown members), and Healthcare Shield (MA at payout vs projected BHS)."],
-                        ["What counts as 'on track'?", "FRS Coverage: RA at payout ≥ projected FRS. Income Adequacy: CPF LIFE payout ≥ your Target Monthly Income (income tier: Basic ≥ BRS payout, Comfortable ≥ FRS payout, Active ≥ ERS payout). Downside Resilience: P10 scenario CPF total ≥ base case (100% = no downside). Longevity Cover: real CPF LIFE payout at age 90 ≥ BRS-level payout floor; or OA draw lasts to age 90+. Healthcare Shield: MA at payout ≥ projected Basic Healthcare Sum (BHS). These are planning benchmarks, not CPF Board rules."],
+                        ["Readiness Gauge & Action Queue", "The arc gauge shows your Retirement Readiness Score (0–100) — a 5-dimension age-banded weighted composite: FRS Coverage (10–35%), Income Adequacy (20–25%), Stress Resilience (15–20% — Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover (15–25%), and Healthcare Shield (10–30%). Weights shift by age band — healthcare escalates to 30% for members 75+; FRS steps down to 10% post-retirement. Null sub-scores excluded and remaining weights renormalised. Colour: green ≥ 75, amber 50–74, red < 50. Below the gauge: a MAS Financial Health advisory panel with 5 tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness). These advisory tiles do not affect the 100-pt score. Below that: the Action Priority Queue with the five highest-impact actions ranked by urgency."],
+                        ["Five sub-score bars", "FRS Coverage (RA vs projected FRS), Income Adequacy (CPF LIFE payout vs target with income tier label — Active ≥ ERS payout, Comfortable ≥ FRS payout, Basic ≥ BRS payout), Stress Resilience (Perfect Storm worst-case delta; falls back to P10 Monte Carlo when Stress Centre is inactive; shows '—' when both are off), Longevity Cover (real purchasing power of CPF LIFE at age 90 vs BRS-payout floor, or OA coverage years vs age-90 for drawdown members), Healthcare Shield (MA at payout vs projected BHS)."],
+                        ["MAS Financial Health Panel", "Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense 2024). Emergency Buffer: months of liquid savings vs 3–6 month guideline (set in Profile sidebar). Savings Rate: total CPF contributions + voluntary as % of annual gross salary vs ≥10% MAS minimum. Inflation Hedge: CPF LIFE plan type and private asset return vs inflation rate. Liquidity Ratio: liquid assets (CPF+SRS+private) vs total net worth — penalises >75% property concentration. Legacy Readiness: Will, CPF nomination, and LPA status (set as toggles in Profile sidebar)."],
+                        ["What counts as 'on track'?", "FRS Coverage: RA at payout ≥ projected FRS. Income Adequacy: payout ≥ target (tier: Active ≥ ERS, Comfortable ≥ FRS, Basic ≥ BRS). Stress Resilience: perfect storm + P10 net worth ≥ base case. Longevity Cover: real CPF LIFE at age 90 ≥ BRS payout floor. Healthcare Shield: MA ≥ projected BHS. Advisory: Emergency ≥ 6 months, Savings Rate ≥ 20%, Escalating plan or positive real return, Liquidity ≤ 75% property, all 3 legacy docs complete."],
                         ["Milestone Snapshots row", "The Milestone Snapshots bar under the gauge shows your projected CPF balance at age 55 (SA lock-in), your payout age, and age 95 (longevity benchmark). Each snapshot shows OA, SA/RA, and MA individually. Balances are shown in nominal dollars by default — toggle Real ($) in Display settings to deflate for inflation."],
                         ["Setting your target income", "The Target Monthly Income field in the sidebar (Private Assets & Goals section) drives the Income Coverage card, the income roadmap, and the Goal Simulator. Set it to your desired post-retirement monthly household spend. A typical Singapore benchmark is $3,000–$5,000/mo for a single individual, or $5,000–$8,000/mo for a couple."],
                         ["Sidebar auto-opens on Readiness (desktop)", "On desktop (viewport > 1,024px), the sidebar opens automatically when you first land on the Readiness tab so you can immediately adjust inputs and see the gauges update. On mobile and tablet the sidebar collapses to give full dashboard space. Your manual open/close choice is remembered for the rest of the session."],
@@ -26803,20 +26986,6 @@ ${milestoneSnapshotHtml}
         </div>
       </div>
 
-      {/* Copyright notice — fixed, unobtrusive, mirrors header wordmark.
-          position:fixed + pointerEvents:none so it never intercepts taps/clicks. */}
-      <div style={{
-        position: "fixed", bottom: 4, right: 8, zIndex: 1,
-        display: "flex", alignItems: "center", gap: 6,
-        fontSize: 10, color: "var(--text-muted)", opacity: 0.55,
-        pointerEvents: "none", whiteSpace: "nowrap",
-      }}>
-        <span style={{ fontWeight: 800, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-          CPF Planner Pro
-        </span>
-        <span>{'\u00A9'} 2026 Michael Tan. All rights reserved.</span>
-      </div>
-
       </div>{/* /rootRef */}
 
       {/* P3-T12: Setup wizard overlay — renders above everything when active.
@@ -26835,158 +27004,3 @@ ${milestoneSnapshotHtml}
 }
 
 
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SOFT ACCESS GATE — secondary friction layer in front of CPFPlannerApp.
-//
-// This is NOT a security boundary: the bundle (including this code) is
-// downloaded to the browser regardless, and the passphrases below are
-// plain strings visible via DevTools. The actual access control is
-// Cloudflare Access + KV-based expiry enforced at the edge
-// (functions/_middleware.js). This gate exists purely to deter casual use
-// of a leaked link (e.g. a Pages preview-deployment URL not covered by
-// Access) and to mirror the admin / beta-tester expiry split at the edge.
-//
-// Storage key 'cpf_access_gate' -> JSON { role: 'admin' | 'beta', unlockedAt }
-//   - role 'admin' : never re-locks once entered
-//   - role 'beta'  : re-locks 7 days after unlockedAt
-// ═══════════════════════════════════════════════════════════════════════════
-
-const ACCESS_GATE_KEY = 'cpf_access_gate';
-const ACCESS_GATE_BETA_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const ACCESS_GATE_PASSPHRASES = { admin: 'admin$$1188$$', beta: 'beta$$2026$$' };
-
-function readAccessGate() {
-  try {
-    const raw = localStorage.getItem(ACCESS_GATE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.role || !parsed.unlockedAt) return null;
-    if (parsed.role === 'beta' && (Date.now() - parsed.unlockedAt) > ACCESS_GATE_BETA_WINDOW_MS) {
-      return { expired: true };
-    }
-    if (parsed.role === 'admin' || parsed.role === 'beta') return { role: parsed.role };
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function writeAccessGate(role) {
-  try {
-    localStorage.setItem(ACCESS_GATE_KEY, JSON.stringify({ role, unlockedAt: Date.now() }));
-  } catch {}
-}
-
-function LockScreen({ initiallyExpired, onUnlock }) {
-  const [value, setValue] = useState('');
-  const [error, setError] = useState(false);
-  const [expired, setExpired] = useState(!!initiallyExpired);
-
-  const submit = () => {
-    const v = value.trim();
-    if (v === ACCESS_GATE_PASSPHRASES.admin) {
-      writeAccessGate('admin');
-      onUnlock();
-    } else if (v === ACCESS_GATE_PASSPHRASES.beta) {
-      writeAccessGate('beta');
-      onUnlock();
-    } else {
-      setError(true);
-      setExpired(false);
-      setValue('');
-    }
-  };
-
-  return (
-    <div style={{
-      minHeight: '100vh', width: '100%',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #0d1424 0%, #131c33 100%)',
-      fontFamily: 'system-ui, -apple-system, sans-serif', padding: 16,
-      boxSizing: 'border-box',
-    }}>
-      <style>{`
-        .cpf-gate-input:focus { outline: none; border-color: #4f8cff !important; }
-        .cpf-gate-btn:hover { background: #3d6fd6 !important; }
-      `}</style>
-      <div style={{
-        background: '#161f38', border: '1px solid #28324f', borderRadius: 12,
-        padding: '32px 28px', maxWidth: 360, width: '100%', textAlign: 'center',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 14 }}>
-          <div style={{ background: '#10b981', padding: 8, borderRadius: 12, display: 'flex' }}>
-            <Calculator style={{ color: '#ffffff', width: 18, height: 18 }} />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 900, fontSize: 16, background: 'linear-gradient(90deg,#10b981,#3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', whiteSpace: 'nowrap' }}>
-              CPF Planner Pro
-            </div>
-            <div style={{ fontSize: 11, color: '#10b981', fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-              Retirement Engine v2026
-            </div>
-          </div>
-        </div>
-        <div style={{ fontSize: 22, marginBottom: 8 }}>{'\u{1F512}'}</div>
-        <p style={{ fontSize: 13, color: '#9aa4b8', margin: '0 0 20px', lineHeight: 1.5 }}>
-          {expired
-            ? 'Your beta access window has ended. Enter a valid access code to continue.'
-            : 'This app is in private beta. Enter your access code to continue.'}
-        </p>
-        <input
-          className="cpf-gate-input"
-          type="password"
-          value={value}
-          placeholder="Access code"
-          onChange={(e) => { setValue(e.target.value); setError(false); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-          style={{
-            width: '100%', boxSizing: 'border-box', padding: '10px 12px',
-            borderRadius: 8, border: `1px solid ${error ? '#e05252' : '#3a4566'}`,
-            background: '#0d1424', color: '#e6e9ef', fontSize: 14, marginBottom: 12,
-          }}
-          autoFocus
-        />
-        {error && (
-          <div style={{ color: '#e05252', fontSize: 12, marginBottom: 12, marginTop: -4 }}>
-            Incorrect access code.
-          </div>
-        )}
-        <button
-          className="cpf-gate-btn"
-          onClick={submit}
-          style={{
-            width: '100%', padding: '10px 12px', borderRadius: 8, border: 'none',
-            background: '#4f8cff', color: '#fff', fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', transition: 'background 0.15s',
-          }}
-        >
-          Unlock
-        </button>
-        <p style={{ fontSize: 11, color: '#5b6785', margin: '20px 0 0' }}>
-          {'\u00A9'} 2026 Michael Tan. All rights reserved.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-export default function App() {
-  const [gate, setGate] = useState(() => {
-    const g = readAccessGate();
-    if (!g) return { status: 'locked' };
-    if (g.expired) return { status: 'expired' };
-    return { status: 'unlocked' };
-  });
-
-  if (gate.status === 'unlocked') return <CPFPlannerApp />;
-
-  return (
-    <LockScreen
-      initiallyExpired={gate.status === 'expired'}
-      onUnlock={() => setGate({ status: 'unlocked' })}
-    />
-  );
-}
