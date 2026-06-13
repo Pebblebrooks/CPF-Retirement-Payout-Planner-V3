@@ -1,3 +1,16 @@
+/**
+ * CPF Planner Pro
+ * ------------------------------------------------------------------------
+ * Copyright (c) 2026 Michael Tan. All rights reserved.
+ *
+ * This source code and the software it forms part of are the proprietary
+ * and confidential property of Michael Tan (owner & developer). No part of
+ * this file may be copied, reproduced, distributed, or used to create
+ * derivative works, in whole or in part, without prior written permission
+ * from the owner.
+ * ------------------------------------------------------------------------
+ */
+
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -26790,6 +26803,20 @@ ${milestoneSnapshotHtml}
         </div>
       </div>
 
+      {/* Copyright notice — fixed, unobtrusive, mirrors header wordmark.
+          position:fixed + pointerEvents:none so it never intercepts taps/clicks. */}
+      <div style={{
+        position: "fixed", bottom: 4, right: 8, zIndex: 1,
+        display: "flex", alignItems: "center", gap: 6,
+        fontSize: 10, color: "var(--text-muted)", opacity: 0.55,
+        pointerEvents: "none", whiteSpace: "nowrap",
+      }}>
+        <span style={{ fontWeight: 800, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+          CPF Planner Pro
+        </span>
+        <span>{'\u00A9'} 2026 Michael Tan. All rights reserved.</span>
+      </div>
+
       </div>{/* /rootRef */}
 
       {/* P3-T12: Setup wizard overlay — renders above everything when active.
@@ -26889,10 +26916,20 @@ function LockScreen({ initiallyExpired, onUnlock }) {
         padding: '32px 28px', maxWidth: 360, width: '100%', textAlign: 'center',
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
       }}>
-        <div style={{ fontSize: 28, marginBottom: 8 }}>{'\u{1F512}'}</div>
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e6e9ef', margin: '0 0 6px' }}>
-          CPF Planner Pro
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ background: '#10b981', padding: 8, borderRadius: 12, display: 'flex' }}>
+            <Calculator style={{ color: '#ffffff', width: 18, height: 18 }} />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 900, fontSize: 16, background: 'linear-gradient(90deg,#10b981,#3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', whiteSpace: 'nowrap' }}>
+              CPF Planner Pro
+            </div>
+            <div style={{ fontSize: 11, color: '#10b981', fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              Retirement Engine v2026
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: 22, marginBottom: 8 }}>{'\u{1F512}'}</div>
         <p style={{ fontSize: 13, color: '#9aa4b8', margin: '0 0 20px', lineHeight: 1.5 }}>
           {expired
             ? 'Your beta access window has ended. Enter a valid access code to continue.'
@@ -26928,6 +26965,9 @@ function LockScreen({ initiallyExpired, onUnlock }) {
         >
           Unlock
         </button>
+        <p style={{ fontSize: 11, color: '#5b6785', margin: '20px 0 0' }}>
+          {'\u00A9'} 2026 Michael Tan. All rights reserved.
+        </p>
       </div>
     </div>
   );
