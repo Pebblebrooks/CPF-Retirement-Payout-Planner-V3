@@ -941,7 +941,6 @@ const PRESET_PROFILES = [
       empOaCont: 17640, empSaCont: 5040, empMaCont: 5040,
       // Housing: 5-room HDB $1,800/mo combined; primary pays 55% = ~$990/mo = $11,880/yr
       housingOutflow: 21600,   // full household amount — housingSharePct=55 splits it in household view
-      housingStopAge: 55,
       // MediShield Life + IP rider (Integrated Shield)
       medicalUsage: 600, medishieldIP: 1200, elderCareShield: 500,
       // HDB 5-room: est. $650k, leasehold 99yr, not selling near-term
@@ -5026,6 +5025,7 @@ function ReadinessTab({
   // Inflows CTA: opens + scrolls to Inflows (topups) section in the sidebar
   onInflowsCtaClick,
 }) {
+  const [expandedMasTile, setExpandedMasTile] = useState(null);
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
   const cy           = Number(inputs.currentYear) || 2026;
@@ -5047,7 +5047,9 @@ function ReadinessTab({
   //   4. Longevity Cover     (15–25%) — real purchasing power of CPF LIFE at age 90 vs BRS floor
   //   5. Healthcare Shield   (10–30%) — MA at payout vs projected BHS; escalates sharply with age
   //
-  // Graceful degradation: null sub-scores are excluded; remaining weights renormalised to 100%.
+  // Graceful degradation:
+  //   incomeSubScore: excluded when null (no target = user choice; not an assessment gap).
+  //   p10SubScore: defaults to 50 when null (MC off = incomplete assessment; nudges user to stress-test).
   // Income fallback: when no target set, incomeSubScore=null (not a frsRatio proxy).
   const {
     score, frsRatio, incomeRatio,
@@ -5138,7 +5140,7 @@ function ReadinessTab({
     const subScores = [
       { val: frsSubScore,       wt: wt.frs  },
       { val: incomeSubScore,    wt: wt.inc  },  // null when no target
-      { val: p10SubScore,       wt: wt.p10  },  // null when MC off
+      { val: p10SubScore ?? 50, wt: wt.p10  },  // 50 (neutral) when MC off — incomplete assessment
       { val: longevitySubScore, wt: wt.long },
       { val: maSubScore,        wt: wt.ma   },
     ];
@@ -5599,7 +5601,7 @@ function ReadinessTab({
               MC off) are excluded and remaining weights renormalised to 100%. */}
           <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4, textAlign: "center" }}>
             5-dimension score: FRS · Income · Stress · Longevity · Healthcare.{" "}
-            Weights shift by age band — activate Stress Centre for resilience score.
+            Weights shift by age band. Stress defaults to 50 when MC is off — enable Stress Centre for a live score.
           </p>
         </div>
 
@@ -5770,17 +5772,88 @@ function ReadinessTab({
           { icon: "💧", title: "Liquidity Ratio",    label: liqLabel,     status: liqStatus,    score: liqScore,    tip: liqTip,    pillar: "Protection"       },
           { icon: "📋", title: "Legacy Readiness",   label: legacyLabel,  status: legacyStatus, score: legacyScore, tip: legacyTip, pillar: "Legacy Planning"  },
         ];
+        // ── MAS Wellness composite (straight average of 5 tile scores) ──────
+        const tileScores = [emScore, savingsRate, hedgeScore, liqScore, legacyScore].filter(s => s != null);
+        const wellnessScore = tileScores.length > 0
+          ? Math.round(tileScores.reduce((a, b) => a + b, 0) / tileScores.length)
+          : 0;
+        const wClr  = wellnessScore >= 75 ? "#f59e0b" : wellnessScore >= 50 ? "#fb923c" : "#ef4444";
+        const wLbl  = wellnessScore >= 75 ? "Good" : wellnessScore >= 50 ? "Fair" : "Needs Work";
+        // SVG arc geometry — half-circle gauge (same maths as main Readiness gauge)
+        const W2 = 140, H2 = 78, cx2 = 70, cy2 = 74, r2 = 58;
+        const arcPct2 = Math.min(1, Math.max(0, wellnessScore / 100));
+        const startA2 = Math.PI, endA2 = Math.PI + arcPct2 * Math.PI;
+        const sx2 = cx2 + r2 * Math.cos(startA2), sy2 = cy2 + r2 * Math.sin(startA2);
+        const ex2 = cx2 + r2 * Math.cos(endA2),   ey2 = cy2 + r2 * Math.sin(endA2);
+        const lg2 = 0; // always 0: fill arc ≤ 180° (main gaugeArc uses same pattern)
+        const arcD2 = arcPct2 > 0
+          ? `M ${sx2} ${sy2} A ${r2} ${r2} 0 ${lg2} 1 ${ex2} ${ey2}`
+          : null;
         return (
           <div style={{ marginTop: 2 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <style>{`
+              .mas-tiles-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+              .mas-tile-card:focus, .mas-tile-card:focus-visible { outline: none !important; box-shadow: none !important; }
+              .mas-tile-card { -webkit-tap-highlight-color: transparent; }
+              @media (max-width: 640px) {
+                .mas-tiles-grid { grid-template-columns: repeat(3, 1fr); }
+                .mas-tiles-grid > *:nth-child(4),
+                .mas-tiles-grid > *:nth-child(5) { grid-column: span 1; }
+                .mas-tiles-grid > *:nth-child(4) { margin-left: calc(50% + 5px); width: calc(100% - 5px); }
+                .mas-wellness-row { flex-direction: column; align-items: center; }
+                .mas-wellness-gauge { margin-bottom: 8px; }
+              }
+            `}</style>
+            {/* ── MAS panel header ── */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <p style={{ ...labelStyle, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 MAS Financial Health <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-subtle)", textTransform: "none" }}>(advisory · not in 100-pt score)</span>
               </p>
-              <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection." />
+              <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection. The Wellness Score is an unweighted average of the five tile scores — it is NOT an official MAS metric." />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
+            {/* ── Wellness gauge row ── */}
+            <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 12, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+              {/* Arc gauge */}
+              <div className="mas-wellness-gauge" style={{ flexShrink: 0 }}>
+                <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible" }}>
+                  {/* Track */}
+                  <path d={`M ${sx2} ${sy2} A ${r2} ${r2} 0 1 1 ${cx2 + r2} ${cy2}`}
+                    fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
+                  {/* Fill arc */}
+                  {arcD2 && (
+                    <path d={arcD2} fill="none" stroke={wClr} strokeWidth={10}
+                      strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+                  )}
+                  {/* Score */}
+                  <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900}
+                    fill={wClr} fontFamily="monospace">{wellnessScore}</text>
+                  <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700}
+                    fill={wClr}>{wLbl}</text>
+                </svg>
+              </div>
+              {/* Gauge legend */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Wellness Score</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 6px", lineHeight: 1.4 }}>
+                  MAS-aligned advisory score — unweighted average of the 5 pillars below.
+                  Not an official MAS metric.
+                </p>
+                {/* Mini sub-bar breakdown */}
+                {tiles.map(({ title, score: ts, status }) => ts != null && (
+                  <div key={title} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", width: 88, flexShrink: 0 }}>{title}</span>
+                    <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${ts}%`, borderRadius: 4, background: clr[status], transition: "width 0.5s ease" }} />
+                    </div>
+                    <span style={{ fontSize: 10, color: clr[status], fontWeight: 700, width: 26, textAlign: "right" }}>{ts}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* ── 5 tiles — 3+2 on mobile via .mas-tiles-grid ── */}
+            <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
-                <div key={title} title={tip} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, borderColor: score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
+                <div key={title} className="mas-tile-card" onClick={() => setExpandedMasTile(expandedMasTile === title ? null : title)} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", borderColor: score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
                   <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ fontSize: 16 }}>{icon}</span>
@@ -5795,6 +5868,29 @@ function ReadinessTab({
                 </div>
               ))}
             </div>
+            {/* MAS tile — expandable workings panel (click any tile to open) */}
+            {expandedMasTile && (() => {
+              const activeTile = tiles.find(t => t.title === expandedMasTile);
+              if (!activeTile) return null;
+              return (
+                <div style={{ background: "var(--bg-muted)", border: `1px solid ${clr[activeTile.status]}55`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 20 }}>{activeTile.icon}</span>
+                      <div>
+                        <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{activeTile.pillar}</p>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: clr[activeTile.status], margin: 0 }}>{activeTile.title} — {activeTile.label}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setExpandedMasTile(null)} style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px 8px", borderRadius: 6 }}>✕</button>
+                  </div>
+                  <p style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.65, margin: 0 }}>{activeTile.tip}</p>
+                  <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 8, marginBottom: 0 }}>
+                    MAS MoneySense guideline · advisory only · not included in the 100-pt Readiness Score
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
@@ -6323,9 +6419,6 @@ function CPFPlannerApp() {
   const [primaryLifePlan, setPrimaryLifePlan] = useState("standard");
   const [spouseLifePlan,  setSpouseLifePlan]  = useState("standard");
   const [viewMode, setViewMode] = useState("bequest");
-  const [payoutPeriod, setPayoutPeriod] = useState("monthly");          // Item 3: "monthly" | "annual" sub-toggle within payout mode
-  const [bequestIncludesOaMa, setBequestIncludesOaMa] = useState(false); // Item 2: bequest chart includes OA+MA balances
-  const [estateShowOaMa, setEstateShowOaMa] = useState(true);            // Item 4: estate cards include OA+MA in total
   const [showTooltipId, setShowTooltipId] = useState(null);
   const [tooltipRect,   setTooltipRect]   = useState(null); // lifted from TooltipBox — survives StrategyCard remounts
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -7356,7 +7449,7 @@ function CPFPlannerApp() {
         // Bug 6 fix: restore per-member CPF LIFE plan selections from share link
         if (fullState.primaryLifePlan) setPrimaryLifePlan(fullState.primaryLifePlan);
         if (fullState.spouseLifePlan)  setSpouseLifePlan(fullState.spouseLifePlan);
-        { const _vm = fullState.viewMode; if (_vm === "annualPayout") { setViewMode("payout"); setPayoutPeriod("annual"); } else if (_vm) setViewMode(_vm); }
+        if (fullState.viewMode) setViewMode(fullState.viewMode);
         if (fullState.basicPremiumPct != null) setBasicPremiumPct(fullState.basicPremiumPct);
         if (fullState.scenarioLabelA != null) setScenarioLabelA(fullState.scenarioLabelA);
         if (fullState.scenarioLabelB != null) setScenarioLabelB(fullState.scenarioLabelB);
@@ -8674,7 +8767,7 @@ function CPFPlannerApp() {
           // Bug 4 fix: restore per-member CPF LIFE plan selections
           try { if (p.primaryLifePlan) setPrimaryLifePlan(p.primaryLifePlan); } catch {}
           try { if (p.spouseLifePlan)  setSpouseLifePlan(p.spouseLifePlan);  } catch {}
-          try { const _vm = p.viewMode; if (_vm === "annualPayout") { setViewMode("payout"); setPayoutPeriod("annual"); } else if (_vm) setViewMode(_vm); } catch {}
+          try { if (p.viewMode) setViewMode(p.viewMode); } catch {}
           try { if (p.basicPremiumPct != null) setBasicPremiumPct(p.basicPremiumPct); } catch {}
           try { if (p.scenarioLabelA != null) setScenarioLabelA(p.scenarioLabelA); } catch {}
           try { if (p.scenarioLabelB != null) setScenarioLabelB(p.scenarioLabelB); } catch {}
@@ -10902,6 +10995,9 @@ function CPFPlannerApp() {
     const baseDepletionAge = rows.find(r => r.basePriv <= 0)?.age || null;
     // Total lifetime income that won't be available due to SORR (annual, not monthly)
     const lifetimeGap = Math.round(rows.reduce((s, r) => s + Math.max(0, r.baseMonthly - r.sorrMonthly) * 12, 0));
+    // Peak single-year private-asset value loss from the crash — used in Stressor
+    // Impact Summary so SORR appears even when no active decumulation strategy.
+    const peakPrivGap = rows.length > 0 ? Math.max(0, ...rows.map(r => r.privGap || 0)) : 0;
 
     return {
       hasData: true,
@@ -10909,6 +11005,7 @@ function CPFPlannerApp() {
       sorrDepletionAge,
       baseDepletionAge,
       lifetimeGap,
+      peakPrivGap,
       privAtPA,
       crashEndAge: pa + sorrCrashYears,
     };
@@ -14701,7 +14798,7 @@ ${milestoneSnapshotHtml}
                     if (parsed.highlightPlan) setHighlightPlan(parsed.highlightPlan);
                     if (parsed.primaryLifePlan) setPrimaryLifePlan(parsed.primaryLifePlan);
                     if (parsed.spouseLifePlan)  setSpouseLifePlan(parsed.spouseLifePlan);
-                    { const _vm = parsed.viewMode; if (_vm === "annualPayout") { setViewMode("payout"); setPayoutPeriod("annual"); } else if (_vm) setViewMode(_vm); }
+                    if (parsed.viewMode) setViewMode(parsed.viewMode);
                     if (parsed.basicPremiumPct != null) setBasicPremiumPct(parsed.basicPremiumPct);
                     if (parsed.scenarioLabelA != null) setScenarioLabelA(parsed.scenarioLabelA);
                     if (parsed.scenarioLabelB != null) setScenarioLabelB(parsed.scenarioLabelB);
@@ -20787,7 +20884,13 @@ ${milestoneSnapshotHtml}
                         const panelBody  = { padding: "13px 14px" };
 
                         return (
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10 }}>
+                          <>
+                          <style>{`
+                            @media (max-width: 640px) {
+                              .stats-3col { grid-template-columns: 1fr !important; }
+                            }
+                          `}</style>
+                          <div className="stats-3col" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10 }}>
 
                             {/* ── Column 1: Retirement Outcomes ── */}
                             <div style={panelShell}>
@@ -20923,6 +21026,7 @@ ${milestoneSnapshotHtml}
                             </div>
 
                           </div>
+                          </>
                         );
                       })()}
                     </div>
@@ -22093,8 +22197,7 @@ ${milestoneSnapshotHtml}
               };
               const activeSensData     = isSpouseLife ? spouseSensitivityData    : sensitivityData;
               const activeInputsLife   = isSpouseLife ? debouncedSpouseInputs    : debouncedInputs;
-      const activeLifeEffRate       = isSpouseLife ? spouseLifeEffRateByAge   : lifeEffRateByAge;
-              const activeAccumulationByAge = isSpouseLife ? spouseAccumulationByAge : accumulationByAge; // Item 2: used for bequest+OA+MA enrichment; must switch with isSpouseLife
+      const activeLifeEffRate  = isSpouseLife ? spouseLifeEffRateByAge   : lifeEffRateByAge;
               // Destructure intersections into li* aliases so LIFE tab JSX references them without change
               const {
                 intersectionEscVsStd:        liEscVsStd,
@@ -22209,7 +22312,7 @@ ${milestoneSnapshotHtml}
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8, marginBottom: 8 }}>
                         {[
-                          ["📈 The Line Chart", "Five view modes from age " + inputs.payoutAge + " to 95: Monthly/Annual Payout (use the Monthly | Annual sub-toggle above the chart), Cumulative Payout (running total of payouts received, bequest excluded), Bequest (CPF LIFE pool only — use the CPF LIFE Only | + OA + MA sub-toggle to include OA and MA nominee balances), and Total Yield (payouts + bequest). Click any mode card below the chart to switch, or use the buttons above it. Hover for exact values at any age."],
+                          ["📈 The Line Chart", "Five view modes from age " + inputs.payoutAge + " to 95: Monthly Payout, Annual Payout, Cumulative Payout (running total of payouts received, bequest excluded), Bequest, and Total Yield (payouts + bequest). Click any mode card below the chart to switch, or use the buttons above it. Hover for exact values at any age."],
                           ["Standard Plan (grey)", "Level flat monthly payout for life. 100% of RA transferred as premium. Predictable income but no inflation protection."],
                           ["Escalating Plan (green)", "Monthly payout starts ~20% lower than Standard but grows at 2%/yr. Surpasses Standard eventually — see the crossover age in the analysis section."],
                           ["Basic Plan (amber)", "RA is split: a % is premium (pool), the rest stays in your personal RA earning 4% and funds your own payouts until ~age 90. After 90, the pool takes over. Adjust the premium % in the Premium Structure block."],
@@ -22275,7 +22378,7 @@ ${milestoneSnapshotHtml}
                     signals to the user that Total Yield and Eff. Return % are reachable by swiping. */}
                 <div style={{ position: "relative" }}>
                   <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-                    {[["payout", "Monthly / Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
+                    {[["payout", "Monthly Payout"], ["annualPayout", "Annual Payout"], ["cumPayout", "Cumulative Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
                       <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
                         {label}
                       </button>
@@ -22285,25 +22388,8 @@ ${milestoneSnapshotHtml}
                     <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36, background: "linear-gradient(to right, transparent, var(--bg-base))", pointerEvents: "none", borderRadius: "0 12px 12px 0" }} />
                   )}
                 </div>
-                {/* Item 3: Monthly/Annual sub-toggle — only visible in payout mode */}
-                {viewMode === "payout" && (
-                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4 }}>
-                    {[["monthly", "Monthly"], ["annual", "Annual"]].map(([id, label]) => (
-                      <button key={id} onClick={() => setPayoutPeriod(id)} style={{ padding: "5px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "1.5px solid var(--border-subtle)", cursor: "pointer", transition: "all 0.15s", background: payoutPeriod === id ? "var(--clr-slate)" : "transparent", color: payoutPeriod === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>{label}</button>
-                    ))}
-                  </div>
-                )}
-                {/* Item 2: CPF LIFE Only / + OA + MA sub-toggle — only visible in bequest mode */}
-                {viewMode === "bequest" && (
-                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4 }}>
-                    {[[false, "CPF LIFE Only"], [true, "+ OA + MA"]].map(([val, label]) => (
-                      <button key={String(val)} onClick={() => setBequestIncludesOaMa(val)} style={{ padding: "5px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "1.5px solid var(--border-subtle)", cursor: "pointer", transition: "all 0.15s", background: bequestIncludesOaMa === val ? "var(--clr-violet)" : "transparent", color: bequestIncludesOaMa === val ? "var(--btn-on-accent)" : "var(--text-muted)" }}>{label}</button>
-                    ))}
-                  </div>
-                )}
                 <div className="fhd-chart-grow" style={{ height: 350, minHeight: 220 }}>
-                  {/* For effRate mode, merge effective-rate values into chart data.
-                      For bequest mode with bequestIncludesOaMa, enrich bequest fields with OA+MA from activeAccumulationByAge. */}
+                  {/* For effRate mode, merge effective-rate values into chart data */}
                   {(() => {
                     const baseRows = activeDisplayProj.filter(d => d.age >= activePayoutAge);
                     const lifeChartData = viewMode === "effRate"
@@ -22313,18 +22399,7 @@ ${milestoneSnapshotHtml}
                           escalatingEffRate: activeLifeEffRate?.escalating?.[d.age] ?? null,
                           basicEffRate:      activeLifeEffRate?.basic?.[d.age]      ?? null,
                         }))
-                      : (viewMode === "bequest" && bequestIncludesOaMa)
-                        ? baseRows.map(row => {
-                            const acc = activeAccumulationByAge.get(row.age) || {};
-                            const oa = acc.oa || 0, ma = acc.ma || 0;
-                            return {
-                              ...row,
-                              standardBequest:   (row.standardBequest   || 0) + oa + ma,
-                              escalatingBequest: (row.escalatingBequest || 0) + oa + ma,
-                              basicBequest:      (row.basicBequest      || 0) + oa + ma,
-                            };
-                          })
-                        : baseRows;
+                      : baseRows;
                     const isEffRate = viewMode === "effRate";
                     // IRR-specific breakeven: first age where Standard's effective return %
                     // surpasses Basic's. Distinct from liStdVsBasic (Total Yield crossover)
@@ -22374,7 +22449,7 @@ ${milestoneSnapshotHtml}
                           )} />
                       )}
                       {/* Monthly payout crossover line */}
-                      {viewMode === "payout" && liEscPayVsStdPay && <ReferenceLine x={liEscPayVsStdPay} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std ${payoutPeriod === "monthly" ? "Monthly" : "Annual"} Age ${liEscPayVsStdPay}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
+                      {viewMode === "payout" && liEscPayVsStdPay && <ReferenceLine x={liEscPayVsStdPay} stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft", value: `Esc>Std Monthly Age ${liEscPayVsStdPay}`, fill: "var(--clr-emerald)", fontSize: 11, fontWeight: "bold" }} />}
                       {/* Q3 NEW: Cumulative Payout breakeven lines */}
                       {viewMode === "cumPayout" && liEscCumVsStdCum    && <ReferenceLine x={liEscCumVsStdCum}    stroke="var(--clr-amber3)"  strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 0,  value: `Esc>Std Cash Age ${liEscCumVsStdCum}`,    fill: "var(--clr-amber3)",  fontSize: 11, fontWeight: "bold" }} />}
                       {viewMode === "cumPayout" && liStdCumVsBasicCum  && <ReferenceLine x={liStdCumVsBasicCum}  stroke="var(--clr-blue2)"   strokeWidth={1.5} strokeDasharray="4 4" label={{ position: "insideTopLeft",   dy: 18, value: `Std>Basic Cash Age ${liStdCumVsBasicCum}`,  fill: "var(--clr-blue2)",   fontSize: 11, fontWeight: "bold" }} />}
@@ -22392,9 +22467,9 @@ ${milestoneSnapshotHtml}
                             </text>
                           )} />
                       )}
-                      <Line isAnimationActive={false} type="monotone" dataKey={isEffRate ? "standardEffRate" : viewMode === "payout" ? (payoutPeriod === "monthly" ? "standardMonthly" : "standardAnnual") : viewMode === "total" ? "standardTotal" : viewMode === "cumPayout" ? "standardCumPayout" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.35} dot={false} name="Standard" />
-                      <Line isAnimationActive={false} type="monotone" dataKey={isEffRate ? "escalatingEffRate" : viewMode === "payout" ? (payoutPeriod === "monthly" ? "escalatingMonthly" : "escalatingAnnual") : viewMode === "total" ? "escalatingTotal" : viewMode === "cumPayout" ? "escalatingCumPayout" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.35} dot={false} name="Escalating" />
-                      <Line isAnimationActive={false} type="monotone" dataKey={isEffRate ? "basicEffRate" : viewMode === "payout" ? (payoutPeriod === "monthly" ? "basicMonthly" : "basicAnnual") : viewMode === "total" ? "basicTotal" : viewMode === "cumPayout" ? "basicCumPayout" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.35} dot={false} name="Basic" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={isEffRate ? "standardEffRate" : viewMode === "payout" ? "standardMonthly" : viewMode === "annualPayout" ? "standardAnnual" : viewMode === "total" ? "standardTotal" : viewMode === "cumPayout" ? "standardCumPayout" : "standardBequest"} stroke="var(--clr-slate)" strokeWidth={highlightPlan === "standard" ? 4 : 2} strokeDasharray={highlightPlan === "standard" ? "" : "6 3"} opacity={highlightPlan === "standard" ? 1 : 0.35} dot={false} name="Standard" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={isEffRate ? "escalatingEffRate" : viewMode === "payout" ? "escalatingMonthly" : viewMode === "annualPayout" ? "escalatingAnnual" : viewMode === "total" ? "escalatingTotal" : viewMode === "cumPayout" ? "escalatingCumPayout" : "escalatingBequest"} stroke="var(--clr-emerald)" strokeWidth={highlightPlan === "escalating" ? 4 : 2} strokeDasharray={highlightPlan === "escalating" ? "" : "6 3"} opacity={highlightPlan === "escalating" ? 1 : 0.35} dot={false} name="Escalating" />
+                      <Line isAnimationActive={false} type="monotone" dataKey={isEffRate ? "basicEffRate" : viewMode === "payout" ? "basicMonthly" : viewMode === "annualPayout" ? "basicAnnual" : viewMode === "total" ? "basicTotal" : viewMode === "cumPayout" ? "basicCumPayout" : "basicBequest"} stroke="var(--clr-amber3)" strokeWidth={highlightPlan === "basic" ? 4 : 2} strokeDasharray={highlightPlan === "basic" ? "" : "6 3"} opacity={highlightPlan === "basic" ? 1 : 0.35} dot={false} name="Basic" />
                     </LineChart>
                   </ResponsiveContainer>
                     );
@@ -22402,12 +22477,13 @@ ${milestoneSnapshotHtml}
                 </div>
                 {/* Info cards — one per view mode, highlighted when active. Click to switch chart view.
                     Mobile fix: collapse from 5/6-col to 2-col grid so cards remain readable at ~178px each. */}
-                <div style={{ display: "grid", gridTemplateColumns: viewportWidth < 640 ? "repeat(2, 1fr)" : `repeat(${isRSSMode ? 4 : 5}, 1fr)`, gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: viewportWidth < 640 ? "repeat(2, 1fr)" : `repeat(${isRSSMode ? 5 : 6}, 1fr)`, gap: 8 }}>
                   {[
-                    ["payout",    "Monthly / Annual Payout", "var(--clr-slate)",   "Fixed or rising income stream. Use the Monthly | Annual toggle above the chart. Escalating starts ~20% lower then grows 2%/yr. Dashed line marks when Escalating first exceeds Standard."],
-                    ["cumPayout", "Cumulative Payout",        "var(--clr-emerald)", "Running cash received in hand — bequest excluded. Answers: 'By this age, which plan has paid me more cash?'"],
-                    ["bequest",   "Bequest",                  "var(--clr-slate)",   "CPF LIFE pool bequest only — OA and MA are excluded (they pass to nominees separately). At each age: premium minus cumulative payouts received. Toggle '+ OA + MA' above the chart to include those balances."],
-                    ["total",     "Total Yield",              "var(--clr-blue)",    "Cumulative payouts + remaining bequest. Shows all 3 Total Yield crossover lines. Best view for plan comparison."],
+                    ["payout",      "Monthly Payout",     "var(--clr-slate)",   "Fixed or rising monthly income. Escalating starts ~20% lower then grows 2%/yr. Dashed line shows the month Escalating exceeds Standard."],
+                    ["annualPayout","Annual Payout",       "var(--clr-blue2)",   "Monthly × 12. Useful for household budget planning. No breakeven line — refer to Monthly or Total Yield views."],
+                    ["cumPayout",   "Cumulative Payout",   "var(--clr-emerald)", "Running cash received in hand — bequest excluded. Answers: 'By this age, which plan has paid me more cash?'"],
+                    ["bequest",     "Bequest",             "var(--clr-slate)",   "Premium minus cumulative payouts at each age. Drops to $0 once the full premium is paid out (~age 80 for Standard)."],
+                    ["total",       "Total Yield",         "var(--clr-blue)",    "Cumulative payouts + remaining bequest. Shows all 3 Total Yield crossover lines. Best view for plan comparison."],
                     ...(!isRSSMode ? [["effRate", "Eff. Return %", "var(--clr-violet)", "Annual IRR on your RA 'investment' at payout age. Standard near 0% while bequest offsets payouts (~age 65–80), then rises. Basic positive from payout age (reflects mortality-credit-enhanced actuarial rate). Dashed vertical = IRR breakeven. Horizontal line = 4% SA/RA floor."]] : []),
                   ].map(([mode, title, color, text]) => (
                     <div key={mode} onClick={() => setViewMode(mode)} style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: viewMode === mode ? "rgba(var(--clr-emerald-rgb),0.06)" : "var(--bg-panel-muted)", border: `1.5px solid ${viewMode === mode ? color : "var(--border-subtle)"}`, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4, transition: "all 0.2s" }}>
@@ -22455,7 +22531,7 @@ ${milestoneSnapshotHtml}
                         cashAge: null,
                         color: "var(--clr-green)", bg: "rgba(var(--clr-emerald-rgb),0.1)", border: "rgba(var(--clr-emerald-rgb),0.2)",
                         cashColor: null,
-                        note: "At 2%/yr compounding, the Escalating monthly amount eventually exceeds Standard's fixed monthly payout. This is the age your monthly income is larger under Escalating. Switch to Monthly / Annual Payout view (Monthly sub-toggle) for the dashed reference line.",
+                        note: "At 2%/yr compounding, the Escalating monthly amount eventually exceeds Standard's fixed monthly payout. This is the age your monthly income is larger under Escalating. Switch to Monthly Payout view for the dashed reference line.",
                       },
                     ].map(({ cardTitle, label, yieldAge, cashAge, color, bg, border, cashColor, note }) => (
                       <div key={label} style={{ padding: 14, borderRadius: 12, background: bg, border: `1px solid ${border}` }}>
@@ -22524,38 +22600,27 @@ ${milestoneSnapshotHtml}
                   const totalAtRef = (() => {
                     const ar = accumulationByAge.get(refAge);
                     if (!ar) return 0;
-                    const oaRef = estateShowOaMa ? (ar.oa||0) : 0;
-                    const maRef = estateShowOaMa ? (ar.ma||0) : 0;
-                    const propRef = inputs.includeProperty ? (ar.propertyValue||0) : 0;
-                    if (isRSSEstate) return (ar.ra||0) + oaRef + maRef + propRef;
+                    if (isRSSEstate) return (ar.ra||0)+(ar.oa||0)+(ar.ma||0)+(inputs.includeProperty?(ar.propertyValue||0):0);
                     // II-2 fix: use displayProjectionByAge (deflated) instead of payoutByAge (nominal)
                     const pr = displayProjectionByAge.get(refAge);
                     if (!pr) return 0;
-                    return (pr[`${plan}Bequest`]||0) + oaRef + maRef + propRef;
+                    return (pr[`${plan}Bequest`]||0)+(ar.oa||0)+(ar.ma||0)+(inputs.includeProperty?(ar.propertyValue||0):0);
                   })();
                   return (
                     <div style={{ background: "var(--bg-base)", border: "1px solid var(--border-strong)", borderRadius: 16, padding: 20 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
                         <Gift style={{ width: 16, height: 16, color: "var(--clr-violet)" }} />
                         <h4 style={{ fontSize: 14, fontWeight: 900, margin: 0 }}>Estate at Death — Bequest Projection</h4>
                         <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "rgba(var(--clr-violet-rgb),0.1)", border: "1px solid rgba(var(--clr-violet-rgb),0.3)", color: "var(--clr-violet)", textTransform: "uppercase", fontWeight: 700 }}>{plan}</span>
-                        {/* Item 4: OA+MA inclusion toggle */}
-                        <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
-                          {[[true, "+ OA + MA"], [false, "CPF LIFE Only"]].map(([val, label]) => (
-                            <button key={String(val)} onClick={() => setEstateShowOaMa(val)} style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700, border: "1.5px solid var(--border-subtle)", cursor: "pointer", transition: "all 0.15s", background: estateShowOaMa === val ? "var(--clr-violet)" : "transparent", color: estateShowOaMa === val ? "var(--btn-on-accent)" : "var(--text-muted)" }}>{label}</button>
-                          ))}
-                        </div>
                       </div>
                       <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>
-                        Estimated estate value if death occurs at each age. Under the <strong style={{ color: "var(--text-bright)" }}>{plan}</strong> plan. Toggle <strong>+ OA + MA</strong> to include remaining OA and MA nominee balances, or <strong>CPF LIFE Only</strong> to isolate the CPF LIFE bequest component.
+                        Estimated estate value if death occurs at each age — CPF bequest (RA premium refund minus payouts drawn) + remaining OA + MA + property. Under the <strong style={{ color: "var(--text-bright)" }}>{plan}</strong> plan.
                       </p>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 8, marginBottom: 12 }}>
                         {ages.map(age => {
                           const aRow = accumulationByAge.get(age);
                           if (!aRow) return null;
-                          const oa = estateShowOaMa ? (aRow.oa||0) : 0;  // Item 4: gated by toggle
-                          const ma = estateShowOaMa ? (aRow.ma||0) : 0;  // Item 4: gated by toggle
-                          const ra = aRow.ra||0;
+                          const oa = aRow.oa||0, ma = aRow.ma||0, ra = aRow.ra||0;
                           const prop = inputs.includeProperty ? (aRow.propertyValue||0) : 0;
                           let bequest, total;
                           if (isRSSEstate) {
@@ -22575,7 +22640,7 @@ ${milestoneSnapshotHtml}
                               <div className="cpf-label" style={{ marginBottom: 5 }}>Age {age}{isRef ? " ◀" : ""}</div>
                               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--clr-violet)", marginBottom: 3 }}>{formatCurrency(total)}</div>
                               <div style={{ fontSize: 11, color: "var(--text-subtle)", lineHeight: 1.5 }}>
-                                <div>{estateShowOaMa ? "CPF" : "CPF LIFE"}: {formatCurrency(bequest+oa+ma)}</div>
+                                <div>CPF: {formatCurrency(bequest+oa+ma)}</div>
                                 {prop > 0 && <div>Property: {formatCurrency(prop)}</div>}
                               </div>
                             </div>
@@ -26139,12 +26204,19 @@ ${milestoneSnapshotHtml}
                       <TableIcon style={{ width: 15, height: 15, color: "var(--clr-emerald)" }} />
                       <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>Lifetime Income Summary</h4>
                     </div>
+                    <style>{`
+                      @media (max-width: 640px) {
+                        .lis-col-hide { display: none !important; }
+                        .lis-foot-span { display: none; }
+                      }
+                    `}</style>
                     <div style={{ overflowX: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                         <thead>
                           <tr style={{ borderBottom: "2px solid var(--border-strong)" }}>
                             {["Income Stream", "Start Age", "End Age", "Monthly Income", "Lifetime Total"].map(h => (
-                              <th key={h} style={{ padding: "8px 12px", textAlign: h === "Income Stream" ? "left" : "right", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
+                              <th key={h} className={["End Age","Lifetime Total"].includes(h) ? "lis-col-hide" : ""}
+                                style={{ padding: "8px 12px", textAlign: h === "Income Stream" ? "left" : "right", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -26166,17 +26238,18 @@ ${milestoneSnapshotHtml}
                                 </div>
                               </td>
                               <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-muted)", fontFamily: "monospace" }}>{row.startAge}</td>
-                              <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-muted)", fontFamily: "monospace" }}>{row.endAge}</td>
+                              <td className="lis-col-hide" style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-muted)", fontFamily: "monospace" }}>{row.endAge}</td>
                               <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: row.color, fontFamily: "monospace" }}>{formatCurrency(row.monthly)}/mo</td>
-                              <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(row.total)}</td>
+                              <td className="lis-col-hide" style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(row.total)}</td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot>
                           <tr style={{ borderTop: "2px solid var(--border-strong)", background: "var(--bg-panel)" }}>
-                            <td colSpan={3} style={{ padding: "12px 12px", fontWeight: 800, color: "var(--text-bright)", fontSize: 14 }}>Total Combined (excl. one-time) @ Age {pa}</td>
+                            <td colSpan={2} style={{ padding: "12px 12px", fontWeight: 800, color: "var(--text-bright)", fontSize: 14 }}>Total Combined (excl. one-time) @ Age {pa}</td>
+                            <td className="lis-foot-span" style={{ padding: "12px 12px", fontWeight: 800, color: "var(--text-bright)", fontSize: 14 }}></td>
                             <td style={{ padding: "12px 12px", textAlign: "right", fontWeight: 900, fontFamily: "monospace", fontSize: 15, color: target > 0 ? (shortfall <= 0 ? "var(--clr-emerald)" : "var(--clr-amber)") : "var(--text-bright)" }}>{formatCurrency(totalCombined)}/mo</td>
-                            <td style={{ padding: "12px 12px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: "var(--text-muted)" }}>{formatCurrency(summaryRows.reduce((s, r) => s + r.total, 0))}</td>
+                            <td className="lis-col-hide" style={{ padding: "12px 12px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: "var(--text-muted)" }}>{formatCurrency(summaryRows.reduce((s, r) => s + r.total, 0))}</td>
                           </tr>
                           {target > 0 && (
                             <tr style={{ background: shortfall <= 0 ? "rgba(var(--clr-emerald-rgb),0.08)" : "rgba(244,63,94,0.08)", border: `1px solid ${shortfall <= 0 ? "rgba(var(--clr-emerald-rgb),0.2)" : "rgba(244,63,94,0.2)"}` }}>
@@ -26285,10 +26358,10 @@ ${milestoneSnapshotHtml}
                           const baseNW   = Math.max(1, baseCPF + baseProp + basePriv);
 
                           const impacts = [];
-                          if (showSorr && sorrData?.hasData && (sorrData.lifetimeGap||0) > 0)
+                          if (showSorr && sorrData?.hasData && (sorrData.peakPrivGap||0) > 0)
                             impacts.push({ label: "SORR", color: "#ef4444",
-                              metric: "Lifetime private asset income gap",
-                              value: sorrData.lifetimeGap });
+                              metric: "Peak private-asset value lost to early-retirement crash",
+                              value: sorrData.peakPrivGap });
                           if (showInflationStress && (inflationStressData?.lifetimeLoss||0) > 0)
                             impacts.push({ label: "Inflation", color: "var(--clr-amber)",
                               metric: `Lifetime CPF LIFE purchasing-power loss at ${inflationStressRate}% CPI`,
