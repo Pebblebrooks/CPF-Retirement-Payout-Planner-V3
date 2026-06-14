@@ -5025,6 +5025,7 @@ function ReadinessTab({
   // Inflows CTA: opens + scrolls to Inflows (topups) section in the sidebar
   onInflowsCtaClick,
 }) {
+  const [expandedMasTile, setExpandedMasTile] = useState(null);
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
   const cy           = Number(inputs.currentYear) || 2026;
@@ -5046,7 +5047,9 @@ function ReadinessTab({
   //   4. Longevity Cover     (15–25%) — real purchasing power of CPF LIFE at age 90 vs BRS floor
   //   5. Healthcare Shield   (10–30%) — MA at payout vs projected BHS; escalates sharply with age
   //
-  // Graceful degradation: null sub-scores are excluded; remaining weights renormalised to 100%.
+  // Graceful degradation:
+  //   incomeSubScore: excluded when null (no target = user choice; not an assessment gap).
+  //   p10SubScore: defaults to 50 when null (MC off = incomplete assessment; nudges user to stress-test).
   // Income fallback: when no target set, incomeSubScore=null (not a frsRatio proxy).
   const {
     score, frsRatio, incomeRatio,
@@ -5137,7 +5140,7 @@ function ReadinessTab({
     const subScores = [
       { val: frsSubScore,       wt: wt.frs  },
       { val: incomeSubScore,    wt: wt.inc  },  // null when no target
-      { val: p10SubScore,       wt: wt.p10  },  // null when MC off
+      { val: p10SubScore ?? 50, wt: wt.p10  },  // 50 (neutral) when MC off — incomplete assessment
       { val: longevitySubScore, wt: wt.long },
       { val: maSubScore,        wt: wt.ma   },
     ];
@@ -5598,7 +5601,7 @@ function ReadinessTab({
               MC off) are excluded and remaining weights renormalised to 100%. */}
           <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4, textAlign: "center" }}>
             5-dimension score: FRS · Income · Stress · Longevity · Healthcare.{" "}
-            Weights shift by age band — activate Stress Centre for resilience score.
+            Weights shift by age band. Stress defaults to 50 when MC is off — enable Stress Centre for a live score.
           </p>
         </div>
 
@@ -5782,7 +5785,7 @@ function ReadinessTab({
         const startA2 = Math.PI, endA2 = Math.PI + arcPct2 * Math.PI;
         const sx2 = cx2 + r2 * Math.cos(startA2), sy2 = cy2 + r2 * Math.sin(startA2);
         const ex2 = cx2 + r2 * Math.cos(endA2),   ey2 = cy2 + r2 * Math.sin(endA2);
-        const lg2 = arcPct2 > 0.5 ? 1 : 0;
+        const lg2 = 0; // always 0: fill arc ≤ 180° (main gaugeArc uses same pattern)
         const arcD2 = arcPct2 > 0
           ? `M ${sx2} ${sy2} A ${r2} ${r2} 0 ${lg2} 1 ${ex2} ${ey2}`
           : null;
@@ -5848,7 +5851,7 @@ function ReadinessTab({
             {/* ── 5 tiles — 3+2 on mobile via .mas-tiles-grid ── */}
             <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
-                <div key={title} title={tip} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, borderColor: score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
+                <div key={title} onClick={() => setExpandedMasTile(expandedMasTile === title ? null : title)} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outlineStyle: "none", borderColor: expandedMasTile === title ? clr[status] : score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
                   <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ fontSize: 16 }}>{icon}</span>
@@ -5863,6 +5866,29 @@ function ReadinessTab({
                 </div>
               ))}
             </div>
+            {/* MAS tile — expandable workings panel (click any tile to open) */}
+            {expandedMasTile && (() => {
+              const activeTile = tiles.find(t => t.title === expandedMasTile);
+              if (!activeTile) return null;
+              return (
+                <div style={{ background: "var(--bg-muted)", border: `1px solid ${clr[activeTile.status]}55`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 20 }}>{activeTile.icon}</span>
+                      <div>
+                        <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{activeTile.pillar}</p>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: clr[activeTile.status], margin: 0 }}>{activeTile.title} — {activeTile.label}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setExpandedMasTile(null)} style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px 8px", borderRadius: 6 }}>✕</button>
+                  </div>
+                  <p style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.65, margin: 0 }}>{activeTile.tip}</p>
+                  <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 8, marginBottom: 0 }}>
+                    MAS MoneySense guideline · advisory only · not included in the 100-pt Readiness Score
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
