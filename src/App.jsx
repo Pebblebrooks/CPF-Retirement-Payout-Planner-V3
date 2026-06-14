@@ -5853,7 +5853,7 @@ function ReadinessTab({
             {/* ── 5 tiles — 3+2 on mobile via .mas-tiles-grid ── */}
             <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
-                <div key={title} className="mas-tile-card" onClick={e => { e.currentTarget.blur(); setExpandedMasTile(expandedMasTile === title ? null : title); }} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", borderColor: expandedMasTile === title ? clr[status] : score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
+                <div key={title} className="mas-tile-card" onMouseDown={e => e.preventDefault()} onClick={() => setExpandedMasTile(expandedMasTile === title ? null : title)} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", borderColor: expandedMasTile === title ? clr[status] : score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
                   <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ fontSize: 16 }}>{icon}</span>
