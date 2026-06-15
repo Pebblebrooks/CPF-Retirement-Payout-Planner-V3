@@ -5043,7 +5043,7 @@ function ReadinessTab({
   // Sub-scores & base weights (adjusted by age band — see AGE_WEIGHTS table below):
   //   1. FRS Coverage        (30–35%) — RA at payout vs projected FRS
   //   2. Income Adequacy     (20–25%) — CPF LIFE payout vs target; null when no target set
-  //   3. Downside Resilience (15–20%) — P10 Monte Carlo total vs base case; null when MC off
+  //   3. Stress Resilience  (15–20%) — Perfect Storm primary; P10 Monte Carlo fallback; null when both off
   //   4. Longevity Cover     (15–25%) — real purchasing power of CPF LIFE at age 90 vs BRS floor
   //   5. Healthcare Shield   (10–30%) — MA at payout vs projected BHS; escalates sharply with age
   //
@@ -5748,14 +5748,18 @@ function ReadinessTab({
 
         // ── Tile 4: Liquidity Ratio ──────────────────────────────────────────
         const paRow        = accumulationByAge.get(pa) || {};
-        const liquidAtPA   = (paRow.oa||0) + (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
-        const propAtPA     = paRow.propertyValue || 0;
-        const totalWealthPA = liquidAtPA + propAtPA;
-        const propPct      = totalWealthPA > 0 ? Math.round(propAtPA / totalWealthPA * 100) : 0;
-        const liqScore     = propPct <= 50 ? 100 : propPct <= 75 ? 65 : 30;
-        const liqStatus    = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
-        const liqLabel     = totalWealthPA > 0 ? `${100 - propPct}% liquid` : "No data";
-        const liqTip       = `At payout age ${pa}: liquid assets (CPF+SRS+private) ${formatCurrency(liquidAtPA)} vs property ${formatCurrency(propAtPA)}. Property >75% of total wealth raises cash-flow risk in retirement.`;
+        // N1-FIX: Only OA + SRS + private are truly liquid at payout age.
+        // RA is locked in CPF LIFE (irrevocable annuity); MA is medical-restricted;
+        // SA is ~0 at payout (transferred to RA at 55 for LIFE members).
+        const liquidAtPA    = (paRow.oa||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
+        const illiquidCPF   = (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0);  // locked: RA (LIFE annuity) + MA (medical) + SA
+        const propAtPA      = paRow.propertyValue || 0;
+        const totalWealthPA = liquidAtPA + illiquidCPF + propAtPA;  // true total wealth denominator
+        const liquidPct     = totalWealthPA > 0 ? Math.round(liquidAtPA / totalWealthPA * 100) : 0;
+        const liqScore      = liquidPct >= 50 ? 100 : liquidPct >= 25 ? 65 : 30;
+        const liqStatus     = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
+        const liqLabel      = totalWealthPA > 0 ? `${liquidPct}% freely liquid` : "No data";
+        const liqTip        = `At payout age ${pa}: freely liquid assets (OA + SRS + private) = ${formatCurrency(liquidAtPA)} of total wealth ${formatCurrency(totalWealthPA)}. RA is locked in CPF LIFE (annuity) and MA is restricted to medical use. Locked CPF: ${formatCurrency(illiquidCPF)}. Score: ≥50% liquid = green; 25–49% = amber; <25% = red.`;
 
         // ── Tile 5: Legacy Readiness ─────────────────────────────────────────
         const legacyChecks = [inputs.hasWill, inputs.hasCPFNomination, inputs.hasLPA].filter(Boolean).length;
@@ -19755,16 +19759,15 @@ ${milestoneSnapshotHtml}
                   <div data-zone="gap-alert" key={Math.round(gapAlert.frsGap / 1000)}
                     style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px",
                       borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.35)" : "rgba(var(--clr-amber3-rgb),0.35)"}`,
-                      background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.07)" }}>
+                      background: gapAlert.isUrgent ? "rgba(239,68,68,0.08)" : "rgba(var(--clr-amber3-rgb),0.07)",
+                      flexWrap: "wrap" }}>
                     <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 2 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>
-                          Contribution gap — {gapAlert.raLabel}
-                        </span>
-                      </div>
+                    <div style={{ flex: 1, minWidth: 180 }}>
+                      <p style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", margin: "0 0 4px" }}>
+                        Contribution gap — {gapAlert.raLabel}
+                      </p>
                       <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
-                        Projected {gapAlert.raLabel} of <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.raForAlert)}</strong> is <strong style={{ color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>{formatCurrency(gapAlert.frsGap)}</strong> short of FRS ({formatCurrency(gapAlert.projFRS55)}).
+                        {gapAlert.raLabel} of <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.raForAlert)}</strong> is <strong style={{ color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>{formatCurrency(gapAlert.frsGap)}</strong> short of FRS ({formatCurrency(gapAlert.projFRS55)}).
                         {" "}Suggested top-up: <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.annualTopUp)}/yr</strong> ({formatCurrency(gapAlert.monthlyTopUp)}/mo) over {gapAlert.yearsToGo} yrs.
                       </p>
                     </div>
@@ -25420,16 +25423,15 @@ ${milestoneSnapshotHtml}
                           <div key={Math.round(gapAlert.frsGap / 1000)}
                             style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px",
                               borderRadius: 12, border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
-                              background: gapAlert.isUrgent ? "rgba(239,68,68,0.09)" : "rgba(var(--clr-amber3-rgb),0.08)" }}>
+                              background: gapAlert.isUrgent ? "rgba(239,68,68,0.09)" : "rgba(var(--clr-amber3-rgb),0.08)",
+                              flexWrap: "wrap" }}>
                             <AlertTriangle style={{ width: 16, height: 16, color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", flexShrink: 0, marginTop: 2 }} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                                <span style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>
-                                  Contribution gap — {gapAlert.raLabel}
-                                </span>
-                              </div>
+                            <div style={{ flex: 1, minWidth: 180 }}>
+                              <p style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", margin: "0 0 5px" }}>
+                                Contribution gap — {gapAlert.raLabel}
+                              </p>
                               <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 8px", lineHeight: 1.55 }}>
-                                Projected {gapAlert.raLabel} of{" "}
+                                {gapAlert.raLabel} of{" "}
                                 <strong style={{ color: "var(--text-main)" }}>{formatCurrency(gapAlert.raForAlert)}</strong> is{" "}
                                 <strong style={{ color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)" }}>{formatCurrency(gapAlert.frsGap)}</strong>{" "}
                                 short of FRS ({formatCurrency(gapAlert.projFRS55)}).{" "}
@@ -26020,7 +26022,15 @@ ${milestoneSnapshotHtml}
                             </div>
                             <span style={{ fontSize: 13, fontWeight: 600, padding: "4px 12px", borderRadius: 20, border: `1px solid ${stBorder}`, color: stColor, background: stBg }}>{stStatus}</span>
                           </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
+                          <style>{`
+                            @media (max-width: 480px) {
+                              .frs-kpi-grid { grid-template-columns: 1fr !important; }
+                            }
+                            @media (min-width: 481px) and (max-width: 640px) {
+                              .frs-kpi-grid { grid-template-columns: 1fr 1fr !important; }
+                            }
+                          `}</style>
+                          <div className="frs-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
                             {[
                               [stPast55 ? `RA at ${stCa}` : "Projected RA at 55", stRa55, stColor],
                               ["FRS target at 55", stFRS, "var(--text-bright)"],
