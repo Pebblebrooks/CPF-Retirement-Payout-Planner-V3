@@ -3990,6 +3990,7 @@ const BOOL_FIELDS_MOD = [
   'isMale','isSelfEmployed','includeProperty','usePropertyPledge',
   'oaToMaForLovedOne','oaToSaForLovedOne','propMonetiseEnabled','dieWithZeroEnabled',
   'isPwD','propertyLeasehold','showSalaryCalc',
+  'hasWill','hasCPFNomination','hasLPA',
 ];
 function buildSafeInputs(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_INPUTS };
@@ -5043,7 +5044,7 @@ function ReadinessTab({
   // Sub-scores & base weights (adjusted by age band — see AGE_WEIGHTS table below):
   //   1. FRS Coverage        (30–35%) — RA at payout vs projected FRS
   //   2. Income Adequacy     (20–25%) — CPF LIFE payout vs target; null when no target set
-  //   3. Downside Resilience (15–20%) — P10 Monte Carlo total vs base case; null when MC off
+  //   3. Stress Resilience  (15–20%) — Perfect Storm primary; P10 Monte Carlo fallback; null when both off
   //   4. Longevity Cover     (15–25%) — real purchasing power of CPF LIFE at age 90 vs BRS floor
   //   5. Healthcare Shield   (10–30%) — MA at payout vs projected BHS; escalates sharply with age
   //
@@ -5748,14 +5749,18 @@ function ReadinessTab({
 
         // ── Tile 4: Liquidity Ratio ──────────────────────────────────────────
         const paRow        = accumulationByAge.get(pa) || {};
-        const liquidAtPA   = (paRow.oa||0) + (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
-        const propAtPA     = paRow.propertyValue || 0;
-        const totalWealthPA = liquidAtPA + propAtPA;
-        const propPct      = totalWealthPA > 0 ? Math.round(propAtPA / totalWealthPA * 100) : 0;
-        const liqScore     = propPct <= 50 ? 100 : propPct <= 75 ? 65 : 30;
-        const liqStatus    = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
-        const liqLabel     = totalWealthPA > 0 ? `${100 - propPct}% liquid` : "No data";
-        const liqTip       = `At payout age ${pa}: liquid assets (CPF+SRS+private) ${formatCurrency(liquidAtPA)} vs property ${formatCurrency(propAtPA)}. Property >75% of total wealth raises cash-flow risk in retirement.`;
+        // N1-FIX: Only OA + SRS + private are truly liquid at payout age.
+        // RA is locked in CPF LIFE (irrevocable annuity); MA is medical-restricted;
+        // SA is ~0 at payout (transferred to RA at 55 for LIFE members).
+        const liquidAtPA    = (paRow.oa||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
+        const illiquidCPF   = (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0);  // locked: RA (LIFE annuity) + MA (medical) + SA
+        const propAtPA      = paRow.propertyValue || 0;
+        const totalWealthPA = liquidAtPA + illiquidCPF + propAtPA;  // true total wealth denominator
+        const liquidPct     = totalWealthPA > 0 ? Math.round(liquidAtPA / totalWealthPA * 100) : 0;
+        const liqScore      = liquidPct >= 50 ? 100 : liquidPct >= 25 ? 65 : 30;
+        const liqStatus     = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
+        const liqLabel      = totalWealthPA > 0 ? `${liquidPct}% freely liquid` : "No data";
+        const liqTip        = `At payout age ${pa}: freely liquid assets (OA + SRS + private) = ${formatCurrency(liquidAtPA)} of total wealth ${formatCurrency(totalWealthPA)}. RA is locked in CPF LIFE (annuity) and MA is restricted to medical use. Locked CPF: ${formatCurrency(illiquidCPF)}. Score: ≥50% liquid = green; 25–49% = amber; <25% = red.`;
 
         // ── Tile 5: Legacy Readiness ─────────────────────────────────────────
         const legacyChecks = [inputs.hasWill, inputs.hasCPFNomination, inputs.hasLPA].filter(Boolean).length;
