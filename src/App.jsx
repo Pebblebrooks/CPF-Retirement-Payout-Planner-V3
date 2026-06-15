@@ -941,7 +941,6 @@ const PRESET_PROFILES = [
       empOaCont: 17640, empSaCont: 5040, empMaCont: 5040,
       // Housing: 5-room HDB $1,800/mo combined; primary pays 55% = ~$990/mo = $11,880/yr
       housingOutflow: 21600,   // full household amount — housingSharePct=55 splits it in household view
-      housingStopAge: 55,
       // MediShield Life + IP rider (Integrated Shield)
       medicalUsage: 600, medishieldIP: 1200, elderCareShield: 500,
       // HDB 5-room: est. $650k, leasehold 99yr, not selling near-term
@@ -3991,7 +3990,6 @@ const BOOL_FIELDS_MOD = [
   'isMale','isSelfEmployed','includeProperty','usePropertyPledge',
   'oaToMaForLovedOne','oaToSaForLovedOne','propMonetiseEnabled','dieWithZeroEnabled',
   'isPwD','propertyLeasehold','showSalaryCalc',
-  'hasWill','hasCPFNomination','hasLPA',
 ];
 function buildSafeInputs(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_INPUTS };
@@ -5027,6 +5025,7 @@ function ReadinessTab({
   // Inflows CTA: opens + scrolls to Inflows (topups) section in the sidebar
   onInflowsCtaClick,
 }) {
+  const [expandedMasTile, setExpandedMasTile] = useState(null);
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
   const cy           = Number(inputs.currentYear) || 2026;
@@ -5044,11 +5043,13 @@ function ReadinessTab({
   // Sub-scores & base weights (adjusted by age band — see AGE_WEIGHTS table below):
   //   1. FRS Coverage        (30–35%) — RA at payout vs projected FRS
   //   2. Income Adequacy     (20–25%) — CPF LIFE payout vs target; null when no target set
-  //   3. Stress Resilience  (15–20%) — Perfect Storm primary; P10 Monte Carlo fallback; null when both off
+  //   3. Downside Resilience (15–20%) — P10 Monte Carlo total vs base case; null when MC off
   //   4. Longevity Cover     (15–25%) — real purchasing power of CPF LIFE at age 90 vs BRS floor
   //   5. Healthcare Shield   (10–30%) — MA at payout vs projected BHS; escalates sharply with age
   //
-  // Graceful degradation: null sub-scores are excluded; remaining weights renormalised to 100%.
+  // Graceful degradation:
+  //   incomeSubScore: excluded when null (no target = user choice; not an assessment gap).
+  //   p10SubScore: defaults to 50 when null (MC off = incomplete assessment; nudges user to stress-test).
   // Income fallback: when no target set, incomeSubScore=null (not a frsRatio proxy).
   const {
     score, frsRatio, incomeRatio,
@@ -5139,7 +5140,7 @@ function ReadinessTab({
     const subScores = [
       { val: frsSubScore,       wt: wt.frs  },
       { val: incomeSubScore,    wt: wt.inc  },  // null when no target
-      { val: p10SubScore,       wt: wt.p10  },  // null when MC off
+      { val: p10SubScore ?? 50, wt: wt.p10  },  // 50 (neutral) when MC off — incomplete assessment
       { val: longevitySubScore, wt: wt.long },
       { val: maSubScore,        wt: wt.ma   },
     ];
@@ -5600,7 +5601,7 @@ function ReadinessTab({
               MC off) are excluded and remaining weights renormalised to 100%. */}
           <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4, textAlign: "center" }}>
             5-dimension score: FRS · Income · Stress · Longevity · Healthcare.{" "}
-            Weights shift by age band — activate Stress Centre for resilience score.
+            Weights shift by age band. Stress defaults to 50 when MC is off — enable Stress Centre for a live score.
           </p>
         </div>
 
@@ -5747,18 +5748,14 @@ function ReadinessTab({
 
         // ── Tile 4: Liquidity Ratio ──────────────────────────────────────────
         const paRow        = accumulationByAge.get(pa) || {};
-        // N1-FIX: Only OA + SRS + private are truly liquid at payout age.
-        // RA is locked in CPF LIFE (irrevocable annuity); MA is medical-restricted;
-        // SA is ~0 at payout (transferred to RA at 55 for LIFE members).
-        const liquidAtPA    = (paRow.oa||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
-        const illiquidCPF   = (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0);  // locked: RA (LIFE annuity) + MA (medical) + SA
-        const propAtPA      = paRow.propertyValue || 0;
-        const totalWealthPA = liquidAtPA + illiquidCPF + propAtPA;  // true total wealth denominator
-        const liquidPct     = totalWealthPA > 0 ? Math.round(liquidAtPA / totalWealthPA * 100) : 0;
-        const liqScore      = liquidPct >= 50 ? 100 : liquidPct >= 25 ? 65 : 30;
-        const liqStatus     = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
-        const liqLabel      = totalWealthPA > 0 ? `${liquidPct}% freely liquid` : "No data";
-        const liqTip        = `At payout age ${pa}: freely liquid assets (OA + SRS + private) = ${formatCurrency(liquidAtPA)} of total wealth ${formatCurrency(totalWealthPA)}. RA is locked in CPF LIFE (annuity) and MA is restricted to medical use. Locked CPF: ${formatCurrency(illiquidCPF)}. Score: ≥50% liquid = green; 25–49% = amber; <25% = red.`;
+        const liquidAtPA   = (paRow.oa||0) + (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
+        const propAtPA     = paRow.propertyValue || 0;
+        const totalWealthPA = liquidAtPA + propAtPA;
+        const propPct      = totalWealthPA > 0 ? Math.round(propAtPA / totalWealthPA * 100) : 0;
+        const liqScore     = propPct <= 50 ? 100 : propPct <= 75 ? 65 : 30;
+        const liqStatus    = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
+        const liqLabel     = totalWealthPA > 0 ? `${100 - propPct}% liquid` : "No data";
+        const liqTip       = `At payout age ${pa}: liquid assets (CPF+SRS+private) ${formatCurrency(liquidAtPA)} vs property ${formatCurrency(propAtPA)}. Property >75% of total wealth raises cash-flow risk in retirement.`;
 
         // ── Tile 5: Legacy Readiness ─────────────────────────────────────────
         const legacyChecks = [inputs.hasWill, inputs.hasCPFNomination, inputs.hasLPA].filter(Boolean).length;
@@ -5775,17 +5772,85 @@ function ReadinessTab({
           { icon: "💧", title: "Liquidity Ratio",    label: liqLabel,     status: liqStatus,    score: liqScore,    tip: liqTip,    pillar: "Protection"       },
           { icon: "📋", title: "Legacy Readiness",   label: legacyLabel,  status: legacyStatus, score: legacyScore, tip: legacyTip, pillar: "Legacy Planning"  },
         ];
+        // ── MAS Wellness composite (straight average of 5 tile scores) ──────
+        const tileScores = [emScore, savingsRate, hedgeScore, liqScore, legacyScore].filter(s => s != null);
+        const wellnessScore = tileScores.length > 0
+          ? Math.round(tileScores.reduce((a, b) => a + b, 0) / tileScores.length)
+          : 0;
+        const wClr  = wellnessScore >= 75 ? "#f59e0b" : wellnessScore >= 50 ? "#fb923c" : "#ef4444";
+        const wLbl  = wellnessScore >= 75 ? "Good" : wellnessScore >= 50 ? "Fair" : "Needs Work";
+        // SVG arc geometry — half-circle gauge (same maths as main Readiness gauge)
+        const W2 = 140, H2 = 78, cx2 = 70, cy2 = 74, r2 = 58;
+        const arcPct2 = Math.min(1, Math.max(0, wellnessScore / 100));
+        const startA2 = Math.PI, endA2 = Math.PI + arcPct2 * Math.PI;
+        const sx2 = cx2 + r2 * Math.cos(startA2), sy2 = cy2 + r2 * Math.sin(startA2);
+        const ex2 = cx2 + r2 * Math.cos(endA2),   ey2 = cy2 + r2 * Math.sin(endA2);
+        const lg2 = 0; // always 0: fill arc ≤ 180° (main gaugeArc uses same pattern)
+        const arcD2 = arcPct2 > 0
+          ? `M ${sx2} ${sy2} A ${r2} ${r2} 0 ${lg2} 1 ${ex2} ${ey2}`
+          : null;
         return (
           <div style={{ marginTop: 2 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <style>{`
+              .mas-tiles-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+              .mas-tile-card:focus, .mas-tile-card:focus-visible, .mas-tile-card:active { outline: 0 !important; box-shadow: none !important; -webkit-tap-highlight-color: transparent; }
+              .mas-tile-card { -webkit-tap-highlight-color: transparent; }
+              @media (max-width: 640px) {
+                .mas-tiles-grid { grid-template-columns: repeat(2, 1fr); }
+                .mas-wellness-row { flex-direction: column; align-items: center; }
+                .mas-wellness-gauge { margin-bottom: 8px; }
+              }
+            `}</style>
+            {/* ── MAS panel header ── */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <p style={{ ...labelStyle, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 MAS Financial Health <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-subtle)", textTransform: "none" }}>(advisory · not in 100-pt score)</span>
               </p>
-              <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection." />
+              <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection. The Wellness Score is an unweighted average of the five tile scores — it is NOT an official MAS metric." />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
+            {/* ── Wellness gauge row ── */}
+            <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 12, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+              {/* Arc gauge */}
+              <div className="mas-wellness-gauge" style={{ flexShrink: 0 }}>
+                <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible" }}>
+                  {/* Track */}
+                  <path d={`M ${sx2} ${sy2} A ${r2} ${r2} 0 1 1 ${cx2 + r2} ${cy2}`}
+                    fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
+                  {/* Fill arc */}
+                  {arcD2 && (
+                    <path d={arcD2} fill="none" stroke={wClr} strokeWidth={10}
+                      strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+                  )}
+                  {/* Score */}
+                  <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900}
+                    fill={wClr} fontFamily="monospace">{wellnessScore}</text>
+                  <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700}
+                    fill={wClr}>{wLbl}</text>
+                </svg>
+              </div>
+              {/* Gauge legend */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Wellness Score</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 6px", lineHeight: 1.4 }}>
+                  MAS-aligned advisory score — unweighted average of the 5 pillars below.
+                  Not an official MAS metric.
+                </p>
+                {/* Mini sub-bar breakdown */}
+                {tiles.map(({ title, score: ts, status }) => ts != null && (
+                  <div key={title} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", width: 88, flexShrink: 0 }}>{title}</span>
+                    <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${ts}%`, borderRadius: 4, background: clr[status], transition: "width 0.5s ease" }} />
+                    </div>
+                    <span style={{ fontSize: 10, color: clr[status], fontWeight: 700, width: 26, textAlign: "right" }}>{ts}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* ── 5 tiles — 3+2 on mobile via .mas-tiles-grid ── */}
+            <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
-                <div key={title} title={tip} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, borderColor: score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
+                <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()} onClick={() => setExpandedMasTile(expandedMasTile === title ? null : title)} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", border: expandedMasTile === title ? `1px solid ${clr[status]}` : "1px solid transparent" }}>
                   <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ fontSize: 16 }}>{icon}</span>
@@ -5800,6 +5865,29 @@ function ReadinessTab({
                 </div>
               ))}
             </div>
+            {/* MAS tile — expandable workings panel (click any tile to open) */}
+            {expandedMasTile && (() => {
+              const activeTile = tiles.find(t => t.title === expandedMasTile);
+              if (!activeTile) return null;
+              return (
+                <div style={{ background: "var(--bg-muted)", border: `1px solid ${clr[activeTile.status]}55`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 20 }}>{activeTile.icon}</span>
+                      <div>
+                        <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{activeTile.pillar}</p>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: clr[activeTile.status], margin: 0 }}>{activeTile.title} — {activeTile.label}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setExpandedMasTile(null)} style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px 8px", borderRadius: 6 }}>✕</button>
+                  </div>
+                  <p style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.65, margin: 0 }}>{activeTile.tip}</p>
+                  <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 8, marginBottom: 0 }}>
+                    MAS MoneySense guideline · advisory only · not included in the 100-pt Readiness Score
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
@@ -10907,6 +10995,9 @@ function CPFPlannerApp() {
     const baseDepletionAge = rows.find(r => r.basePriv <= 0)?.age || null;
     // Total lifetime income that won't be available due to SORR (annual, not monthly)
     const lifetimeGap = Math.round(rows.reduce((s, r) => s + Math.max(0, r.baseMonthly - r.sorrMonthly) * 12, 0));
+    // Peak single-year private-asset value loss from the crash — used in Stressor
+    // Impact Summary so SORR appears even when no active decumulation strategy.
+    const peakPrivGap = rows.length > 0 ? Math.max(0, ...rows.map(r => r.privGap || 0)) : 0;
 
     return {
       hasData: true,
@@ -10914,6 +11005,7 @@ function CPFPlannerApp() {
       sorrDepletionAge,
       baseDepletionAge,
       lifetimeGap,
+      peakPrivGap,
       privAtPA,
       crashEndAge: pa + sorrCrashYears,
     };
@@ -14940,12 +15032,12 @@ ${milestoneSnapshotHtml}
                     setActiveTab("household");
                   } else {
                     setHouseholdEnabled(false);
-                    // NEW-BUG-1 fix: reset activeTab to "summary" whenever a non-household
+                    // NEW-BUG-1 fix: reset activeTab to "readiness" whenever a non-household
                     // sample is loaded. Without this, activeTab remains "household" from the
                     // prior household-sample load (line above sets it). Since householdEnabled
                     // is now false, the "household" tab is absent from the nav array and the
                     // content block for it is suppressed — leaving the panel completely blank.
-                    setActiveTab("summary");
+                    setActiveTab("readiness");
                     setSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
                     setDebouncedSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
                     setHousingSharePct(50);
@@ -20792,7 +20884,13 @@ ${milestoneSnapshotHtml}
                         const panelBody  = { padding: "13px 14px" };
 
                         return (
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10 }}>
+                          <>
+                          <style>{`
+                            @media (max-width: 640px) {
+                              .stats-3col { grid-template-columns: 1fr !important; }
+                            }
+                          `}</style>
+                          <div className="stats-3col" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10 }}>
 
                             {/* ── Column 1: Retirement Outcomes ── */}
                             <div style={panelShell}>
@@ -20928,6 +21026,7 @@ ${milestoneSnapshotHtml}
                             </div>
 
                           </div>
+                          </>
                         );
                       })()}
                     </div>
@@ -26143,12 +26242,19 @@ ${milestoneSnapshotHtml}
                       <TableIcon style={{ width: 15, height: 15, color: "var(--clr-emerald)" }} />
                       <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0 }}>Lifetime Income Summary</h4>
                     </div>
+                    <style>{`
+                      @media (max-width: 640px) {
+                        .lis-col-hide { display: none !important; }
+                        .lis-foot-span { display: none; }
+                      }
+                    `}</style>
                     <div style={{ overflowX: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                         <thead>
                           <tr style={{ borderBottom: "2px solid var(--border-strong)" }}>
                             {["Income Stream", "Start Age", "End Age", "Monthly Income", "Lifetime Total"].map(h => (
-                              <th key={h} style={{ padding: "8px 12px", textAlign: h === "Income Stream" ? "left" : "right", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
+                              <th key={h} className={["End Age","Lifetime Total"].includes(h) ? "lis-col-hide" : ""}
+                                style={{ padding: "8px 12px", textAlign: h === "Income Stream" ? "left" : "right", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -26170,17 +26276,18 @@ ${milestoneSnapshotHtml}
                                 </div>
                               </td>
                               <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-muted)", fontFamily: "monospace" }}>{row.startAge}</td>
-                              <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-muted)", fontFamily: "monospace" }}>{row.endAge}</td>
+                              <td className="lis-col-hide" style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-muted)", fontFamily: "monospace" }}>{row.endAge}</td>
                               <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: row.color, fontFamily: "monospace" }}>{formatCurrency(row.monthly)}/mo</td>
-                              <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(row.total)}</td>
+                              <td className="lis-col-hide" style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(row.total)}</td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot>
                           <tr style={{ borderTop: "2px solid var(--border-strong)", background: "var(--bg-panel)" }}>
-                            <td colSpan={3} style={{ padding: "12px 12px", fontWeight: 800, color: "var(--text-bright)", fontSize: 14 }}>Total Combined (excl. one-time) @ Age {pa}</td>
+                            <td colSpan={2} style={{ padding: "12px 12px", fontWeight: 800, color: "var(--text-bright)", fontSize: 14 }}>Total Combined (excl. one-time) @ Age {pa}</td>
+                            <td className="lis-foot-span" style={{ padding: "12px 12px", fontWeight: 800, color: "var(--text-bright)", fontSize: 14 }}></td>
                             <td style={{ padding: "12px 12px", textAlign: "right", fontWeight: 900, fontFamily: "monospace", fontSize: 15, color: target > 0 ? (shortfall <= 0 ? "var(--clr-emerald)" : "var(--clr-amber)") : "var(--text-bright)" }}>{formatCurrency(totalCombined)}/mo</td>
-                            <td style={{ padding: "12px 12px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: "var(--text-muted)" }}>{formatCurrency(summaryRows.reduce((s, r) => s + r.total, 0))}</td>
+                            <td className="lis-col-hide" style={{ padding: "12px 12px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: "var(--text-muted)" }}>{formatCurrency(summaryRows.reduce((s, r) => s + r.total, 0))}</td>
                           </tr>
                           {target > 0 && (
                             <tr style={{ background: shortfall <= 0 ? "rgba(var(--clr-emerald-rgb),0.08)" : "rgba(244,63,94,0.08)", border: `1px solid ${shortfall <= 0 ? "rgba(var(--clr-emerald-rgb),0.2)" : "rgba(244,63,94,0.2)"}` }}>
@@ -26289,10 +26396,10 @@ ${milestoneSnapshotHtml}
                           const baseNW   = Math.max(1, baseCPF + baseProp + basePriv);
 
                           const impacts = [];
-                          if (showSorr && sorrData?.hasData && (sorrData.lifetimeGap||0) > 0)
+                          if (showSorr && sorrData?.hasData && (sorrData.peakPrivGap||0) > 0)
                             impacts.push({ label: "SORR", color: "#ef4444",
-                              metric: "Lifetime private asset income gap",
-                              value: sorrData.lifetimeGap });
+                              metric: "Peak private-asset value lost to early-retirement crash",
+                              value: sorrData.peakPrivGap });
                           if (showInflationStress && (inflationStressData?.lifetimeLoss||0) > 0)
                             impacts.push({ label: "Inflation", color: "var(--clr-amber)",
                               metric: `Lifetime CPF LIFE purchasing-power loss at ${inflationStressRate}% CPI`,
