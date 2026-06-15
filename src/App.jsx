@@ -5793,13 +5793,11 @@ function ReadinessTab({
           <div style={{ marginTop: 2 }}>
             <style>{`
               .mas-tiles-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-              .mas-tile-card:focus, .mas-tile-card:focus-visible { outline: none !important; box-shadow: none !important; }
+              .mas-tile-card:focus, .mas-tile-card:focus-visible, .mas-tile-card:active { outline: 0 !important; box-shadow: none !important; -webkit-tap-highlight-color: transparent; }
               .mas-tile-card { -webkit-tap-highlight-color: transparent; }
               @media (max-width: 640px) {
-                .mas-tiles-grid { grid-template-columns: repeat(3, 1fr); }
-                .mas-tiles-grid > *:nth-child(4),
-                .mas-tiles-grid > *:nth-child(5) { grid-column: span 1; }
-                .mas-tiles-grid > *:nth-child(4) { margin-left: calc(50% + 5px); width: calc(100% - 5px); }
+                .mas-tiles-grid { grid-template-columns: repeat(2, 1fr); }
+                .mas-tiles-grid > *:last-child:nth-child(odd) { grid-column: 1 / -1; max-width: calc(50% - 5px); }
                 .mas-wellness-row { flex-direction: column; align-items: center; }
                 .mas-wellness-gauge { margin-bottom: 8px; }
               }
@@ -5853,7 +5851,7 @@ function ReadinessTab({
             {/* ── 5 tiles — 3+2 on mobile via .mas-tiles-grid ── */}
             <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
-                <div key={title} className="mas-tile-card" onMouseDown={e => e.preventDefault()} onClick={() => setExpandedMasTile(expandedMasTile === title ? null : title)} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", borderColor: expandedMasTile === title ? clr[status] : score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
+                <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()} onClick={() => setExpandedMasTile(expandedMasTile === title ? null : title)} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", borderColor: expandedMasTile === title ? clr[status] : score != null && score >= 80 ? "rgba(var(--clr-emerald-rgb),0.25)" : score != null && score < 40 ? "rgba(var(--clr-red-rgb),0.25)" : undefined }}>
                   <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ fontSize: 16 }}>{icon}</span>
@@ -15032,12 +15030,12 @@ ${milestoneSnapshotHtml}
                     setActiveTab("household");
                   } else {
                     setHouseholdEnabled(false);
-                    // NEW-BUG-1 fix: reset activeTab to "summary" whenever a non-household
+                    // NEW-BUG-1 fix: reset activeTab to "readiness" whenever a non-household
                     // sample is loaded. Without this, activeTab remains "household" from the
                     // prior household-sample load (line above sets it). Since householdEnabled
                     // is now false, the "household" tab is absent from the nav array and the
                     // content block for it is suppressed — leaving the panel completely blank.
-                    setActiveTab("summary");
+                    setActiveTab("readiness");
                     setSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
                     setDebouncedSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
                     setHousingSharePct(50);
