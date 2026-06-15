@@ -3990,7 +3990,6 @@ const BOOL_FIELDS_MOD = [
   'isMale','isSelfEmployed','includeProperty','usePropertyPledge',
   'oaToMaForLovedOne','oaToSaForLovedOne','propMonetiseEnabled','dieWithZeroEnabled',
   'isPwD','propertyLeasehold','showSalaryCalc',
-  'hasWill','hasCPFNomination','hasLPA',
 ];
 function buildSafeInputs(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_INPUTS };
@@ -5044,7 +5043,7 @@ function ReadinessTab({
   // Sub-scores & base weights (adjusted by age band — see AGE_WEIGHTS table below):
   //   1. FRS Coverage        (30–35%) — RA at payout vs projected FRS
   //   2. Income Adequacy     (20–25%) — CPF LIFE payout vs target; null when no target set
-  //   3. Stress Resilience  (15–20%) — Perfect Storm primary; P10 Monte Carlo fallback; null when both off
+  //   3. Downside Resilience (15–20%) — P10 Monte Carlo total vs base case; null when MC off
   //   4. Longevity Cover     (15–25%) — real purchasing power of CPF LIFE at age 90 vs BRS floor
   //   5. Healthcare Shield   (10–30%) — MA at payout vs projected BHS; escalates sharply with age
   //
@@ -5749,18 +5748,14 @@ function ReadinessTab({
 
         // ── Tile 4: Liquidity Ratio ──────────────────────────────────────────
         const paRow        = accumulationByAge.get(pa) || {};
-        // N1-FIX: Only OA + SRS + private are truly liquid at payout age.
-        // RA is locked in CPF LIFE (irrevocable annuity); MA is medical-restricted;
-        // SA is ~0 at payout (transferred to RA at 55 for LIFE members).
-        const liquidAtPA    = (paRow.oa||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
-        const illiquidCPF   = (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0);  // locked: RA (LIFE annuity) + MA (medical) + SA
-        const propAtPA      = paRow.propertyValue || 0;
-        const totalWealthPA = liquidAtPA + illiquidCPF + propAtPA;  // true total wealth denominator
-        const liquidPct     = totalWealthPA > 0 ? Math.round(liquidAtPA / totalWealthPA * 100) : 0;
-        const liqScore      = liquidPct >= 50 ? 100 : liquidPct >= 25 ? 65 : 30;
-        const liqStatus     = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
-        const liqLabel      = totalWealthPA > 0 ? `${liquidPct}% freely liquid` : "No data";
-        const liqTip        = `At payout age ${pa}: freely liquid assets (OA + SRS + private) = ${formatCurrency(liquidAtPA)} of total wealth ${formatCurrency(totalWealthPA)}. RA is locked in CPF LIFE (annuity) and MA is restricted to medical use. Locked CPF: ${formatCurrency(illiquidCPF)}. Score: ≥50% liquid = green; 25–49% = amber; <25% = red.`;
+        const liquidAtPA   = (paRow.oa||0) + (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
+        const propAtPA     = paRow.propertyValue || 0;
+        const totalWealthPA = liquidAtPA + propAtPA;
+        const propPct      = totalWealthPA > 0 ? Math.round(propAtPA / totalWealthPA * 100) : 0;
+        const liqScore     = propPct <= 50 ? 100 : propPct <= 75 ? 65 : 30;
+        const liqStatus    = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
+        const liqLabel     = totalWealthPA > 0 ? `${100 - propPct}% liquid` : "No data";
+        const liqTip       = `At payout age ${pa}: liquid assets (CPF+SRS+private) ${formatCurrency(liquidAtPA)} vs property ${formatCurrency(propAtPA)}. Property >75% of total wealth raises cash-flow risk in retirement.`;
 
         // ── Tile 5: Legacy Readiness ─────────────────────────────────────────
         const legacyChecks = [inputs.hasWill, inputs.hasCPFNomination, inputs.hasLPA].filter(Boolean).length;
@@ -6467,6 +6462,7 @@ function CPFPlannerApp() {
   const [inflationStressRate, setInflationStressRate]         = useState(4);     // F2: stress CPI % (default 4%)
   const [showPropertyStress, setShowPropertyStress]           = useState(false); // F4: property correction toggle
   const [propertyStressGrowthRate, setPropertyStressGrowthRate] = useState(0);  // F4: stressed growth rate %
+  const [showBalaDecayCurve, setShowBalaDecayCurve]             = useState(false); // F4b: Bala leasehold decay overlay
   const [showPerfectStorm, setShowPerfectStorm]               = useState(false); // Perfect Storm: combined stressor engine run
   const [showLifeEventMarkers, setShowLifeEventMarkers] = useState(true); // Rev #D2: default ON so events are visible immediately
   // accumChartMode: 'stacked' = AreaChart (wealth composition); 'lines' = LineChart (individual accounts, no MA stacking artifact)
@@ -7449,10 +7445,7 @@ function CPFPlannerApp() {
           setInputErrors({});
           lastSavedRef.current = JSON.stringify(mergedInputs);
         }
-        // BUG-FIX: always land on the Readiness tab after loading a shared profile —
-        // regardless of which tab the sender was on — so the recipient immediately
-        // sees their retirement readiness score for the loaded profile.
-        setActiveTab("readiness");
+        if (fullState.activeTab) { const t = fullState.activeTab; setActiveTab(t === 'welcome' || t === 'notes' ? 'guide' : t); }
         if (fullState.highlightPlan) setHighlightPlan(fullState.highlightPlan);
         // Bug 6 fix: restore per-member CPF LIFE plan selections from share link
         if (fullState.primaryLifePlan) setPrimaryLifePlan(fullState.primaryLifePlan);
@@ -7536,7 +7529,6 @@ function CPFPlannerApp() {
         setInputs(mergedLegacy); setDebouncedInputs(mergedLegacy);
         setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedLegacy);
-        setActiveTab("readiness"); // BUG-FIX: land on Readiness after loading a shared profile
       } else if (stateParam) {
         // Legacy plain format
         const decoded = JSON.parse(decodeURIComponent(stateParam));
@@ -7545,7 +7537,6 @@ function CPFPlannerApp() {
         setInputs(mergedPlain); setDebouncedInputs(mergedPlain);
         setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedPlain);
-        setActiveTab("readiness"); // BUG-FIX: land on Readiness after loading a shared profile
       } else {
         // Always show welcome modal on fresh load
         setShowWelcome(true);
@@ -11079,15 +11070,17 @@ function CPFPlannerApp() {
       const bala         = isLH ? balaRatio(leaseNow) : 1;
       rows.push({
         age,
-        baseValue:   Math.round(fhEquiv * Math.pow(1 + baseGrowth,   yrs) * bala),
-        stressValue: Math.round(fhEquiv * Math.pow(1 + stressGrowth, yrs) * bala),
+        baseValue:    Math.round(fhEquiv * Math.pow(1 + baseGrowth,   yrs) * bala),
+        stressValue:  Math.round(fhEquiv * Math.pow(1 + stressGrowth, yrs) * bala),
+        balaOnlyValue: isLH ? Math.round(fhEquiv * bala) : null, // pure lease decay, 0% market growth
       });
     }
-    const baseValueAtPA   = rows[rows.length - 1]?.baseValue   || 0;
-    const stressValueAtPA = rows[rows.length - 1]?.stressValue || 0;
-    const delta           = baseValueAtPA - stressValueAtPA;
-    const deltaPct        = baseValueAtPA > 0 ? Math.round(Math.abs(delta / baseValueAtPA) * 100) : 0;
-    return { rows, baseValueAtPA, stressValueAtPA, delta, deltaPct, propValue, pa, ca };
+    const baseValueAtPA    = rows[rows.length - 1]?.baseValue    || 0;
+    const stressValueAtPA  = rows[rows.length - 1]?.stressValue  || 0;
+    const balaOnlyValueAtPA = isLH ? (rows[rows.length - 1]?.balaOnlyValue || 0) : null;
+    const delta            = baseValueAtPA - stressValueAtPA;
+    const deltaPct         = baseValueAtPA > 0 ? Math.round(Math.abs(delta / baseValueAtPA) * 100) : 0;
+    return { rows, baseValueAtPA, stressValueAtPA, balaOnlyValueAtPA, delta, deltaPct, propValue, pa, ca, isLH };
   }, [showPropertyStress, propertyStressGrowthRate, debouncedInputs.propertyGrowthRate,
       debouncedInputs.propertyValue, debouncedInputs.currentAge, payoutAge65,
       debouncedInputs.propertyLeasehold, debouncedInputs.propertyLeaseYears]);
@@ -14802,10 +14795,9 @@ ${milestoneSnapshotHtml}
                     // BUG-2 fix: stamp lastSavedRef so "Unsaved changes" guard doesn't fire after Share Code load
                     lastSavedRef.current = JSON.stringify(safeInp);
                     // BUG-3 fix: restore all previously missing state fields
-                    // BUG-FIX: always land on the Readiness tab after loading a shared profile —
-                    // regardless of which tab the sender was on (legacy 'welcome'/'notes' tab-ID
-                    // remapping is therefore no longer needed here).
-                    setActiveTab("readiness");
+                    // Map legacy tab IDs to merged "guide" tab (welcome+notes were merged in App_62)
+                    const restoredTab = parsed.activeTab === 'welcome' || parsed.activeTab === 'notes' ? 'guide' : parsed.activeTab;
+                    if (restoredTab) setActiveTab(restoredTab);
                     if (parsed.highlightPlan) setHighlightPlan(parsed.highlightPlan);
                     if (parsed.primaryLifePlan) setPrimaryLifePlan(parsed.primaryLifePlan);
                     if (parsed.spouseLifePlan)  setSpouseLifePlan(parsed.spouseLifePlan);
@@ -22240,7 +22232,7 @@ ${milestoneSnapshotHtml}
                       </span>
                     </div>
                   )}
-                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {activePayoutAge} – {maxPA})</h3>
+                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {activePayoutAge} – 95)</h3>
                   {/* P1 fix: Foreigner gate — CPF LIFE is SC/PR only. Show a prominent warning when
                       citizenStatus === 'foreigner' so the user knows the payout estimates below do not apply.
                       The chart is not suppressed — foreigners may be exploring what-if SC/PR scenarios. */}
@@ -22347,6 +22339,83 @@ ${milestoneSnapshotHtml}
                       </button>
                     ))}
                   </div>
+
+                {/* ── RA→OA Transfer reference card (LIFE tab) ─────────────────────────
+                     Surfaces the transfer toggle inline so users understand which RA base
+                     the chart is using — critical for born-1958+ members where the swing
+                     can be $80k+. Handles both primary and spouse (household mode).
+                     Gate: actTransferPct === 0 (born 1956 or earlier) → renders null.
+                     No new fields: reuses raOaTransfer / spouseRaAfterTransfer etc.
+                ─────────────────────────────────────────────────────────────────────── */}
+                {(() => {
+                  const actBirthYear   = isSpouseLife ? _sBirthYearForTransfer : _birthYear;
+                  const actTransferPct = isSpouseLife ? _sTransferPct          : _raTransferPct;
+                  const actRaAtPA      = isSpouseLife ? spouseRaAtPayout       : raAtPayout;
+                  const actTransfer    = isSpouseLife ? _sRaOaTransfer         : raOaTransfer;
+                  const actRaAfter     = isSpouseLife ? spouseRaAfterTransfer  : raAfterTransfer;
+                  const actApply       = isSpouseLife
+                    ? debouncedSpouseInputs.applyRaOaTransfer
+                    : debouncedInputs.applyRaOaTransfer;
+                  const actToggle      = () => isSpouseLife
+                    ? setSpouseInputs(p => ({ ...p, applyRaOaTransfer: !p.applyRaOaTransfer }))
+                    : setInputs(p => ({ ...p, applyRaOaTransfer: !p.applyRaOaTransfer }));
+
+                  if (actTransferPct === 0) return null; // born ≤1956 — not eligible
+
+                  const badge = actBirthYear >= 1958
+                    ? { label: `Born ${actBirthYear} (1958+) · 20% of eligible RA − $5,000`, color: "var(--clr-green)", bg: "rgba(var(--clr-emerald-rgb),0.12)", border: "rgba(var(--clr-emerald-rgb),0.35)" }
+                    : { label: "Born 1957 · 10% of eligible RA (no $5,000 deduction)", color: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.10)", border: "rgba(var(--clr-amber-rgb),0.30)" };
+
+                  return (
+                    <div style={{ background: "rgba(var(--clr-blue2-rgb),0.06)", border: "1px solid rgba(var(--clr-blue2-rgb),0.25)", borderRadius: 12, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                      {/* Header row: title + ON/OFF toggle */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <ArrowRightLeft style={{ width: 13, height: 13, color: "var(--clr-blue2)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue2)", textTransform: "uppercase", flex: 1 }}>
+                          RA → OA Transfer at Age {activePayoutAge}
+                        </span>
+                        <TooltipBox id="t-life-raoa" text="At payout age, a birth-year-gated portion of eligible RA is transferred to OA as a freely-withdrawable lump sum. Eligible base = RA minus cumulative RSTU cash top-ups and OA→RA transfers. Born 1958+: 20% − $5,000. Born 1957: 10%. Toggle ON to apply in the projection — chart payouts will be based on the lower post-transfer RA." />
+                        <button onClick={actToggle}
+                          style={{ flexShrink: 0, marginLeft: 6, padding: "4px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                            background: actApply ? "var(--clr-blue2)" : "var(--bg-muted)",
+                            color:      actApply ? "#fff"             : "var(--text-muted)" }}>
+                          {actApply ? "ON" : "OFF"}
+                        </button>
+                      </div>
+
+                      {/* Birth-year eligibility badge */}
+                      <div style={{ display: "inline-flex", alignItems: "center", background: badge.bg, border: `1px solid ${badge.border}`, borderRadius: 6, padding: "3px 9px", fontSize: 12, fontWeight: 700, color: badge.color, alignSelf: "flex-start" }}>
+                        {badge.label}
+                      </div>
+
+                      {/* Breakdown: RA at PA → Transfer → RA entering pool */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-muted)" }}>RA at age {activePayoutAge}</span>
+                          <span style={{ color: "var(--text-highlight)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(actRaAtPA)}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-muted)" }}>{actApply ? "↑ Transfer to OA (applied)" : "↑ Transfer to OA (reference only)"}</span>
+                          <span style={{ color: "var(--clr-blue2)", fontFamily: "monospace", fontWeight: 700 }}>{formatCurrency(actTransfer)}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border-subtle)", paddingTop: 5 }}>
+                          <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>RA entering CPF LIFE pool</span>
+                          <span style={{ color: actApply ? "var(--clr-emerald)" : "var(--text-highlight)", fontFamily: "monospace", fontWeight: 800 }}>
+                            {formatCurrency(actApply ? actRaAfter : actRaAtPA)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Context note */}
+                      <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: 0, lineHeight: 1.5 }}>
+                        {actApply
+                          ? `Toggle ON — chart uses ${formatCurrency(actRaAfter)} as payout base. OA boosted by ${formatCurrency(actTransfer)} at age ${activePayoutAge}.`
+                          : `Toggle OFF — chart uses full ${formatCurrency(actRaAtPA)} RA. Toggle ON to apply OA lump-sum and see reduced payouts.`}
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 {/* Payout Premium Structure — Standard, Escalating (fixed 100%) and Basic (variable slider) in one block */}
                 <div style={{ background: "var(--bg-base)", border: "1px solid var(--border-strong)", borderRadius: 14, padding: "14px 18px" }}>
                   <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><SlidersHorizontal style={{ width: 13, height: 13, color: "var(--clr-amber)" }} />CPF LIFE Premium Structure</h4>
@@ -26695,12 +26764,7 @@ ${milestoneSnapshotHtml}
                                 Override CPF account interest rates with a permanent lower-rate scenario. Unlike Monte Carlo (random annual noise), this tests a structural rate reduction.
                                 The projection immediately updates — compare the chart against your base projection.
                               </p>
-                              <style>{`
-                                @media (max-width: 640px) {
-                                  .cpf-rate-grid { grid-template-columns: 1fr !important; }
-                                }
-                              `}</style>
-                              <div className="cpf-rate-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
                                 {[
                                   { label: "OA Rate", key: "cpfOARateOverride", defaultRate: 2.5, stressRate: 1.5, color: "var(--clr-blue)" },
                                   { label: "SA/RA Rate", key: "cpfSARateOverride", defaultRate: 4.0, stressRate: 3.0, color: "var(--clr-emerald)" },
@@ -27080,6 +27144,18 @@ ${milestoneSnapshotHtml}
                                       <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 10, color: "var(--clr-red)" }}>−3%</span><span style={{ fontSize: 10, color: "var(--clr-green)" }}>+3%</span></div>
                                     </div>
                                   </div>
+                                  {/* Bala decay curve toggle — only for leasehold properties */}
+                                  {propertyStressData?.isLH && (
+                                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10, marginTop: -4 }}>
+                                      <button onClick={() => setShowBalaDecayCurve(v => !v)}
+                                        style={{ padding: "5px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                                          border: `1px solid ${showBalaDecayCurve ? "rgba(var(--clr-amber-rgb),0.5)" : "var(--border-subtle)"}`,
+                                          background: showBalaDecayCurve ? "rgba(var(--clr-amber-rgb),0.10)" : "var(--bg-input)",
+                                          color: showBalaDecayCurve ? "var(--clr-amber)" : "var(--text-subtle)" }}>
+                                        {showBalaDecayCurve ? "📉 Hide Bala's Decay" : "📉 Show Bala's Decay Curve"}
+                                      </button>
+                                    </div>
+                                  )}
                                   {!propertyStressData ? (
                                     <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>Enter a property value in the sidebar to run this analysis.</p>
                                   ) : (
@@ -27093,6 +27169,9 @@ ${milestoneSnapshotHtml}
                                             <Tooltip formatter={(v, name) => [`$${Math.round(v).toLocaleString()}`, name]} labelFormatter={l => `Age ${l}`} contentStyle={{ background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 8, fontSize: 12 }} />
                                             <Line type="monotone" dataKey="baseValue" stroke="var(--clr-blue)" strokeWidth={2} dot={false} name={`Base ${baseGrowth}%`} />
                                             <Line type="monotone" dataKey="stressValue" stroke="var(--clr-red)" strokeWidth={2} strokeDasharray="6 3" dot={false} name={`Stress ${propertyStressGrowthRate}%`} />
+                                            {showBalaDecayCurve && propertyStressData.isLH && (
+                                              <Line type="monotone" dataKey="balaOnlyValue" stroke="var(--clr-amber)" strokeWidth={1.5} strokeDasharray="3 2" dot={false} name="Bala decay (0% mkt)" />
+                                            )}
                                             <Legend iconType="line" wrapperStyle={{ fontSize: 11 }} />
                                           </LineChart>
                                         </ResponsiveContainer>
@@ -27103,6 +27182,17 @@ ${milestoneSnapshotHtml}
                                           <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", margin: "0 0 2px" }}>Base: {formatCurrency(propertyStressData.baseValueAtPA)}</p>
                                           <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-red)", margin: 0 }}>Stress: {formatCurrency(propertyStressData.stressValueAtPA)}</p>
                                         </div>
+                                        {showBalaDecayCurve && propertyStressData.isLH && (
+                                          <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(var(--clr-amber-rgb),0.35)" }}>
+                                            <p style={{ fontSize: 11, color: "var(--clr-amber)", margin: "0 0 4px", textTransform: "uppercase", fontWeight: 700 }}>Bala decay only (0% mkt)</p>
+                                            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-amber)", margin: "0 0 2px" }}>Age {propertyStressData.pa}: {formatCurrency(propertyStressData.balaOnlyValueAtPA)}</p>
+                                            <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>
+                                              {propertyStressData.baseValueAtPA >= propertyStressData.balaOnlyValueAtPA
+                                                ? `Mkt growth adds ${formatCurrency(propertyStressData.baseValueAtPA - propertyStressData.balaOnlyValueAtPA)}`
+                                                : `Mkt drag costs ${formatCurrency(propertyStressData.balaOnlyValueAtPA - propertyStressData.baseValueAtPA)}`}
+                                            </p>
+                                          </div>
+                                        )}
                                         <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(239,68,68,0.3)" }}>
                                           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Delta at age {propertyStressData.pa}</p>
                                           <p style={{ fontSize: 14, fontWeight: 800, color: propertyStressData.delta >= 0 ? "var(--clr-red)" : "var(--clr-green)", margin: 0 }}>
