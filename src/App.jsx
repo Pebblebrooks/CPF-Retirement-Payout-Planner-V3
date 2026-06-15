@@ -7449,7 +7449,10 @@ function CPFPlannerApp() {
           setInputErrors({});
           lastSavedRef.current = JSON.stringify(mergedInputs);
         }
-        if (fullState.activeTab) { const t = fullState.activeTab; setActiveTab(t === 'welcome' || t === 'notes' ? 'guide' : t); }
+        // BUG-FIX: always land on the Readiness tab after loading a shared profile —
+        // regardless of which tab the sender was on — so the recipient immediately
+        // sees their retirement readiness score for the loaded profile.
+        setActiveTab("readiness");
         if (fullState.highlightPlan) setHighlightPlan(fullState.highlightPlan);
         // Bug 6 fix: restore per-member CPF LIFE plan selections from share link
         if (fullState.primaryLifePlan) setPrimaryLifePlan(fullState.primaryLifePlan);
@@ -7533,6 +7536,7 @@ function CPFPlannerApp() {
         setInputs(mergedLegacy); setDebouncedInputs(mergedLegacy);
         setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedLegacy);
+        setActiveTab("readiness"); // BUG-FIX: land on Readiness after loading a shared profile
       } else if (stateParam) {
         // Legacy plain format
         const decoded = JSON.parse(decodeURIComponent(stateParam));
@@ -7541,6 +7545,7 @@ function CPFPlannerApp() {
         setInputs(mergedPlain); setDebouncedInputs(mergedPlain);
         setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedPlain);
+        setActiveTab("readiness"); // BUG-FIX: land on Readiness after loading a shared profile
       } else {
         // Always show welcome modal on fresh load
         setShowWelcome(true);
@@ -14797,9 +14802,10 @@ ${milestoneSnapshotHtml}
                     // BUG-2 fix: stamp lastSavedRef so "Unsaved changes" guard doesn't fire after Share Code load
                     lastSavedRef.current = JSON.stringify(safeInp);
                     // BUG-3 fix: restore all previously missing state fields
-                    // Map legacy tab IDs to merged "guide" tab (welcome+notes were merged in App_62)
-                    const restoredTab = parsed.activeTab === 'welcome' || parsed.activeTab === 'notes' ? 'guide' : parsed.activeTab;
-                    if (restoredTab) setActiveTab(restoredTab);
+                    // BUG-FIX: always land on the Readiness tab after loading a shared profile —
+                    // regardless of which tab the sender was on (legacy 'welcome'/'notes' tab-ID
+                    // remapping is therefore no longer needed here).
+                    setActiveTab("readiness");
                     if (parsed.highlightPlan) setHighlightPlan(parsed.highlightPlan);
                     if (parsed.primaryLifePlan) setPrimaryLifePlan(parsed.primaryLifePlan);
                     if (parsed.spouseLifePlan)  setSpouseLifePlan(parsed.spouseLifePlan);
@@ -22234,7 +22240,7 @@ ${milestoneSnapshotHtml}
                       </span>
                     </div>
                   )}
-                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {activePayoutAge} – 95)</h3>
+                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {activePayoutAge} – {maxPA})</h3>
                   {/* P1 fix: Foreigner gate — CPF LIFE is SC/PR only. Show a prominent warning when
                       citizenStatus === 'foreigner' so the user knows the payout estimates below do not apply.
                       The chart is not suppressed — foreigners may be exploring what-if SC/PR scenarios. */}
@@ -26689,7 +26695,12 @@ ${milestoneSnapshotHtml}
                                 Override CPF account interest rates with a permanent lower-rate scenario. Unlike Monte Carlo (random annual noise), this tests a structural rate reduction.
                                 The projection immediately updates — compare the chart against your base projection.
                               </p>
-                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+                              <style>{`
+                                @media (max-width: 640px) {
+                                  .cpf-rate-grid { grid-template-columns: 1fr !important; }
+                                }
+                              `}</style>
+                              <div className="cpf-rate-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
                                 {[
                                   { label: "OA Rate", key: "cpfOARateOverride", defaultRate: 2.5, stressRate: 1.5, color: "var(--clr-blue)" },
                                   { label: "SA/RA Rate", key: "cpfSARateOverride", defaultRate: 4.0, stressRate: 3.0, color: "var(--clr-emerald)" },
