@@ -14648,6 +14648,7 @@ ${milestoneSnapshotHtml}
           /* Shrink logo on tiny screens */
           .cpf-logo-text { font-size: 14px !important; }
           .cpf-logo-sub  { display: none !important; }
+          .cpf-logo-copy { display: none !important; }
           /* Full-width tab strip: fixed below fixed header (top:48px).
              Fixed (not sticky) so it cannot rubber-band during iOS overscroll — sticky
              elements travel with the bounce animation; fixed elements do not.
@@ -15333,6 +15334,7 @@ ${milestoneSnapshotHtml}
             <div>
               <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>CPF Planner Pro</div>
               <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
+              <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-subtle)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1, opacity: 0.75 }}>© 2026 Pebblebrooks. All rights reserved.</div>
             </div>
           </div>
 
@@ -26426,7 +26428,7 @@ ${milestoneSnapshotHtml}
                     const applyWorstCase = () => {
                       setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15);
                       setShowInflationStress(true); setInflationStressRate(5);
-                      setShowPropertyStress(true); setPropertyStressGrowthRate(-2);
+                      setShowPropertyStress(true); setPropertyStressGrowthRate(-6); // Correction-level; user can escalate to Crash/Crisis
                       setShowCpfRateStress(true);
                       setInputs(p => ({ ...p, cpfOARateOverride: 1.5, cpfSARateOverride: 3.0, cpfMARateOverride: 3.0 }));
                     };
@@ -26453,11 +26455,11 @@ ${milestoneSnapshotHtml}
                               ["Monte Carlo", "200 simulated rate environments showing P10/P50/P90 confidence band. Enable in Growth tab for the full chart."],
                               ["SORR", "Sequence of Returns Risk — private assets hit by a market crash in early retirement. Configure crash duration and depth."],
                               ["Inflation Stress", "Tests how higher CPI erodes the real purchasing power of your fixed nominal CPF LIFE payout."],
-                              ["Property Correction", "Stress-tests your property value trajectory at a different growth rate (−3% to +3%/yr)."],
+                              ["Property Correction", "Stress-tests your property value trajectory at a downside growth rate. Range: −15% (Crisis) to 0%. Use presets — Mild −3%, Correction −6%, Crash −10%, Crisis −15% — or fine-tune with the slider. Rates are sustained annual, not one-time crashes. A Crash/Crisis warning banner appears below −10%."],
                               ["Salary Cut", "Reduces your gross salary by a user-defined % for a specified age range — useful for modelling a demotion, industry downturn, or gig-economy transition. Add via the Life Events panel."],
                               ["Tier Shock", "CPF LIFE payout if your RA falls to a lower tier at payout age — full inline analysis shows the tier ladder, per-plan payout impact, and estimated lifetime payout loss."],
                               ["Healthcare Cost Surge", "Models extended long-term care costs drawing from private assets and MA above your base medical inputs."],
-                              ["⚡ Worst Case", "Simultaneously applies SORR + Inflation 5% + Property −2% + CPF rates 1.5%/3%/3%."],
+                              ["⚡ Worst Case", "Simultaneously applies SORR + Inflation 5% + Property −6% (Correction) + CPF rates 1.5%/3%/3%. Escalate the property slider to Crash or Crisis for a more severe test."],
                             ].map(([t, d]) => (
                               <div key={t} style={{ display: "flex", gap: 10, padding: "5px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
                                 <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-highlight)", margin: 0, minWidth: 150, whiteSpace: "nowrap" }}>{t}</p>
@@ -26589,6 +26591,18 @@ ${milestoneSnapshotHtml}
                                       CPF impact: −{formatCurrency(cpfDelta)} · Life expectancy used: age {perfectStormData.lifeExp}
                                       {hcTotal > 0 ? ` · Healthcare surge: ${formatCurrency(hcTotal)}` : ""}
                                     </p>
+                                    {/* Life Events disclosure — only shown when events are configured */}
+                                    {(() => {
+                                      const les = (debouncedInputs.lifeEvents || []).filter(e => e.enabled !== false);
+                                      if (les.length === 0) return null;
+                                      const names = les.map(e => e.label || e.type).join(", ");
+                                      return (
+                                        <p style={{ fontSize:11, color:"var(--clr-amber)", margin:"6px 0 0", borderTop:"1px solid rgba(239,68,68,0.2)", paddingTop:5, lineHeight:1.5 }}>
+                                          <strong>Life Events included:</strong> {names} ({les.length} event{les.length > 1 ? "s" : ""} compounding with market stressors above).{" "}
+                                          <span style={{ color:"var(--text-subtle)" }}>Individual stressor panels (SORR, Inflation, Property) are isolated and do not include Life Events.</span>
+                                        </p>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               );
@@ -27132,16 +27146,30 @@ ${milestoneSnapshotHtml}
                               const baseGrowth = Number(debouncedInputs.propertyGrowthRate) || 0;
                               return (
                                 <>
-                                  <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>Shows how your property value changes at a stressed growth rate vs your base assumption.</p>
+                                  <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.5 }}>Shows how your property value changes under a downside scenario. Rates are <em>sustained annual</em> from today to payout age — not one-time crashes. Use presets for common scenarios or fine-tune with the slider.</p>
                                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
                                     <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)" }}>
                                       <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Base growth (sidebar)</p>
                                       <p style={{ fontSize: 18, fontWeight: 800, color: "var(--clr-blue)", margin: 0 }}>{baseGrowth}% p.a.</p>
                                     </div>
                                     <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${showPropertyStress ? "rgba(239,68,68,0.3)" : "var(--border-subtle)"}` }}>
-                                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Stress growth: <strong style={{ color: propertyStressGrowthRate < 0 ? "var(--clr-red)" : "var(--clr-green)" }}>{propertyStressGrowthRate}% p.a.</strong></p>
-                                      <input type="range" min={-3} max={3} step={0.5} value={propertyStressGrowthRate} onChange={e => setPropertyStressGrowthRate(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-red)" }} />
-                                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 10, color: "var(--clr-red)" }}>−3%</span><span style={{ fontSize: 10, color: "var(--clr-green)" }}>+3%</span></div>
+                                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 8px", textTransform: "uppercase" }}>
+                                        Scenario growth rate: <strong style={{ color: "var(--clr-red)" }}>{propertyStressGrowthRate}% p.a.</strong>
+                                      </p>
+                                      {/* Preset quick-picks — Mild / Correction / Crash / Crisis */}
+                                      <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
+                                        {[["Mild", -3], ["Correction", -6], ["Crash", -10], ["Crisis", -15]].map(([label, rate]) => (
+                                          <button key={label} onClick={() => setPropertyStressGrowthRate(rate)}
+                                            style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "1px solid",
+                                              borderColor:  propertyStressGrowthRate === rate ? "rgba(239,68,68,0.6)" : "var(--border-subtle)",
+                                              background:   propertyStressGrowthRate === rate ? "rgba(239,68,68,0.15)" : "var(--bg-input)",
+                                              color:        propertyStressGrowthRate === rate ? "var(--clr-red)" : "var(--text-subtle)" }}>
+                                            {label} {rate}%
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <input type="range" min={-15} max={0} step={1} value={propertyStressGrowthRate} onChange={e => setPropertyStressGrowthRate(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-red)" }} />
+                                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 10, color: "var(--clr-red)" }}>−15% (Crisis)</span><span style={{ fontSize: 10, color: "var(--text-muted)" }}>0%</span></div>
                                     </div>
                                   </div>
                                   {/* Bala decay curve toggle — only for leasehold properties */}
@@ -27154,6 +27182,16 @@ ${milestoneSnapshotHtml}
                                           color: showBalaDecayCurve ? "var(--clr-amber)" : "var(--text-subtle)" }}>
                                         {showBalaDecayCurve ? "📉 Hide Bala's Decay" : "📉 Show Bala's Decay Curve"}
                                       </button>
+                                    </div>
+                                  )}
+                                  {/* Crash/Crisis warning banner — appears when rate ≤ −10% */}
+                                  {propertyStressGrowthRate <= -10 && (
+                                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.35)", marginBottom: 10, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                                      <AlertTriangle style={{ width: 13, height: 13, color: "var(--clr-red)", flexShrink: 0, marginTop: 1 }} />
+                                      <span>
+                                        <strong style={{ color: "var(--clr-red)" }}>{propertyStressGrowthRate <= -14 ? "Crisis scenario" : "Crash scenario"}</strong>
+                                        {" "}— this is a <em>sustained annual rate</em>, not a one-time crash. Singapore's worst historical crash (AFC 1997–98) equated to ≈−18% p.a. for 2–3 years before recovery. A sustained {propertyStressGrowthRate}% p.a. to payout age is a severe long-run stress test.
+                                      </span>
                                     </div>
                                   )}
                                   {!propertyStressData ? (
@@ -27260,19 +27298,7 @@ ${milestoneSnapshotHtml}
         </div>
       </div>
 
-      {/* Copyright notice — fixed, center-justified, mirrors header wordmark.
-          position:fixed + pointerEvents:none so it never intercepts taps/clicks. */}
-      <div style={{
-        position: "fixed", bottom: 4, left: 0, right: 0, zIndex: 1,
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-        fontSize: 10, color: "var(--text-muted)", opacity: 0.55,
-        pointerEvents: "none", whiteSpace: "nowrap",
-      }}>
-        <span style={{ fontWeight: 800, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-          CPF Planner Pro
-        </span>
-        <span>{'\u00A9'} 2026 Pebblebrooks. All rights reserved.</span>
-      </div>
+      {/* Copyright notice moved to navbar logo block (cpf-logo-copy div). Footer removed. */}
 
       </div>{/* /rootRef */}
 
