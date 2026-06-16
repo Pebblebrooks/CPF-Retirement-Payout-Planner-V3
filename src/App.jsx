@@ -7449,10 +7449,9 @@ function CPFPlannerApp() {
           setInputErrors({});
           lastSavedRef.current = JSON.stringify(mergedInputs);
         }
-        // BUG-FIX: always land on the Readiness tab after loading a shared profile —
-        // regardless of which tab the sender was on — so the recipient immediately
-        // sees their retirement readiness score for the loaded profile.
-        setActiveTab("readiness");
+        // Standardize landing tab: RSS profiles → rss tab (readiness is hidden for RSS);
+        // all other shared profiles → readiness, regardless of sender's active tab.
+        setActiveTab(mergedInputs?.cpfScheme === 'rss' ? 'rss' : 'readiness');
         if (fullState.highlightPlan) setHighlightPlan(fullState.highlightPlan);
         // Bug 6 fix: restore per-member CPF LIFE plan selections from share link
         if (fullState.primaryLifePlan) setPrimaryLifePlan(fullState.primaryLifePlan);
@@ -7536,7 +7535,7 @@ function CPFPlannerApp() {
         setInputs(mergedLegacy); setDebouncedInputs(mergedLegacy);
         setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedLegacy);
-        setActiveTab("readiness"); // BUG-FIX: land on Readiness after loading a shared profile
+        setActiveTab(mergedLegacy.cpfScheme === 'rss' ? 'rss' : 'readiness'); // Standardize: RSS→rss, all others→readiness
       } else if (stateParam) {
         // Legacy plain format
         const decoded = JSON.parse(decodeURIComponent(stateParam));
@@ -7545,7 +7544,7 @@ function CPFPlannerApp() {
         setInputs(mergedPlain); setDebouncedInputs(mergedPlain);
         setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedPlain);
-        setActiveTab("readiness"); // BUG-FIX: land on Readiness after loading a shared profile
+        setActiveTab(mergedPlain.cpfScheme === 'rss' ? 'rss' : 'readiness'); // Standardize: RSS→rss, all others→readiness
       } else {
         // Always show welcome modal on fresh load
         setShowWelcome(true);
@@ -8772,7 +8771,10 @@ function CPFPlannerApp() {
         // Restore optional UI state — each wrapped individually so one bad field
         // doesn't prevent the rest of the profile from loading
         if (p.inputs) {
-          try { if (p.activeTab) { const t = p.activeTab; setActiveTab(t === 'welcome' || t === 'notes' ? 'guide' : t); } } catch {}
+          // Standardize landing tab: RSS profiles → rss tab (readiness is hidden for RSS);
+          // all other file-loaded profiles → readiness for a consistent entry point.
+          // (Previously restored the sender's saved activeTab — now dropped for consistency.)
+          setActiveTab(safeIn.cpfScheme === 'rss' ? 'rss' : 'readiness');
           try { if (p.highlightPlan) setHighlightPlan(p.highlightPlan); } catch {}
           // Bug 4 fix: restore per-member CPF LIFE plan selections
           try { if (p.primaryLifePlan) setPrimaryLifePlan(p.primaryLifePlan); } catch {}
@@ -14805,10 +14807,9 @@ ${milestoneSnapshotHtml}
                     // BUG-2 fix: stamp lastSavedRef so "Unsaved changes" guard doesn't fire after Share Code load
                     lastSavedRef.current = JSON.stringify(safeInp);
                     // BUG-3 fix: restore all previously missing state fields
-                    // BUG-FIX: always land on the Readiness tab after loading a shared profile —
-                    // regardless of which tab the sender was on (legacy 'welcome'/'notes' tab-ID
-                    // remapping is therefore no longer needed here).
-                    setActiveTab("readiness");
+                    // Standardize landing tab: RSS profiles → rss tab (readiness hidden for RSS);
+                    // all other profiles → readiness, regardless of sender's active tab.
+                    setActiveTab(safeInp.cpfScheme === 'rss' ? 'rss' : 'readiness');
                     if (parsed.highlightPlan) setHighlightPlan(parsed.highlightPlan);
                     if (parsed.primaryLifePlan) setPrimaryLifePlan(parsed.primaryLifePlan);
                     if (parsed.spouseLifePlan)  setSpouseLifePlan(parsed.spouseLifePlan);
@@ -15043,20 +15044,16 @@ ${milestoneSnapshotHtml}
                     setHousingSharePct(p.housingSharePct ?? 50);
                     if (p.children) setHouseholdChildren(p.children);
                     if (window.innerWidth <= 1024) setSidebarOpen(false);
-                    setActiveTab("household");
                   } else {
                     setHouseholdEnabled(false);
-                    // NEW-BUG-1 fix: reset activeTab to "readiness" whenever a non-household
-                    // sample is loaded. Without this, activeTab remains "household" from the
-                    // prior household-sample load (line above sets it). Since householdEnabled
-                    // is now false, the "household" tab is absent from the nav array and the
-                    // content block for it is suppressed — leaving the panel completely blank.
-                    setActiveTab("readiness");
                     setSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
                     setDebouncedSpouseInputs({ ...SPOUSE_DEFAULT_INPUTS });
                     setHousingSharePct(50);
                     setHouseholdChildren([]);
                   }
+                  // Standardize landing tab across ALL sample loads: RSS scheme → rss tab
+                  // (readiness is hidden for RSS); all others including household → readiness.
+                  setActiveTab(merged.cpfScheme === 'rss' ? 'rss' : 'readiness');
                   setShowPresets(false);
                   showToast(`✓ Loaded: ${p.label}`);
                 }} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%", transition: "border-color 0.15s" }}
@@ -15344,7 +15341,7 @@ ${milestoneSnapshotHtml}
             <div>
               <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>CPF Planner Pro</div>
               <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
-              <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-subtle)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1, opacity: 0.75 }}>© 2026 Pebblebrooks. All rights reserved.</div>
+              <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1 }}>© 2026 Pebblebrooks. All rights reserved.</div>
             </div>
           </div>
 
@@ -27474,7 +27471,7 @@ function LockScreen({ initiallyExpired, onUnlock }) {
         >
           Unlock
         </button>
-        <p style={{ fontSize: 11, color: '#5b6785', margin: '20px 0 0' }}>
+        <p style={{ fontSize: 11, color: '#a0b4cc', margin: '20px 0 0' }}>
           {'\u00A9'} 2026 Pebblebrooks. All rights reserved.
         </p>
       </div>
