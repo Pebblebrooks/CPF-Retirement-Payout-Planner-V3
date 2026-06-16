@@ -6467,6 +6467,9 @@ function CPFPlannerApp() {
   const [showPropertyStress, setShowPropertyStress]           = useState(false); // F4: property correction toggle
   const [propertyStressGrowthRate, setPropertyStressGrowthRate] = useState(0);  // F4: stressed growth rate %
   const [showBalaDecayCurve, setShowBalaDecayCurve]             = useState(false); // F4b: Bala leasehold decay overlay
+  const [showCrashRecovery, setShowCrashRecovery]               = useState(false); // F4c: Crash+Recovery mode toggle
+  const [crashPeriodYrs, setCrashPeriodYrs]                     = useState(3);     // F4c: years in crash phase (1–10)
+  const [recoveryGrowthRate, setRecoveryGrowthRate]             = useState(2);     // F4c: post-crash annual recovery % (0–5)
   const [showPerfectStorm, setShowPerfectStorm]               = useState(false); // Perfect Storm: combined stressor engine run
   const [showLifeEventMarkers, setShowLifeEventMarkers] = useState(true); // Rev #D2: default ON so events are visible immediately
   // accumChartMode: 'stacked' = AreaChart (wealth composition); 'lines' = LineChart (individual accounts, no MA stacking artifact)
@@ -11074,27 +11077,38 @@ function CPFPlannerApp() {
     const leaseSt   = Math.max(1, Number(debouncedInputs.propertyLeaseYears) || 99);
     const initBala  = isLH ? balaRatio(leaseSt) : 1;
     const fhEquiv   = (isLH && initBala > 0) ? propValue / initBala : propValue;
+    const recGrowth = recoveryGrowthRate / 100;
     const rows = [];
     for (let age = ca; age <= pa; age++) {
       const yrs          = age - ca;
       const leaseNow     = Math.max(0, leaseSt - yrs);
       const bala         = isLH ? balaRatio(leaseNow) : 1;
+      // F4c: Crash+Recovery — crash at stressGrowth for crashPeriodYrs, then recover at recGrowth.
+      // During crash phase (yrs ≤ crashPeriodYrs) this equals stressValue; lines visually split at recovery start.
+      const fhAtCrashEnd     = fhEquiv * Math.pow(1 + stressGrowth, crashPeriodYrs);
+      const crashRecoveryValue = yrs <= crashPeriodYrs
+        ? Math.round(fhEquiv   * Math.pow(1 + stressGrowth, yrs) * bala)
+        : Math.round(fhAtCrashEnd * Math.pow(1 + recGrowth, yrs - crashPeriodYrs) * bala);
       rows.push({
         age,
-        baseValue:    Math.round(fhEquiv * Math.pow(1 + baseGrowth,   yrs) * bala),
-        stressValue:  Math.round(fhEquiv * Math.pow(1 + stressGrowth, yrs) * bala),
-        balaOnlyValue: isLH ? Math.round(fhEquiv * bala) : null, // pure lease decay, 0% market growth
+        baseValue:         Math.round(fhEquiv * Math.pow(1 + baseGrowth,   yrs) * bala),
+        stressValue:       Math.round(fhEquiv * Math.pow(1 + stressGrowth, yrs) * bala),
+        balaOnlyValue:     isLH ? Math.round(fhEquiv * bala) : null, // pure lease decay, 0% market growth
+        crashRecoveryValue,
       });
     }
-    const baseValueAtPA    = rows[rows.length - 1]?.baseValue    || 0;
-    const stressValueAtPA  = rows[rows.length - 1]?.stressValue  || 0;
-    const balaOnlyValueAtPA = isLH ? (rows[rows.length - 1]?.balaOnlyValue || 0) : null;
+    const baseValueAtPA       = rows[rows.length - 1]?.baseValue          || 0;
+    const stressValueAtPA     = rows[rows.length - 1]?.stressValue        || 0;
+    const balaOnlyValueAtPA   = isLH ? (rows[rows.length - 1]?.balaOnlyValue || 0) : null;
+    const crashRecoveryValueAtPA = rows[rows.length - 1]?.crashRecoveryValue || 0;
     const delta            = baseValueAtPA - stressValueAtPA;
     const deltaPct         = baseValueAtPA > 0 ? Math.round(Math.abs(delta / baseValueAtPA) * 100) : 0;
-    return { rows, baseValueAtPA, stressValueAtPA, balaOnlyValueAtPA, delta, deltaPct, propValue, pa, ca, isLH };
+    return { rows, baseValueAtPA, stressValueAtPA, balaOnlyValueAtPA, crashRecoveryValueAtPA,
+             delta, deltaPct, propValue, pa, ca, isLH };
   }, [showPropertyStress, propertyStressGrowthRate, debouncedInputs.propertyGrowthRate,
       debouncedInputs.propertyValue, debouncedInputs.currentAge, payoutAge65,
-      debouncedInputs.propertyLeasehold, debouncedInputs.propertyLeaseYears]);
+      debouncedInputs.propertyLeasehold, debouncedInputs.propertyLeaseYears,
+      crashPeriodYrs, recoveryGrowthRate]);
 
   // ── F3: Tier Shock Analysis (App-level) ──────────────────────────────────
   // Mirrors the identical useMemo inside ReadinessTab but lives here so the
@@ -27207,6 +27221,66 @@ ${milestoneSnapshotHtml}
                                       </button>
                                     </div>
                                   )}
+                                  {/* F4c: Crash + Recovery mode — toggle + controls ───────────── */}
+                                  <div style={{ marginBottom: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: showCrashRecovery ? 10 : 0 }}>
+                                      <button onClick={() => setShowCrashRecovery(v => !v)}
+                                        style={{ padding: "5px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                                          border: `1px solid ${showCrashRecovery ? "rgba(var(--clr-purple-rgb),0.5)" : "var(--border-subtle)"}`,
+                                          background: showCrashRecovery ? "rgba(var(--clr-purple-rgb),0.10)" : "var(--bg-input)",
+                                          color: showCrashRecovery ? "var(--clr-purple)" : "var(--text-subtle)" }}>
+                                        {showCrashRecovery ? "🔄 Hide Crash + Recovery" : "🔄 Crash + Recovery Mode"}
+                                      </button>
+                                    </div>
+                                    {showCrashRecovery && (
+                                      <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(var(--clr-purple-rgb),0.06)", border: "1px solid rgba(var(--clr-purple-rgb),0.25)", display: "flex", flexDirection: "column", gap: 12 }}>
+                                        <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+                                          Models a <strong style={{ color: "var(--clr-purple)" }}>{crashPeriodYrs}-year crash</strong> at the Stress rate ({propertyStressGrowthRate}% p.a.),
+                                          then recovery at <strong style={{ color: "var(--clr-purple)" }}>{recoveryGrowthRate}% p.a.</strong>
+                                          — lines overlap during crash phase, then split at recovery start.
+                                        </p>
+                                        {/* Crash duration controls */}
+                                        <div>
+                                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 6px", textTransform: "uppercase" }}>
+                                            Crash duration: <strong>{crashPeriodYrs} year{crashPeriodYrs > 1 ? "s" : ""}</strong>
+                                          </p>
+                                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
+                                            {[1, 2, 3, 5, 7].map(y => (
+                                              <button key={y} onClick={() => setCrashPeriodYrs(y)}
+                                                style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "1px solid",
+                                                  borderColor: crashPeriodYrs === y ? "rgba(var(--clr-purple-rgb),0.6)" : "var(--border-subtle)",
+                                                  background:  crashPeriodYrs === y ? "rgba(var(--clr-purple-rgb),0.15)" : "var(--bg-input)",
+                                                  color:       crashPeriodYrs === y ? "var(--clr-purple)" : "var(--text-subtle)" }}>
+                                                {y}yr
+                                              </button>
+                                            ))}
+                                          </div>
+                                          <input type="range" min={1} max={10} step={1} value={crashPeriodYrs} onChange={e => setCrashPeriodYrs(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-purple)" }} />
+                                          <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 10, color: "var(--text-subtle)" }}>1yr</span><span style={{ fontSize: 10, color: "var(--text-subtle)" }}>10yr</span></div>
+                                        </div>
+                                        {/* Recovery rate controls */}
+                                        <div>
+                                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 6px", textTransform: "uppercase" }}>
+                                            Recovery rate: <strong>{recoveryGrowthRate}% p.a.</strong>
+                                          </p>
+                                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
+                                            {[0, 1, 2, 3].map(r => (
+                                              <button key={r} onClick={() => setRecoveryGrowthRate(r)}
+                                                style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "1px solid",
+                                                  borderColor: recoveryGrowthRate === r ? "rgba(var(--clr-purple-rgb),0.6)" : "var(--border-subtle)",
+                                                  background:  recoveryGrowthRate === r ? "rgba(var(--clr-purple-rgb),0.15)" : "var(--bg-input)",
+                                                  color:       recoveryGrowthRate === r ? "var(--clr-purple)" : "var(--text-subtle)" }}>
+                                                {r}%
+                                              </button>
+                                            ))}
+                                          </div>
+                                          <input type="range" min={0} max={5} step={0.5} value={recoveryGrowthRate} onChange={e => setRecoveryGrowthRate(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--clr-purple)" }} />
+                                          <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 10, color: "var(--text-subtle)" }}>0%</span><span style={{ fontSize: 10, color: "var(--clr-purple)" }}>5%</span></div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
                                   {/* Crash/Crisis warning banner — appears when rate ≤ −10% */}
                                   {propertyStressGrowthRate <= -10 && (
                                     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.35)", marginBottom: 10, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
@@ -27232,6 +27306,11 @@ ${milestoneSnapshotHtml}
                                             <Line type="monotone" dataKey="stressValue" stroke="var(--clr-red)" strokeWidth={2} strokeDasharray="6 3" dot={false} name={`Stress ${propertyStressGrowthRate}%`} />
                                             {showBalaDecayCurve && propertyStressData.isLH && (
                                               <Line type="monotone" dataKey="balaOnlyValue" stroke="var(--clr-amber)" strokeWidth={1.5} strokeDasharray="3 2" dot={false} name="Bala decay (0% mkt)" />
+                                            )}
+                                            {/* F4c: Crash+Recovery line — overlaps stress during crash phase, diverges at recovery start */}
+                                            {showCrashRecovery && (
+                                              <Line type="monotone" dataKey="crashRecoveryValue" stroke="var(--clr-purple)" strokeWidth={1.5} strokeDasharray="4 2 1 2" dot={false}
+                                                name={`Crash ${crashPeriodYrs}yr → +${recoveryGrowthRate}%`} />
                                             )}
                                             <Legend iconType="line" wrapperStyle={{ fontSize: 11 }} />
                                           </LineChart>
@@ -27261,6 +27340,32 @@ ${milestoneSnapshotHtml}
                                           </p>
                                           <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "2px 0 0" }}>{propertyStressData.deltaPct}% {propertyStressData.delta >= 0 ? "lower" : "higher"} than base</p>
                                         </div>
+                                        {/* F4c: Crash+Recovery stat card */}
+                                        {showCrashRecovery && (() => {
+                                          const crVal    = propertyStressData.crashRecoveryValueAtPA;
+                                          const vsSustained = crVal - propertyStressData.stressValueAtPA;
+                                          const vsBase      = propertyStressData.baseValueAtPA - crVal;
+                                          return (
+                                            <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(var(--clr-purple-rgb),0.35)" }}>
+                                              <p style={{ fontSize: 11, color: "var(--clr-purple)", margin: "0 0 4px", textTransform: "uppercase", fontWeight: 700 }}>
+                                                Crash {crashPeriodYrs}yr → +{recoveryGrowthRate}%
+                                              </p>
+                                              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-purple)", margin: "0 0 2px" }}>
+                                                Age {propertyStressData.pa}: {formatCurrency(crVal)}
+                                              </p>
+                                              <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "1px 0 0" }}>
+                                                {vsSustained >= 0
+                                                  ? `${formatCurrency(vsSustained)} better than sustained stress`
+                                                  : `${formatCurrency(Math.abs(vsSustained))} worse than sustained stress`}
+                                              </p>
+                                              <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "1px 0 0" }}>
+                                                {vsBase >= 0
+                                                  ? `${formatCurrency(vsBase)} below base (market opportunity cost)`
+                                                  : `${formatCurrency(Math.abs(vsBase))} above base`}
+                                              </p>
+                                            </div>
+                                          );
+                                        })()}
                                       </div>
                                     </>
                                   )}
