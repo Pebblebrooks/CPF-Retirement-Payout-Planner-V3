@@ -5532,10 +5532,112 @@ function ReadinessTab({
         </div>
       </details>
 
-      {/* ── ROW 1: Gauge (4 sub-scores) + 5-col KPI hero ── */}
-      <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
+      {/* ── ROW 1 (Q3 restructure): KPI hero (4 cards) ABOVE the Readiness gauge ──
+          Previously a 220px-gauge + 5-col-KPI side-by-side grid. "Income coverage"
+          removed — confirmed exact duplicate of the gauge's own Income Coverage
+          sub-bar (both derive from the same stdMonthly/displayPayout vs target). ── */}
+      <div className="rd-kpi-hero" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 16 }}>
+        {/* 2 KPI tiles (Income coverage removed — see comment above) */}
+        {[
+          {
+            label: `Total CPF at ${pa}`,
+            sublabel: isRealDollars ? "today's dollars" : "nominal",
+            value: totalCPF > 0 ? formatCurrency(totalCPF) : (wizardCompleted ? "—" : null),
+            placeholder: totalCPF === 0 && !wizardCompleted ? "Add CPF balances" : null,
+            color: "var(--clr-blue)",
+            tip: `OA + SA/RA + MA at payout age ${pa}`,
+            extraBorder: null,
+          },
+          {
+            label: `${highlightPlan === "basic" ? "Basic" : highlightPlan === "escalating" ? "Escalating" : "Standard"} plan payout`,
+            sublabel: "monthly CPF LIFE",
+            value: displayPayout > 0 ? `${formatCurrency(Math.round(displayPayout))}` : (wizardCompleted ? "—" : null),
+            placeholder: displayPayout === 0 && !wizardCompleted ? "Add salary & balances" : null,
+            color: "var(--clr-green)",
+            tip: `${highlightPlan} plan monthly payout${isRealDollars ? " in today's dollars" : ""}`,
+            extraBorder: null,
+          },
+        ].map(({ label, sublabel, value, placeholder, color, tip, extraBorder }) => (
+          <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center", ...(extraBorder ? { borderColor: extraBorder } : {}) }}>
+            <p style={labelStyle}>{label}</p>
+            {placeholder ? (
+              <>
+                <p style={{ fontSize: 18, fontWeight: 700, color: "var(--text-subtle)", marginTop: 2 }}>—</p>
+                <button onClick={() => { setActiveTab("summary"); setSidebarOpen(true); }}
+                  style={{ marginTop: 6, padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.12)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", cursor: "pointer", textAlign: "left" }}>
+                  + {placeholder}
+                </button>
+              </>
+            ) : (
+              <>
+                <p style={{ ...bigNumStyle, color }}>{value ?? "—"}</p>
+                {sublabel && <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>{sublabel}</p>}
+              </>
+            )}
+          </div>
+        ))}
 
-        {/* Gauge card — Phase 3: 2 new sub-score bars added below existing 2 */}
+        {/* P10 Downside tile */}
+        <div
+          title={p10DropPct != null
+            ? `Bad-luck (P10) scenario: total CPF at ${pa} = ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} · −${p10DropPct}%. Enable Monte Carlo in the Accumulation tab.`
+            : "Enable Monte Carlo in the Accumulation tab to see the P10 downside scenario"}
+          style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <p style={labelStyle}>P10 downside</p>
+          {p10TotalAtPA > 0 ? (
+            <>
+              <p style={{ ...bigNumStyle, color: "var(--clr-amber)" }}>{formatCurrency(p10TotalAtPA)}</p>
+              <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>bad-luck scenario</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-red)", marginTop: 4 }}>−{p10DropPct}% vs base</p>
+            </>
+          ) : (
+            <>
+              <p style={{ ...bigNumStyle, color: "var(--text-subtle)" }}>—</p>
+              <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>enable Monte Carlo<br />in Accumulation tab</p>
+            </>
+          )}
+          {probSufficiency != null && (
+            <p style={{ fontSize: 10, fontWeight: 700, marginTop: 6,
+              color: probSufficiency >= 80 ? "var(--clr-green)" : probSufficiency >= 60 ? "var(--clr-amber)" : "var(--clr-red)" }}>
+              {probSufficiency}% chance hits FRS
+            </p>
+          )}
+        </div>
+
+        {/* OA Depletes tile */}
+        <div
+          title={oaDepletionAge
+            ? `OA drawdown exhausts at age ${oaDepletionAge}. ${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy}. ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk.` : ""}`
+            : "No OA drawdown active, or OA is sustained to the planning horizon"}
+          style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center",
+            borderColor: oaDepletionAge && oaIncomeGapYrs > 0 ? "rgba(239,68,68,0.4)" : "var(--border-subtle)" }}>
+          <p style={labelStyle}>OA depletes</p>
+          {oaDepletionAge ? (
+            <>
+              <p style={{ ...bigNumStyle, color: "var(--clr-red)" }}>Age {oaDepletionAge}</p>
+              <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>drawdown exhausted</p>
+              {oaIncomeGapYrs > 0 && (
+                <div style={{ marginTop: 5, padding: "3px 8px", borderRadius: 5, display: "inline-block",
+                  background: "rgba(239,68,68,0.12)", fontSize: 10, fontWeight: 700, color: "var(--clr-red)" }}>
+                  ⚠ {oaIncomeGapYrs}-yr gap risk
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <p style={{ ...bigNumStyle, color: "var(--clr-green)" }}>—</p>
+              <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>
+                {oaDrawActive ? "OA sustained to horizon" : "no drawdown active"}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Gauge card — now standalone below the KPI row, centered. Internal structure
+          unchanged (Q2's "match Wellness Score format" mockup is pending approval —
+          this is intentionally NOT restyled yet, only relocated per Q3). */}
+      <div style={{ display: "flex", justifyContent: "center" }}>
         <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
           <p style={{ ...labelStyle, marginBottom: 8 }}>Retirement Readiness</p>
           <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible" }}>
@@ -5604,114 +5706,6 @@ function ReadinessTab({
             Weights shift by age band. Stress defaults to 50 when MC is off — enable Stress Centre for a live score.
           </p>
         </div>
-
-        {/* 5-col KPI hero — Phase 3: P10 Downside + OA Depletes added */}
-        <div className="rd-kpi-hero" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}>
-          {/* Existing 3 KPI tiles */}
-          {[
-            {
-              label: `Total CPF at ${pa}`,
-              sublabel: isRealDollars ? "today's dollars" : "nominal",
-              value: totalCPF > 0 ? formatCurrency(totalCPF) : (wizardCompleted ? "—" : null),
-              placeholder: totalCPF === 0 && !wizardCompleted ? "Add CPF balances" : null,
-              color: "var(--clr-blue)",
-              tip: `OA + SA/RA + MA at payout age ${pa}`,
-              extraBorder: null,
-            },
-            {
-              label: `${highlightPlan === "basic" ? "Basic" : highlightPlan === "escalating" ? "Escalating" : "Standard"} plan payout`,
-              sublabel: "monthly CPF LIFE",
-              value: displayPayout > 0 ? `${formatCurrency(Math.round(displayPayout))}` : (wizardCompleted ? "—" : null),
-              placeholder: displayPayout === 0 && !wizardCompleted ? "Add salary & balances" : null,
-              color: "var(--clr-green)",
-              tip: `${highlightPlan} plan monthly payout${isRealDollars ? " in today's dollars" : ""}`,
-              extraBorder: null,
-            },
-            {
-              label: "Income coverage",
-              sublabel: target > 0 ? `vs ${formatCurrency(target)}/mo target` : (wizardCompleted ? "set target in sidebar" : null),
-              value: coveragePct != null ? `${coveragePct}%` : (wizardCompleted ? "—" : null),
-              placeholder: !wizardCompleted && target === 0 ? "Set retirement target" : null,
-              color: coveragePct == null ? "var(--text-muted)" : coveragePct >= 100 ? "var(--clr-green)" : coveragePct >= 70 ? "var(--clr-amber)" : "var(--clr-red)",
-              tip: target > 0 ? `CPF LIFE payout covers ${coveragePct}% of your ${formatCurrency(target)}/mo target` : "Enter Target Monthly Income in the Decumulation section",
-              extraBorder: null,
-            },
-          ].map(({ label, sublabel, value, placeholder, color, tip, extraBorder }) => (
-            <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center", ...(extraBorder ? { borderColor: extraBorder } : {}) }}>
-              <p style={labelStyle}>{label}</p>
-              {placeholder ? (
-                <>
-                  <p style={{ fontSize: 18, fontWeight: 700, color: "var(--text-subtle)", marginTop: 2 }}>—</p>
-                  <button onClick={() => { setActiveTab("summary"); setSidebarOpen(true); }}
-                    style={{ marginTop: 6, padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.12)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", cursor: "pointer", textAlign: "left" }}>
-                    + {placeholder}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p style={{ ...bigNumStyle, color }}>{value ?? "—"}</p>
-                  {sublabel && <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>{sublabel}</p>}
-                </>
-              )}
-            </div>
-          ))}
-
-          {/* P10 Downside tile */}
-          <div
-            title={p10DropPct != null
-              ? `Bad-luck (P10) scenario: total CPF at ${pa} = ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} · −${p10DropPct}%. Enable Monte Carlo in the Accumulation tab.`
-              : "Enable Monte Carlo in the Accumulation tab to see the P10 downside scenario"}
-            style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <p style={labelStyle}>P10 downside</p>
-            {p10TotalAtPA > 0 ? (
-              <>
-                <p style={{ ...bigNumStyle, color: "var(--clr-amber)" }}>{formatCurrency(p10TotalAtPA)}</p>
-                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>bad-luck scenario</p>
-                <p style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-red)", marginTop: 4 }}>−{p10DropPct}% vs base</p>
-              </>
-            ) : (
-              <>
-                <p style={{ ...bigNumStyle, color: "var(--text-subtle)" }}>—</p>
-                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>enable Monte Carlo<br />in Accumulation tab</p>
-              </>
-            )}
-            {probSufficiency != null && (
-              <p style={{ fontSize: 10, fontWeight: 700, marginTop: 6,
-                color: probSufficiency >= 80 ? "var(--clr-green)" : probSufficiency >= 60 ? "var(--clr-amber)" : "var(--clr-red)" }}>
-                {probSufficiency}% chance hits FRS
-              </p>
-            )}
-          </div>
-
-          {/* OA Depletes tile */}
-          <div
-            title={oaDepletionAge
-              ? `OA drawdown exhausts at age ${oaDepletionAge}. ${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy}. ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk.` : ""}`
-              : "No OA drawdown active, or OA is sustained to the planning horizon"}
-            style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center",
-              borderColor: oaDepletionAge && oaIncomeGapYrs > 0 ? "rgba(239,68,68,0.4)" : "var(--border-subtle)" }}>
-            <p style={labelStyle}>OA depletes</p>
-            {oaDepletionAge ? (
-              <>
-                <p style={{ ...bigNumStyle, color: "var(--clr-red)" }}>Age {oaDepletionAge}</p>
-                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>drawdown exhausted</p>
-                {oaIncomeGapYrs > 0 && (
-                  <div style={{ marginTop: 5, padding: "3px 8px", borderRadius: 5, display: "inline-block",
-                    background: "rgba(239,68,68,0.12)", fontSize: 10, fontWeight: 700, color: "var(--clr-red)" }}>
-                    ⚠ {oaIncomeGapYrs}-yr gap risk
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <p style={{ ...bigNumStyle, color: "var(--clr-green)" }}>—</p>
-                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>
-                  {oaDrawActive ? "OA sustained to horizon" : "no drawdown active"}
-                </p>
-              </>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* ── MAS FINANCIAL HEALTH PANEL (Tier 2 advisory) ─────────────────────
@@ -5738,13 +5732,24 @@ function ReadinessTab({
         const srTip        = `MAS guideline: ≥10% of income to retirement. CPF mandatory: ${formatCurrency(annualMand)}/yr + voluntary: ${formatCurrency(annualVC)}/yr = ${formatCurrency(annualMand+annualVC)}/yr. Annual gross: ${formatCurrency(annualGross)}.`;
 
         // ── Tile 3: Inflation Hedge ──────────────────────────────────────────
-        const inflPct      = Number(inputs.inflationRate) || 2;
-        const isEscalating = highlightPlan === "escalating";
-        const privReturn   = Number(inputs.privateAssetGrowthRate) || 0;
-        const hedgeScore   = isEscalating ? 100 : (privReturn >= inflPct + 1 ? 80 : privReturn >= inflPct ? 60 : 35);
-        const hedgeStatus  = hedgeScore >= 80 ? "green" : hedgeScore >= 60 ? "amber" : "red";
-        const hedgeLabel   = isEscalating ? "Escalating plan" : privReturn >= inflPct ? `+${(privReturn - inflPct).toFixed(1)}% real return` : `−${(inflPct - privReturn).toFixed(1)}% real`;
-        const hedgeTip     = `Inflation: ${inflPct}%/yr. CPF LIFE Standard plan: flat nominal payout loses ~${Math.round((1 - 1/Math.pow(1+inflPct/100,25))*100)}% purchasing power over 25 yrs. Escalating plan (+2%/yr) hedges inflation. Private assets yielding ${privReturn}%/yr vs ${inflPct}% inflation.`;
+        // BUGFIX (Q1): previously `isEscalating` fully OVERRODE hedgeScore to 100,
+        // discarding privReturn entirely the moment Escalating was selected — while
+        // Standard/Basic got ZERO credit for plan type (pure privReturn-based).
+        // Asymmetric + ignored the tile's own stated purpose ("plan type AND asset
+        // return"). Now a blended 50/50 composite: neither factor can fully mask
+        // the other. Max attainable score is 90 (Escalating + best asset tier).
+        const inflPct       = Number(inputs.inflationRate) || 2;
+        const isEscalating  = highlightPlan === "escalating";
+        const isBasicPlan   = highlightPlan === "basic";
+        const privReturn    = Number(inputs.privateAssetGrowthRate) || 0;
+        const planTypeScore = isEscalating ? 100 : isBasicPlan ? 40 : 50; // Escalating hedges fully; Standard/Basic pay flat nominal
+        const assetScore    = privReturn >= inflPct + 1 ? 80 : privReturn >= inflPct ? 60 : 35;
+        const hedgeScore    = Math.round(0.5 * planTypeScore + 0.5 * assetScore);
+        const hedgeStatus   = hedgeScore >= 80 ? "green" : hedgeScore >= 60 ? "amber" : "red";
+        const planLabel     = isEscalating ? "Escalating" : isBasicPlan ? "Basic" : "Standard";
+        const realDeltaStr  = `${privReturn >= inflPct ? "+" : "−"}${Math.abs(privReturn - inflPct).toFixed(1)}%`;
+        const hedgeLabel    = `${planLabel} ${realDeltaStr}`;
+        const hedgeTip      = `Blended 50/50: CPF LIFE plan type (${planLabel} = ${planTypeScore}/100) + private asset real return (${assetScore}/100) = ${hedgeScore}/100. Inflation: ${inflPct}%/yr. Standard/Basic pay flat nominal — loses ~${Math.round((1 - 1/Math.pow(1+inflPct/100,25))*100)}% purchasing power over 25 yrs. Escalating (+2%/yr) fully hedges CPF LIFE income. Private assets yielding ${privReturn}%/yr vs ${inflPct}% inflation.`;
 
         // ── Tile 4: Liquidity Ratio ──────────────────────────────────────────
         const paRow        = accumulationByAge.get(pa) || {};
@@ -14448,8 +14453,7 @@ ${milestoneSnapshotHtml}
           .z2-z3-grid { grid-template-columns: 1fr 1fr !important; }
           .z4-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
-          /* Readiness tab responsive — tablet */
-          .rd-row1 { grid-template-columns: 1fr !important; }
+          /* Readiness tab responsive — tablet (rd-row1 removed: KPI hero no longer paired with gauge in a grid) */
           .rd-kpi-hero { grid-template-columns: repeat(3, 1fr) !important; }
           .rd-row2 { grid-template-columns: 1fr 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr 1fr !important; }
@@ -14576,8 +14580,7 @@ ${milestoneSnapshotHtml}
           .compare-slots-grid { grid-template-columns: 1fr !important; }
           .wi-summary-grid { grid-template-columns: 1fr !important; }
           .wi-sliders-grid { grid-template-columns: 1fr !important; }
-          /* Readiness tab — stack all rows vertically on mobile */
-          .rd-row1 { grid-template-columns: 1fr !important; }
+          /* Readiness tab — stack all rows vertically on mobile (rd-row1 removed) */
           .rd-kpi-hero { grid-template-columns: 1fr 1fr !important; }
           .rd-row2 { grid-template-columns: 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr !important; }
