@@ -5635,19 +5635,24 @@ function ReadinessTab({
         </div>
       </div>
 
-      {/* Gauge LEFT (own fixed-width card) + 5 sub-factors as RIGHT-side tile-cards,
-          mirroring .mas-tile-card exactly (icon + title + big value + thin bar + click-
-          to-expand). Explicit width:220 on the gauge card fixes the earlier accidental
-          full-width stretch — cardStyle itself carries no width; the long footnote
-          paragraph's fit-content sizing pulled the whole card wide once it left the
-          original 220px grid column. Now the gauge card is its own bounded box again. */}
+      {/* Readiness now mirrors the MAS Wellness Score block structure exactly:
+          (1) gauge-row card — gauge LEFT + title/description RIGHT, ONE shared border,
+              same classNames/sizing as .mas-wellness-row / .mas-wellness-gauge.
+          (2) 5-tile row BELOW it, full width, same repeat(5,...) grid as .mas-tiles-grid.
+          (3) expand panel below that — unchanged from the previous pass.
+          Deliberately NOT duplicating a mini-bar list inside the gauge-row (unlike MAS's
+          pillar mini-bars): each Readiness tile's own % IS already the normalized 0-100
+          sub-score, so a second list would be the exact "Income Coverage" duplication
+          already removed earlier in this thread — MAS's pillars differ in unit from
+          their score, Readiness's don't, so the redundancy risk isn't symmetric. */}
       <style>{`
         .rd-tile-card:focus, .rd-tile-card:focus-visible, .rd-tile-card:active { outline: 0 !important; box-shadow: none !important; -webkit-tap-highlight-color: transparent; }
         .rd-tile-card { -webkit-tap-highlight-color: transparent; }
-        .rd-tiles-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .rd-tiles-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
         @media (max-width: 640px) {
-          .rd-gauge-tiles-row { flex-direction: column; }
           .rd-tiles-grid { grid-template-columns: repeat(2, 1fr); }
+          .rd-gauge-row { flex-direction: column; align-items: center; }
+          .rd-gauge-svg-wrap { margin-bottom: 8px; }
         }
       `}</style>
       {(() => {
@@ -5674,62 +5679,65 @@ function ReadinessTab({
             tip: `MA at payout age vs projected Basic Healthcare Sum (BHS) of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}` },
         ];
         return (
-          <div className="rd-gauge-tiles-row" style={{ display: "flex", gap: 16 }}>
-            {/* Gauge — own small card, explicit width (this is the stretch-bug fix) */}
-            <div style={{ ...cardStyle, width: 220, flexShrink: 0, alignSelf: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <p style={{ ...labelStyle, marginBottom: 8 }}>Retirement Readiness</p>
-              <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible" }}>
-                <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
-                <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
-                <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
-                <text x="110" y="94" textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--text-muted)", letterSpacing: "0.05em" }}>/ 100 · {scoreLabel}</text>
-              </svg>
-              <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4, textAlign: "center" }}>
-                5-dimension score. Weights shift by age band — tap a tile for details.
-              </p>
+          <>
+            {/* (1) Gauge row — shared card, matches .mas-wellness-row exactly */}
+            <div className="rd-gauge-row" style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 12, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+              <div className="rd-gauge-svg-wrap" style={{ flexShrink: 0 }}>
+                <svg width="140" height="64" viewBox="0 0 220 100" style={{ overflow: "visible" }}>
+                  <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
+                  <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+                  <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
+                  <text x="110" y="94" textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--text-muted)", letterSpacing: "0.05em" }}>/ 100 · {scoreLabel}</text>
+                </svg>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Retirement Readiness</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: 0, lineHeight: 1.4 }}>
+                  5-dimension age-banded weighted composite — FRS, Income, Stress, Longevity, Healthcare. Tap a tile below for the full calculation.
+                </p>
+              </div>
             </div>
 
-            {/* 5 sub-factor tiles — mirrors .mas-tile-card markup exactly */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="rd-tiles-grid">
-                {readinessTiles.map(({ icon, label, pct, tip }) => (
-                  <div key={label} className="rd-tile-card" tabIndex={-1} onFocus={e => e.target.blur()}
-                    onClick={() => setExpandedReadinessTile(expandedReadinessTile === label ? null : label)}
-                    style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none",
-                      background: expandedReadinessTile === label ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)",
-                      border: expandedReadinessTile === label ? `1px solid ${subBarColor(pct)}` : "1px solid transparent" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ fontSize: 16 }}>{icon}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>{label}</span>
-                    </div>
-                    <p style={{ fontSize: 15, fontWeight: 800, color: subBarColor(pct), margin: "2px 0 0" }}>{pct == null ? "—" : `${pct}%`}</p>
-                    <div style={{ height: 3, borderRadius: 3, background: "var(--border-subtle)", overflow: "hidden", marginTop: 2 }}>
-                      <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 3, background: subBarColor(pct), transition: "width 0.5s ease" }} />
-                    </div>
+            {/* (2) 5 sub-factor tiles — full-width row, mirrors .mas-tile-card / .mas-tiles-grid exactly */}
+            <div className="rd-tiles-grid">
+              {readinessTiles.map(({ icon, label, pct, tip }) => (
+                <div key={label} className="rd-tile-card" tabIndex={-1} onFocus={e => e.target.blur()}
+                  onClick={() => setExpandedReadinessTile(expandedReadinessTile === label ? null : label)}
+                  style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none",
+                    background: expandedReadinessTile === label ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)",
+                    border: expandedReadinessTile === label ? `1px solid ${subBarColor(pct)}` : "1px solid transparent" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ fontSize: 16 }}>{icon}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>{label}</span>
                   </div>
-                ))}
-              </div>
-              {/* Expandable detail panel — mirrors the MAS tile expand pattern exactly */}
-              {expandedReadinessTile && (() => {
-                const activeT = readinessTiles.find(t => t.label === expandedReadinessTile);
-                if (!activeT) return null;
-                return (
-                  <div style={{ background: "var(--bg-muted)", border: `1px solid ${subBarColor(activeT.pct)}`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 20 }}>{activeT.icon}</span>
-                        <p style={{ fontSize: 13, fontWeight: 800, color: subBarColor(activeT.pct), margin: 0 }}>
-                          {activeT.label} — {activeT.pct == null ? "—" : `${activeT.pct}%`}
-                        </p>
-                      </div>
-                      <button onClick={() => setExpandedReadinessTile(null)} style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px 8px", borderRadius: 6 }}>✕</button>
-                    </div>
-                    <p style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.65, margin: 0 }}>{activeT.tip}</p>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: subBarColor(pct), margin: "2px 0 0" }}>{pct == null ? "—" : `${pct}%`}</p>
+                  <div style={{ height: 3, borderRadius: 3, background: "var(--border-subtle)", overflow: "hidden", marginTop: 2 }}>
+                    <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 3, background: subBarColor(pct), transition: "width 0.5s ease" }} />
                   </div>
-                );
-              })()}
+                </div>
+              ))}
             </div>
-          </div>
+
+            {/* (3) Expandable detail panel — unchanged, mirrors the MAS tile expand pattern */}
+            {expandedReadinessTile && (() => {
+              const activeT = readinessTiles.find(t => t.label === expandedReadinessTile);
+              if (!activeT) return null;
+              return (
+                <div style={{ background: "var(--bg-muted)", border: `1px solid ${subBarColor(activeT.pct)}`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 20 }}>{activeT.icon}</span>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: subBarColor(activeT.pct), margin: 0 }}>
+                        {activeT.label} — {activeT.pct == null ? "—" : `${activeT.pct}%`}
+                      </p>
+                    </div>
+                    <button onClick={() => setExpandedReadinessTile(null)} style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px 8px", borderRadius: 6 }}>✕</button>
+                  </div>
+                  <p style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.65, margin: 0 }}>{activeT.tip}</p>
+                </div>
+              );
+            })()}
+          </>
         );
       })()}
 
