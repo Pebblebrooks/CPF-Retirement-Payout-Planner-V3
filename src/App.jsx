@@ -5026,6 +5026,7 @@ function ReadinessTab({
   onInflowsCtaClick,
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
+  const [expandedReadinessTile, setExpandedReadinessTile] = useState(null); // mirrors expandedMasTile, for the Readiness sub-factor tiles
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
   const cy           = Number(inputs.currentYear) || 2026;
@@ -5517,7 +5518,7 @@ function ReadinessTab({
         </summary>
         <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[
-            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Stress Resilience (Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Activate the Stress Centre (⚡ Worst Case) for the most meaningful Stress Resilience signal. Below the gauge: a MAS Financial Health advisory panel with 5 non-scoring tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness)."],
+            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Stress Resilience (Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover, and Healthcare Shield, shown as tappable tiles beside the gauge — tap any tile for the full calculation. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Activate the Stress Centre (⚡ Worst Case) for the most meaningful Stress Resilience signal. Below the gauge: a MAS Financial Health advisory panel with 5 non-scoring tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness)."],
             ["📊 KPI Tiles", "Five headline numbers: total CPF at payout age, monthly CPF LIFE payout, income coverage %, P10 downside (bad-luck scenario), and OA depletion age. Enable Monte Carlo in the Accumulation tab to unlock the downside tile."],
             ["📈 RA vs Retirement Sums", "A progress bar comparing your projected RA at payout age against BRS, FRS, and ERS. These targets grow at the retirement-sum growth rate you set in the sidebar (default 3%/yr)."],
             ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
@@ -5634,79 +5635,103 @@ function ReadinessTab({
         </div>
       </div>
 
-      {/* Gauge card — now standalone below the KPI row, centered. Internal structure
-          unchanged (Q2's "match Wellness Score format" mockup is pending approval —
-          this is intentionally NOT restyled yet, only relocated per Q3). */}
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-          <p style={{ ...labelStyle, marginBottom: 8 }}>Retirement Readiness</p>
-          <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible" }}>
-            <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
-            <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
-            <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
-            <text x="110" y="94" textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--text-muted)", letterSpacing: "0.05em" }}>/ 100 · {scoreLabel}</text>
-          </svg>
-          <div style={{ width: "100%", marginTop: 4, display: "flex", flexDirection: "column", gap: 6 }}>
-            {[
-              {
-                label: "FRS Coverage",
-                pct: Math.round(frsRatio * 100),
-                tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}`,
-              },
-              {
-                label: "Income Coverage",
-                pct: incomeRatio !== null ? Math.round(incomeRatio * 100) : null,
-                tip: target > 0
-                  ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target · ${incomeTierLabel}`
-                  : `${incomeTierLabel} · Set a Target Monthly Income in the sidebar to compare`,
-              },
-              {
-                label: "Stress Resilience",
-                pct: p10SubScore,
-                tip: p10SubScore != null
-                  ? perfectStormData
-                    ? `Perfect Storm: −${perfectStormData.deltaPct}% net worth (SORR+inflation+property+CPF rate+healthcare). ${monteCarloData ? "Combined with P10 Monte Carlo." : ""}`
-                    : `P10 Monte Carlo: ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} at age ${pa}`
-                  : "Enable Stress Centre (⚡ Worst Case) or Monte Carlo for live stress resilience figures",
-              },
-              {
-                label: "Longevity Cover",
-                pct: longevitySubScore,
-                tip: oaDrawActive
-                  ? (oaDepletionAge
-                      ? `OA covers to age ${oaDepletionAge} vs age-90 planning benchmark`
-                      : "OA drawdown sustained to planning horizon")
-                  : `Real CPF LIFE at age 90: ${formatCurrency(realPayoutAt90)}/mo vs BRS payout floor ${formatCurrency(brsPayoutAtPA)}/mo (${inflRateVal * 100}% inflation)`,
-              },
-              {
-                label: "Healthcare Shield",
-                pct: maSubScore,
-                tip: `MA at payout age vs projected Basic Healthcare Sum (BHS) of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}`,
-              },
-            ].map(({ label, pct, tip }) => (
-              <div key={label} title={tip}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: subBarColor(pct) }}>
-                    {pct == null ? "—" : `${pct}%`}
-                  </span>
-                </div>
-                <div style={{ height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: subBarColor(pct), transition: "width 0.5s ease" }} />
-                </div>
+      {/* Gauge LEFT (own fixed-width card) + 5 sub-factors as RIGHT-side tile-cards,
+          mirroring .mas-tile-card exactly (icon + title + big value + thin bar + click-
+          to-expand). Explicit width:220 on the gauge card fixes the earlier accidental
+          full-width stretch — cardStyle itself carries no width; the long footnote
+          paragraph's fit-content sizing pulled the whole card wide once it left the
+          original 220px grid column. Now the gauge card is its own bounded box again. */}
+      <style>{`
+        .rd-tile-card:focus, .rd-tile-card:focus-visible, .rd-tile-card:active { outline: 0 !important; box-shadow: none !important; -webkit-tap-highlight-color: transparent; }
+        .rd-tile-card { -webkit-tap-highlight-color: transparent; }
+        .rd-tiles-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        @media (max-width: 640px) {
+          .rd-gauge-tiles-row { flex-direction: column; }
+          .rd-tiles-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+      `}</style>
+      {(() => {
+        const readinessTiles = [
+          { icon: "🎯", label: "FRS Coverage", pct: Math.round(frsRatio * 100),
+            tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}` },
+          { icon: "💵", label: "Income Coverage", pct: incomeRatio !== null ? Math.round(incomeRatio * 100) : null,
+            tip: target > 0
+              ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target · ${incomeTierLabel}`
+              : `${incomeTierLabel} · Set a Target Monthly Income in the sidebar to compare` },
+          { icon: "🛡️", label: "Stress Resilience", pct: p10SubScore,
+            tip: p10SubScore != null
+              ? perfectStormData
+                ? `Perfect Storm: −${perfectStormData.deltaPct}% net worth (SORR+inflation+property+CPF rate+healthcare). ${monteCarloData ? "Combined with P10 Monte Carlo." : ""}`
+                : `P10 Monte Carlo: ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} at age ${pa}`
+              : "Enable Stress Centre (⚡ Worst Case) or Monte Carlo for live stress resilience figures" },
+          { icon: "⏳", label: "Longevity Cover", pct: longevitySubScore,
+            tip: oaDrawActive
+              ? (oaDepletionAge
+                  ? `OA covers to age ${oaDepletionAge} vs age-90 planning benchmark`
+                  : "OA drawdown sustained to planning horizon")
+              : `Real CPF LIFE at age 90: ${formatCurrency(realPayoutAt90)}/mo vs BRS payout floor ${formatCurrency(brsPayoutAtPA)}/mo (${inflRateVal * 100}% inflation)` },
+          { icon: "🏥", label: "Healthcare Shield", pct: maSubScore,
+            tip: `MA at payout age vs projected Basic Healthcare Sum (BHS) of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}` },
+        ];
+        return (
+          <div className="rd-gauge-tiles-row" style={{ display: "flex", gap: 16 }}>
+            {/* Gauge — own small card, explicit width (this is the stretch-bug fix) */}
+            <div style={{ ...cardStyle, width: 220, flexShrink: 0, alignSelf: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <p style={{ ...labelStyle, marginBottom: 8 }}>Retirement Readiness</p>
+              <svg width="220" height="100" viewBox="0 0 220 100" style={{ overflow: "visible" }}>
+                <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
+                <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+                <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
+                <text x="110" y="94" textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--text-muted)", letterSpacing: "0.05em" }}>/ 100 · {scoreLabel}</text>
+              </svg>
+              <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4, textAlign: "center" }}>
+                5-dimension score. Weights shift by age band — tap a tile for details.
+              </p>
+            </div>
+
+            {/* 5 sub-factor tiles — mirrors .mas-tile-card markup exactly */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="rd-tiles-grid">
+                {readinessTiles.map(({ icon, label, pct, tip }) => (
+                  <div key={label} className="rd-tile-card" tabIndex={-1} onFocus={e => e.target.blur()}
+                    onClick={() => setExpandedReadinessTile(expandedReadinessTile === label ? null : label)}
+                    style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none",
+                      background: expandedReadinessTile === label ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)",
+                      border: expandedReadinessTile === label ? `1px solid ${subBarColor(pct)}` : "1px solid transparent" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ fontSize: 16 }}>{icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>{label}</span>
+                    </div>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: subBarColor(pct), margin: "2px 0 0" }}>{pct == null ? "—" : `${pct}%`}</p>
+                    <div style={{ height: 3, borderRadius: 3, background: "var(--border-subtle)", overflow: "hidden", marginTop: 2 }}>
+                      <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 3, background: subBarColor(pct), transition: "width 0.5s ease" }} />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+              {/* Expandable detail panel — mirrors the MAS tile expand pattern exactly */}
+              {expandedReadinessTile && (() => {
+                const activeT = readinessTiles.find(t => t.label === expandedReadinessTile);
+                if (!activeT) return null;
+                return (
+                  <div style={{ background: "var(--bg-muted)", border: `1px solid ${subBarColor(activeT.pct)}`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 20 }}>{activeT.icon}</span>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: subBarColor(activeT.pct), margin: 0 }}>
+                          {activeT.label} — {activeT.pct == null ? "—" : `${activeT.pct}%`}
+                        </p>
+                      </div>
+                      <button onClick={() => setExpandedReadinessTile(null)} style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px 8px", borderRadius: 6 }}>✕</button>
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.65, margin: 0 }}>{activeT.tip}</p>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
-          {/* Scoring note: 5-dimension age-banded weighted composite.
-              Weights shift by age band — healthcare escalates for seniors (up to 30% at 75+);
-              FRS steps down post-retirement (10% at 75+). Null sub-scores (no income target,
-              MC off) are excluded and remaining weights renormalised to 100%. */}
-          <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4, textAlign: "center" }}>
-            5-dimension score: FRS · Income · Stress · Longevity · Healthcare.{" "}
-            Weights shift by age band. Stress defaults to 50 when MC is off — enable Stress Centre for a live score.
-          </p>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* ── MAS FINANCIAL HEALTH PANEL (Tier 2 advisory) ─────────────────────
           Five tiles aligned to the MAS Basic Financial Planning Guide pillars.
@@ -24347,7 +24372,7 @@ ${milestoneSnapshotHtml}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
-                        ["Readiness Gauge & Action Queue", "The arc gauge shows your Retirement Readiness Score (0–100) — a 5-dimension age-banded weighted composite: FRS Coverage (10–35%), Income Adequacy (20–25%), Stress Resilience (15–20% — Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover (15–25%), and Healthcare Shield (10–30%). Weights shift by age band — healthcare escalates to 30% for members 75+; FRS steps down to 10% post-retirement. Null sub-scores excluded and remaining weights renormalised. Colour: green ≥ 75, amber 50–74, red < 50. Below the gauge: a MAS Financial Health advisory panel with 5 tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness). These advisory tiles do not affect the 100-pt score. Below that: the Action Priority Queue with the five highest-impact actions ranked by urgency."],
+                        ["Readiness Gauge & Action Queue", "The arc gauge shows your Retirement Readiness Score (0–100) — a 5-dimension age-banded weighted composite: FRS Coverage (10–35%), Income Adequacy (20–25%), Stress Resilience (15–20% — Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover (15–25%), and Healthcare Shield (10–30%), each shown as a tappable tile to the right of the gauge — tap one for the full calculation. Weights shift by age band — healthcare escalates to 30% for members 75+; FRS steps down to 10% post-retirement. Null sub-scores excluded and remaining weights renormalised. Colour: green ≥ 75, amber 50–74, red < 50. Below the gauge: a MAS Financial Health advisory panel with 5 tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness). These advisory tiles do not affect the 100-pt score. Below that: the Action Priority Queue with the five highest-impact actions ranked by urgency."],
                         ["Five sub-score bars", "FRS Coverage (RA vs projected FRS), Income Adequacy (CPF LIFE payout vs target with income tier label — Active ≥ ERS payout, Comfortable ≥ FRS payout, Basic ≥ BRS payout), Stress Resilience (Perfect Storm worst-case delta; falls back to P10 Monte Carlo when Stress Centre is inactive; shows '—' when both are off), Longevity Cover (real purchasing power of CPF LIFE at age 90 vs BRS-payout floor, or OA coverage years vs age-90 for drawdown members), Healthcare Shield (MA at payout vs projected BHS)."],
                         ["MAS Financial Health Panel", "Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense 2024). Emergency Buffer: months of liquid savings vs 3–6 month guideline (set in Profile sidebar). Savings Rate: total CPF contributions + voluntary as % of annual gross salary vs ≥10% MAS minimum. Inflation Hedge: CPF LIFE plan type and private asset return vs inflation rate. Liquidity Ratio: liquid assets (CPF+SRS+private) vs total net worth — penalises >75% property concentration. Legacy Readiness: Will, CPF nomination, and LPA status (set as toggles in Profile sidebar)."],
                         ["What counts as 'on track'?", "FRS Coverage: RA at payout ≥ projected FRS. Income Adequacy: payout ≥ target (tier: Active ≥ ERS, Comfortable ≥ FRS, Basic ≥ BRS). Stress Resilience: perfect storm + P10 net worth ≥ base case. Longevity Cover: real CPF LIFE at age 90 ≥ BRS payout floor. Healthcare Shield: MA ≥ projected BHS. Advisory: Emergency ≥ 6 months, Savings Rate ≥ 20%, Escalating plan or positive real return, Liquidity ≤ 75% property, all 3 legacy docs complete."],
