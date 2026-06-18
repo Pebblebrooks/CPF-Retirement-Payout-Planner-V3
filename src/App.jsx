@@ -5029,6 +5029,7 @@ function ReadinessTab({
   onInflowsCtaClick,
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
+  const [expandedRdTile,  setExpandedRdTile]  = useState(null); // Readiness sub-factor tile expansion
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
   const cy           = Number(inputs.currentYear) || 2026;
@@ -5830,10 +5831,199 @@ function ReadinessTab({
               </div>
 
             </div>{/* end .rd-mas-side-by-side */}
-            {/* ── 5 tiles — 3+2 on mobile via .mas-tiles-grid ── */}
+
+            {/* ── 5 Readiness sub-factor tiles — mirrors MAS tile pattern ──────────────
+                Each tile corresponds to one bar in the Readiness gauge legend above.
+                Click to expand detailed workings, same UX as the MAS tiles below.    */}
+            {(() => {
+              const rdTileClr = { green: "var(--clr-green)", amber: "var(--clr-amber)", red: "var(--clr-red)", grey: "var(--text-muted)" };
+              const rdStatus  = (pct) => pct == null ? "grey" : pct >= 75 ? "green" : pct >= 50 ? "amber" : "red";
+
+              // ── Tile data ──────────────────────────────────────────────────────────
+              const frsPct    = Math.min(999, Math.round(frsRatio * 100));
+              const incPct    = incomeRatio !== null ? Math.min(999, Math.round(incomeRatio * 100)) : null;
+              const monthlyTotal = Math.round(stdMonthly) + (Number(inputs.oaDrawdownMonthly) || 0);
+              const incGap       = target > 0 ? target - monthlyTotal : null;
+
+              const rdTiles = [
+                {
+                  icon: "🎯", title: "FRS Coverage", pillar: "Retirement Sum",
+                  label: `${frsPct}%`,
+                  status: frsRatio >= 1 ? "green" : frsRatio >= 0.8 ? "amber" : "red",
+                  score: Math.min(100, frsPct),
+                  detail: [
+                    `RA at payout age ${pa}: ${formatCurrency(Math.round(raAtPA))}`,
+                    `Projected FRS at age ${pa}: ${formatCurrency(Math.round(projFRS))} (${(Number(inputs.retirementSumGrowth) || 3)}%/yr growth)`,
+                    frsRatio >= 1
+                      ? `Surplus: ${formatCurrency(Math.round(raAtPA - projFRS))} above FRS — consider ERS (Enhanced Retirement Sum = ${formatCurrency(Math.round(projFRS * 1.5))}).`
+                      : `Shortfall: ${formatCurrency(Math.round(projFRS - raAtPA))} below FRS — add RSTU top-ups in the Boost My CPF section to close the gap.`,
+                    `Weight in score: 35% at age 35 → 10% at age 75+ (FRS matters most when RA is still building).`,
+                  ],
+                },
+                {
+                  icon: "💰", title: "Income Coverage", pillar: "Income",
+                  label: incPct != null ? `${incPct}%` : "No target",
+                  status: incPct == null ? "grey" : incPct >= 100 ? "green" : incPct >= 70 ? "amber" : "red",
+                  score: incPct,
+                  detail: target > 0
+                    ? [
+                        `Target monthly income: ${formatCurrency(target)}/mo`,
+                        `CPF LIFE (${(highlightPlan || "standard")}): ${formatCurrency(Math.round(stdMonthly))}/mo`,
+                        Number(inputs.oaDrawdownMonthly) > 0 ? `OA drawdown: ${formatCurrency(Number(inputs.oaDrawdownMonthly))}/mo` : `OA drawdown: not active`,
+                        incGap > 0
+                          ? `Gap: ${formatCurrency(incGap)}/mo — use Strategy → Income Roadmap → ⚡ Fill Gap to auto-calculate the OA drawdown needed.`
+                          : `Surplus: ${formatCurrency(Math.abs(incGap))}/mo above target.`,
+                        `Weight in score: 30% at all age bands.`,
+                      ]
+                    : ["No target set — enter Target Monthly Income in the Retirement Drawdown sidebar section to activate this dimension."],
+                },
+                {
+                  icon: "⚡", title: "Stress Resilience", pillar: "Downside Risk",
+                  label: p10SubScore != null ? `${p10SubScore}%` : "No data",
+                  status: rdStatus(p10SubScore),
+                  score: p10SubScore,
+                  detail: p10SubScore != null
+                    ? perfectStormData
+                      ? [
+                          `Perfect Storm scenario: −${perfectStormData.deltaPct}% net worth vs base (SORR + hyperinflation + property crash + CPF rate cut + medical crisis).`,
+                          `Score = 100 − drop% = ${p10SubScore}%.`,
+                          `Enable Monte Carlo in the Grow tab alongside Stress Centre for a combined signal.`,
+                        ]
+                      : [
+                          `P10 Monte Carlo (bad-luck 10th percentile): total CPF at ${pa} = ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)}.`,
+                          `Drop = ${100 - p10SubScore}% below base — score = ${p10SubScore}%.`,
+                          probSufficiency != null ? `Probability of reaching FRS: ${probSufficiency}%.` : "",
+                          `Enable ⚡ Stress Centre (Worst Case) in the Grow tab for Perfect Storm scenario (takes priority over P10).`,
+                        ].filter(Boolean)
+                    : [
+                        "No stress data available — enable Monte Carlo in the Grow tab (200 runs) or activate Worst Case in the Stress Centre.",
+                        "Score defaults to 50 while disabled, so other dimensions still produce a meaningful composite.",
+                      ],
+                },
+                {
+                  icon: "🕰️", title: "Longevity Cover", pillar: "Longevity",
+                  label: oaDepletionAge ? `Depletes ${oaDepletionAge}` : (oaDrawActive ? "Sustained" : "CPF LIFE only"),
+                  status: rdStatus(longevitySubScore),
+                  score: longevitySubScore,
+                  detail: oaDrawActive
+                    ? oaDepletionAge
+                      ? [
+                          `OA drawdown of ${formatCurrency(Number(inputs.oaDrawdownMonthly))}/mo depletes OA at age ${oaDepletionAge}.`,
+                          `${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy} — ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk after depletion.` : "depletion is after median life expectancy."}`,
+                          `Reduce monthly draw or lower the drawdown floor in the Retirement Drawdown section to extend OA.`,
+                        ]
+                      : [
+                          `OA drawdown of ${formatCurrency(Number(inputs.oaDrawdownMonthly))}/mo is sustained to the planning horizon (age ${Number(inputs.maxProjectionAge) || 95}).`,
+                          `Combined with CPF LIFE, income is fully covered through life.`,
+                        ]
+                    : [
+                        `No OA drawdown active — CPF LIFE provides lifelong cover.`,
+                        `Real CPF LIFE payout at age 90 (${(Number(inputs.inflationRate) || 2)}% inflation): ${formatCurrency(realPayoutAt90)}/mo.`,
+                        `Consider an OA drawdown in the Retirement Drawdown section to supplement CPF LIFE in early retirement.`,
+                      ],
+                },
+                {
+                  icon: "🏥", title: "Healthcare Shield", pillar: "Healthcare",
+                  label: `${maSubScore ?? "—"}%`,
+                  status: rdStatus(maSubScore),
+                  score: maSubScore,
+                  detail: (() => {
+                    const bhsTarget   = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow));
+                    const maGap       = bhsTarget - Math.round(maAtPA ?? 0);
+                    const bhsPct      = maAtPA != null ? Math.min(999, Math.round((maAtPA / bhsTarget) * 100)) : null;
+                    return maAtPA != null
+                      ? [
+                          `MA at payout age ${pa}: ${formatCurrency(Math.round(maAtPA))}`,
+                          `Projected Basic Healthcare Sum (BHS) at ${pa}: ${formatCurrency(bhsTarget)} (${(rsGrowth * 100).toFixed(1)}%/yr growth)`,
+                          bhsPct >= 100
+                            ? `MA meets BHS — excess stays in MA earning 4%/yr and is not transferred to RA.`
+                            : `Shortfall: ${formatCurrency(maGap)} below BHS — add annual cash top-ups to MA via the Boost My CPF section (VCMA).`,
+                          `Weight in score: 10% at age 35 → 30% at age 75+ (Healthcare becomes the dominant concern in late retirement).`,
+                        ]
+                      : ["MA projection not available — add CPF account balances in the Today's CPF Balances section."];
+                  })(),
+                },
+              ];
+
+              return (
+                <>
+                  {/* ── Sub-header ── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
+                    <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+                      Retirement Readiness — 5 dimensions
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
+                  </div>
+
+                  {/* ── Tiles grid — identical markup to MAS tiles ── */}
+                  <div className="mas-tiles-grid" style={{ marginBottom: 0 }}>
+                    {rdTiles.map(({ icon, title, label, status, score: sc, pillar }) => (
+                      <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()}
+                        onClick={() => { setExpandedRdTile(expandedRdTile === title ? null : title); setExpandedMasTile(null); }}
+                        style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4,
+                          cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none",
+                          background: expandedRdTile === title ? "rgba(var(--clr-emerald-rgb),0.07)" : "var(--bg-panel)",
+                          border: expandedRdTile === title ? `1px solid ${rdTileClr[status]}` : "1px solid transparent" }}>
+                        <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{ fontSize: 16 }}>{icon}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>{title}</span>
+                        </div>
+                        <p style={{ fontSize: 15, fontWeight: 800, color: rdTileClr[status], margin: "2px 0 0" }}>{label}</p>
+                        {sc != null && (
+                          <div style={{ height: 3, borderRadius: 3, background: "var(--border-subtle)", overflow: "hidden", marginTop: 2 }}>
+                            <div style={{ height: "100%", width: `${Math.min(100, sc)}%`, borderRadius: 3, background: rdTileClr[status], transition: "width 0.5s ease" }} />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* ── Expansion panel for the active Readiness tile ── */}
+                  {expandedRdTile && (() => {
+                    const active = rdTiles.find(t => t.title === expandedRdTile);
+                    if (!active) return null;
+                    return (
+                      <div style={{ background: "var(--bg-muted)", border: `1px solid ${rdTileClr[active.status]}55`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>{active.icon}</span>
+                            <div>
+                              <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{active.pillar}</p>
+                              <p style={{ fontSize: 13, fontWeight: 800, color: rdTileClr[active.status], margin: 0 }}>{active.title} — {active.label}</p>
+                            </div>
+                          </div>
+                          <button onClick={() => setExpandedRdTile(null)} style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px 8px", borderRadius: 6 }}>✕</button>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {active.detail.map((line, i) => (
+                            <p key={i} style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.65, margin: 0 }}>{line}</p>
+                          ))}
+                        </div>
+                        <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 8, marginBottom: 0 }}>
+                          Included in the 100-pt Retirement Readiness score · weights shift by age band
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── Divider before MAS tiles ── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
+                    <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+                      MAS Financial Health — 5 pillars
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* ── 5 MAS tiles — 3+2 on mobile via .mas-tiles-grid ── */}
             <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
-                <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()} onClick={() => setExpandedMasTile(expandedMasTile === title ? null : title)} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", border: expandedMasTile === title ? `1px solid ${clr[status]}` : "1px solid transparent" }}>
+                <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()} onClick={() => { setExpandedMasTile(expandedMasTile === title ? null : title); setExpandedRdTile(null); }} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", border: expandedMasTile === title ? `1px solid ${clr[status]}` : "1px solid transparent" }}>
                   <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ fontSize: 16 }}>{icon}</span>
