@@ -5652,7 +5652,7 @@ function ReadinessTab({
             const startA2 = Math.PI, endA2 = Math.PI + arcPct2 * Math.PI;
             const sx2 = cx2 + r2 * Math.cos(startA2), sy2 = cy2 + r2 * Math.sin(startA2);
             const ex2 = cx2 + r2 * Math.cos(endA2),   ey2 = cy2 + r2 * Math.sin(endA2);
-            const lg2 = arcPct2 > 0.5 ? 1 : 0;
+            const lg2 = 0; // fill arc always ≤ 180° of gauge span — always the small arc; matches Wellness card
             const arcD2 = arcPct2 > 0 ? `M ${sx2.toFixed(2)} ${sy2.toFixed(2)} A ${r2} ${r2} 0 ${lg2} 1 ${ex2.toFixed(2)} ${ey2.toFixed(2)}` : null;
             // Track: full half-circle from left endpoint to right endpoint
             const trackD = `M ${(cx2 - r2).toFixed(2)} ${cy2} A ${r2} ${r2} 0 1 1 ${(cx2 + r2).toFixed(2)} ${cy2}`;
@@ -5721,7 +5721,7 @@ function ReadinessTab({
         const privReturn   = Number(inputs.privateAssetGrowthRate) || 0;
         const hedgeScore   = isEscalating ? 100 : (privReturn >= inflPct + 1 ? 80 : privReturn >= inflPct ? 60 : 35);
         const hedgeStatus  = hedgeScore >= 80 ? "green" : hedgeScore >= 60 ? "amber" : "red";
-        const hedgeLabel   = isEscalating ? "Escalating plan" : privReturn >= inflPct ? `+${(privReturn - inflPct).toFixed(1)}% real return` : `−${(inflPct - privReturn).toFixed(1)}% real`;
+        const hedgeLabel   = isEscalating ? "+2%/yr escalating" : privReturn >= inflPct ? `+${(privReturn - inflPct).toFixed(1)}% real return` : `−${(inflPct - privReturn).toFixed(1)}% real`;
         const hedgeTip     = `Inflation: ${inflPct}%/yr. CPF LIFE Standard plan: flat nominal payout loses ~${Math.round((1 - 1/Math.pow(1+inflPct/100,25))*100)}% purchasing power over 25 yrs. Escalating plan (+2%/yr) hedges inflation. Private assets yielding ${privReturn}%/yr vs ${inflPct}% inflation.`;
 
         // ── Tile 4: Liquidity Ratio ──────────────────────────────────────────
