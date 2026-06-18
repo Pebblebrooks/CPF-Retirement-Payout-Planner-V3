@@ -622,7 +622,7 @@ const DEFAULT_INPUTS = {
   cpfOARateOverride: '', cpfSARateOverride: '', cpfMARateOverride: '', // '' = use CPF_RATES defaults; set to a number (e.g. 1.5) for Stress Centre override
   sellPropertyAge: 0,
   // Private Assets & Goals
-  targetMonthlyIncome: 0,
+  targetMonthlyIncome: 3000,   // sensible SGD baseline — users can adjust in Retirement Drawdown section
   currentPrivateAssets: 0,
   annualPrivateSaving: 0,
   privateAssetGrowthRate: 0,
@@ -1001,8 +1001,7 @@ const PRESET_PROFILES = [
       // SRS
       srsBalance: 3000, srsAnnualContribution: 3000, srsReturnRate: 4,
       srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10,
-      targetMonthlyIncome: 0,
-      // Life events: career break age 39–41 (second child care)
+      targetMonthlyIncome: 5000,  // combined household retirement target
       lifeEvents: [
         {
           id: "le-hl-break", type: "retrenchment",
@@ -5527,6 +5526,7 @@ function ReadinessTab({
             ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
             ["🥧 Wealth Mix", "A doughnut showing how your total wealth at payout age is distributed across CPF, Private Assets, SRS, and Property. Reflects the Include Property toggle."],
             ["⚡ Action Priority Queue", "The five highest-impact actions ranked by urgency — FRS gap, plan switch, income gap, OA depletion risk, and SRS setup. Each card links directly to the relevant tab or sidebar section."],
+            ["🏥 MAS Financial Health", "Five advisory tiles below the gauge — aligned to the MAS Basic Financial Planning Guide pillars: Emergency Buffer (3–6 months liquid savings), Savings Rate (≥10% of income), Inflation Hedge (CPF LIFE plan or private-asset real return), Liquidity Ratio (freely liquid assets as % of total wealth at payout age), and Legacy Readiness (Will · CPF Nomination · LPA). These are advisory only — they do NOT affect the 100-pt Readiness Score. Click any tile to expand its full calculation workings. Set Emergency Fund months, Legacy Planning toggles, and living-expense budget in the Profile (Who I Am) sidebar section."],
           ].map(([title, desc]) => (
             <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-highlight)", margin: "0 0 2px", whiteSpace: "nowrap" }}>{title}</p>
@@ -5640,62 +5640,7 @@ function ReadinessTab({
         </div>
       </div>
 
-      {/* ── Retirement Readiness Gauge — full-width, matches MAS Wellness card anatomy exactly ──
-          Layout: compact half-circle gauge (W=140, same geometry as Wellness) on the left;
-          title + 5 sub-factor horizontal bars on the right — mirrors the Wellness Score row.   */}
-      <div className="rd-readiness-gauge-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
-        {/* Compact half-circle gauge — identical geometry to MAS Wellness card */}
-        <div style={{ flexShrink: 0 }}>
-          {(() => {
-            const W2 = 140, H2 = 78, cx2 = 70, cy2 = 74, r2 = 58;
-            const arcPct2 = Math.min(1, Math.max(0, score / 100));
-            const startA2 = Math.PI, endA2 = Math.PI + arcPct2 * Math.PI;
-            const sx2 = cx2 + r2 * Math.cos(startA2), sy2 = cy2 + r2 * Math.sin(startA2);
-            const ex2 = cx2 + r2 * Math.cos(endA2),   ey2 = cy2 + r2 * Math.sin(endA2);
-            const lg2 = 0; // fill arc always ≤ 180° of gauge span — always the small arc; matches Wellness card
-            const arcD2 = arcPct2 > 0 ? `M ${sx2.toFixed(2)} ${sy2.toFixed(2)} A ${r2} ${r2} 0 ${lg2} 1 ${ex2.toFixed(2)} ${ey2.toFixed(2)}` : null;
-            // Track: full half-circle from left endpoint to right endpoint
-            const trackD = `M ${(cx2 - r2).toFixed(2)} ${cy2} A ${r2} ${r2} 0 1 1 ${(cx2 + r2).toFixed(2)} ${cy2}`;
-            return (
-              <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible", display: "block" }}>
-                <path d={trackD} fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
-                {arcD2 && <path d={arcD2} fill="none" stroke={scoreColor} strokeWidth={10} strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />}
-                <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900} fill={scoreColor} fontFamily="monospace">{score}</text>
-                <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700} fill={scoreColor}>{scoreLabel}</text>
-              </svg>
-            );
-          })()}
-        </div>
-
-        {/* Legend panel — title + sub-factor bars, matching Wellness card layout */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 2px" }}>Retirement Readiness</p>
-          <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 7px", lineHeight: 1.4 }}>
-            5-dimension age-banded score — weights shift by age band
-          </p>
-          {/* Sub-factor bars — same dimensions as MAS Wellness (label w=88, bar flex:1, value w=26) */}
-          {[
-            { label: "FRS Coverage",      pct: Math.round(frsRatio * 100),                                    tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}` },
-            { label: "Income Coverage",   pct: incomeRatio !== null ? Math.round(incomeRatio * 100) : null,   tip: target > 0 ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target` : "Set Target Monthly Income in sidebar" },
-            { label: "Stress Resilience", pct: p10SubScore,                                                    tip: p10SubScore != null ? (perfectStormData ? `Perfect Storm: −${perfectStormData.deltaPct}% net worth` : `P10 Monte Carlo: ${formatCurrency(p10TotalAtPA)} vs base at age ${pa}`) : "Enable Stress Centre or Monte Carlo in the Grow tab" },
-            { label: "Longevity Cover",   pct: longevitySubScore,                                              tip: oaDrawActive ? (oaDepletionAge ? `OA covers to age ${oaDepletionAge}` : "OA drawdown sustained to horizon") : `Real CPF LIFE at 90: ${formatCurrency(realPayoutAt90)}/mo` },
-            { label: "Healthcare Shield", pct: maSubScore,                                                     tip: `MA at payout vs projected BHS of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}` },
-          ].map(({ label, pct, tip }) => (
-            <div key={label} title={tip} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-              <span style={{ fontSize: 10, color: "var(--text-muted)", width: 88, flexShrink: 0 }}>{label}</span>
-              <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: subBarColor(pct), transition: "width 0.5s ease" }} />
-              </div>
-              <span style={{ fontSize: 10, color: subBarColor(pct), fontWeight: 700, width: 26, textAlign: "right" }}>{pct == null ? "—" : pct}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── MAS FINANCIAL HEALTH PANEL (Tier 2 advisory) ─────────────────────
-          Five tiles aligned to the MAS Basic Financial Planning Guide pillars.
-          These are ADVISORY ONLY — they do not feed into the 100-pt gauge score.
-          Data is derived from existing inputs + 3 new boolean legacy fields.      */}
+      {/* ── MAS FINANCIAL HEALTH PANEL — Readiness + Wellness side by side, then 5 tiles ── */}
       {(() => {
         // ── Tile 1: Emergency Buffer ──────────────────────────────────────────
         const livingExp    = Number(inputs.budgetLivingExpenses) || 0;
@@ -5777,12 +5722,19 @@ function ReadinessTab({
               .mas-tiles-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
               .mas-tile-card:focus, .mas-tile-card:focus-visible, .mas-tile-card:active { outline: 0 !important; box-shadow: none !important; -webkit-tap-highlight-color: transparent; }
               .mas-tile-card { -webkit-tap-highlight-color: transparent; }
+              .rd-mas-side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+              @media (max-width: 900px) {
+                .rd-mas-side-by-side { grid-template-columns: 1fr; }
+              }
               @media (max-width: 640px) {
                 .mas-tiles-grid { grid-template-columns: repeat(2, 1fr); }
                 .mas-wellness-row { flex-direction: column; align-items: center; }
                 .mas-wellness-gauge { margin-bottom: 8px; }
+                .rd-kpi-header { grid-template-columns: repeat(3, 1fr) !important; }
+                .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
               }
             `}</style>
+
             {/* ── MAS panel header ── */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <p style={{ ...labelStyle, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -5790,45 +5742,94 @@ function ReadinessTab({
               </p>
               <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection. The Wellness Score is an unweighted average of the five tile scores — it is NOT an official MAS metric." />
             </div>
-            {/* ── Wellness gauge row ── */}
-            <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 12, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
-              {/* Arc gauge */}
-              <div className="mas-wellness-gauge" style={{ flexShrink: 0 }}>
-                <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible" }}>
-                  {/* Track */}
-                  <path d={`M ${sx2} ${sy2} A ${r2} ${r2} 0 1 1 ${cx2 + r2} ${cy2}`}
-                    fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
-                  {/* Fill arc */}
-                  {arcD2 && (
-                    <path d={arcD2} fill="none" stroke={wClr} strokeWidth={10}
-                      strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
-                  )}
-                  {/* Score */}
-                  <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900}
-                    fill={wClr} fontFamily="monospace">{wellnessScore}</text>
-                  <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700}
-                    fill={wClr}>{wLbl}</text>
-                </svg>
-              </div>
-              {/* Gauge legend */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Wellness Score</p>
-                <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 6px", lineHeight: 1.4 }}>
-                  MAS-aligned advisory score — unweighted average of the 5 pillars below.
-                  Not an official MAS metric.
-                </p>
-                {/* Mini sub-bar breakdown */}
-                {tiles.map(({ title, score: ts, status }) => ts != null && (
-                  <div key={title} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", width: 88, flexShrink: 0 }}>{title}</span>
-                    <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${ts}%`, borderRadius: 4, background: clr[status], transition: "width 0.5s ease" }} />
+
+            {/* ── Side-by-side: Retirement Readiness gauge (left) | Wellness Score (right) ── */}
+            <div className="rd-mas-side-by-side">
+
+              {/* LEFT — Retirement Readiness gauge, matching Wellness anatomy */}
+              <div className="rd-readiness-gauge-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+                <div className="mas-wellness-gauge" style={{ flexShrink: 0 }}>
+                  {(() => {
+                    const W2 = 140, H2 = 78, cx2 = 70, cy2 = 74, r2 = 58;
+                    const arcPct2 = Math.min(1, Math.max(0, score / 100));
+                    const startA2 = Math.PI, endA2 = Math.PI + arcPct2 * Math.PI;
+                    const sx2 = cx2 + r2 * Math.cos(startA2), sy2 = cy2 + r2 * Math.sin(startA2);
+                    const ex2 = cx2 + r2 * Math.cos(endA2),   ey2 = cy2 + r2 * Math.sin(endA2);
+                    const lg2 = 0; // fill arc ≤ 180° → always the small arc
+                    const arcD2 = arcPct2 > 0 ? `M ${sx2.toFixed(2)} ${sy2.toFixed(2)} A ${r2} ${r2} 0 ${lg2} 1 ${ex2.toFixed(2)} ${ey2.toFixed(2)}` : null;
+                    const trackD = `M ${(cx2 - r2).toFixed(2)} ${cy2} A ${r2} ${r2} 0 1 1 ${(cx2 + r2).toFixed(2)} ${cy2}`;
+                    return (
+                      <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible", display: "block" }}>
+                        <path d={trackD} fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
+                        {arcD2 && <path d={arcD2} fill="none" stroke={scoreColor} strokeWidth={10} strokeLinecap="round" />}
+                        <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900} fill={scoreColor} fontFamily="monospace">{score}</text>
+                        <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700} fill={scoreColor}>{scoreLabel}</text>
+                      </svg>
+                    );
+                  })()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 2px" }}>Retirement Readiness</p>
+                  <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 7px", lineHeight: 1.4 }}>5-dimension age-banded score — weights shift by age band</p>
+                  {[
+                    { label: "FRS Coverage",      pct: Math.round(frsRatio * 100),                                   tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}` },
+                    { label: "Income Coverage",   pct: incomeRatio !== null ? Math.round(incomeRatio * 100) : null,  tip: target > 0 ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target` : "Set Target Monthly Income in sidebar" },
+                    { label: "Stress Resilience", pct: p10SubScore,                                                   tip: p10SubScore != null ? (perfectStormData ? `Perfect Storm: −${perfectStormData.deltaPct}% net worth` : `P10 Monte Carlo: ${formatCurrency(p10TotalAtPA)} vs base at age ${pa}`) : "Enable Stress Centre or Monte Carlo in the Grow tab" },
+                    { label: "Longevity Cover",   pct: longevitySubScore,                                             tip: oaDrawActive ? (oaDepletionAge ? `OA covers to age ${oaDepletionAge}` : "OA drawdown sustained to horizon") : `Real CPF LIFE at 90: ${formatCurrency(realPayoutAt90)}/mo` },
+                    { label: "Healthcare Shield", pct: maSubScore,                                                    tip: `MA at payout vs projected BHS of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}` },
+                  ].map(({ label, pct, tip }) => (
+                    <div key={label} title={tip} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 88, flexShrink: 0 }}>{label}</span>
+                      <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: subBarColor(pct), transition: "width 0.5s ease" }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: subBarColor(pct), fontWeight: 700, width: 26, textAlign: "right" }}>{pct == null ? "—" : pct}</span>
                     </div>
-                    <span style={{ fontSize: 10, color: clr[status], fontWeight: 700, width: 26, textAlign: "right" }}>{ts}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+
+              {/* RIGHT — Wellness Score gauge ── */}
+              <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+                {/* Arc gauge */}
+                <div className="mas-wellness-gauge" style={{ flexShrink: 0 }}>
+                  <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible" }}>
+                    {/* Track */}
+                    <path d={`M ${sx2} ${sy2} A ${r2} ${r2} 0 1 1 ${cx2 + r2} ${cy2}`}
+                      fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
+                    {/* Fill arc */}
+                    {arcD2 && (
+                      <path d={arcD2} fill="none" stroke={wClr} strokeWidth={10}
+                        strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+                    )}
+                    {/* Score */}
+                    <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900}
+                      fill={wClr} fontFamily="monospace">{wellnessScore}</text>
+                    <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700}
+                      fill={wClr}>{wLbl}</text>
+                  </svg>
+                </div>
+                {/* Gauge legend */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Wellness Score</p>
+                  <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 6px", lineHeight: 1.4 }}>
+                    MAS-aligned advisory score — unweighted average of the 5 pillars below.
+                    Not an official MAS metric.
+                  </p>
+                  {/* Mini sub-bar breakdown */}
+                  {tiles.map(({ title, score: ts, status }) => ts != null && (
+                    <div key={title} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 88, flexShrink: 0 }}>{title}</span>
+                      <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${ts}%`, borderRadius: 4, background: clr[status], transition: "width 0.5s ease" }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: clr[status], fontWeight: 700, width: 26, textAlign: "right" }}>{ts}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>{/* end .rd-mas-side-by-side */}
             {/* ── 5 tiles — 3+2 on mobile via .mas-tiles-grid ── */}
             <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
@@ -6428,7 +6429,7 @@ function CPFPlannerApp() {
   // Each child: { id, name, birthYear } — age derived from currentYear - birthYear
   const [householdChildren, setHouseholdChildren] = useState([]); // primary member pays 50% by default
 
-  const [showMonteCarlo, setShowMonteCarlo] = useState(false);
+  const [showMonteCarlo, setShowMonteCarlo] = useState(true); // on by default so P10 Downside tile is populated
   const [showBaseline, setShowBaseline] = useState(false);
   // Item 5 — CPF Rate Reduction (Stress Centre)
   const [showCpfRateStress, setShowCpfRateStress] = useState(false);
