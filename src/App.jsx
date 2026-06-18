@@ -134,16 +134,16 @@ const MMSS_PILOT_END_YEAR   = 2030;
 // this constant and filter dynamically using the isForeigner / cpfScheme / householdEnabled flags.
 // Format: [id, label, Icon, accentColor]
 const TAB_CONFIG = [
-  ["readiness",    "Dashboard",      Activity,    "var(--clr-emerald)"],  // UX: merged Readiness + Summary into one Dashboard tab with sub-view toggle
-  // "summary" removed from tab strip — accessible via the Score / Overview toggle inside Dashboard
-  ["strategy",     "Strategy",       Target,      "#f43f5e"],
-  ["accumulation", "Grow",           BarChart3,   "var(--clr-blue2)"],    // UX: renamed from "Growth" to "Grow" (verb-first)
-  ["rss",          "RSS",            Clock,       "var(--clr-blue)"],      // shown only when cpfScheme === 'rss'
-  ["life",         "Payout Plans",   ShieldCheck, "var(--clr-purple)"],   // UX: renamed from "LIFE" — self-explanatory; hidden for foreigners + rss mode
-  ["compare",      "Compare",        Split,       "var(--clr-amber3)"],
-  ["household",    "Household",      Users,       "#8b5cf6"],              // shown only when householdEnabled
-  ["table",        "Data Table",     TableIcon,   "var(--clr-slate)"],    // UX: renamed from "Table" to "Data Table"
-  ["guide",        "Docs",           BookOpen,    "var(--clr-blue)"],      // merged Welcome (Quick Start) + Docs (Reference) — always last
+  ["readiness",    "Readiness",  Activity,    "var(--clr-emerald)"],  // Phase 1: Retirement Readiness dashboard
+  ["summary",      "Summary",    PieChart,    "var(--clr-emerald)"],
+  ["strategy",     "Strategy",   Target,      "#f43f5e"],
+  ["accumulation", "Growth",     BarChart3,   "var(--clr-blue2)"],
+  ["rss",          "RSS",        Clock,       "var(--clr-blue)"],   // shown only when cpfScheme === 'rss'
+  ["life",         "LIFE",       ShieldCheck, "var(--clr-purple)"], // hidden for foreigners + rss mode
+  ["compare",      "Compare",    Split,       "var(--clr-amber3)"],
+  ["household",    "Household",  Users,       "#8b5cf6"],           // shown only when householdEnabled
+  ["table",        "Table",      TableIcon,   "var(--clr-slate)"],  // UX-11: renamed from "Data Table" to "Table"
+  ["guide",        "Docs",       BookOpen,    "var(--clr-blue)"],   // merged Welcome (Quick Start) + Docs (Reference) — always last
   // "notes" tab removed — merged into "guide" tab (Quick Start + Reference sub-views)
 ];
 // Helper: filter TAB_CONFIG to only the tabs visible in a given context.
@@ -622,7 +622,7 @@ const DEFAULT_INPUTS = {
   cpfOARateOverride: '', cpfSARateOverride: '', cpfMARateOverride: '', // '' = use CPF_RATES defaults; set to a number (e.g. 1.5) for Stress Centre override
   sellPropertyAge: 0,
   // Private Assets & Goals
-  targetMonthlyIncome: 3000,   // sensible SGD baseline — users can adjust in Retirement Drawdown section
+  targetMonthlyIncome: 0,
   currentPrivateAssets: 0,
   annualPrivateSaving: 0,
   privateAssetGrowthRate: 0,
@@ -738,7 +738,7 @@ const DEFAULT_INPUTS = {
   // Must be > currentAge and ≤ 80 (CPF policy deadline for migration).
   lifeMigrationAge: 0,
   lifePlanAtMigration: 'std',  // 'std' | 'esc' | 'bas' — CPF LIFE plan chosen at migration
-  // Q2: Milestone Age — user-defined age marker on Grow chart + Summary callout.
+  // Q2: Milestone Age — user-defined age marker on Accumulation chart + Summary callout.
   // 0 = disabled. A teal dashed line and balance card appear when set.
   // Useful for baby/minor profiles targeting age 21, 35, or 55.
   milestoneAge: 0,
@@ -1001,7 +1001,8 @@ const PRESET_PROFILES = [
       // SRS
       srsBalance: 3000, srsAnnualContribution: 3000, srsReturnRate: 4,
       srsContribStopAge: 63, srsDrawdownStartAge: 63, srsDrawdownYears: 10,
-      targetMonthlyIncome: 5000,  // combined household retirement target
+      targetMonthlyIncome: 0,
+      // Life events: career break age 39–41 (second child care)
       lifeEvents: [
         {
           id: "le-hl-break", type: "retrenchment",
@@ -4206,7 +4207,7 @@ class ErrorBoundary extends React.Component {
 // One cell in the KPI strip bar. `isFirst` triggers the blue-tinted highlight
 // on the primary metric; `isEarly` applies the faint emerald tint on items 2-4.
 // `tip` is rendered as a native title tooltip (no extra DOM cost).
-function KpiCard({ label, sublabel, value, color, tip, isFirst = false, isEarly = false, isNew = false }) {
+function KpiCard({ label, sublabel, value, color, tip, isFirst = false, isEarly = false }) {
   const bg = isFirst
     ? "rgba(var(--clr-blue-rgb),0.08)"
     : isEarly
@@ -4219,18 +4220,14 @@ function KpiCard({ label, sublabel, value, color, tip, isFirst = false, isEarly 
       style={{
         padding: "6px 10px",
         borderRadius: 8,
-        border: isNew ? "1px solid rgba(var(--clr-emerald-rgb),0.25)" : "1px solid var(--border-subtle)",
+        border: "1px solid var(--border-subtle)",
         minWidth: 0,
         textAlign: "center",
         boxSizing: "border-box",
         cursor: "help",
-        background: isNew ? "rgba(var(--clr-emerald-rgb),0.04)" : bg,
-        position: "relative",
+        background: bg,
       }}
     >
-      {isNew && (
-        <span style={{ position: "absolute", top: 4, right: 5, fontSize: 9, fontWeight: 800, background: "rgba(var(--clr-emerald-rgb),0.18)", color: "var(--clr-emerald)", border: "1px solid rgba(var(--clr-emerald-rgb),0.35)", borderRadius: 4, padding: "0 4px", letterSpacing: "0.04em" }}>NEW</span>
-      )}
       <div
         className="cpf-kpi-label"
         style={{
@@ -5029,7 +5026,6 @@ function ReadinessTab({
   onInflowsCtaClick,
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
-  const [expandedRdTile,  setExpandedRdTile]  = useState(null); // Readiness sub-factor tile expansion
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
   const cy           = Number(inputs.currentYear) || 2026;
@@ -5527,7 +5523,6 @@ function ReadinessTab({
             ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
             ["🥧 Wealth Mix", "A doughnut showing how your total wealth at payout age is distributed across CPF, Private Assets, SRS, and Property. Reflects the Include Property toggle."],
             ["⚡ Action Priority Queue", "The five highest-impact actions ranked by urgency — FRS gap, plan switch, income gap, OA depletion risk, and SRS setup. Each card links directly to the relevant tab or sidebar section."],
-            ["🏥 MAS Financial Health", "Five advisory tiles below the gauge — aligned to the MAS Basic Financial Planning Guide pillars: Emergency Buffer (3–6 months liquid savings), Savings Rate (≥10% of income), Inflation Hedge (CPF LIFE plan or private-asset real return), Liquidity Ratio (freely liquid assets as % of total wealth at payout age), and Legacy Readiness (Will · CPF Nomination · LPA). These are advisory only — they do NOT affect the 100-pt Readiness Score. Click any tile to expand its full calculation workings. Set Emergency Fund months, Legacy Planning toggles, and living-expense budget in the Profile (Who I Am) sidebar section."],
           ].map(([title, desc]) => (
             <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-highlight)", margin: "0 0 2px", whiteSpace: "nowrap" }}>{title}</p>
@@ -5537,111 +5532,196 @@ function ReadinessTab({
         </div>
       </details>
 
-      {/* ── KPI Header Row — 5 tiles full-width across the top ── */}
-      <div className="rd-kpi-header" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}>
-        {[
-          {
-            label: `Total CPF at ${pa}`,
-            sublabel: isRealDollars ? "today's dollars" : "nominal",
-            value: totalCPF > 0 ? formatCurrency(totalCPF) : (wizardCompleted ? "—" : null),
-            placeholder: totalCPF === 0 && !wizardCompleted ? "Add CPF balances" : null,
-            color: "var(--clr-blue)",
-            tip: `OA + SA/RA + MA at payout age ${pa}`,
-          },
-          {
-            label: `${highlightPlan === "basic" ? "Basic" : highlightPlan === "escalating" ? "Escalating" : "Standard"} plan payout`,
-            sublabel: "monthly CPF LIFE",
-            value: displayPayout > 0 ? `${formatCurrency(Math.round(displayPayout))}` : (wizardCompleted ? "—" : null),
-            placeholder: displayPayout === 0 && !wizardCompleted ? "Add salary & balances" : null,
-            color: "var(--clr-green)",
-            tip: `${highlightPlan} plan monthly payout${isRealDollars ? " in today's dollars" : ""}`,
-          },
-          {
-            label: "Income coverage",
-            sublabel: target > 0 ? `vs ${formatCurrency(target)}/mo target` : (wizardCompleted ? "set target in sidebar" : null),
-            value: coveragePct != null ? `${coveragePct}%` : (wizardCompleted ? "—" : null),
-            placeholder: !wizardCompleted && target === 0 ? "Set retirement target" : null,
-            color: coveragePct == null ? "var(--text-muted)" : coveragePct >= 100 ? "var(--clr-green)" : coveragePct >= 70 ? "var(--clr-amber)" : "var(--clr-red)",
-            tip: target > 0 ? `CPF LIFE payout covers ${coveragePct}% of your ${formatCurrency(target)}/mo target` : "Enter Target Monthly Income in the Retirement Drawdown section",
-          },
-        ].map(({ label, sublabel, value, placeholder, color, tip }) => (
-          <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <p style={labelStyle}>{label}</p>
-            {placeholder ? (
+      {/* ── ROW 1: Gauge (4 sub-scores) + 5-col KPI hero ── */}
+      <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) 2fr", gap: 16 }}>
+
+        {/* Gauge card — restyled to mirror the Wellness Score panel's layout: arc (~1/3 width) + legend with title/description/bars, side by side */}
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div className="rd-gauge-row" style={{ display: "flex", alignItems: "center", gap: 18 }}>
+            {/* Arc gauge — ~1/3 of the card's width, responsive (scales with viewBox, not a fixed pixel size) */}
+            <div className="rd-gauge-arc" style={{ flex: "0 0 36%", maxWidth: 220, minWidth: 120 }}>
+              <svg viewBox="0 0 220 100" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
+                <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
+                <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+                <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
+                <text x="110" y="94" textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--text-muted)", letterSpacing: "0.05em" }}>/ 100 · {scoreLabel}</text>
+              </svg>
+            </div>
+            {/* Legend — title, description, and the 5 sub-score bars (mirrors the Wellness row's right-hand column) */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Retirement Readiness</p>
+              <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 6px", lineHeight: 1.4 }}>
+                5-dimension age-banded composite — FRS, Income, Stress, Longevity, Healthcare.
+                Stress defaults to 50 when Monte Carlo is off.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[
+                  {
+                    label: "FRS Coverage",
+                    pct: Math.round(frsRatio * 100),
+                    tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}`,
+                  },
+                  {
+                    label: "Income Coverage",
+                    pct: incomeRatio !== null ? Math.round(incomeRatio * 100) : null,
+                    tip: target > 0
+                      ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target · ${incomeTierLabel}`
+                      : `${incomeTierLabel} · Set a Target Monthly Income in the sidebar to compare`,
+                  },
+                  {
+                    label: "Stress Resilience",
+                    pct: p10SubScore,
+                    tip: p10SubScore != null
+                      ? perfectStormData
+                        ? `Perfect Storm: −${perfectStormData.deltaPct}% net worth (SORR+inflation+property+CPF rate+healthcare). ${monteCarloData ? "Combined with P10 Monte Carlo." : ""}`
+                        : `P10 Monte Carlo: ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} at age ${pa}`
+                      : "Enable Stress Centre (⚡ Worst Case) or Monte Carlo for live stress resilience figures",
+                  },
+                  {
+                    label: "Longevity Cover",
+                    pct: longevitySubScore,
+                    tip: oaDrawActive
+                      ? (oaDepletionAge
+                          ? `OA covers to age ${oaDepletionAge} vs age-90 planning benchmark`
+                          : "OA drawdown sustained to planning horizon")
+                      : `Real CPF LIFE at age 90: ${formatCurrency(realPayoutAt90)}/mo vs BRS payout floor ${formatCurrency(brsPayoutAtPA)}/mo (${inflRateVal * 100}% inflation)`,
+                  },
+                  {
+                    label: "Healthcare Shield",
+                    pct: maSubScore,
+                    tip: `MA at payout age vs projected Basic Healthcare Sum (BHS) of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}`,
+                  },
+                ].map(({ label, pct, tip }) => (
+                  <div key={label} title={tip}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: subBarColor(pct) }}>
+                        {pct == null ? "—" : `${pct}%`}
+                      </span>
+                    </div>
+                    <div style={{ height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: subBarColor(pct), transition: "width 0.5s ease" }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 5-col KPI hero — Phase 3: P10 Downside + OA Depletes added */}
+        <div className="rd-kpi-hero" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}>
+          {/* Existing 3 KPI tiles */}
+          {[
+            {
+              label: `Total CPF at ${pa}`,
+              sublabel: isRealDollars ? "today's dollars" : "nominal",
+              value: totalCPF > 0 ? formatCurrency(totalCPF) : (wizardCompleted ? "—" : null),
+              placeholder: totalCPF === 0 && !wizardCompleted ? "Add CPF balances" : null,
+              color: "var(--clr-blue)",
+              tip: `OA + SA/RA + MA at payout age ${pa}`,
+              extraBorder: null,
+            },
+            {
+              label: `${highlightPlan === "basic" ? "Basic" : highlightPlan === "escalating" ? "Escalating" : "Standard"} plan payout`,
+              sublabel: "monthly CPF LIFE",
+              value: displayPayout > 0 ? `${formatCurrency(Math.round(displayPayout))}` : (wizardCompleted ? "—" : null),
+              placeholder: displayPayout === 0 && !wizardCompleted ? "Add salary & balances" : null,
+              color: "var(--clr-green)",
+              tip: `${highlightPlan} plan monthly payout${isRealDollars ? " in today's dollars" : ""}`,
+              extraBorder: null,
+            },
+            {
+              label: "Income coverage",
+              sublabel: target > 0 ? `vs ${formatCurrency(target)}/mo target` : (wizardCompleted ? "set target in sidebar" : null),
+              value: coveragePct != null ? `${coveragePct}%` : (wizardCompleted ? "—" : null),
+              placeholder: !wizardCompleted && target === 0 ? "Set retirement target" : null,
+              color: coveragePct == null ? "var(--text-muted)" : coveragePct >= 100 ? "var(--clr-green)" : coveragePct >= 70 ? "var(--clr-amber)" : "var(--clr-red)",
+              tip: target > 0 ? `CPF LIFE payout covers ${coveragePct}% of your ${formatCurrency(target)}/mo target` : "Enter Target Monthly Income in the Decumulation section",
+              extraBorder: null,
+            },
+          ].map(({ label, sublabel, value, placeholder, color, tip, extraBorder }) => (
+            <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center", ...(extraBorder ? { borderColor: extraBorder } : {}) }}>
+              <p style={labelStyle}>{label}</p>
+              {placeholder ? (
+                <>
+                  <p style={{ fontSize: 18, fontWeight: 700, color: "var(--text-subtle)", marginTop: 2 }}>—</p>
+                  <button onClick={() => { setActiveTab("summary"); setSidebarOpen(true); }}
+                    style={{ marginTop: 6, padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.12)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", cursor: "pointer", textAlign: "left" }}>
+                    + {placeholder}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p style={{ ...bigNumStyle, color }}>{value ?? "—"}</p>
+                  {sublabel && <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>{sublabel}</p>}
+                </>
+              )}
+            </div>
+          ))}
+
+          {/* P10 Downside tile */}
+          <div
+            title={p10DropPct != null
+              ? `Bad-luck (P10) scenario: total CPF at ${pa} = ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} · −${p10DropPct}%. Enable Monte Carlo in the Accumulation tab.`
+              : "Enable Monte Carlo in the Accumulation tab to see the P10 downside scenario"}
+            style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <p style={labelStyle}>P10 downside</p>
+            {p10TotalAtPA > 0 ? (
               <>
-                <p style={{ fontSize: 18, fontWeight: 700, color: "var(--text-subtle)", marginTop: 2 }}>—</p>
-                <button onClick={() => { setActiveTab("summary"); setSidebarOpen(true); }}
-                  style={{ marginTop: 6, padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.12)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", cursor: "pointer", textAlign: "left" }}>
-                  + {placeholder}
-                </button>
+                <p style={{ ...bigNumStyle, color: "var(--clr-amber)" }}>{formatCurrency(p10TotalAtPA)}</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>bad-luck scenario</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-red)", marginTop: 4 }}>−{p10DropPct}% vs base</p>
               </>
             ) : (
               <>
-                <p style={{ ...bigNumStyle, color }}>{value ?? "—"}</p>
-                {sublabel && <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>{sublabel}</p>}
+                <p style={{ ...bigNumStyle, color: "var(--text-subtle)" }}>—</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>enable Monte Carlo<br />in Accumulation tab</p>
+              </>
+            )}
+            {probSufficiency != null && (
+              <p style={{ fontSize: 10, fontWeight: 700, marginTop: 6,
+                color: probSufficiency >= 80 ? "var(--clr-green)" : probSufficiency >= 60 ? "var(--clr-amber)" : "var(--clr-red)" }}>
+                {probSufficiency}% chance hits FRS
+              </p>
+            )}
+          </div>
+
+          {/* OA Depletes tile */}
+          <div
+            title={oaDepletionAge
+              ? `OA drawdown exhausts at age ${oaDepletionAge}. ${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy}. ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk.` : ""}`
+              : "No OA drawdown active, or OA is sustained to the planning horizon"}
+            style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center",
+              borderColor: oaDepletionAge && oaIncomeGapYrs > 0 ? "rgba(239,68,68,0.4)" : "var(--border-subtle)" }}>
+            <p style={labelStyle}>OA depletes</p>
+            {oaDepletionAge ? (
+              <>
+                <p style={{ ...bigNumStyle, color: "var(--clr-red)" }}>Age {oaDepletionAge}</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>drawdown exhausted</p>
+                {oaIncomeGapYrs > 0 && (
+                  <div style={{ marginTop: 5, padding: "3px 8px", borderRadius: 5, display: "inline-block",
+                    background: "rgba(239,68,68,0.12)", fontSize: 10, fontWeight: 700, color: "var(--clr-red)" }}>
+                    ⚠ {oaIncomeGapYrs}-yr gap risk
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <p style={{ ...bigNumStyle, color: "var(--clr-green)" }}>—</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>
+                  {oaDrawActive ? "OA sustained to horizon" : "no drawdown active"}
+                </p>
               </>
             )}
           </div>
-        ))}
-
-        {/* P10 Downside tile */}
-        <div
-          title={p10DropPct != null
-            ? `Bad-luck (P10) scenario: total CPF at ${pa} = ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} · −${p10DropPct}%. Enable Monte Carlo in the Grow tab.`
-            : "Enable Monte Carlo in the Grow tab to see the P10 downside scenario"}
-          style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <p style={labelStyle}>P10 downside</p>
-          {p10TotalAtPA > 0 ? (
-            <>
-              <p style={{ ...bigNumStyle, color: "var(--clr-amber)" }}>{formatCurrency(p10TotalAtPA)}</p>
-              <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>bad-luck scenario</p>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--clr-red)", marginTop: 4 }}>−{p10DropPct}% vs base</p>
-            </>
-          ) : (
-            <>
-              <p style={{ ...bigNumStyle, color: "var(--text-subtle)" }}>—</p>
-              <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>enable Monte Carlo<br />in Grow tab</p>
-            </>
-          )}
-          {probSufficiency != null && (
-            <p style={{ fontSize: 10, fontWeight: 700, marginTop: 6,
-              color: probSufficiency >= 80 ? "var(--clr-green)" : probSufficiency >= 60 ? "var(--clr-amber)" : "var(--clr-red)" }}>
-              {probSufficiency}% chance hits FRS
-            </p>
-          )}
-        </div>
-
-        {/* OA Depletes tile */}
-        <div
-          title={oaDepletionAge
-            ? `OA drawdown exhausts at age ${oaDepletionAge}. ${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy}. ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk.` : ""}`
-            : "No OA drawdown active, or OA is sustained to the planning horizon"}
-          style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center",
-            borderColor: oaDepletionAge && oaIncomeGapYrs > 0 ? "rgba(239,68,68,0.4)" : "var(--border-subtle)" }}>
-          <p style={labelStyle}>OA depletes</p>
-          {oaDepletionAge ? (
-            <>
-              <p style={{ ...bigNumStyle, color: "var(--clr-red)" }}>Age {oaDepletionAge}</p>
-              <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>drawdown exhausted</p>
-              {oaIncomeGapYrs > 0 && (
-                <div style={{ marginTop: 5, padding: "3px 8px", borderRadius: 5, display: "inline-block",
-                  background: "rgba(239,68,68,0.12)", fontSize: 10, fontWeight: 700, color: "var(--clr-red)" }}>
-                  ⚠ {oaIncomeGapYrs}-yr gap risk
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <p style={{ ...bigNumStyle, color: "var(--clr-green)" }}>—</p>
-              <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>
-                {oaDrawActive ? "OA sustained to horizon" : "no drawdown active"}
-              </p>
-            </>
-          )}
         </div>
       </div>
 
-      {/* ── MAS FINANCIAL HEALTH PANEL — Readiness + Wellness side by side, then 5 tiles ── */}
+      {/* ── MAS FINANCIAL HEALTH PANEL (Tier 2 advisory) ─────────────────────
+          Five tiles aligned to the MAS Basic Financial Planning Guide pillars.
+          These are ADVISORY ONLY — they do not feed into the 100-pt gauge score.
+          Data is derived from existing inputs + 3 new boolean legacy fields.      */}
       {(() => {
         // ── Tile 1: Emergency Buffer ──────────────────────────────────────────
         const livingExp    = Number(inputs.budgetLivingExpenses) || 0;
@@ -5667,7 +5747,7 @@ function ReadinessTab({
         const privReturn   = Number(inputs.privateAssetGrowthRate) || 0;
         const hedgeScore   = isEscalating ? 100 : (privReturn >= inflPct + 1 ? 80 : privReturn >= inflPct ? 60 : 35);
         const hedgeStatus  = hedgeScore >= 80 ? "green" : hedgeScore >= 60 ? "amber" : "red";
-        const hedgeLabel   = isEscalating ? "+2%/yr escalating" : privReturn >= inflPct ? `+${(privReturn - inflPct).toFixed(1)}% real return` : `−${(inflPct - privReturn).toFixed(1)}% real`;
+        const hedgeLabel   = isEscalating ? "Escalating plan" : privReturn >= inflPct ? `+${(privReturn - inflPct).toFixed(1)}% real return` : `−${(inflPct - privReturn).toFixed(1)}% real`;
         const hedgeTip     = `Inflation: ${inflPct}%/yr. CPF LIFE Standard plan: flat nominal payout loses ~${Math.round((1 - 1/Math.pow(1+inflPct/100,25))*100)}% purchasing power over 25 yrs. Escalating plan (+2%/yr) hedges inflation. Private assets yielding ${privReturn}%/yr vs ${inflPct}% inflation.`;
 
         // ── Tile 4: Liquidity Ratio ──────────────────────────────────────────
@@ -5723,19 +5803,14 @@ function ReadinessTab({
               .mas-tiles-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
               .mas-tile-card:focus, .mas-tile-card:focus-visible, .mas-tile-card:active { outline: 0 !important; box-shadow: none !important; -webkit-tap-highlight-color: transparent; }
               .mas-tile-card { -webkit-tap-highlight-color: transparent; }
-              .rd-mas-side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-              @media (max-width: 900px) {
-                .rd-mas-side-by-side { grid-template-columns: 1fr; }
-              }
               @media (max-width: 640px) {
                 .mas-tiles-grid { grid-template-columns: repeat(2, 1fr); }
                 .mas-wellness-row { flex-direction: column; align-items: center; }
-                .mas-wellness-gauge { margin-bottom: 8px; }
-                .rd-kpi-header { grid-template-columns: repeat(3, 1fr) !important; }
-                .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
+                .mas-wellness-gauge { flex: none; width: 60%; max-width: 200px; margin: 0 auto 8px; }
+                .rd-gauge-row { flex-direction: column; align-items: center; }
+                .rd-gauge-arc { flex: none; width: 60%; max-width: 200px; margin: 0 auto 10px; }
               }
             `}</style>
-
             {/* ── MAS panel header ── */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <p style={{ ...labelStyle, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -5743,288 +5818,49 @@ function ReadinessTab({
               </p>
               <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection. The Wellness Score is an unweighted average of the five tile scores — it is NOT an official MAS metric." />
             </div>
-
-            {/* ── Side-by-side: Retirement Readiness gauge (left) | Wellness Score (right) ── */}
-            <div className="rd-mas-side-by-side">
-
-              {/* LEFT — Retirement Readiness gauge, matching Wellness anatomy */}
-              <div className="rd-readiness-gauge-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
-                <div className="mas-wellness-gauge" style={{ flexShrink: 0 }}>
-                  {(() => {
-                    const W2 = 140, H2 = 78, cx2 = 70, cy2 = 74, r2 = 58;
-                    const arcPct2 = Math.min(1, Math.max(0, score / 100));
-                    const startA2 = Math.PI, endA2 = Math.PI + arcPct2 * Math.PI;
-                    const sx2 = cx2 + r2 * Math.cos(startA2), sy2 = cy2 + r2 * Math.sin(startA2);
-                    const ex2 = cx2 + r2 * Math.cos(endA2),   ey2 = cy2 + r2 * Math.sin(endA2);
-                    const lg2 = 0; // fill arc ≤ 180° → always the small arc
-                    const arcD2 = arcPct2 > 0 ? `M ${sx2.toFixed(2)} ${sy2.toFixed(2)} A ${r2} ${r2} 0 ${lg2} 1 ${ex2.toFixed(2)} ${ey2.toFixed(2)}` : null;
-                    const trackD = `M ${(cx2 - r2).toFixed(2)} ${cy2} A ${r2} ${r2} 0 1 1 ${(cx2 + r2).toFixed(2)} ${cy2}`;
-                    return (
-                      <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible", display: "block" }}>
-                        <path d={trackD} fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
-                        {arcD2 && <path d={arcD2} fill="none" stroke={scoreColor} strokeWidth={10} strokeLinecap="round" />}
-                        <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900} fill={scoreColor} fontFamily="monospace">{score}</text>
-                        <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700} fill={scoreColor}>{scoreLabel}</text>
-                      </svg>
-                    );
-                  })()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 2px" }}>Retirement Readiness</p>
-                  <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 7px", lineHeight: 1.4 }}>5-dimension age-banded score — weights shift by age band</p>
-                  {[
-                    { label: "FRS Coverage",      pct: Math.round(frsRatio * 100),                                   tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}` },
-                    { label: "Income Coverage",   pct: incomeRatio !== null ? Math.round(incomeRatio * 100) : null,  tip: target > 0 ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target` : "Set Target Monthly Income in sidebar" },
-                    { label: "Stress Resilience", pct: p10SubScore,                                                   tip: p10SubScore != null ? (perfectStormData ? `Perfect Storm: −${perfectStormData.deltaPct}% net worth` : `P10 Monte Carlo: ${formatCurrency(p10TotalAtPA)} vs base at age ${pa}`) : "Enable Stress Centre or Monte Carlo in the Grow tab" },
-                    { label: "Longevity Cover",   pct: longevitySubScore,                                             tip: oaDrawActive ? (oaDepletionAge ? `OA covers to age ${oaDepletionAge}` : "OA drawdown sustained to horizon") : `Real CPF LIFE at 90: ${formatCurrency(realPayoutAt90)}/mo` },
-                    { label: "Healthcare Shield", pct: maSubScore,                                                    tip: `MA at payout vs projected BHS of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}` },
-                  ].map(({ label, pct, tip }) => (
-                    <div key={label} title={tip} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 88, flexShrink: 0 }}>{label}</span>
-                      <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: subBarColor(pct), transition: "width 0.5s ease" }} />
-                      </div>
-                      <span style={{ fontSize: 10, color: subBarColor(pct), fontWeight: 700, width: 26, textAlign: "right" }}>{pct == null ? "—" : pct}</span>
-                    </div>
-                  ))}
-                </div>
+            {/* ── Wellness gauge row ── */}
+            <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 12, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+              {/* Arc gauge — ~1/3 of the row's width, responsive (scales with viewBox, not a fixed pixel size) */}
+              <div className="mas-wellness-gauge" style={{ flex: "0 0 34%", maxWidth: 260, minWidth: 130 }}>
+                <svg viewBox={`0 0 ${W2} ${H2}`} style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
+                  {/* Track */}
+                  <path d={`M ${sx2} ${sy2} A ${r2} ${r2} 0 1 1 ${cx2 + r2} ${cy2}`}
+                    fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
+                  {/* Fill arc */}
+                  {arcD2 && (
+                    <path d={arcD2} fill="none" stroke={wClr} strokeWidth={10}
+                      strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+                  )}
+                  {/* Score */}
+                  <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900}
+                    fill={wClr} fontFamily="monospace">{wellnessScore}</text>
+                  <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700}
+                    fill={wClr}>{wLbl}</text>
+                </svg>
               </div>
-
-              {/* RIGHT — Wellness Score gauge ── */}
-              <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
-                {/* Arc gauge */}
-                <div className="mas-wellness-gauge" style={{ flexShrink: 0 }}>
-                  <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible" }}>
-                    {/* Track */}
-                    <path d={`M ${sx2} ${sy2} A ${r2} ${r2} 0 1 1 ${cx2 + r2} ${cy2}`}
-                      fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
-                    {/* Fill arc */}
-                    {arcD2 && (
-                      <path d={arcD2} fill="none" stroke={wClr} strokeWidth={10}
-                        strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
-                    )}
-                    {/* Score */}
-                    <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900}
-                      fill={wClr} fontFamily="monospace">{wellnessScore}</text>
-                    <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700}
-                      fill={wClr}>{wLbl}</text>
-                  </svg>
-                </div>
-                {/* Gauge legend */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Wellness Score</p>
-                  <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 6px", lineHeight: 1.4 }}>
-                    MAS-aligned advisory score — unweighted average of the 5 pillars below.
-                    Not an official MAS metric.
-                  </p>
-                  {/* Mini sub-bar breakdown */}
-                  {tiles.map(({ title, score: ts, status }) => ts != null && (
-                    <div key={title} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 88, flexShrink: 0 }}>{title}</span>
-                      <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${ts}%`, borderRadius: 4, background: clr[status], transition: "width 0.5s ease" }} />
-                      </div>
-                      <span style={{ fontSize: 10, color: clr[status], fontWeight: 700, width: 26, textAlign: "right" }}>{ts}</span>
+              {/* Gauge legend */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Wellness Score</p>
+                <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 6px", lineHeight: 1.4 }}>
+                  MAS-aligned advisory score — unweighted average of the 5 pillars below.
+                  Not an official MAS metric.
+                </p>
+                {/* Mini sub-bar breakdown */}
+                {tiles.map(({ title, score: ts, status }) => ts != null && (
+                  <div key={title} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", width: 88, flexShrink: 0 }}>{title}</span>
+                    <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${ts}%`, borderRadius: 4, background: clr[status], transition: "width 0.5s ease" }} />
                     </div>
-                  ))}
-                </div>
+                    <span style={{ fontSize: 10, color: clr[status], fontWeight: 700, width: 26, textAlign: "right" }}>{ts}</span>
+                  </div>
+                ))}
               </div>
-
-            </div>{/* end .rd-mas-side-by-side */}
-
-            {/* ── 5 Readiness sub-factor tiles — mirrors MAS tile pattern ──────────────
-                Each tile corresponds to one bar in the Readiness gauge legend above.
-                Click to expand detailed workings, same UX as the MAS tiles below.    */}
-            {(() => {
-              const rdTileClr = { green: "var(--clr-green)", amber: "var(--clr-amber)", red: "var(--clr-red)", grey: "var(--text-muted)" };
-              const rdStatus  = (pct) => pct == null ? "grey" : pct >= 75 ? "green" : pct >= 50 ? "amber" : "red";
-
-              // ── Tile data ──────────────────────────────────────────────────────────
-              const frsPct    = Math.min(999, Math.round(frsRatio * 100));
-              const incPct    = incomeRatio !== null ? Math.min(999, Math.round(incomeRatio * 100)) : null;
-              const monthlyTotal = Math.round(stdMonthly) + (Number(inputs.oaDrawdownMonthly) || 0);
-              const incGap       = target > 0 ? target - monthlyTotal : null;
-
-              const rdTiles = [
-                {
-                  icon: "🎯", title: "FRS Coverage", pillar: "Retirement Sum",
-                  label: `${frsPct}%`,
-                  status: frsRatio >= 1 ? "green" : frsRatio >= 0.8 ? "amber" : "red",
-                  score: Math.min(100, frsPct),
-                  detail: [
-                    `RA at payout age ${pa}: ${formatCurrency(Math.round(raAtPA))}`,
-                    `Projected FRS at age ${pa}: ${formatCurrency(Math.round(projFRS))} (${(Number(inputs.retirementSumGrowth) || 3)}%/yr growth)`,
-                    frsRatio >= 1
-                      ? `Surplus: ${formatCurrency(Math.round(raAtPA - projFRS))} above FRS — consider ERS (Enhanced Retirement Sum = ${formatCurrency(Math.round(projFRS * 1.5))}).`
-                      : `Shortfall: ${formatCurrency(Math.round(projFRS - raAtPA))} below FRS — add RSTU top-ups in the Boost My CPF section to close the gap.`,
-                    `Weight in score: 35% at age 35 → 10% at age 75+ (FRS matters most when RA is still building).`,
-                  ],
-                },
-                {
-                  icon: "💰", title: "Income Coverage", pillar: "Income",
-                  label: incPct != null ? `${incPct}%` : "No target",
-                  status: incPct == null ? "grey" : incPct >= 100 ? "green" : incPct >= 70 ? "amber" : "red",
-                  score: incPct,
-                  detail: target > 0
-                    ? [
-                        `Target monthly income: ${formatCurrency(target)}/mo`,
-                        `CPF LIFE (${(highlightPlan || "standard")}): ${formatCurrency(Math.round(stdMonthly))}/mo`,
-                        Number(inputs.oaDrawdownMonthly) > 0 ? `OA drawdown: ${formatCurrency(Number(inputs.oaDrawdownMonthly))}/mo` : `OA drawdown: not active`,
-                        incGap > 0
-                          ? `Gap: ${formatCurrency(incGap)}/mo — use Strategy → Income Roadmap → ⚡ Fill Gap to auto-calculate the OA drawdown needed.`
-                          : `Surplus: ${formatCurrency(Math.abs(incGap))}/mo above target.`,
-                        `Weight in score: 30% at all age bands.`,
-                      ]
-                    : ["No target set — enter Target Monthly Income in the Retirement Drawdown sidebar section to activate this dimension."],
-                },
-                {
-                  icon: "⚡", title: "Stress Resilience", pillar: "Downside Risk",
-                  label: p10SubScore != null ? `${p10SubScore}%` : "No data",
-                  status: rdStatus(p10SubScore),
-                  score: p10SubScore,
-                  detail: p10SubScore != null
-                    ? perfectStormData
-                      ? [
-                          `Perfect Storm scenario: −${perfectStormData.deltaPct}% net worth vs base (SORR + hyperinflation + property crash + CPF rate cut + medical crisis).`,
-                          `Score = 100 − drop% = ${p10SubScore}%.`,
-                          `Enable Monte Carlo in the Grow tab alongside Stress Centre for a combined signal.`,
-                        ]
-                      : [
-                          `P10 Monte Carlo (bad-luck 10th percentile): total CPF at ${pa} = ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)}.`,
-                          `Drop = ${100 - p10SubScore}% below base — score = ${p10SubScore}%.`,
-                          probSufficiency != null ? `Probability of reaching FRS: ${probSufficiency}%.` : "",
-                          `Enable ⚡ Stress Centre (Worst Case) in the Grow tab for Perfect Storm scenario (takes priority over P10).`,
-                        ].filter(Boolean)
-                    : [
-                        "No stress data available — enable Monte Carlo in the Grow tab (200 runs) or activate Worst Case in the Stress Centre.",
-                        "Score defaults to 50 while disabled, so other dimensions still produce a meaningful composite.",
-                      ],
-                },
-                {
-                  icon: "🕰️", title: "Longevity Cover", pillar: "Longevity",
-                  label: oaDepletionAge ? `Depletes ${oaDepletionAge}` : (oaDrawActive ? "Sustained" : "CPF LIFE only"),
-                  status: rdStatus(longevitySubScore),
-                  score: longevitySubScore,
-                  detail: oaDrawActive
-                    ? oaDepletionAge
-                      ? [
-                          `OA drawdown of ${formatCurrency(Number(inputs.oaDrawdownMonthly))}/mo depletes OA at age ${oaDepletionAge}.`,
-                          `${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy} — ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk after depletion.` : "depletion is after median life expectancy."}`,
-                          `Reduce monthly draw or lower the drawdown floor in the Retirement Drawdown section to extend OA.`,
-                        ]
-                      : [
-                          `OA drawdown of ${formatCurrency(Number(inputs.oaDrawdownMonthly))}/mo is sustained to the planning horizon (age ${Number(inputs.maxProjectionAge) || 95}).`,
-                          `Combined with CPF LIFE, income is fully covered through life.`,
-                        ]
-                    : [
-                        `No OA drawdown active — CPF LIFE provides lifelong cover.`,
-                        `Real CPF LIFE payout at age 90 (${(Number(inputs.inflationRate) || 2)}% inflation): ${formatCurrency(realPayoutAt90)}/mo.`,
-                        `Consider an OA drawdown in the Retirement Drawdown section to supplement CPF LIFE in early retirement.`,
-                      ],
-                },
-                {
-                  icon: "🏥", title: "Healthcare Shield", pillar: "Healthcare",
-                  label: `${maSubScore ?? "—"}%`,
-                  status: rdStatus(maSubScore),
-                  score: maSubScore,
-                  detail: (() => {
-                    const maVal     = nomPayoutData?.ma || 0;   // nominal MA at payout age — in scope via nomPayoutData
-                    const bhsTarget = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow));
-                    const maGap     = bhsTarget - Math.round(maVal);
-                    const bhsPct    = maVal > 0 ? Math.min(999, Math.round((maVal / bhsTarget) * 100)) : null;
-                    return maVal > 0
-                      ? [
-                          `MA at payout age ${pa}: ${formatCurrency(Math.round(maVal))}`,
-                          `Projected Basic Healthcare Sum (BHS) at ${pa}: ${formatCurrency(bhsTarget)} (${(rsGrowth * 100).toFixed(1)}%/yr growth)`,
-                          bhsPct >= 100
-                            ? `MA meets BHS — excess stays in MA earning 4%/yr and is not transferred to RA.`
-                            : `Shortfall: ${formatCurrency(maGap)} below BHS — add annual cash top-ups to MA via the Boost My CPF section (VCMA).`,
-                          `Weight in score: 10% at age 35 → 30% at age 75+ (Healthcare becomes the dominant concern in late retirement).`,
-                        ]
-                      : ["MA projection not available — add CPF account balances in the Today's CPF Balances section."];
-                  })(),
-                },
-              ];
-
-              return (
-                <>
-                  {/* ── Sub-header ── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
-                    <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-                      Retirement Readiness — 5 dimensions
-                    </span>
-                    <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
-                  </div>
-
-                  {/* ── Tiles grid — identical markup to MAS tiles ── */}
-                  <div className="mas-tiles-grid" style={{ marginBottom: 0 }}>
-                    {rdTiles.map(({ icon, title, label, status, score: sc, pillar }) => (
-                      <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()}
-                        onClick={() => { setExpandedRdTile(expandedRdTile === title ? null : title); setExpandedMasTile(null); }}
-                        style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4,
-                          cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none",
-                          background: expandedRdTile === title ? "rgba(var(--clr-emerald-rgb),0.07)" : "var(--bg-panel)",
-                          border: expandedRdTile === title ? `1px solid ${rdTileClr[status]}` : "1px solid transparent" }}>
-                        <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <span style={{ fontSize: 16 }}>{icon}</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-highlight)" }}>{title}</span>
-                        </div>
-                        <p style={{ fontSize: 15, fontWeight: 800, color: rdTileClr[status], margin: "2px 0 0" }}>{label}</p>
-                        {sc != null && (
-                          <div style={{ height: 3, borderRadius: 3, background: "var(--border-subtle)", overflow: "hidden", marginTop: 2 }}>
-                            <div style={{ height: "100%", width: `${Math.min(100, sc)}%`, borderRadius: 3, background: rdTileClr[status], transition: "width 0.5s ease" }} />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* ── Expansion panel for the active Readiness tile ── */}
-                  {expandedRdTile && (() => {
-                    const active = rdTiles.find(t => t.title === expandedRdTile);
-                    if (!active) return null;
-                    return (
-                      <div style={{ background: "var(--bg-muted)", border: `1px solid ${rdTileClr[active.status]}55`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 20 }}>{active.icon}</span>
-                            <div>
-                              <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{active.pillar}</p>
-                              <p style={{ fontSize: 13, fontWeight: 800, color: rdTileClr[active.status], margin: 0 }}>{active.title} — {active.label}</p>
-                            </div>
-                          </div>
-                          <button onClick={() => setExpandedRdTile(null)} style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px 8px", borderRadius: 6 }}>✕</button>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          {active.detail.map((line, i) => (
-                            <p key={i} style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.65, margin: 0 }}>{line}</p>
-                          ))}
-                        </div>
-                        <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 8, marginBottom: 0 }}>
-                          Included in the 100-pt Retirement Readiness score · weights shift by age band
-                        </p>
-                      </div>
-                    );
-                  })()}
-
-                  {/* ── Divider before MAS tiles ── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
-                    <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-                      MAS Financial Health — 5 pillars
-                    </span>
-                    <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
-                  </div>
-                </>
-              );
-            })()}
-
-            {/* ── 5 MAS tiles — 3+2 on mobile via .mas-tiles-grid ── */}
+            </div>
+            {/* ── 5 tiles — 3+2 on mobile via .mas-tiles-grid ── */}
             <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
-                <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()} onClick={() => { setExpandedMasTile(expandedMasTile === title ? null : title); setExpandedRdTile(null); }} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", border: expandedMasTile === title ? `1px solid ${clr[status]}` : "1px solid transparent" }}>
+                <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()} onClick={() => setExpandedMasTile(expandedMasTile === title ? null : title)} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", border: expandedMasTile === title ? `1px solid ${clr[status]}` : "1px solid transparent" }}>
                   <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: 0 }}>{pillar}</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ fontSize: 16 }}>{icon}</span>
@@ -6620,7 +6456,7 @@ function CPFPlannerApp() {
   // Each child: { id, name, birthYear } — age derived from currentYear - birthYear
   const [householdChildren, setHouseholdChildren] = useState([]); // primary member pays 50% by default
 
-  const [showMonteCarlo, setShowMonteCarlo] = useState(true); // on by default so P10 Downside tile is populated
+  const [showMonteCarlo, setShowMonteCarlo] = useState(false);
   const [showBaseline, setShowBaseline] = useState(false);
   // Item 5 — CPF Rate Reduction (Stress Centre)
   const [showCpfRateStress, setShowCpfRateStress] = useState(false);
@@ -6751,7 +6587,14 @@ function CPFPlannerApp() {
   const [showDataTableGuide, setShowDataTableGuide] = useState(false);
   const [showWisEligibility, setShowWisEligibility] = useState(false); // WIS eligibility panel toggle — must be top-level (Rules of Hooks)
   // Goal Simulator state (Strategy tab → Goal sub-tab)
-  const [goalStratTab, setGoalStratTab] = useState("goal");           // "goal" | "roadmap" | "stress"
+  const [goalStratTab, setGoalStratTab] = useState("goal");           // "goal" | "roadmap" | "stress" | "turbo"
+  // ── Turbocharger state (Strategy tab ⚡ Turbo sub-tab) ──────────────────────
+  // No "applied" guard ref needed: Turbo's lever-applied badges read directly from
+  // live `inputs` values, and writes to shared fields (vcSaTopup/vc3aCash) are
+  // intentionally allowed to clear Goal Simulator's own "Applied" badge via its
+  // existing useEffect (line ~6796) — if Turbo overwrites the value, the Goal Sim
+  // badge would otherwise show a stale strategy letter next to a non-matching amount.
+  const [turboSnapshot,   setTurboSnapshot]   = useState(null);  // inputs snapshot before first Turbo Apply — enables Undo All
   const [goalResult,   setGoalResult]   = useState(null);             // solver output object
   const [goalSolving,  setGoalSolving]  = useState(false);            // spinner while computing
   const [goalApplied,  setGoalApplied]  = useState(null);             // "A"|"B"|"C"|null last-applied strategy
@@ -6767,7 +6610,7 @@ function CPFPlannerApp() {
   const [spousePreApplySnapshot,setSpousePreApplySnapshot]= useState(null);      // { vcSaTopup, vc3aCash } for spouse revert
   const [marginalTaxRate,       setMarginalTaxRate]       = useState(15);        // % marginal income tax rate for Strategy D
   const isApplyingSpouseStratRef = useRef(false);                                // guards spouse lever-change useEffect
-  // BUG-2 fix: Life Events & Stress Tests panel state hoisted from IIFE to top-level useState.
+  // BUG-2 fix: Life Events panel state hoisted from IIFE to top-level useState.
   // Calling React.useState inside an IIFE embedded in JSX violates Rules of Hooks:
   // the hook call count changes when the IIFE is conditionally skipped, React's
   // identity checks break under Strict Mode double-invocation, and the state is
@@ -8600,6 +8443,7 @@ function CPFPlannerApp() {
         setCombinedGoalResult(null);
         setSpouseGoalApplied(null);
         setSpousePreApplySnapshot(null);
+        setTurboSnapshot(null);
         showToast("All inputs, scenarios, and What-If data reset to defaults.");
       }
     });
@@ -8654,6 +8498,7 @@ function CPFPlannerApp() {
         setCombinedGoalSolving(false);
         setSpouseGoalApplied(null);
         setSpousePreApplySnapshot(null);
+        setTurboSnapshot(null);
         setGoalSimView("primary");
         setGoalTargetCombined(0);
         // Clear Life Events form state — prevents ghost form appearing over empty events list.
@@ -9095,11 +8940,15 @@ function CPFPlannerApp() {
             : fileHadScenarios
               ? "✓ Profile loaded — saved scenarios could not be restored (format too old; re-save them to update)"
               : "✓ Profile loaded successfully";
+          // Reset Turbocharger state on any profile load — prevents stale snapshot
+          // from a prior session appearing as an Undo target in the new profile.
+          setTurboSnapshot(null);
           showToast(cbMigrated ? `${baseToast} · ⏸ Career break converted to Life Event` : baseToast);
         } else {
           // Legacy: old format was just the inputs object directly
           setScenarioA(null);
           setScenarioB(null);
+          setTurboSnapshot(null);
           setMobileMenuOpen(false);
           lastSavedRef.current = JSON.stringify(safeIn); // clear unsaved-changes flag
           showToast("✓ Profile inputs imported (legacy format)");
@@ -10295,6 +10144,133 @@ function CPFPlannerApp() {
     () => new Map((displayAccumulation || []).map(r => [r.age, r])),
     [displayAccumulation]);
 
+  // ── Turbocharger impact calculations ─────────────────────────────────────────
+  // Runs only when the ⚡ Turbo sub-tab is active. Each lever override-runs the
+  // full engine (bare runProjectionEngine, not runProjectionWithDWZ — see note
+  // below) with one field changed to its max recommended value, computes the
+  // delta in total CPF at payoutAge vs baseline, and surfaces that as the "gain"
+  // shown on the lever card. Gated early-exit avoids 7 extra engine runs (1
+  // baseline + 6 levers) on every other tab.
+  // DWZ caveat: when dieWithZeroEnabled is true, "total at payout age" stops being
+  // a meaningful gain metric — DWZ deliberately draws OA + private assets down to
+  // ~$0 by a target age regardless of contribution levers, so a bigger RSTU top-up
+  // mostly shows up as a longer runway, not a bigger payout-age balance. Rather than
+  // re-solving the DWZ multi-pass for every override (expensive, and conceptually
+  // muddy — DWZ would partially cancel out any lever's apparent gain), this useMemo
+  // always computes against bare runProjectionEngine for an apples-to-apples
+  // comparison, and the render block below shows a disclaimer when DWZ is on.
+  const turboImpacts = useMemo(() => {
+    if (activeTab !== 'strategy' || goalStratTab !== 'turbo') return {};
+    const d    = debouncedInputs;
+    const pa   = payoutAge65;
+    const isMale = d.isMale !== false;        // BUGFIX: was referencing an undeclared `isMale` — caused "isMale is not defined" crash on app load
+    const isRSSMode = d.cpfScheme === 'rss';
+    if (isRSSMode) return {};                        // RSS mode — most levers inapplicable
+
+    // Helper: sum of all CPF accounts at payout age from a projection array
+    const totalCpfAt = (proj) => {
+      const row = new Map(proj.map(r => [r.age, r])).get(pa);
+      return row ? (row.oa || 0) + (row.sa || 0) + (row.ra || 0) + (row.ma || 0) : 0;
+    };
+
+    // Compute baseline — use runProjectionEngine directly (without DWZ) for a fair
+    // apples-to-apples comparison since each override run also skips DWZ.
+    let baseline = 0;
+    try { baseline = totalCpfAt(runProjectionEngine(d)); } catch { return {}; }
+
+    // Safe per-lever runner — catches engine errors without poisoning other levers
+    const run = (overrides) => {
+      try {
+        const result = totalCpfAt(runProjectionEngine({ ...d, ...overrides }));
+        return Math.max(0, result - baseline);
+      } catch { return 0; }
+    };
+
+    // --- Lever max values ---
+    // Mirrors the self-employed-aware totalMandatory/maxAllowableVC formula (component
+    // scope, line ~7825) but rebuilt from `d` (debouncedInputs) so this useMemo's deps
+    // stay correctly debounced. Cannot reference the component-level maxAllowableVC
+    // directly — that's derived from live `inputs`, and adding it as a dependency here
+    // would re-trigger all 9 engine passes on every keystroke, defeating the debounce.
+    let sepMandatoryMA_turbo = 0;
+    const nti_turbo = Number(d.netTradeIncome) || 0;
+    const ca_turbo  = Number(d.currentAge) || 35;
+    if (d.isSelfEmployed && nti_turbo > 6000) {
+      let maRate = 0.08;
+      if (ca_turbo > 50) maRate = 0.105;
+      else if (ca_turbo > 45) maRate = 0.10;
+      else if (ca_turbo > 35) maRate = 0.09;
+      sepMandatoryMA_turbo = Math.round(Math.min(nti_turbo, 96000) * maRate);
+    }
+    const mandatoryContribs = d.isSelfEmployed
+      ? sepMandatoryMA_turbo
+      : ((Number(d.empOaCont) || 0) + (Number(d.empSaCont) || 0) + (Number(d.empMaCont) || 0));
+    const vc3aMaxRoom = Math.max(0, ANNUAL_LIMIT - mandatoryContribs);
+    const maBal  = Number(d.maBalance) || 0;
+    const bhsNow = 77500;                            // 2026 BHS — display; engine uses projected BHS
+    const vcmaRoom = Math.max(0, bhsNow - maBal);
+    const oaBal  = Number(d.oaBalance)  || 0;
+    const housing = Number(d.housingOutflow) || 0;
+
+    // 1. RSTU — top up to $8,000 tax-relief cap
+    const rstuGain    = run({ vcSaTopup: 8000 });
+
+    // 2. VC3A — fill remaining Annual Limit room
+    const vc3aGain    = vc3aMaxRoom > 0
+      ? run({ vc3aCash: Math.max(vc3aMaxRoom, Number(d.vc3aCash) || 0) })
+      : 0;
+
+    // 3. VCMA — top up MA to BHS
+    const vcmaGain    = vcmaRoom > 0
+      ? run({ vcMaCash: Math.max(vcmaRoom, Number(d.vcMaCash) || 0) })
+      : 0;
+
+    // 4. OA→SA/RA transfer — engine routes to SA pre-55 or RA post-55 automatically
+    const oaSaGain    = oaBal > 0
+      ? run({ oaToSaTransfer: Math.max(oaBal, Number(d.oaToSaTransfer) || 0) })
+      : 0;
+
+    // 5. VHR — refund housing amount back into OA
+    const vhrGain     = housing > 0
+      ? run({ vcVhr: Math.max(housing, Number(d.vcVhr) || 0) })
+      : 0;
+
+    // NOTE: MRSS and MMSS are NOT independently overridable — the engine auto-derives
+    // them from vcSaTopup/vcMaCash internally (MRSS = min(vcSaTopup,2000,lifetimeCap)
+    // when SC+age55+/RA<BRS; MMSS = min(vcMaCash,1000,maRoom) when SC+age55-70/MA<halfBHS,
+    // 2026-2030 pilot only). Setting mrssGrant/mmssGrant has zero engine effect — those
+    // input fields are dead (see comment at line ~2425). Any matched-grant uplift the
+    // member is eligible for is therefore ALREADY included in rstuGain and vcmaGain below,
+    // since those override runs call the same real engine that applies the match internally.
+
+    // 6. Property monetisation — enable flag (activates at the member's configured propMonetiseAge)
+    const propGain    = !d.propMonetiseEnabled
+      ? run({ propMonetiseEnabled: true })
+      : 0;
+
+    // 7. Deferment — compare payout at current payoutAge vs deferred age 70
+    // Uses interpolateCpfLife directly (no engine re-run) since RA at payout age
+    // is already in projectionByAge. Expressed as monthly payout delta, not CPF delta.
+    const curPlanKey  = (d.highlightPlan === 'escalating' ? 'esc' : d.highlightPlan === 'basic' ? 'bas' : 'std');
+    const raForDefer  = raAtPayout || 0;
+    const payAtCur    = interpolateCpfLife(raForDefer, curPlanKey, isMale, pa);
+    const payAt70     = pa < 70 ? interpolateCpfLife(raForDefer, curPlanKey, isMale, 70) : payAtCur;
+    const deferGainMonthly = Math.max(0, payAt70 - payAtCur);
+
+    return {
+      rstu:       rstuGain,
+      vc3a:       vc3aGain,
+      vcma:       vcmaGain,
+      oaSa:       oaSaGain,
+      vhr:        vhrGain,
+      prop:       propGain,
+      deferMonthly:     deferGainMonthly,  // $/month
+      deferPctIncrease: payAtCur > 0 ? Math.round((deferGainMonthly / payAtCur) * 100) : 0,
+      vc3aMaxRoom,
+      vcmaRoom,
+    };
+  }, [activeTab, goalStratTab, debouncedInputs, payoutAge65, raAtPayout]);
+
   // Pre-computed data for Lines chart mode — each account independent (no stacking).
   // sa: null post-55; ra: null pre-55; total = sum of all active accounts.
   const accumLineChartData = useMemo(() => {
@@ -10464,7 +10440,7 @@ function CPFPlannerApp() {
   }, [showMonteCarlo, debouncedInputs, isRealDollars]);
 
   // Baseline projection — mandatory contributions only, all voluntary inputs zeroed.
-  // Used as a dashed ghost line on the Grow chart to show how much voluntary
+  // Used as a dashed ghost line on the Accumulation chart to show how much voluntary
   // top-ups, transfers, and grants are contributing above the mandatory floor.
   const baselineProjection = useMemo(() => {
     if (!showBaseline) return null;
@@ -11539,7 +11515,7 @@ function CPFPlannerApp() {
         return `<tr><td style="padding:5px 8px;font-weight:700">${fc(h)}</td>${cells}</tr>`;
       }).join("");
 
-      // Milestone rows — colour-coded cards matching the Dashboard → CPF Overview sub-view's severity palette
+      // Milestone rows — colour-coded cards matching the Summary tab's severity palette
       const MS_COLORS = {
         success: { bg: '#f0fdf4', border: '#86efac', left: '#16a34a', badge: '#166534', badgeBg: '#dcfce7', icon: '✅' },
         gold:    { bg: '#fffbeb', border: '#fde68a', left: '#d97706', badge: '#92400e', badgeBg: '#fef3c7', icon: '🏆' },
@@ -11559,7 +11535,7 @@ function CPFPlannerApp() {
       }).join("");
 
       // Milestone Snapshots — balance callout table for user-set milestone ages (milestoneAge 1-5)
-      // Mirrors the "Milestone Snapshots" section in the Dashboard → CPF Overview sub-view UI.
+      // Mirrors the "Milestone Snapshots" section in the Summary tab UI.
       // G2 fix: added years-from-now column and growth-from-prior-milestone annotation.
       const msAges = [
         Number(inputs.milestoneAge)  || 0,
@@ -12934,7 +12910,7 @@ ${milestoneSnapshotHtml}
   }, [activeTab]);
 
   // ─── EXECUTIVE DASHBOARD MODE ─────────────────────────────────────────────────
-  // Activates when: FHD/auto≥1920px + sidebar collapsed + on Dashboard → CPF Overview sub-view.
+  // Activates when: FHD/auto≥1920px + sidebar collapsed + on Summary tab.
   // Replaces the normal vertical-scroll layout with a 2-column grid so all
   // critical data fits on-screen, like an exec dashboard.
   // viewportWidth (reactive state) replaces the stale window.innerWidth snapshot
@@ -13589,6 +13565,70 @@ ${milestoneSnapshotHtml}
             background: var(--bg-panel) !important;
             border-bottom: 1px solid var(--border-subtle);
           }
+        }
+
+        /* ── ⚡ Turbo lever cards (Strategy sub-tab) ──────────────────────────
+             Accent #f97316 (orange) — distinct from Strategy red (#f43f5e),
+             Stress amber, and every other tab accent in TAB_CONFIG.            ── */
+        .turbo-score-header {
+          display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+          justify-content: space-between; padding: 16px 18px; border-radius: 14px;
+          background: linear-gradient(135deg, rgba(249,115,22,0.14), rgba(249,115,22,0.04));
+          border: 1px solid rgba(249,115,22,0.35); margin-bottom: 16px;
+        }
+        .turbo-score-pill {
+          display: inline-flex; align-items: center; gap: 6px; font-weight: 800;
+          font-size: 13px; color: #f97316; background: rgba(249,115,22,0.12);
+          border: 1px solid rgba(249,115,22,0.4); border-radius: 999px; padding: 6px 14px;
+        }
+        .turbo-lever-grid {
+          display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+        }
+        @media (max-width: 720px) {
+          .turbo-lever-grid { grid-template-columns: 1fr; }
+        }
+        .turbo-lever-card {
+          border-radius: 14px; padding: 16px; border: 1px solid var(--border-subtle);
+          background: var(--bg-panel); display: flex; flex-direction: column; gap: 8px;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .turbo-lever-card.is-active {
+          border-color: rgba(16,185,129,0.55); background: rgba(16,185,129,0.06);
+        }
+        .turbo-lever-card.is-eligible {
+          border-color: rgba(249,115,22,0.4);
+        }
+        .turbo-lever-card.is-ineligible {
+          opacity: 0.55; filter: grayscale(0.4);
+        }
+        .turbo-lever-title {
+          display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px;
+          color: var(--text-bright);
+        }
+        .turbo-lever-gain {
+          font-size: 18px; font-weight: 800; color: #10b981;
+        }
+        .turbo-lever-note {
+          font-size: 12px; color: var(--text-muted); line-height: 1.5;
+        }
+        .turbo-lever-btn {
+          margin-top: 4px; padding: 9px 14px; border-radius: 10px; border: none;
+          background: #f97316; color: #fff; font-weight: 800; font-size: 13px;
+          cursor: pointer; align-self: flex-start;
+        }
+        .turbo-lever-btn:disabled {
+          background: var(--bg-input); color: var(--text-muted); cursor: default;
+        }
+        .turbo-undo-btn {
+          padding: 8px 16px; border-radius: 10px; border: 1px solid var(--border-strong);
+          background: var(--bg-input); color: var(--text-bright); font-weight: 700;
+          font-size: 13px; cursor: pointer;
+        }
+        .theme-light .turbo-score-header {
+          background: linear-gradient(135deg, rgba(249,115,22,0.10), rgba(249,115,22,0.02));
+        }
+        .theme-light .turbo-lever-card.is-active {
+          background: rgba(16,185,129,0.08);
         }
 
         /* ── Light mode: welcome step cards — hard-coded dark bg ── */
@@ -14619,8 +14659,8 @@ ${milestoneSnapshotHtml}
           .z4-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
           /* Readiness tab responsive — tablet */
-          .rd-kpi-header { grid-template-columns: repeat(3, 1fr) !important; }
-          .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
+          .rd-row1 { grid-template-columns: 1fr !important; }
+          .rd-kpi-hero { grid-template-columns: repeat(3, 1fr) !important; }
           .rd-row2 { grid-template-columns: 1fr 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr 1fr !important; }
           .rd-row3-milestones { grid-column: 1 / -1; }
@@ -14747,8 +14787,8 @@ ${milestoneSnapshotHtml}
           .wi-summary-grid { grid-template-columns: 1fr !important; }
           .wi-sliders-grid { grid-template-columns: 1fr !important; }
           /* Readiness tab — stack all rows vertically on mobile */
-          .rd-kpi-header { grid-template-columns: 1fr 1fr !important; }
-          .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
+          .rd-row1 { grid-template-columns: 1fr !important; }
+          .rd-kpi-hero { grid-template-columns: 1fr 1fr !important; }
           .rd-row2 { grid-template-columns: 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr !important; }
           .rd-row3-milestones { grid-column: 1 !important; }
@@ -15351,12 +15391,13 @@ ${milestoneSnapshotHtml}
               {welcomeStep === 2 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {[
-                    ["Dashboard", Activity, "var(--clr-emerald)", "Your retirement command centre — two sub-views toggled by pills at the top. Readiness Score: a 5-dimension arc gauge (FRS Coverage, Income Adequacy, Downside Resilience, Longevity Cover, Healthcare Shield) plus an Action Priority Queue, FRS/BRS/ERS progress bars, CPF LIFE payout card, and Milestone Summary chart. CPF Overview: total CPF at payout age, Tier Shock notice, RA-to-OA transfer notice, net worth breakdown, milestone alerts, and the What-If Explorer sliders. Hidden for RSS members and Foreigners."],
+                    ["Readiness", Activity, "var(--clr-emerald)", "Your Retirement Readiness Score (0–100) shown as an arc gauge — a 5-dimension age-banded weighted composite of FRS Coverage, Income Adequacy, Downside Resilience, Longevity Cover, and Healthcare Shield. Below the gauge: an Action Priority Queue listing the five highest-impact actions ranked by urgency, plus FRS/BRS/ERS progress bars, CPF LIFE payout card, and Milestone Summary chart. Hidden for RSS members and Foreigners."],
+                    ["Summary", PieChart, "var(--clr-blue2)", "Key metrics at a glance: total CPF at payout age, Tier Shock notice, RA-to-OA transfer notice, net worth breakdown, milestone alerts, and the What-If Explorer sliders."],
                     ["Strategy", Target, "#f43f5e", "Two tools in one tab. (1) Income Roadmap — set a Target Monthly Income, use ⚡ Fill Gap to auto-calculate the exact OA Drawdown needed to close the shortfall. Gantt timeline and income table show CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets side by side. (2) Goal Simulator — enter a CPF balance target at payout age and click ⚡ Calculate Strategies for three solver-generated plans: Strategy A (RSTU only), Strategy B (VC3A only), Strategy C (blended). Each card shows feasibility, required annual cash, monthly equivalent, and an Apply to Profile button that instantly writes the values to the sidebar. Clear Simulator always reverts to your original baseline even after applying multiple strategies."],
-                    ["Grow", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance — the active band is shown on the Probability of Sufficiency badge."],
-                    ["Payout Plans", ShieldCheck, "var(--clr-purple)", "Side-by-side CPF LIFE payout curves for Standard, Escalating, and Basic plans. Basic payout = PMT formula; bequest in Phase 1 includes full premium refund. Vertical lines mark exact break-even ages between plans."],
-                    ["Compare", Split, "var(--clr-orange)", "Two tools in one tab. (1) What-If Explorer — drag sliders to instantly simulate how payout age, SA/RA top-up, housing, salary, OA drawdown, SRS, or private growth affect your balance without modifying saved inputs. (2) Scenario A vs B diff — save your profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded diff of every metric that changes."],
-                    ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E), and IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, and interest component. Download either view as CSV."],
+                    ["Accumulation", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance — the active band is shown on the Probability of Sufficiency badge."],
+                    ["LIFE Comparison", ShieldCheck, "var(--clr-purple)", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Basic payout = PMT formula; bequest in Phase 1 includes full premium refund. Vertical lines mark exact break-even ages."],
+                    ["Compare", Split, "var(--clr-orange)", "Two tools in one tab. (1) What-If Explorer — drag sliders to instantly simulate how payout age, SA/RA top-up, housing, salary, OA drawdown, SRS, or private growth affect your balance without modifying saved inputs. The same sliders are also accessible from the Summary tab. (2) Scenario A vs B diff — save your profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded diff of every metric that changes."],
+                    ["Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E), and IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, and interest component. Download either view as CSV."],
                     ["Household", Users, "#8b5cf6", "Enable Household Mode in the sidebar to add a spouse or partner. Shows combined CPF accumulation, side-by-side payout cards (with gender, citizenship, FRS headroom), Income Coverage vs your target, OA Depletion Risk, Key Ages table (5-year intervals from current age through 95), and a Children & Dependants milestone guide. Each member runs a fully independent projection engine."],
                   ].map(([title, Icon, color, desc]) => (
                     <div key={title}>
@@ -15379,11 +15420,11 @@ ${milestoneSnapshotHtml}
                       ["Monte Carlo", Activity, "200 simulations with user-selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in the Accumulation tab. Shows probability of meeting FRS at payout age and a live P10–P90 confidence band on the chart."],
                       ["Retirement Sum Growth", TrendingUp, "Control the annual rate at which FRS, BRS, ERS, and BHS targets rise (default 3%, CPF Board historical average). Lower it for a conservative FRS target; raise it for a pessimistic view. Preset buttons: 2% / 3% / 4%. Found in the Salary section."],
                       ["Phased Salary & Career Break", Briefcase, "Model two-phase salary growth (e.g. 4%/yr to age 45, then 1%/yr after) using the Phase 2 Salary section in Mandatory Contributions. To pause contributions entirely (sabbatical, NS, parental leave), add a Career Break event in the Life Events section — it's fully visible on the chart with start/end age bands, can be toggled on/off, and supports multiple overlapping breaks."],
-                      ["Life Events & Stress Tests", Activity, "Overlay stress-test events: Retrenchment, Career Break (contributions pause), Medical Crisis (draws from OA/private), Windfall (one-off inflow), Early Retirement, or Hyperinflation. Visible as coloured bands on the Grow chart and a row in the Strategy Gantt. Found in the Life Events & Stress Tests panel."],
+                      ["Life Events", Activity, "Overlay stress-test events: Retrenchment, Career Break (contributions pause), Medical Crisis (draws from OA/private), Windfall (one-off inflow), Early Retirement, or Hyperinflation. Visible as coloured bands on the Accumulation chart and a row in the Strategy Gantt. Found in the Life Events panel."],
                       ["Goal Simulator", Target, "Set a CPF balance target at payout age, then click ⚡ Calculate Strategies for three solver plans: Strategy A (RSTU only), Strategy B (VC3A only), Strategy C (blended). Each card shows feasibility, required annual cash, monthly equivalent, and an Apply to Profile button. Clear Simulator reverts all changes back to your original baseline even after applying multiple strategies. Found in Strategy tab → Goal Simulator."],
                       ["SRS", BookOpen, "Supplementary Retirement Scheme — tax-deductible contributions up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63. Must deplete within 10 years of first withdrawal. Modelled in the SRS panel."],
                       ["Property Monetisation", Home, "Model a one-time monetisation event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds go to private assets; RA top-up credited to RA. Now in the Property & Timelines panel."],
-                      ["Die with Zero Mode", Clock, "Toggle in Retirement Drawdown. Uses the PMT annuity formula to compute the optimal monthly draw from OA, SRS, and Private Assets so all reach $0 at your target age. RA/CPF LIFE cannot be depleted."],
+                      ["Die with Zero Mode", Clock, "Toggle in Decumulation & Goals. Uses the PMT annuity formula to compute the optimal monthly draw from OA, SRS, and Private Assets so all reach $0 at your target age. RA/CPF LIFE cannot be depleted."],
                       ["Sample Profiles", Users, "11 pre-built scenarios (Blank Slate, Typical Employee, Late Starter, SEP, High Earner, Near Retirement, Post-55 RA Builder, RSS Member, Household — Tan Family, Baby Millionaire A & B). Load from the Samples button in the header — a great way to explore the tool quickly."],
                       ["OA→SA / OA→RA Transfer", ArrowRightLeft, "Pre-55: transfer OA to SA (capped at FRS). Age 55+: SA closes — transfer OA to RA instead (capped at ERS, $440,800). Both earn 4% vs 2.5%. Irreversible. No tax relief. CPF Transfers panel."],
                       ["OA Drawdown & ⚡ Fill Gap", Download, "Draw monthly cash from OA post-retirement to supplement CPF LIFE. Set a Target Monthly Income, then click ⚡ Fill Gap to auto-calculate the exact OA draw needed. Shows OA exhaustion age and sustainability warning."],
@@ -15749,10 +15790,10 @@ ${milestoneSnapshotHtml}
             {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
               const isLifeLocked = id === "life" && isForeigner;
               return (
-                <button key={id} role="tab" aria-selected={activeTab === id || (id === "readiness" && activeTab === "summary")} aria-controls={`panel-${id}`}
+                <button key={id} role="tab" aria-selected={activeTab === id} aria-controls={`panel-${id}`}
                   onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
                   title={isLifeLocked ? "CPF LIFE — not available to foreigners" : undefined}
-                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: "transparent", color: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLifeLocked ? 0.45 : 1 }}>
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: "transparent", color: activeTab === id ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: activeTab === id ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLifeLocked ? 0.45 : 1 }}>
                   <Icon style={{ width: 14, height: 14 }} />{label}{isLifeLocked && <span style={{ fontSize: 11, marginLeft: 2 }}>🔒</span>}
                 </button>
               );
@@ -15786,7 +15827,7 @@ ${milestoneSnapshotHtml}
                   const isLifeLocked = id === "life" && isForeigner;
                   return (
                     <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? 800 : 600, border: "none", background: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `${accent}18` : "transparent", color: isLifeLocked ? "rgba(160,160,160,0.4)" : (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: isLifeLocked ? 0.5 : 1 }}>
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: activeTab === id ? 800 : 600, border: "none", background: activeTab === id ? `${accent}18` : "transparent", color: isLifeLocked ? "rgba(160,160,160,0.4)" : activeTab === id ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: isLifeLocked ? 0.5 : 1 }}>
                       <Icon style={{ width: 13, height: 13 }} />{label}{isLifeLocked && " 🔒"}
                     </button>
                   );
@@ -15884,8 +15925,8 @@ ${milestoneSnapshotHtml}
               };
               const colMeta = [
                 { n: 1, label: "Profile & Contributions", clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
-                { n: 2, label: "Outflows & Boosts",       clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
-                { n: 3, label: "Wealth & Scenarios",      clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
+                { n: 2, label: "Outflows & Transfers",    clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
+                { n: 3, label: "Assets & Goals",          clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
               ];
               return colMeta.map(({ n, label, clr, bg, bdr, solid }) => {
                 const ids = colSections[n];
@@ -15984,7 +16025,7 @@ ${milestoneSnapshotHtml}
             <div className="sidebar-col sidebar-col-1">
               <div className={`sidebar-col-body${colOpen[1] ? "" : " col-collapsed"}`}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="profile" label="Who I Am" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} badge={null}
+              <SidebarSectionHeader id="profile" label="Profile" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} badge={null}
                 collapsedHint="Name · Age · Citizenship (SC / PR / Foreigner) · Gender · CPF scheme · Payout age · Milestone ages" />
               {openSections.has("profile") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -16119,7 +16160,7 @@ ${milestoneSnapshotHtml}
                   <div style={{ padding: "10px 12px", borderRadius: 10, background: "var(--bg-muted)", border: `1px solid ${inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3 || inputErrors.milestoneAge4 || inputErrors.milestoneAge5 ? "var(--clr-red)" : "rgba(34,211,238,0.25)"}` }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee", textTransform: "uppercase", whiteSpace: "nowrap" }}>🎯 Milestone Ages</span>
-                      <TooltipBox id="t-milestone" text="Set up to 5 personal milestone ages to track on the Grow chart and Dashboard → CPF Overview sub-view. A teal dashed marker appears for each, with a balance callout showing projected OA/SA/MA/RA. Useful for age 21 (first job), 35 (peak earning), 55 (SA closure). Leave at 0 to disable a slot." />
+                      <TooltipBox id="t-milestone" text="Set up to 5 personal milestone ages to track on the Accumulation chart and Summary tab. A teal dashed marker appears for each, with a balance callout showing projected OA/SA/MA/RA. Useful for age 21 (first job), 35 (peak earning), 55 (SA closure). Leave at 0 to disable a slot." />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 6 }}>
                       {[
@@ -16799,7 +16840,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="cpfBalances" label="Today's CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} badge={null}
+              <SidebarSectionHeader id="cpfBalances" label="CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} badge={null}
                 collapsedHint="Ordinary (OA) · Special / Retirement (SA/RA) · MediSave (MA) · Progress trackers toward FRS, ERS and BHS" />
               {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -16860,7 +16901,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="contribs" label={`Salary & Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 11, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}</>}
+              <SidebarSectionHeader id="contribs" label={`Mandatory Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 11, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}</>}
                 collapsedHint={isSelfEmployed
                   ? "SEP — MediSave contributions only · Salary reference for retirement sum projections"
                   : "OA · SA · MA employee & employer amounts · Auto-Calc from OW + AW · Salary growth · Phase 2 salary · Career break · PR tenure"} />
@@ -17440,8 +17481,8 @@ ${milestoneSnapshotHtml}
                 <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
               </div>
             )}
-            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit && openSections.has("topups") ? "#f97316" : isVcOverLimit ? "rgba(249,115,22,0.3)" : isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="topups" label="Boost My CPF" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => toggleSection("topups")} collapsedHint="VC3A · RSTU · VCMA cash top-up to MA · MRSS · MMSS · Gov Grants · WIS" badge={(() => {
+            <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit ? "#f97316" : isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
+              <SidebarSectionHeader id="topups" label="Inflows ($/yr)" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => toggleSection("topups")} collapsedHint="VC3A · RSTU · VCMA cash top-up to MA · MRSS · MMSS · Gov Grants · WIS" badge={(() => {
                 // Fix 3: badge now reflects VC3A + RSTU combined so it updates when either field changes.
                 // Policy: only VC3A counts toward the $37,740 Annual Limit; RSTU is exempt.
                 // usedPct uses totalVC (vc3aOnly + rstuOnly) for display; isVcOverLimit checks vc3aOnly only.
@@ -17921,7 +17962,7 @@ ${milestoneSnapshotHtml}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
 
-              <SidebarSectionHeader id="outflows" label="Housing, Insurance & Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
+              <SidebarSectionHeader id="outflows" label="Outflows ($/yr)" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -17954,7 +17995,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="transfers" label="CPF Transfers & OA Moves" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One · RA → OA at payout age" />
+              <SidebarSectionHeader id="transfers" label="CPF Transfers ($/yr)" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One · RA → OA at payout age" />
               {openSections.has("transfers") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* OA → MA */}
@@ -18246,9 +18287,9 @@ ${milestoneSnapshotHtml}
             </div>{/* /transfers inner */}
             </div>{/* /transfers gate wrapper */}
 
-            {/* Retirement Drawdown — income targets, OA drawdown, Die with Zero */}
+            {/* Decumulation & Goals — income targets, OA drawdown, Die with Zero */}
             <div ref={decumulationSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader id="decumulation" label="Retirement Drawdown" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
+              <SidebarSectionHeader id="decumulation" label="Decumulation & Goals" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
               {openSections.has("decumulation") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Monthly Goal */}
@@ -18552,7 +18593,7 @@ ${milestoneSnapshotHtml}
                 </div>
               )}
               <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-                <SidebarSectionHeader id="investments" label="CPFIS Investments" icon={<TrendingUp style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />} color="var(--clr-orange)" activeBg="rgba(var(--clr-orange-rgb),0.06)" isOpen={openSections.has("investments")} onToggle={() => toggleSection("investments")} badge={null} collapsedHint="CPFIS OA (>$20k floor) · CPFIS SA (>$40k floor) · OA Education Loan · OA Lump Sum Withdrawal (55+)" />
+                <SidebarSectionHeader id="investments" label="Investments & Withdrawals" icon={<TrendingUp style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />} color="var(--clr-orange)" activeBg="rgba(var(--clr-orange-rgb),0.06)" isOpen={openSections.has("investments")} onToggle={() => toggleSection("investments")} badge={null} collapsedHint="CPFIS OA (>$20k floor) · CPFIS SA (>$40k floor) · OA Education Loan · OA Lump Sum Withdrawal (55+)" />
                 {openSections.has("investments") && <div style={{ padding: "0 16px 16px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -18719,7 +18760,7 @@ ${milestoneSnapshotHtml}
             <>
             {/* Property — consolidated section (3rd section of col2) */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="property" label="Property & Monetisation" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => toggleSection("property")} badge={null} collapsedHint="Housing loan timelines · OA used for housing · Property sale & CPF refund · LBS · Monetisation" />
+              <SidebarSectionHeader id="property" label="Property & Timelines" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => toggleSection("property")} badge={null} collapsedHint="Housing loan timelines · OA used for housing · Property sale & CPF refund · LBS · Monetisation" />
               {openSections.has("property") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -19011,7 +19052,7 @@ ${milestoneSnapshotHtml}
                           </div>
                           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
                             {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Sell existing home, buy smaller. Enter net cash after CPF OA refund (handled by Sell Property at Age), agent fees, stamp duty, and replacement home cost. Any voluntary RA top-up from proceeds is optional."}
-                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "Sell tail-end of HDB lease to HDB; you stay in your flat for life. Available from age 65 (SC only). HDB pays an annuity premium directly into RA (enter in RA field below); you may also receive a smaller cash component. ⚠ Monthly LBS income is not modelled as a cash stream — add it as private income in Retirement Drawdown if needed."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "Sell tail-end of HDB lease to HDB; you stay in your flat for life. Available from age 65 (SC only). HDB pays an annuity premium directly into RA (enter in RA field below); you may also receive a smaller cash component. ⚠ Monthly LBS income is not modelled as a cash stream — add it as private income in Decumulation & Goals if needed."}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Downgrade to a 3-room or smaller HDB; govt tops up RA as a CPF bonus. Cash bonus (if any) enters private assets; CPF RA bonus enters RA. Bonus amount depends on flat type — verify the exact figures with CPF Board before entering."}
                           </p>
                         </div>
@@ -19153,7 +19194,7 @@ ${milestoneSnapshotHtml}
             <>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
             <div ref={privateAssetsRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader id="privateAssets" label="Savings, SRS & Private Wealth" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & contributions" />
+              <SidebarSectionHeader id="privateAssets" label="Private Assets" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & contributions" />
               {openSections.has("privateAssets") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   
@@ -19364,7 +19405,7 @@ ${milestoneSnapshotHtml}
               return (
                 <div ref={lifeEventsSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
                   {/* Header */}
-                  <SidebarSectionHeader id="lifeevents" label="Life Events & Stress Tests" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Stress-test retrenchment, windfall, career break, medical crisis…"} />
+                  <SidebarSectionHeader id="lifeevents" label="Life Events" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Stress-test retrenchment, windfall, career break, medical crisis…"} />
 
                   {openSections.has("lifeevents") && (
                     <div style={{ padding: "0 16px 16px" }}>
@@ -19690,26 +19731,9 @@ ${milestoneSnapshotHtml}
                           { label: "Total CPF", sublabel: `at payout age ${inputs.payoutAge}`, value: formatCurrency(dispTotal), color: "var(--clr-blue)", tip: "Total CPF balance (OA+MA+RA) at your chosen payout age — the nest egg that funds CPF LIFE payouts" },
                           { label: planLabel, sublabel: "monthly payout", value: activePayout ? formatCurrency(Math.round(applyInflation(activePayout, inputs.payoutAge))) : "—", color: "var(--clr-emerald)", tip: `${planLabel} monthly payout from CPF LIFE. Switch plans in the plan comparison below. Figures from 2026 CPF Board data.` },
                           { label: "Payout age", sublabel: "CPF LIFE start", value: `${inputs.payoutAge}`, color: "var(--clr-amber)", tip: "Age CPF LIFE payouts begin. Deferring allows RA to grow further, increasing monthly payouts." },
-                          (() => {
-                            // KPI 4: FRS Progress — RA at 55 vs projected FRS at 55 (from gapAlert if available)
-                            const frsTarget = gapAlert?.projFRS55 || RETIREMENT_SUMS_2026.FRS;
-                            const frsPct    = frsTarget > 0 ? Math.min(999, Math.round((ra55 / frsTarget) * 100)) : null;
-                            const frsClr    = frsPct == null ? "var(--text-muted)" : frsPct >= 100 ? "var(--clr-emerald)" : frsPct >= 80 ? "var(--clr-amber)" : "var(--clr-red)";
-                            return { label: "FRS progress", sublabel: ra55Sublabel, value: frsPct != null ? `${frsPct}%` : "—", color: frsClr, tip: `RA ${ra55Sublabel}: ${formatCurrency(Math.round(ra55))} vs projected FRS ${formatCurrency(Math.round(frsTarget))} — ${frsPct ?? "—"}% of target`, isNew: true };
-                          })(),
-                          (() => {
-                            // KPI 5: Monthly income gap vs target (positive = surplus, negative = gap)
-                            const target_ = Number(inputs.targetMonthlyIncome) || 0;
-                            const totalMonthly = (activePayout ? Math.round(applyInflation(activePayout, inputs.payoutAge)) : 0)
-                              + (Number(inputs.oaDrawdownMonthly) || 0);
-                            const gap = target_ > 0 ? totalMonthly - target_ : null;
-                            const gapClr = gap == null ? "var(--text-muted)" : gap >= 0 ? "var(--clr-emerald)" : "var(--clr-red)";
-                            const gapVal = gap == null ? "—" : (gap >= 0 ? `+${formatCurrency(gap)}` : `−${formatCurrency(Math.abs(gap))}`);
-                            return { label: "Monthly gap", sublabel: target_ > 0 ? `vs ${formatCurrency(target_)}/mo target` : "set target in sidebar", value: gapVal, color: gapClr, tip: target_ > 0 ? `CPF LIFE payout + OA drawdown = ${formatCurrency(totalMonthly)}/mo vs ${formatCurrency(target_)}/mo target. ${gap != null && gap < 0 ? "Gap: add SRS drawdown or OA drawdown to close." : "Surplus — you are on track."}` : "Enter Target Monthly Income in the Retirement Drawdown section to track your income gap.", isNew: true };
-                          })(),
                         ];
                       })();
-                    })().map(({ label, sublabel, value, color, tip, isNew }, i) => (
+                    })().map(({ label, sublabel, value, color, tip }, i) => (
                       <KpiCard
                         key={i}
                         label={label}
@@ -19717,7 +19741,6 @@ ${milestoneSnapshotHtml}
                         value={value}
                         color={color}
                         tip={tip}
-                        isNew={isNew}
                         isFirst={i === 0}
                         isEarly={i > 0 && i < 4}
                       />
@@ -19730,19 +19753,6 @@ ${milestoneSnapshotHtml}
           </div>
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
           <div ref={tabContentRef} className="cpf-tab-content" data-exec={execDashMode ? "true" : undefined} data-tab={activeTab}>
-            {/* ── DASHBOARD TAB sub-view toggle (Score / Overview) ── */}
-            {(activeTab === "readiness" || activeTab === "summary") && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px 0", background: "var(--bg-base)" }}>
-                <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
-                  <button onClick={() => setActiveTab("readiness")} style={{ padding: "5px 16px", borderRadius: 7, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: activeTab === "readiness" ? "var(--ctrl-active-bg)" : "transparent", color: activeTab === "readiness" ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
-                    <Activity style={{ width: 12, height: 12, display: "inline", marginRight: 5, verticalAlign: "middle" }} />Readiness score
-                  </button>
-                  <button onClick={() => setActiveTab("summary")} style={{ padding: "5px 16px", borderRadius: 7, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: activeTab === "summary" ? "var(--ctrl-active-bg)" : "transparent", color: activeTab === "summary" ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
-                    <PieChart style={{ width: 12, height: 12, display: "inline", marginRight: 5, verticalAlign: "middle" }} />CPF overview
-                  </button>
-                </div>
-              </div>
-            )}
             {/* ── READINESS TAB ── */}
             {activeTab === "readiness" && (
               <ReadinessTab
@@ -19882,7 +19892,7 @@ ${milestoneSnapshotHtml}
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#eff6ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Setting Up Your Profile</h4><p style={{ fontSize: 13, color: "rgba(239,246,255,0.8)", margin: 0 }}>Step 1 — The Input Engine (left panel)</p></div>
                     </div>
                     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[["1", "Enter your CPF balances, gender & citizenship", "Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). Select citizenship: SC or PR have full CPF access; Foreigners have no CPF account — all CPF sections lock automatically and only SRS, Property, and Private Assets apply. MRSS and MMSS are SC-only. PR members in Year 1 or 2 get lower contribution rates, with the engine automatically advancing from Yr 1 → Yr 2 → Yr 3+ rates each projection year.", "var(--clr-blue2)"], ["2", "Auto-Calc Contributions (SC / PR / SEP)", "For employed members: enter OW, AW, and Salary Growth %, then click ⚡ Auto-Calc. SC uses full rates. PR members: select tenure year (1 / 2 / 3+) and rate type — G/G (default, graduated employer) or F/G (full employer 17%, requires joint CPF application). Auto-Calc uses the correct rates and the engine advances tiers automatically year-by-year. SEP members use the Inflows (VC3A) panel instead.", "var(--clr-emerald)"], ["3", "Add voluntary top-ups & CPF Transfers", "RSTU top-ups to SA/RA, gov grants, MRSS/MMSS. Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the current year. CPF Transfers: OA→SA/RA (For Self: internal move; For Loved One: OA outflow only, no FRS cap). CPFIS: OA above $20k and SA above $40k are investible separately.", "var(--clr-purple)"], ["4", "Review the Inflows panel limit", "The Inflows panel tracks the $37,740 CPF Annual Limit for VC contributions. It turns orange if your combined VC3A/RSTU inputs exceed your remaining allowance.", "var(--clr-amber)"], ["5", "Set your life-phase timelines", "Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model transitions accurately. If selling property, enter Sell Property at Age — CPF requires refund of OA housing principal + 2.5%/yr accrued interest, credited back to OA.", "var(--clr-orange)"], ["6", "Configure SRS (optional)", "Enter your SRS balance, annual contribution (max $15,300/yr for SC/PR), and drawdown start age in the SRS panel. Contributions are tax-deductible; 50% of each withdrawal is taxable from age 63; full balance must be withdrawn within 10 years of first withdrawal. The engine models growth and drawdown separately.", "#0ea5e9"], ["7", "Plan decumulation income & Property Monetisation", "Set a Target Monthly Income in Retirement Drawdown. Click ⚡ Fill Gap to auto-set the OA Drawdown amount. If you plan to downgrade, use LBS, or sell and buy smaller, toggle Property Monetisation in the Property & Timelines section to add net cash proceeds and any RA top-up to the projection.", "#f43f5e"], ["8", "Try Die with Zero mode (optional)", "Toggle Die with Zero in Retirement Drawdown. Set a target depletion age — the tool automatically computes the exact monthly OA draw using the PMT annuity formula and applies it directly to the projection. The OA draw is shown as auto-applied in the panel. RA and CPF LIFE payouts are unaffected.", "var(--clr-green)"]].map(([num, title, desc, color]) => (
+                      {[["1", "Enter your CPF balances, gender & citizenship", "Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). Select citizenship: SC or PR have full CPF access; Foreigners have no CPF account — all CPF sections lock automatically and only SRS, Property, and Private Assets apply. MRSS and MMSS are SC-only. PR members in Year 1 or 2 get lower contribution rates, with the engine automatically advancing from Yr 1 → Yr 2 → Yr 3+ rates each projection year.", "var(--clr-blue2)"], ["2", "Auto-Calc Contributions (SC / PR / SEP)", "For employed members: enter OW, AW, and Salary Growth %, then click ⚡ Auto-Calc. SC uses full rates. PR members: select tenure year (1 / 2 / 3+) and rate type — G/G (default, graduated employer) or F/G (full employer 17%, requires joint CPF application). Auto-Calc uses the correct rates and the engine advances tiers automatically year-by-year. SEP members use the Inflows (VC3A) panel instead.", "var(--clr-emerald)"], ["3", "Add voluntary top-ups & CPF Transfers", "RSTU top-ups to SA/RA, gov grants, MRSS/MMSS. Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the current year. CPF Transfers: OA→SA/RA (For Self: internal move; For Loved One: OA outflow only, no FRS cap). CPFIS: OA above $20k and SA above $40k are investible separately.", "var(--clr-purple)"], ["4", "Review the Inflows panel limit", "The Inflows panel tracks the $37,740 CPF Annual Limit for VC contributions. It turns orange if your combined VC3A/RSTU inputs exceed your remaining allowance.", "var(--clr-amber)"], ["5", "Set your life-phase timelines", "Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model transitions accurately. If selling property, enter Sell Property at Age — CPF requires refund of OA housing principal + 2.5%/yr accrued interest, credited back to OA.", "var(--clr-orange)"], ["6", "Configure SRS (optional)", "Enter your SRS balance, annual contribution (max $15,300/yr for SC/PR), and drawdown start age in the SRS panel. Contributions are tax-deductible; 50% of each withdrawal is taxable from age 63; full balance must be withdrawn within 10 years of first withdrawal. The engine models growth and drawdown separately.", "#0ea5e9"], ["7", "Plan decumulation income & Property Monetisation", "Set a Target Monthly Income in Decumulation & Goals. Click ⚡ Fill Gap to auto-set the OA Drawdown amount. If you plan to downgrade, use LBS, or sell and buy smaller, toggle Property Monetisation in the Property & Timelines section to add net cash proceeds and any RA top-up to the projection.", "#f43f5e"], ["8", "Try Die with Zero mode (optional)", "Toggle Die with Zero in Decumulation & Goals. Set a target depletion age — the tool automatically computes the exact monthly OA draw using the PMT annuity formula and applies it directly to the projection. The OA draw is shown as auto-applied in the panel. RA and CPF LIFE payouts are unaffected.", "var(--clr-green)"]].map(([num, title, desc, color]) => (
                         <div key={num} style={{ display: "flex", gap: 12 }}>
                           <div style={{ width: 26, height: 26, borderRadius: "50%", background: `${color}20`, color, border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, flexShrink: 0 }}>{num}</div>
                           <div><h5 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)", marginBottom: 2 }}>{title}</h5><p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</p></div>
@@ -19897,7 +19907,7 @@ ${milestoneSnapshotHtml}
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#faf5ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Exploring the Dashboard</h4><p style={{ fontSize: 13, color: "rgba(250,245,255,0.8)", margin: 0 }}>Step 2 — The right panel tabs</p></div>
                     </div>
                     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[["CPF Overview", PieChart, "var(--clr-emerald)", "Sub-view inside the Dashboard tab — toggle using the pills at the top. Shows: five-card KPI strip (Total CPF · Monthly Payout · Payout Age · FRS Progress · Monthly Gap), net worth doughnut, estate planning panel, Milestone Snapshots chart, contribution gap alert, What-If Explorer sliders, and milestone alerts."], ["Strategy", Target, "#f43f5e", "Two tools in one tab. (1) Income Roadmap — set a Target Monthly Income, use ⚡ Fill Gap to auto-set the OA Drawdown needed to close the income gap. Gantt and income table show CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets. (2) Goal Simulator — enter a CPF balance target at payout age and click ⚡ Calculate Strategies for three solver plans: A (RSTU only), B (VC3A only), C (blended). Each card shows feasibility, required cash, and Apply to Profile. Clear Simulator reverts to your original baseline even after applying multiple strategies."], ["Grow", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance. Life Events overlay shows coloured bands for retrenchment, career break, windfall and other stress scenarios. Real vs Nominal dollar toggle adjusts for inflation."], ["Payout Plans", ShieldCheck, "var(--clr-purple)", "Side-by-side CPF LIFE payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."], ["Compare", Split, "var(--clr-orange)", "Scenario A vs B diff — save your current profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded side-by-side diff of every metric that changes. The What-If Explorer is in the Dashboard → CPF Overview sub-view."], ["Household", Users, "#8b5cf6", "Enable Household Mode in the Profile section sidebar toggle to add a spouse or partner. Shows combined CPF accumulation, side-by-side payout cards (with gender, citizenship, FRS headroom), Income Coverage vs your target, OA Depletion Risk, Key Ages table (5-year intervals), and a Children & Dependants milestone guide. Each member runs a fully independent projection engine."], ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, interest, and transfer component. Download either view as CSV."]].map(([title, Icon, color, desc]) => (
+                      {[["Summary", PieChart, "var(--clr-emerald)", "Three-tile hero row: Total CPF at payout age · Monthly CPF LIFE payout · Payout Age — each in its own floating tile. Below: net worth doughnut, estate planning panel, Milestone Snapshots chart, contribution gap alert, What-If Explorer sliders, and milestone alerts. Footer row aligns Display toggle, Plan selector, and Alert badge directly under their tile."], ["Strategy", Target, "#f43f5e", "Two tools in one tab. (1) Income Roadmap — set a Target Monthly Income, use ⚡ Fill Gap to auto-set the OA Drawdown needed to close the income gap. Gantt and income table show CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets. (2) Goal Simulator — enter a CPF balance target at payout age and click ⚡ Calculate Strategies for three solver plans: A (RSTU only), B (VC3A only), C (blended). Each card shows feasibility, required cash, and Apply to Profile. Clear Simulator reverts to your original baseline even after applying multiple strategies."], ["Accumulation", BarChart3, "var(--clr-blue2)", "Stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance. Life Events overlay shows coloured bands for retrenchment, career break, windfall and other stress scenarios. Real vs Nominal dollar toggle adjusts for inflation."], ["LIFE Comparison", ShieldCheck, "var(--clr-purple)", "Side-by-side payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."], ["Compare", Split, "var(--clr-orange)", "Scenario A vs B diff — save your current profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded side-by-side diff of every metric that changes. The What-If Explorer is in the Summary tab."], ["Household", Users, "#8b5cf6", "Enable Household Mode in the Profile section sidebar toggle to add a spouse or partner. Shows combined CPF accumulation, side-by-side payout cards (with gender, citizenship, FRS headroom), Income Coverage vs your target, OA Depletion Risk, Key Ages table (5-year intervals), and a Children & Dependants milestone guide. Each member runs a fully independent projection engine."], ["Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, interest, and transfer component. Download either view as CSV."]].map(([title, Icon, color, desc]) => (
                         <div key={title}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}15`, border: `1px solid ${color}33`, padding: "4px 10px", borderRadius: 10, marginBottom: 5 }}>
                             <Icon style={{ width: 12, height: 12, color }} />
@@ -19916,7 +19926,7 @@ ${milestoneSnapshotHtml}
                     </div>
                     <div style={{ padding: "16px 20px" }}>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8, marginBottom: 16 }}>
-                        {[["Goal Simulator", Target, "Set a CPF balance target at payout age. Click ⚡ Calculate Strategies for three solver plans — A (RSTU only), B (VC3A only), C (blended). Each card shows feasibility, required annual cash, monthly equivalent, and Apply to Profile. Clear Simulator reverts to the original baseline even after applying multiple strategies. Found in Strategy tab → Goal Simulator."], ["VCMA — Cash Top-up to MA", Gift, "Voluntary Cash MediSave Top-up — direct annual cash deposit to your MA. Found in the Inflows panel directly after RSTU. Capped at BHS ($79,000). Not subject to the $37,740 Annual Limit. MMSS-eligible members get an automatic government match up to $1,000/yr."], ["Share Link", Link, "Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."], ["PDF Report", Download, "Comprehensive multi-section PDF report: cover KPIs, input parameters & optional features, charts, FRS tracker & breakeven, year-by-year projection, Cashflow Ledger, sensitivity analysis, and conditional SRS / Scenario Comparison sections."], ["SEP Mode", Briefcase, "Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr split proportionally across OA/SA/MA. BHS and ERS caps enforced."], ["Monte Carlo", Activity, "200 simulations with selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in the Grow tab. Probability of Sufficiency badge shows the active band."], ["SRS", BookOpen, "Tax-deferred savings scheme — contributions deductible up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63; full balance must be withdrawn within 10 years. Model in the SRS panel."], ["Property Monetisation", Home, "One-time event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds to private assets; RA top-up to RA. Now in the Property & Monetisation panel."], ["Die with Zero", Clock, "PMT-based draw-down planner — toggle in Retirement Drawdown. Set a target depletion age; the OA draw is computed via PMT and auto-applied to the projection immediately. All liquid assets reach $0 at that age; RA/CPF LIFE unaffected."], ["Sample Profiles", Users, "11 pre-built scenarios: Blank Slate, Typical Employee (35), Late Starter (50), Self-Employed (40), High Earner (40), Near Retirement (54), Post-55 RA Builder (57), RSS Member (68), Household — Tan Family, Baby Millionaire A & B. Load from the Samples button in the header (desktop) or hamburger menu (mobile) to explore the tool instantly."], ["PR G/G & F/G Rates", Users, "PR members in Year 1 or 2 can select G/G (graduated employer, default) or F/G (full employer 17% — requires joint CPF application). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates in the projection."], ["Recurring / One-Time Toggles", ArrowRightLeft, "Every inflow/outflow field has a frequency toggle. 'Recurring' applies the amount every projection year. 'One-Time' applies it only in the first projection year — ideal for lump-sum top-ups or one-off withdrawals."], ["OA→SA / OA→RA For Loved One", Users, "CPF Transfers panel supports For Self (internal move with FRS/ERS cap) and For Loved One (OA outflow only, no headroom constraint on the recipient). Applies to both OA→SA (pre-55) and OA→RA (55+)."], ["Annual Cashflow Ledger", TableIcon, "In the Data Table tab, switch to Cashflow Ledger for a full year-by-year breakdown: mandatory, voluntary, grants, OA/SA/RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with column totals."], ["Gender Toggle", Users, "Male/Female selection affects CPF LIFE payout. Female payouts are ~7% lower (0.93× male) due to longer life expectancy. Estimates use 2026 CPF Board data with linear interpolation."], ["OA Drawdown & ⚡ Fill Gap", Download, "Draw monthly cash from OA after CPF LIFE starts to close the income gap. Set a Target Monthly Income, then click ⚡ Fill Gap to auto-set the exact draw amount. OA Exhaustion Age badge updates live."], ["Property Sale & CPF Refund", Home, "Enter Sell Property at Age in Timelines & Property. On sale, CPF refunds OA housing principal + 2.5%/yr interest to OA. With pledge active, refund restores RA to FRS first."], ["OA Education Loan", BookOpen, "Model CPF Education Scheme withdrawals: use OA savings to fund tuition at approved local institutions. Engine enforces the 40% OA ceiling and age 55+ FRS-first rule. Modelled as a pure OA outflow."], ["PwD MRSS Bypass", ShieldCheck, "Enable the Person with Disabilities (PwD) flag in Profile to unlock MRSS below age 55. PwD members are exempt from the age-55 requirement for the Matched Retirement Savings Scheme."], ["Retirement Sum Growth", TrendingUp, "Control how fast FRS, BRS, ERS, and BHS targets rise each year (default 3%, CPF Board historical average). Preset buttons: 2% / 3% / 4%. Found in the Salary section."], ["Phased Salary & Career Break", Briefcase, "Model a growth rate change at a specific age (Phase 2) or a full contribution pause for a career break age range (sabbatical, NS, parental leave). Both affect mandatory contribution projections. Found in the Salary section."], ["Life Events & Stress Tests", Activity, "Overlay stress-test events: Retrenchment, Career Break (contributions pause), Medical Crisis (draws OA/private), Windfall (one-off inflow), Early Retirement, Hyperinflation, or Salary Cut (reduces gross salary by %). Coloured bands on the Grow chart and a row in the Strategy Gantt. Found in the Life Events & Stress Tests panel."]].map(([title, Icon, desc]) => (
+                        {[["Goal Simulator", Target, "Set a CPF balance target at payout age. Click ⚡ Calculate Strategies for three solver plans — A (RSTU only), B (VC3A only), C (blended). Each card shows feasibility, required annual cash, monthly equivalent, and Apply to Profile. Clear Simulator reverts to the original baseline even after applying multiple strategies. Found in Strategy tab → Goal Simulator."], ["VCMA — Cash Top-up to MA", Gift, "Voluntary Cash MediSave Top-up — direct annual cash deposit to your MA. Found in the Inflows panel directly after RSTU. Capped at BHS ($79,000). Not subject to the $37,740 Annual Limit. MMSS-eligible members get an automatic government match up to $1,000/yr."], ["Share Link", Link, "Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."], ["PDF Report", Download, "Comprehensive multi-section PDF report: cover KPIs, input parameters & optional features, charts, FRS tracker & breakeven, year-by-year projection, Cashflow Ledger, sensitivity analysis, and conditional SRS / Scenario Comparison sections."], ["SEP Mode", Briefcase, "Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr split proportionally across OA/SA/MA. BHS and ERS caps enforced."], ["Monte Carlo", Activity, "200 simulations with selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in the Accumulation tab. Probability of Sufficiency badge shows the active band."], ["SRS", BookOpen, "Tax-deferred savings scheme — contributions deductible up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63; full balance must be withdrawn within 10 years. Model in the SRS panel."], ["Property Monetisation", Home, "One-time event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds to private assets; RA top-up to RA. Now in the Property & Timelines panel."], ["Die with Zero", Clock, "PMT-based draw-down planner — toggle in Decumulation & Goals. Set a target depletion age; the OA draw is computed via PMT and auto-applied to the projection immediately. All liquid assets reach $0 at that age; RA/CPF LIFE unaffected."], ["Sample Profiles", Users, "11 pre-built scenarios: Blank Slate, Typical Employee (35), Late Starter (50), Self-Employed (40), High Earner (40), Near Retirement (54), Post-55 RA Builder (57), RSS Member (68), Household — Tan Family, Baby Millionaire A & B. Load from the Samples button in the header (desktop) or hamburger menu (mobile) to explore the tool instantly."], ["PR G/G & F/G Rates", Users, "PR members in Year 1 or 2 can select G/G (graduated employer, default) or F/G (full employer 17% — requires joint CPF application). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates in the projection."], ["Recurring / One-Time Toggles", ArrowRightLeft, "Every inflow/outflow field has a frequency toggle. 'Recurring' applies the amount every projection year. 'One-Time' applies it only in the first projection year — ideal for lump-sum top-ups or one-off withdrawals."], ["OA→SA / OA→RA For Loved One", Users, "CPF Transfers panel supports For Self (internal move with FRS/ERS cap) and For Loved One (OA outflow only, no headroom constraint on the recipient). Applies to both OA→SA (pre-55) and OA→RA (55+)."], ["Annual Cashflow Ledger", TableIcon, "In the Table tab, switch to Cashflow Ledger for a full year-by-year breakdown: mandatory, voluntary, grants, OA/SA/RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with column totals."], ["Gender Toggle", Users, "Male/Female selection affects CPF LIFE payout. Female payouts are ~7% lower (0.93× male) due to longer life expectancy. Estimates use 2026 CPF Board data with linear interpolation."], ["OA Drawdown & ⚡ Fill Gap", Download, "Draw monthly cash from OA after CPF LIFE starts to close the income gap. Set a Target Monthly Income, then click ⚡ Fill Gap to auto-set the exact draw amount. OA Exhaustion Age badge updates live."], ["Property Sale & CPF Refund", Home, "Enter Sell Property at Age in Timelines & Property. On sale, CPF refunds OA housing principal + 2.5%/yr interest to OA. With pledge active, refund restores RA to FRS first."], ["OA Education Loan", BookOpen, "Model CPF Education Scheme withdrawals: use OA savings to fund tuition at approved local institutions. Engine enforces the 40% OA ceiling and age 55+ FRS-first rule. Modelled as a pure OA outflow."], ["PwD MRSS Bypass", ShieldCheck, "Enable the Person with Disabilities (PwD) flag in Profile to unlock MRSS below age 55. PwD members are exempt from the age-55 requirement for the Matched Retirement Savings Scheme."], ["Retirement Sum Growth", TrendingUp, "Control how fast FRS, BRS, ERS, and BHS targets rise each year (default 3%, CPF Board historical average). Preset buttons: 2% / 3% / 4%. Found in the Salary section."], ["Phased Salary & Career Break", Briefcase, "Model a growth rate change at a specific age (Phase 2) or a full contribution pause for a career break age range (sabbatical, NS, parental leave). Both affect mandatory contribution projections. Found in the Salary section."], ["Life Events", Activity, "Overlay stress-test events: Retrenchment, Career Break (contributions pause), Medical Crisis (draws OA/private), Windfall (one-off inflow), Early Retirement, Hyperinflation, or Salary Cut (reduces gross salary by %). Coloured bands on the Accumulation chart and a row in the Strategy Gantt. Found in the Life Events panel."]].map(([title, Icon, desc]) => (
                           <div key={title} style={{ background: "var(--bg-base)", padding: "12px 14px", borderRadius: 12, border: "1px solid var(--border-subtle)" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
                               <Icon style={{ width: 13, height: 13, color: "var(--clr-blue2)" }} />
@@ -21183,7 +21193,7 @@ ${milestoneSnapshotHtml}
                                 </div>
                                 {cagrRaw6 !== null && (
                                   <div style={mRow(!contribMul6 && !xirrStd6 && !xirrEsc6 && !xirrBas6)}>
-                                    <p style={mLabel}>Implied CPF CAGR<TooltipBox id="t-cagr6" text={`Approximate effective annual growth rate of your CPF from age ${Number(inputs.currentAge)||35} to ${summaryRefAge}. Computed as (total balance ÷ total put in)^(1/years) − 1. For a time-weighted return use Yield IRR% in the Data Table tab.`} /></p>
+                                    <p style={mLabel}>Implied CPF CAGR<TooltipBox id="t-cagr6" text={`Approximate effective annual growth rate of your CPF from age ${Number(inputs.currentAge)||35} to ${summaryRefAge}. Computed as (total balance ÷ total put in)^(1/years) − 1. For a time-weighted return use Yield IRR% in the Table tab.`} /></p>
                                     <p style={mVal("var(--clr-blue)")}>{cagrRaw6.toFixed(2)}%</p>
                                     <p style={mSub}>over {years6} yrs · contributions → balance</p>
                                   </div>
@@ -21211,7 +21221,7 @@ ${milestoneSnapshotHtml}
                                 )}
                                 {xirrBas6 !== null && (
                                   <div style={mRow(true)}>
-                                    <p style={mLabel}>XIRR · Basic<TooltipBox id="t-xirr-bas6" text={`XIRR for the Basic plan at age ${summaryRefAge}. Basic has two phases which can prevent solver convergence — use the Data Table tab Yield IRR% column for per-age detail.${isRealDollars ? " Always a nominal rate." : ""}`} /></p>
+                                    <p style={mLabel}>XIRR · Basic<TooltipBox id="t-xirr-bas6" text={`XIRR for the Basic plan at age ${summaryRefAge}. Basic has two phases which can prevent solver convergence — use the Table tab Yield IRR% column for per-age detail.${isRealDollars ? " Always a nominal rate." : ""}`} /></p>
                                     <p style={mVal(xirrCol6(xirrBas6))}>{xirrBas6.toFixed(2)}%</p>
                                     <p style={mSub}>{isRealDollars ? "nominal rate · not inflation-adjusted" : "annualised return on all contributions"}</p>
                                   </div>
@@ -21664,7 +21674,7 @@ ${milestoneSnapshotHtml}
                       ["∿ Lines mode", "Renders each account as an independent curve. SA terminates at 55 and RA appears from 55 onwards. Best for spotting when individual accounts hit caps or deplete."],
                       ["📉 Baseline ghost", "The dashed grey line shows the mandatory-contributions-only projection with all voluntary top-ups, transfers, and grants zeroed. The gap between the ghost and the solid line is the value your active voluntary strategy adds."],
                       ["🎲 Monte Carlo band", "200 simulations with randomised CPF interest rates each year. The shaded purple band is the P10–P90 range; the dashed line is P50. The Probability of Sufficiency badge shows the share of runs where CPF at payout age ≥ projected FRS. Variance presets: Mild ±0.5%, Base ±1%, Stress ±2%."],
-                      ["🔔 Life Events overlay", "Coloured vertical bands mark active life events (retrenchment, career break, windfall, etc.). Toggle the Events button to show or hide them. Events are configured in the Life Events & Stress Tests panel in the sidebar."],
+                      ["🔔 Life Events overlay", "Coloured vertical bands mark active life events (retrenchment, career break, windfall, etc.). Toggle the Events button to show or hide them. Events are configured in the Life Events panel in the sidebar."],
                       ["📍 Vertical markers", "The dotted line at age 55 marks when the SA is converted to RA. The solid line at your payout age marks when CPF LIFE begins and accumulation ends."],
                     ].map(([title, desc]) => (
                       <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
@@ -21802,7 +21812,7 @@ ${milestoneSnapshotHtml}
                           </div>
                         ))}
                       </div>
-                      <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>💡 <strong>What to do with this:</strong> If the probability is low, consider increasing your RSTU top-ups or deferring your payout age. The What-If Explorer (Dashboard → CPF Overview) lets you test these adjustments instantly.</p>
+                      <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>💡 <strong>What to do with this:</strong> If the probability is low, consider increasing your RSTU top-ups or deferring your payout age. The What-If Explorer (Summary tab) lets you test these adjustments instantly.</p>
                     </div>
                   </>);
                 })()}
@@ -23449,7 +23459,7 @@ ${milestoneSnapshotHtml}
                     const kpis = [
                       { label: "Combined CPF at Later Payout Age", value: fmtM((pAtPA.total || 0) + (sAtPA.total || 0)), sub: `At age ${combinedPA}`, color: "#8b5cf6", tip: "Sum of both members' total CPF at the later of the two payout ages. Each member's projection runs independently." },
                       { label: "Est. Combined CPF LIFE", value: `${fmt(combinedMonthly)}/mo`, sub: `${pName}: ${pPlanLabel} · ${sName}: ${sPlanLabel}`, color: "var(--clr-green)", tip: "Sum of each member's CPF LIFE monthly payout under each member's independently selected plan. Female payouts are ~7% lower. Both members must meet RA ≥ $60,000 threshold." },
-                      { label: "Income Coverage", value: coveragePct != null ? `${coveragePct}%` : "—", sub: coveragePct != null ? `${fmt(combinedMonthly)}/mo vs ${fmt(targetMo)} target` : "Enter target in sidebar", color: coverageColor, tip: "Combined monthly CPF LIFE vs the primary member's Target Monthly Income. Green ≥ 100%, amber ≥ 75%, red < 75%. Set your Target in the Retirement Drawdown section." },
+                      { label: "Income Coverage", value: coveragePct != null ? `${coveragePct}%` : "—", sub: coveragePct != null ? `${fmt(combinedMonthly)}/mo vs ${fmt(targetMo)} target` : "Enter target in sidebar", color: coverageColor, tip: "Combined monthly CPF LIFE vs the primary member's Target Monthly Income. Green ≥ 100%, amber ≥ 75%, red < 75%. Set your Target in the Decumulation & Goals section." },
                       { label: `Combined Net Worth at ${maxPA}`, value: fmtM(hAt95.combinedTotal || 0), sub: "Private + CPF both members", color: "var(--clr-blue2)", tip: `Sum of CPF balances and private assets for both members at age ${maxPA}, after all outflows and drawdowns.` },
                       { label: "OA Depletion Risk", value: deplLabel, sub: deplSub, color: deplColor, tip: "Flags if either member's OA drawdown reaches its floor before age 90. Only shown when OA Drawdown is configured. Green = no risk through 90." },
                     ];
@@ -24488,7 +24498,7 @@ ${milestoneSnapshotHtml}
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
                         [Activity, "Life Events — stress-test your projection", "#ef4444",
-                          "A configurable Life Events & Stress Tests panel lets you overlay retrenchment, career breaks, medical crises, windfalls, hyperinflation, and black-swan shocks on any age range. Each event type has tailored parameters — retrenchment pauses mandatory contributions and optionally injects a redundancy payout; medical crisis draws from OA then private assets; windfall routes to OA, private assets, or SRS. Events appear as coloured bands on the Grow chart and as milestone markers in the PDF. Add events from the Life Events section in the sidebar."],
+                          "A configurable Life Events panel lets you overlay retrenchment, career breaks, medical crises, windfalls, hyperinflation, and black-swan shocks on any age range. Each event type has tailored parameters — retrenchment pauses mandatory contributions and optionally injects a redundancy payout; medical crisis draws from OA then private assets; windfall routes to OA, private assets, or SRS. Events appear as coloured bands on the Accumulation chart and as milestone markers in the PDF. Add events from the Life Events section in the sidebar."],
                         [ArrowRightLeft, "RA→OA Transfer at payout / migration age", "var(--clr-blue2)",
                           "A toggle in the Age-55 Options panel models the birth-year-gated CPF Board transfer of eligible RA back to OA at payout age (or RSS migration age). Born 1958+: 20% of eligible RA minus $5,000 credited to OA. Born 1957: 10%. Born 1956 or earlier: not eligible. Eligible base = full RA minus all cash top-ups (RSTU, OA→RA transfers, government grants). When the toggle is ON, CPF LIFE payouts recalculate on the reduced post-transfer RA — important for accurate payout modelling."],
                         [Clock, "Birth Year / Birth Month precision (D4)", "var(--clr-purple)",
@@ -24571,10 +24581,10 @@ ${milestoneSnapshotHtml}
                       ["2", "Auto-Calc Contributions (SC / PR / SEP)", "var(--clr-emerald)", "rgba(var(--clr-emerald-rgb),0.08)", "rgba(var(--clr-emerald-rgb),0.2)", "Enter OW (Monthly Gross), AW (Annual Bonus), and Salary Growth %, then click ⚡ Auto-Calc. SC uses full rates. PR G/G: graduated employer — no application needed. PR F/G: full employer 17%, employee pays graduated rate — requires joint CPF application. OW ceiling $8,000/mo, AW ceiling $102,000/yr. SEP members use the Inflows (VC3A) panel. Important: if citizenship is PR (Year 1 or 2) and Monthly Gross is left at $0, a validation warning will appear — the engine derives PR contributions from salary so gross pay must be entered before Auto-Calc can apply the correct rates."],
                       ["3", "Add Voluntary Top-Ups & CPF Transfers", "var(--clr-purple)", "rgba(var(--clr-purple-rgb),0.08)", "rgba(var(--clr-purple-rgb),0.2)", "Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the first projection year. RSTU tops up SA (pre-55) or RA (post-55). CPF Transfers support For Self (internal move with FRS/ERS cap) and For Loved One (OA outflow only). CPFIS: OA above $20k and SA above $40k are investible separately with their own frequency toggles."],
                       ["4", "Compare CPF LIFE Plans", "var(--clr-amber)", "rgba(var(--clr-amber3-rgb),0.08)", "rgba(var(--clr-amber3-rgb),0.2)", "Open the LIFE Comparison tab to evaluate Standard, Escalating, and Basic plans. Vertical lines explicitly mark age intersections for total yield and payouts. Toggle between Bequest and Cumulative Payout views."],
-                      ["5", "Explore What-If & Compare Scenarios", "var(--clr-orange)", "rgba(249,115,22,0.08)", "rgba(249,115,22,0.2)", "The What-If Explorer is in the Dashboard → CPF Overview sub-view (scroll down past the milestone alerts). Drag sliders to instantly see how changes to payout age, SA/RA top-up, housing outflow, salary, contribution stop age, OA drawdown, SRS, or private growth affect your total balance — no saved inputs are touched. The Compare tab is dedicated to Scenario A vs B diffs: save your current inputs as Scenario A, adjust any parameters, then save as Scenario B for a colour-coded side-by-side diff of every metric that changes."],
+                      ["5", "Explore What-If & Compare Scenarios", "var(--clr-orange)", "rgba(249,115,22,0.08)", "rgba(249,115,22,0.2)", "The What-If Explorer is in the Summary tab (scroll down past the milestone alerts). Drag sliders to instantly see how changes to payout age, SA/RA top-up, housing outflow, salary, contribution stop age, OA drawdown, SRS, or private growth affect your total balance — no saved inputs are touched. The Compare tab is dedicated to Scenario A vs B diffs: save your current inputs as Scenario A, adjust any parameters, then save as Scenario B for a colour-coded side-by-side diff of every metric that changes."],
                       ["6", "Share & Export", "#f43f5e", "rgba(244,63,94,0.08)", "rgba(244,63,94,0.2)", "Use Share to encode your entire profile into a URL. Download a PDF report or CSV. On desktop, all primary actions (Share, Report, Display settings) are direct buttons in the navbar — no gear icon. On tablet/mobile, the ⚙ gear gives access to everything including Share and Report. Keyboard shortcuts: Ctrl+Shift+S (Share), Ctrl+Alt+R (Reset), Ctrl+]/[ (switch tabs). To relaunch the Setup Wizard at any time, open the Display▾ menu (desktop) or ⚙ Settings (mobile/tablet) and click Setup Wizard."],
                       ["7", "Load a Sample Profile", "#0ea5e9", "rgba(14,165,233,0.08)", "rgba(14,165,233,0.2)", "Click Samples in the header (desktop) or ☰ hamburger menu (mobile) to choose from 11 pre-built scenarios: Blank Slate, Typical Employee (35), Late Starter (50), Self-Employed (40), High Earner (40), Near Retirement (54), Post-55 RA Builder (57), RSS Member (68), Household — Tan Family (38 & 36), Baby Millionaire A (Full Launch), and Baby Millionaire B (Annual Only). Loading a sample overwrites current inputs — export your profile first."],
-                      ["8", "Annual Cashflow Ledger", "#2dd4bf", "rgba(45,212,191,0.08)", "rgba(45,212,191,0.2)", "In the Data Table tab, switch to the Cashflow Ledger sub-tab for a complete year-by-year breakdown of every flow: mandatory contributions, voluntary top-ups, gov grants/WIS, OA/SA-RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with a column totals row at the bottom. Download as CSV."],
+                      ["8", "Annual Cashflow Ledger", "#2dd4bf", "rgba(45,212,191,0.08)", "rgba(45,212,191,0.2)", "In the Table tab, switch to the Cashflow Ledger sub-tab for a complete year-by-year breakdown of every flow: mandatory contributions, voluntary top-ups, gov grants/WIS, OA/SA-RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with a column totals row at the bottom. Download as CSV."],
                     ].map(([num, title, color, bg, border, text]) => (
                       <div key={num} style={{ background: "var(--bg-muted)", borderRadius: 14, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 12 }}>
                         <div style={{ background: bg, borderBottom: `1px solid ${border}`, borderLeft: `4px solid ${color}`, padding: "12px 18px", display: "flex", alignItems: "center", gap: 10 }}>
@@ -24730,7 +24740,7 @@ ${milestoneSnapshotHtml}
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>RA-to-OA Transfer at Payout Age:</strong> At payout age, CPF transfers a birth-year-gated amount from RA to OA. <strong>Eligible base</strong> = RA at payout − cumulative cash top-ups (RSTU), OA→RA CPF transfers, and government grants. Interest earned on SA/RA is <em>not</em> excluded. <strong>Transfer by birth year:</strong> Born 1958 or after → 20% of eligible base − $5,000 (floor $0); Born 1957 → 10% of eligible base; Born 1956 or earlier → not eligible ($0). <strong>CPF LIFE payouts are calculated on RA after this transfer</strong> — the transferred sum moves to OA (freely accessible), reducing the RA pool and correspondingly lowering monthly payouts. The CPF Overview sub-view shows all components. See the <strong>CPF Transfers panel</strong> for a live projected breakdown of your RA→OA transfer, eligible base, and OA withdrawal rights at payout age.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>RA-to-OA Transfer at Payout Age:</strong> At payout age, CPF transfers a birth-year-gated amount from RA to OA. <strong>Eligible base</strong> = RA at payout − cumulative cash top-ups (RSTU), OA→RA CPF transfers, and government grants. Interest earned on SA/RA is <em>not</em> excluded. <strong>Transfer by birth year:</strong> Born 1958 or after → 20% of eligible base − $5,000 (floor $0); Born 1957 → 10% of eligible base; Born 1956 or earlier → not eligible ($0). <strong>CPF LIFE payouts are calculated on RA after this transfer</strong> — the transferred sum moves to OA (freely accessible), reducing the RA pool and correspondingly lowering monthly payouts. The Summary tab shows all components. See the <strong>CPF Transfers panel</strong> for a live projected breakdown of your RA→OA transfer, eligible base, and OA withdrawal rights at payout age.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-purple)", marginTop: 6, flexShrink: 0 }} />
@@ -24799,7 +24809,7 @@ ${milestoneSnapshotHtml}
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-green)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Where to find it:</strong> The What-If Explorer is accessible from two tabs — the <strong>Dashboard → CPF Overview</strong> sub-view (scroll down, click "Open What-If Explorer") and the <strong>Compare tab</strong> (at the top, always visible). Both instances share the same live state, so sliders set in one tab are immediately reflected in the other.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>Where to find it:</strong> The What-If Explorer is accessible from two tabs — the <strong>Summary tab</strong> (scroll down, click "Open What-If Explorer") and the <strong>Compare tab</strong> (at the top, always visible). Both instances share the same live state, so sliders set in one tab are immediately reflected in the other.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
@@ -24974,7 +24984,7 @@ ${milestoneSnapshotHtml}
                         ))}
                       </div>
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>Probability of Sufficiency:</strong> Shown as a large percentage badge when Monte Carlo is active. It answers: <em>"What share of my 200 simulated futures reached the projected FRS by payout age?"</em> A result of <strong style={{ color: "var(--clr-green)" }}>80%+</strong> suggests a robust plan. Below <strong style={{ color: "var(--clr-red)" }}>50%</strong> means more than half your simulated futures fell short — consider increasing top-ups or deferring payout age.</p>
-                      <p style={{ marginBottom: 0 }}><strong style={{ color: "var(--text-highlight)" }}>Limitations:</strong> Only CPF interest rates are randomised. Salary growth, contribution amounts, housing outflows, and SRS returns remain fixed at your inputs. Monte Carlo here measures <em>rate risk only</em> — it does not model job loss, medical crises, or policy changes. For those scenarios, use the What-If Explorer in the Dashboard → CPF Overview sub-view.</p>
+                      <p style={{ marginBottom: 0 }}><strong style={{ color: "var(--text-highlight)" }}>Limitations:</strong> Only CPF interest rates are randomised. Salary growth, contribution amounts, housing outflows, and SRS returns remain fixed at your inputs. Monte Carlo here measures <em>rate risk only</em> — it does not model job loss, medical crises, or policy changes. For those scenarios, use the What-If Explorer in the Summary tab.</p>
                     </div>
 
                     {/* ── Actuarial Math (kept here — content still relevant to CPF LIFE analysis) ── */}
@@ -25083,7 +25093,7 @@ ${milestoneSnapshotHtml}
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-lime)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Phase 2 Salary Growth:</strong> Enter a <strong>Phase 2 Start Age</strong> and a <strong>Phase 2 Growth %</strong> in the Mandatory Contributions → Phase 2 Salary sub-section. Before that age, salary compounds at Phase 1 growth rate. From that age onward it compounds at Phase 2 rate — inheriting the full Phase 1 accumulated base (not a reset). Example: 4%/yr to age 45 then 1%/yr models a mid-career plateau. Setting Phase 2 to 0% freezes salary from that age. A lime-coloured marker appears on the Grow chart at the Phase 2 transition age (toggle via "Show Events").</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>Phase 2 Salary Growth:</strong> Enter a <strong>Phase 2 Start Age</strong> and a <strong>Phase 2 Growth %</strong> in the Mandatory Contributions → Phase 2 Salary sub-section. Before that age, salary compounds at Phase 1 growth rate. From that age onward it compounds at Phase 2 rate — inheriting the full Phase 1 accumulated base (not a reset). Example: 4%/yr to age 45 then 1%/yr models a mid-career plateau. Setting Phase 2 to 0% freezes salary from that age. A lime-coloured marker appears on the Accumulation chart at the Phase 2 transition age (toggle via "Show Events").</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", marginTop: 6, flexShrink: 0 }} />
@@ -25105,7 +25115,7 @@ ${milestoneSnapshotHtml}
                   <section id="doc-lifeevents">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#ef4444", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 18, height: 18 }} />Life Events &amp; Stress Testing</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
-                      <p style={{ marginBottom: 12 }}>The Life Events & Stress Tests panel (between Timelines and Decumulation in the left sidebar) lets you overlay named stress-test scenarios onto your projection. Events are processed by the engine each year and appear as coloured markers on the Grow chart and a dedicated row in the Strategy Gantt timeline.</p>
+                      <p style={{ marginBottom: 12 }}>The Life Events panel (between Timelines and Decumulation in the left sidebar) lets you overlay named stress-test scenarios onto your projection. Events are processed by the engine each year and appear as coloured markers on the Accumulation chart and a dedicated row in the Strategy Gantt timeline.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                         {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => {
                           const DocEvIcon = meta.icon || Activity;
@@ -25120,7 +25130,7 @@ ${milestoneSnapshotHtml}
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>How to add an event:</strong> Open the Life Events & Stress Tests panel, click <strong>+ Add Life Event</strong>, select a type, fill in the label, age range, and magnitude, then click <strong>Save Event</strong>. The projection updates immediately. Use the ON/OFF toggle on each event to compare your plan with and without it — or use Disable All to see your baseline.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>How to add an event:</strong> Open the Life Events panel, click <strong>+ Add Life Event</strong>, select a type, fill in the label, age range, and magnitude, then click <strong>Save Event</strong>. The projection updates immediately. Use the ON/OFF toggle on each event to compare your plan with and without it — or use Disable All to see your baseline.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-purple)", marginTop: 6, flexShrink: 0 }} />
@@ -25136,7 +25146,7 @@ ${milestoneSnapshotHtml}
                         </li>
                         <li style={{ display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Chart markers:</strong> When the <strong>Show Events</strong> button is active on the Grow chart, point events (Windfall, Early Retirement) appear as labelled dashed vertical lines; range events appear as translucent shaded bands in the event's colour. The Strategy Gantt shows all enabled events as a single Life Events row with icon-labelled blocks or dots.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>Chart markers:</strong> When the <strong>Show Events</strong> button is active on the Accumulation chart, point events (Windfall, Early Retirement) appear as labelled dashed vertical lines; range events appear as translucent shaded bands in the event's colour. The Strategy Gantt shows all enabled events as a single Life Events row with icon-labelled blocks or dots.</div>
                         </li>
                       </ul>
                     </div>
@@ -25153,7 +25163,7 @@ ${milestoneSnapshotHtml}
                         ["Independent engines", "Each member (primary + spouse) runs a completely separate full CPF projection engine. There is no cross-member balance sharing. Mandatory contributions, voluntary top-ups, CPFIS, SRS, OA drawdown, and CPF LIFE are all computed per-member. The combined view is a post-hoc sum of both projections."],
                         ["What stays on the primary profile", "Property model, housing outflow, and SRS are anchored to the primary member. If the spouse has a separate property or SRS, model it as private assets in the spouse's inputs. To split housing costs, use the Housing Split % slider in the Household sidebar — this allocates the primary's housing outflow between both members for the combined net worth view."],
                         ["Combined CPF LIFE", "The 'Combined Monthly Income' in the Key Ages table and the 'Est. Combined CPF LIFE' KPI are arithmetic sums of each member's independently computed CPF LIFE payout. Female payouts are ~7% lower than male (0.93× multiplier). Both members must meet the RA ≥ $60,000 threshold and be SC/PR born 1958 or after."],
-                        ["Income Coverage KPI", "Compares combined monthly CPF LIFE against the primary member's Target Monthly Income. Green ≥ 100%; amber 75–99%; red < 75%. Set your Target in the Retirement Drawdown section of the sidebar."],
+                        ["Income Coverage KPI", "Compares combined monthly CPF LIFE against the primary member's Target Monthly Income. Green ≥ 100%; amber 75–99%; red < 75%. Set your Target in the Decumulation & Goals section of the sidebar."],
                         ["OA Depletion Risk KPI", "Checks whether either member's OA drawdown balance hits its floor before age 90. Only active when OA Drawdown is configured. Red warning shows the earliest depletion age across both members; green 'No risk to 90' otherwise."],
                         ["Key Ages table", "Shows 5-year interval ages from the younger member's current age to 95, plus age 55 (SA→RA conversion), both payout ages, and age 65 (statutory retirement). Payout-age rows are highlighted in purple. Combined Monthly Income only shows once each member has passed their own payout age."],
                         ["FRS headroom badge on member cards", "Each member card shows a progress bar comparing SA/RA at payout age vs the projected FRS at that age (grown at the configured Retirement Sum Growth rate). Green ≥ 100%; amber 60–99%; red < 60%. A gap amount shows additional top-up needed."],
@@ -25195,7 +25205,7 @@ ${milestoneSnapshotHtml}
                     {/* ── XIRR sub-section ── */}
                     <h4 style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-violet)", marginBottom: 10, marginTop: 20, display: "flex", alignItems: "center", gap: 8 }}><Percent style={{ width: 16, height: 16 }} />XIRR — Internal Rate of Return</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
-                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What XIRR measures:</strong> The XIRR column in the Data Table tab shows the <em>Extended Internal Rate of Return</em> of the highlighted CPF LIFE plan at each projection age. It answers: <em>"If I treat all my CPF contributions as money out and all my payouts + final bequest as money in, what annual return did I earn on the whole strategy?"</em> A positive XIRR above the CPF SA/RA rate (4%) means your overall strategy is generating value faster than simply leaving money in SA/RA. <strong style={{ color: "var(--clr-amber)" }}>Important:</strong> XIRR covers your <em>entire contribution history</em> from your current age — not just the CPF LIFE payout phase. A member aged 35 includes 30 years of accumulation outflows in the denominator, which depresses XIRR values relative to "effective returns from payout age" figures sometimes shown in financial articles. Those article figures treat the RA at payout age as the starting investment; CPF Planner Pro's XIRR is the more conservative, whole-of-strategy measure.</p>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What XIRR measures:</strong> The XIRR column in the Table tab shows the <em>Extended Internal Rate of Return</em> of the highlighted CPF LIFE plan at each projection age. It answers: <em>"If I treat all my CPF contributions as money out and all my payouts + final bequest as money in, what annual return did I earn on the whole strategy?"</em> A positive XIRR above the CPF SA/RA rate (4%) means your overall strategy is generating value faster than simply leaving money in SA/RA. <strong style={{ color: "var(--clr-amber)" }}>Important:</strong> XIRR covers your <em>entire contribution history</em> from your current age — not just the CPF LIFE payout phase. A member aged 35 includes 30 years of accumulation outflows in the denominator, which depresses XIRR values relative to "effective returns from payout age" figures sometimes shown in financial articles. Those article figures treat the RA at payout age as the starting investment; CPF Planner Pro's XIRR is the more conservative, whole-of-strategy measure.</p>
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>How it is computed:</strong> The engine builds a cashflow timeline: contributions made each year are negative (money leaving your pocket), and CPF LIFE payouts received each year plus the terminal bequest value are positive (money coming back). Newton-Raphson iteration then finds the single discount rate that makes the net present value of that entire cashflow stream equal to zero. That rate is the XIRR. Up to 100 iterations per age-point are run; if it fails to converge, the cell shows <strong>—</strong>.</p>
                       <p style={{ marginBottom: 12 }}><strong style={{ color: "var(--text-highlight)" }}>Colour coding in the Table:</strong></p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
@@ -25515,16 +25525,17 @@ ${milestoneSnapshotHtml}
               return (
                 <div className="fhd-tab-inner strategy-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
 
-                  {/* ── Sub-navigation: Goal Simulator | Income Roadmap ── */}
+                  {/* ── Sub-navigation: Goal | Roadmap | Stress | Turbo ── */}
                   {/* strategy-subnav: inline bg is var(--bg-panel) — fully opaque — so
                       scrolling content cannot bleed through when the bar sticks. overflow:clip
                       (not hidden) preserves border-radius without creating a stacking context
                       that would break position:sticky inside the scroll container. */}
                   <div ref={strategySubnavRef} className="strategy-subnav" style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel)", borderRadius: "24px 24px 0 0", overflow: "clip" }}>
                     {[
-                      { id: "goal",    label: "🎯 Goal Simulator"  },
-                      { id: "roadmap", label: "📅 Income Roadmap"  },
-                      { id: "stress",  label: "🛡️ Stress Centre"   },
+                      { id: "goal",     label: "🎯 Goal"    },
+                      { id: "roadmap",  label: "📅 Roadmap" },
+                      { id: "stress",   label: "🛡️ Stress"  },
+                      { id: "turbo",    label: "⚡ Turbo"   },
                     ].map(({ id, label }) => (
                       <button key={id} onClick={() => setGoalStratTab(id)}
                         style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
@@ -26688,7 +26699,7 @@ ${milestoneSnapshotHtml}
                               ["SORR", "Sequence of Returns Risk — private assets hit by a market crash in early retirement. Configure crash duration and depth."],
                               ["Inflation Stress", "Tests how higher CPI erodes the real purchasing power of your fixed nominal CPF LIFE payout."],
                               ["Property Correction", "Stress-tests your property value trajectory at a downside growth rate. Range: −15% (Crisis) to 0%. Use presets — Mild −3%, Correction −6%, Crash −10%, Crisis −15% — or fine-tune with the slider. Rates are sustained annual, not one-time crashes. A Crash/Crisis warning banner appears below −10%."],
-                              ["Salary Cut", "Reduces your gross salary by a user-defined % for a specified age range — useful for modelling a demotion, industry downturn, or gig-economy transition. Add via the Life Events & Stress Tests panel."],
+                              ["Salary Cut", "Reduces your gross salary by a user-defined % for a specified age range — useful for modelling a demotion, industry downturn, or gig-economy transition. Add via the Life Events panel."],
                               ["Tier Shock", "CPF LIFE payout if your RA falls to a lower tier at payout age — full inline analysis shows the tier ladder, per-plan payout impact, and estimated lifetime payout loss."],
                               ["Healthcare Cost Surge", "Models extended long-term care costs drawing from private assets and MA above your base medical inputs."],
                               ["⚡ Worst Case", "Simultaneously applies SORR + Inflation 5% + Property −6% (Correction) + CPF rates 1.5%/3%/3%. Escalate the property slider to Crash or Crisis for a more severe test."],
@@ -27574,6 +27585,289 @@ ${milestoneSnapshotHtml}
                             })()}
                           </div>
                         )}
+
+                      </div>
+                    );
+                  })()}
+
+                  {/* ══ TURBOCHARGER ══════════════════════════════════════════
+                       7 levers: RSTU, VC3A, VCMA, OA→SA/RA, VHR, Deferment, Property.
+                       MRSS/MMSS are NOT separate levers — the engine auto-derives them
+                       as a government match on top of RSTU/VCMA when eligible (see note
+                       in turboImpacts, line ~10145), so they appear as inline call-outs
+                       on the RSTU and VCMA cards instead of standalone cards.
+                       Impact $ figures come from turboImpacts (useMemo gated to this
+                       sub-tab — see line ~10141). Apply buttons write directly to
+                       `inputs`; lever cards read live `inputs` (not debounced) so the
+                       "Active" badge flips the instant a button is clicked.
+                       Foreigners are handled with a single early-return panel (below)
+                       rather than per-lever messaging — every lever requires SC/PR
+                       status, so a grid of individually-"ineligible" cards would be
+                       noise; one clear explanation is more honest than seven of them.
+                  ═══════════════════════════════════════════════════════════ */}
+                  {goalStratTab === "turbo" && (() => {
+                    const fmtK = v => v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : v >= 1e3 ? `$${Math.round(v/1e3)}k` : `$${Math.round(v)}`;
+                    const pa      = payoutAge65;
+                    const ca      = Number(debouncedInputs.currentAge) || 35;
+                    const isRSSMode = debouncedInputs.cpfScheme === 'rss';
+
+                    if (isRSSMode) {
+                      return (
+                        <div style={{ padding: 24 }}>
+                          <div style={{ padding: 20, borderRadius: 14, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", textAlign: "center" }}>
+                            <Zap style={{ width: 22, height: 22, color: "var(--text-muted)", margin: "0 auto 10px" }} />
+                            <p style={{ fontSize: 14, color: "var(--text-muted)", margin: 0 }}>
+                              The Turbocharger applies to CPF LIFE members. RSS members have already migrated their Retirement Account — most levers here (RSTU, VC3A, deferment) no longer apply.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (isForeigner) {
+                      return (
+                        <div style={{ padding: 24 }}>
+                          <div style={{ padding: 20, borderRadius: 14, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", textAlign: "center" }}>
+                            <Zap style={{ width: 22, height: 22, color: "var(--text-muted)", margin: "0 auto 10px" }} />
+                            <p style={{ fontSize: 14, color: "var(--text-muted)", margin: 0 }}>
+                              The Turbocharger's levers (RSTU, VC3A, VCMA, MRSS, MMSS, CPF LIFE deferment) all require Singapore Citizenship or PR status. Foreigners working in Singapore do not have a CPF account, so none of these schemes apply.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    const oaBal     = Number(inputs.oaBalance)  || 0;
+                    const maBal     = Number(inputs.maBalance)  || 0;
+                    const curRSTU   = Number(inputs.vcSaTopup)  || 0;
+                    const curVC3A   = Number(inputs.vc3aCash)   || 0;
+                    const curVCMA   = Number(inputs.vcMaCash)   || 0;
+                    const curVHR    = Number(inputs.vcVhr)      || 0;
+                    const curOaSa   = Number(inputs.oaToSaTransfer) || 0;
+                    const housing   = Number(inputs.housingOutflow) || 0;
+                    const propOn    = inputs.propMonetiseEnabled === true;
+                    const pmAge     = Number(inputs.propMonetiseAge) || 65;
+                    const dwzOn     = debouncedInputs.dieWithZeroEnabled === true;
+
+                    const vc3aMaxRoom = turboImpacts.vc3aMaxRoom || 0;
+                    const vcmaRoom    = turboImpacts.vcmaRoom    || 0;
+                    const mrssAgeBand = isSC && ca >= 55;     // informational call-out condition, not a hard gate
+                    const mmssAgeBand = isSC && ca >= 55 && ca <= 70;
+                    const deferEligible = pa < 70;
+
+                    // ── Apply handlers — each is self-contained; no shared guard needed ──
+                    // (Goal Simulator's existing useEffect on vcSaTopup/vc3aCash is allowed to
+                    // fire normally and clear any stale "Applied: Strategy X" badge there — see
+                    // note at the turboSnapshot state declaration.)
+                    const snapshotIfFirst = () => { if (!turboSnapshot) setTurboSnapshot({ ...inputs }); };
+                    const applyRSTU  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, vcSaTopup: 8000 })); };
+                    const applyVC3A  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, vc3aCash: Math.max(vc3aMaxRoom, curVC3A) })); };
+                    const applyVCMA  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, vcMaCash: Math.max(vcmaRoom, curVCMA) })); };
+                    const applyOaSa  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, oaToSaTransfer: Math.max(oaBal, curOaSa) })); };
+                    const applyVHR   = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, vcVhr: Math.max(housing, curVHR) })); };
+                    const applyProp  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, propMonetiseEnabled: true })); };
+                    const applyDefer = () => {
+                      setConfirmModal({
+                        title: "Defer Payout to Age 70?",
+                        message: `This changes your CPF LIFE payout age from ${pa} to 70 across your entire profile — the Growth chart, LIFE tab payout table, and Goal Simulator baseline will all recompute. You can change this back anytime in the sidebar.`,
+                        confirmLabel: "Confirm — Defer to 70",
+                        confirmColor: "#f97316",
+                        onConfirm: () => {
+                          snapshotIfFirst();
+                          setInputs(prev => ({ ...prev, payoutAge: 70 }));
+                        },
+                      });
+                    };
+                    const undoAllTurbo = () => {
+                      if (!turboSnapshot) return;
+                      setConfirmModal({
+                        title: "Undo All Turbo Changes?",
+                        message: "This restores every input to what it was before your first Turbo apply in this session. Any other manual edits you made since then will also be reverted.",
+                        confirmLabel: "Undo All",
+                        confirmColor: "#f97316",
+                        onConfirm: () => {
+                          setInputs({ ...turboSnapshot });
+                          setTurboSnapshot(null);
+                        },
+                      });
+                    };
+
+                    // ── Lever definitions ──────────────────────────────────────
+                    // RSTU and OA→SA/RA apply at ANY age — the engine itself routes
+                    // contributions to SA pre-55 or RA post-55 (SA closes, RA opens),
+                    // so neither lever is restricted to a pre-55 age band.
+                    // Pattern: `eligible` = "there's still actionable room"; once a lever
+                    // is maxed, `isApplied` flips true and (for RSTU/defer/property, where
+                    // eligible depends on remaining room) `eligible` flips false — `note`
+                    // text is written to read sensibly in both states.
+                    const levers = [
+                      {
+                        id: "rstu", icon: "💰", title: "RSTU — SA/RA Top-Up",
+                        eligible: curRSTU < 8000,
+                        isApplied: curRSTU >= 8000,
+                        gain: turboImpacts.rstu || 0,
+                        note: curRSTU >= 8000
+                          ? "Already at the $8,000/yr RSTU tax-relief cap."
+                          : `Top up $${(8000-curRSTU).toLocaleString()} more to reach the $8,000/yr tax-relief cap. Routes to SA pre-55, RA post-55.`
+                            + (mrssAgeBand ? " Government may match this dollar-for-dollar (MRSS, up to $2,000/yr) if your RA is below BRS — already reflected in the gain shown." : ""),
+                        ineligibleNote: "Already at the $8,000/yr RSTU tax-relief cap.",
+                        onApply: applyRSTU,
+                      },
+                      {
+                        id: "vc3a", icon: "📈", title: "VC3A — Voluntary OA",
+                        eligible: vc3aMaxRoom > 0,
+                        isApplied: curVC3A >= vc3aMaxRoom && vc3aMaxRoom > 0,
+                        gain: turboImpacts.vc3a || 0,
+                        note: `$${vc3aMaxRoom.toLocaleString()}/yr of Annual Limit room unused after mandatory contributions.`,
+                        ineligibleNote: "Mandatory contributions already use up your full $37,740 Annual Limit.",
+                        onApply: applyVC3A,
+                      },
+                      {
+                        id: "vcma", icon: "🏥", title: "VCMA — MediSave Top-Up",
+                        eligible: !isUnder16 && vcmaRoom > 0,
+                        isApplied: curVCMA >= vcmaRoom && vcmaRoom > 0,
+                        gain: turboImpacts.vcma || 0,
+                        note: `$${vcmaRoom.toLocaleString()} of MediSave headroom to BHS — tax-deductible top-up.`
+                          + (mmssAgeBand ? " Government may match this dollar-for-dollar (MMSS, up to $1,000/yr, 2026–2030 pilot) if your MA is below half-BHS — already reflected in the gain shown." : ""),
+                        ineligibleNote: isUnder16 ? "Cash top-ups require age 16+ (a parent/guardian may action this on the member's behalf)." : "MediSave Account is already at or above the Basic Healthcare Sum.",
+                        onApply: applyVCMA,
+                      },
+                      {
+                        id: "oaSa", icon: "🔁", title: "OA→SA/RA Transfer",
+                        eligible: oaBal > 0,
+                        isApplied: curOaSa >= oaBal && oaBal > 0,
+                        gain: turboImpacts.oaSa || 0,
+                        note: `Move $${oaBal.toLocaleString()} OA → ${ca < 55 ? "SA" : "RA"}. ${ca < 55 ? "SA" : "RA"} earns ~1.5% more interest than OA. Engine caps each year at your FRS/ERS headroom.`,
+                        ineligibleNote: "No OA balance available to transfer.",
+                        onApply: applyOaSa,
+                      },
+                      {
+                        id: "vhr", icon: "🏠", title: "VHR — Housing Refund",
+                        eligible: housing > 0,
+                        isApplied: curVHR >= housing && housing > 0,
+                        gain: turboImpacts.vhr || 0,
+                        note: `Refund $${housing.toLocaleString()}/yr of housing OA usage back into your OA to keep compounding.`,
+                        ineligibleNote: "No housing OA outflow configured in your profile.",
+                        onApply: applyVHR,
+                      },
+                      {
+                        id: "defer", icon: "⏳", title: "Deferment to 70",
+                        eligible: deferEligible,
+                        isApplied: pa >= 70,
+                        gain: null, // shown as % uplift, not $ — rendered specially below
+                        note: pa >= 70
+                          ? "Already deferred to the maximum CPF LIFE payout age of 70 — the best payout multiplier available."
+                          : `Deferring from ${pa} to 70 raises your monthly CPF LIFE payout by ~${turboImpacts.deferPctIncrease || 0}% (+${formatCurrency(turboImpacts.deferMonthly || 0)}/mo).`,
+                        ineligibleNote: "Already deferred to the maximum payout age of 70.",
+                        onApply: applyDefer,
+                      },
+                      {
+                        id: "prop", icon: "🏘️", title: "Property Monetisation",
+                        eligible: !propOn,
+                        isApplied: propOn,
+                        gain: turboImpacts.prop || 0,
+                        note: `Right-size or lease-buyback your home at age ${pmAge} to top up RA and unlock cash proceeds. Change the trigger age in the sidebar.`,
+                        ineligibleNote: "Already enabled in your profile.",
+                        onApply: applyProp,
+                      },
+                    ];
+
+                    const eligibleLevers = levers.filter(l => l.eligible || l.isApplied);
+                    const activeCount    = levers.filter(l => l.isApplied).length;
+                    const totalGainLeft  = levers.filter(l => l.eligible && !l.isApplied && typeof l.gain === "number").reduce((s, l) => s + l.gain, 0);
+
+                    return (
+                      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+
+                        {/* ── How to use (collapsible) ──────────────────────────────── */}
+                        <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
+                          <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
+                            <Zap style={{ width: 13, height: 13, color: "#f97316", flexShrink: 0 }} />
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>How the Turbocharger works</span>
+                          </summary>
+                          <div style={{ padding: "0 16px 14px", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                            Each card scans one CPF scheme and shows the maximum gain available if you max it out, compared to your current profile. Unlike the Goal Simulator (which solves backward from a target), every lever here is shown regardless of any target — this is "what am I leaving on the table" across your whole profile. Click Apply to write a lever's max value into your profile; click Undo All at any time to revert every Turbo change made this session. MRSS and MMSS government matches are not separate levers — they're automatically captured inside the RSTU and VCMA gain figures when you're eligible.
+                            {dwzOn && (
+                              <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", color: "var(--clr-amber)" }}>
+                                ⚠ Die with Zero is enabled on your profile. The gain figures below compare raw CPF balances at payout age, which isn't the right lens once DWZ is drawing your balances down to ~$0 — treat these as directional rather than exact while DWZ is on.
+                              </div>
+                            )}
+                          </div>
+                        </details>
+
+                        {/* ── Turbo Score header ──────────────────────────────────────── */}
+                        <div className="turbo-score-header">
+                          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                            <span className="turbo-score-pill">
+                              <Zap style={{ width: 14, height: 14 }} />
+                              {activeCount} of {eligibleLevers.length} eligible levers active
+                            </span>
+                            {totalGainLeft > 0 && (
+                              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                                Up to <strong style={{ color: "#10b981" }}>{fmtK(totalGainLeft)}</strong> more available at age {pa} if you max the rest
+                              </span>
+                            )}
+                          </div>
+                          {turboSnapshot && (
+                            <button className="turbo-undo-btn" onClick={undoAllTurbo}>↩ Undo All Turbo Changes</button>
+                          )}
+                        </div>
+
+                        {/* ── Lever grid ──────────────────────────────────────────────── */}
+                        <div className="turbo-lever-grid">
+                          {levers.map(lev => {
+                            const cardClass = lev.isApplied ? "is-active" : lev.eligible ? "is-eligible" : "is-ineligible";
+                            return (
+                              <div key={lev.id} className={`turbo-lever-card ${cardClass}`}>
+                                <div className="turbo-lever-title">
+                                  <span>{lev.icon}</span>
+                                  <span>{lev.title}</span>
+                                  {lev.isApplied && <CheckCircle2 style={{ width: 14, height: 14, color: "#10b981", marginLeft: "auto" }} />}
+                                </div>
+                                {lev.eligible ? (
+                                  <>
+                                    {lev.id === "defer" ? (
+                                      <div className="turbo-lever-gain" style={{ fontSize: 15 }}>
+                                        +{turboImpacts.deferPctIncrease || 0}% monthly payout
+                                      </div>
+                                    ) : (
+                                      !lev.isApplied && typeof lev.gain === "number" && lev.gain > 0 && (
+                                        <div className="turbo-lever-gain">+{fmtK(lev.gain)}</div>
+                                      )
+                                    )}
+                                    <div className="turbo-lever-note">{lev.note}</div>
+                                    <button
+                                      className="turbo-lever-btn"
+                                      disabled={lev.isApplied}
+                                      onClick={() => !lev.isApplied && lev.onApply()}>
+                                      {lev.isApplied ? "✓ Active" : "Apply to Profile"}
+                                    </button>
+                                  </>
+                                ) : (
+                                  <div className="turbo-lever-note">{lev.isApplied ? lev.note : lev.ineligibleNote}</div>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {/* ── 1st Jan Timing — informational only, no Apply button ──── */}
+                          {(curRSTU > 0 || curVC3A > 0) && (() => {
+                            const timingRate = 0.025; // approximate blended OA/SA rate for illustration
+                            const timingGain = Math.round((curRSTU + curVC3A) * timingRate * (11/12));
+                            return (
+                              <div className="turbo-lever-card is-eligible">
+                                <div className="turbo-lever-title">
+                                  <span>📅</span>
+                                  <span>1st Jan Timing</span>
+                                </div>
+                                <div className="turbo-lever-gain" style={{ fontSize: 15 }}>+{formatCurrency(timingGain)}/yr</div>
+                                <div className="turbo-lever-note">
+                                  Contributing your RSTU + VC3A top-ups on 1 January instead of spread through the year captures ~11 extra months of interest. The engine already models annual lump sums — just top up early each calendar year to realise this in practice.
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
 
                       </div>
                     );
