@@ -5928,12 +5928,13 @@ function ReadinessTab({
                   status: rdStatus(maSubScore),
                   score: maSubScore,
                   detail: (() => {
-                    const bhsTarget   = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow));
-                    const maGap       = bhsTarget - Math.round(maAtPA ?? 0);
-                    const bhsPct      = maAtPA != null ? Math.min(999, Math.round((maAtPA / bhsTarget) * 100)) : null;
-                    return maAtPA != null
+                    const maVal     = nomPayoutData?.ma || 0;   // nominal MA at payout age — in scope via nomPayoutData
+                    const bhsTarget = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow));
+                    const maGap     = bhsTarget - Math.round(maVal);
+                    const bhsPct    = maVal > 0 ? Math.min(999, Math.round((maVal / bhsTarget) * 100)) : null;
+                    return maVal > 0
                       ? [
-                          `MA at payout age ${pa}: ${formatCurrency(Math.round(maAtPA))}`,
+                          `MA at payout age ${pa}: ${formatCurrency(Math.round(maVal))}`,
                           `Projected Basic Healthcare Sum (BHS) at ${pa}: ${formatCurrency(bhsTarget)} (${(rsGrowth * 100).toFixed(1)}%/yr growth)`,
                           bhsPct >= 100
                             ? `MA meets BHS — excess stays in MA earning 4%/yr and is not transferred to RA.`
