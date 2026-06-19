@@ -1845,13 +1845,17 @@ function runRSSEngine(inputs, {
         const wisMASpill = wisToMA_sep - actualToMAWis;
         ma += (actualMandatoryMA_sep + actualVcMA_sep + actualToMAWis);
         const projFRS_sep = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        // BUG-SEP-RSTU fix: moved up from below (was previously computed only for MRSS
+        // sizing, never credited to any account — see mirrored fix in runProjectionEngine
+        // for full rationale). Computation itself is unchanged.
+        const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
         if (age >= 55) {
           const raRoom_sep = Math.max(0, projFRS_sep - ra);
-          const toRA_sep = Math.min(toSA_vc3a + maSpill + wisMASpill, raRoom_sep);
-          ra += toRA_sep; oa += (toSA_vc3a + maSpill + wisMASpill - toRA_sep);
+          const toRA_sep = Math.min(toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep, raRoom_sep);
+          ra += toRA_sep; oa += (toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep - toRA_sep);
         } else {
           const saRoomSep = Math.max(0, projFRS_sep - sa);
-          const toSA_total = toSA_vc3a + maSpill + wisMASpill;
+          const toSA_total = toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep;
           const actualToSA_sep = Math.min(toSA_total, saRoomSep);
           sa += actualToSA_sep; oa += (toSA_total - actualToSA_sep);
         }
@@ -1860,17 +1864,18 @@ function runRSSEngine(inputs, {
         const mrssAgeOk_sep = age >= 55 || (isPwD && age < 55);
         const mrssBalOk_sep = age >= 55 ? ra < projBRS_sep : (oa + sa) < projBRS_sep;
         const mrssIncomeOk_sep = mmssMonthlyIncome <= 4000;
-        const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
+        // BUG-SEP-RSTU fix: vcSaThis_sep now computed above, before the SA/RA routing block.
         const mrssEligible_sep = isSC && mrssAgeOk_sep && mrssBalOk_sep && mrssIncomeOk_sep && cumMrssReceived < 20000 && vcSaThis_sep > 0;
         const actualMrss_sep = mrssEligible_sep ? Math.min(vcSaThis_sep, 2000, 20000 - cumMrssReceived) : 0;
         if (actualMrss_sep > 0) cumMrssReceived += actualMrss_sep;
         const govGrant_sep = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
         if (age >= 55) { ra += govGrant_sep + actualMrss_sep; } else { sa += govGrant_sep + actualMrss_sep; }
-        const sepContribInflow = vc3aTotal + vcVhrAmt * effVcVhrFreq + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep;
+        // BUG-SEP-RSTU fix: vcSaThis_sep added to inflow/voluntary/cumRaCashTopUps tracking below.
+        const sepContribInflow = vc3aTotal + vcVhrAmt * effVcVhrFreq + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep + vcSaThis_sep;
         yearInflow += sepContribInflow; totalInjected += sepContribInflow;
-        cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + govGrant_sep + actualMrss_sep;
+        cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep + govGrant_sep + actualMrss_sep;
         yearMandatory += actualMandatoryMA_sep;
-        yearVoluntary += vc3aTotal + vcVhrAmt * effVcVhrFreq;
+        yearVoluntary += vc3aTotal + vcVhrAmt * effVcVhrFreq + vcSaThis_sep;
         yearGovGrants += govGrant_sep + actualMrss_sep + wisToMA_sep;
       } else {
         let mandatoryOA_i, mandatorySA_dyn, mandatoryMA_i;
@@ -2997,18 +3002,32 @@ function runProjectionEngine(inputs, {
         ma += (actualMandatoryMA_sep + actualVcMA_sep + actualToMAWis);
         // M3: projFRS_sep is shared by both age branches — identical formula, computed once
         const projFRS_sep = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        // BUG-SEP-RSTU fix: vcSaThis_sep (the member's RSTU/vcSaTopup contribution) is moved
+        // up from its previous position (just above mrssEligible_sep) so it can actually be
+        // credited to SA/RA below. Previously this value was computed ONLY to size the MRSS
+        // government match — the underlying user-contributed dollar amount itself was never
+        // added to any account, silently dropping every self-employed member's RSTU top-up.
+        // The computation itself is unchanged (same overrideVcSA ternary, same effVcSaFreq) —
+        // only its position moved earlier in the block; all values it depends on are already
+        // available at this point in the per-year loop.
+        const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
         if (age >= 55) {
           // VC3A: RA cap is FRS (not ERS — ERS applies only to RSTU cash top-ups)
           const raRoom_sep = Math.max(0, projFRS_sep - ra);
           // B2: include wisMASpill in SA/RA routing alongside vc3a SA and maSpill
-          const toRA_sep = Math.min(toSA_vc3a + maSpill + wisMASpill, raRoom_sep);
+          // BUG-SEP-RSTU fix: vcSaThis_sep folded into the same pool, capped by the same
+          // FRS-headroom-in-RA, with any overflow routed to OA — mirrors the employed
+          // branch's vcToRA treatment of cappedVcSA exactly.
+          const toRA_sep = Math.min(toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep, raRoom_sep);
           ra += toRA_sep;
-          oa += (toSA_vc3a + maSpill + wisMASpill - toRA_sep);
+          oa += (toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep - toRA_sep);
         } else {
           // MA spill to SA is capped at FRS — excess above FRS overflows to OA
           const saRoomSep = Math.max(0, projFRS_sep - sa);
           // B2: include wisMASpill in SA routing
-          const toSA_total = toSA_vc3a + maSpill + wisMASpill;
+          // BUG-SEP-RSTU fix: vcSaThis_sep folded into the same pool — mirrors the employed
+          // branch's totalToSA treatment of cappedVcSA exactly.
+          const toSA_total = toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep;
           const actualToSA_sep = Math.min(toSA_total, saRoomSep);
           sa += actualToSA_sep;
           oa += (toSA_total - actualToSA_sep); // FRS overflow to OA
@@ -3025,7 +3044,9 @@ function runProjectionEngine(inputs, {
         const mrssIncomeOk_sep = mmssMonthlyIncome <= 4000;
         // C4 fix: same overrideVcSA ternary as employed path — MRSS in SEP branch must
         // also respect the What-If slider rather than reading live inputs.vcSaTopup directly.
-        const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
+        // (BUG-SEP-RSTU fix: vcSaThis_sep now computed earlier, above the SA/RA routing
+        // block, so it can be credited — see comment there. Eligibility/match math below
+        // is otherwise unchanged.)
         const mrssEligible_sep = isSC && mrssAgeOk_sep && mrssBalOk_sep && mrssIncomeOk_sep && cumMrssReceived < 20000 && vcSaThis_sep > 0;
         const actualMrss_sep = mrssEligible_sep ? Math.min(vcSaThis_sep, 2000, 20000 - cumMrssReceived) : 0;
         if (actualMrss_sep > 0) cumMrssReceived += actualMrss_sep;
@@ -3036,13 +3057,19 @@ function runProjectionEngine(inputs, {
         // Fix: use a local variable for the contribution-phase inflow so that vcMaCash and
         // any MMSS carry already accumulated into yearInflow (before this block) are not
         // overwritten. yearInflow must be += (not =) to preserve those earlier additions.
-        const sepContribInflow = vc3aTotal + vcVhrAmt * effVcVhrFreq + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep; // E1 fix: VHR frequency-gated
+        // BUG-SEP-RSTU fix: vcSaThis_sep added so RSTU contributions are actually counted
+        // in yearInflow/totalInjected (previously silently excluded entirely).
+        const sepContribInflow = vc3aTotal + vcVhrAmt * effVcVhrFreq + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep + vcSaThis_sep; // E1 fix: VHR frequency-gated
         yearInflow += sepContribInflow;
         totalInjected += sepContribInflow;
-        cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + govGrant_sep + actualMrss_sep;
+        // BUG-SEP-RSTU fix: vcSaThis_sep added — mirrors the employed branch's
+        // cumRaCashTopUps treatment, which already bundles the RSTU amount via cappedVcSA.
+        cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep + govGrant_sep + actualMrss_sep;
         // Cashflow ledger breakdown (SEP)
         yearMandatory += actualMandatoryMA_sep;          // B3: actual amount credited to MA, not nominal
-        yearVoluntary += vc3aTotal + vcVhrAmt * effVcVhrFreq; // E1 fix: VHR frequency-gated
+        // BUG-SEP-RSTU fix: vcSaThis_sep added to yearVoluntary — mirrors the employed
+        // branch, where yearVoluntary already includes the vcSaTopup portion of cappedVcSA.
+        yearVoluntary += vc3aTotal + vcVhrAmt * effVcVhrFreq + vcSaThis_sep; // E1 fix: VHR frequency-gated
         yearGovGrants += govGrant_sep + actualMrss_sep + wisToMA_sep; // B2: WIS included
       } else {
         // Mandatory contribution calculation — three paths:
@@ -5533,79 +5560,75 @@ function ReadinessTab({
       </details>
 
       {/* ── ROW 1: Gauge (4 sub-scores) + 5-col KPI hero ── */}
-      <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) 2fr", gap: 16 }}>
+      <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16 }}>
 
-        {/* Gauge card — restyled to mirror the Wellness Score panel's layout: arc (~1/3 width) + legend with title/description/bars, side by side */}
-        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div className="rd-gauge-row" style={{ display: "flex", alignItems: "center", gap: 18 }}>
-            {/* Arc gauge — ~1/3 of the card's width, responsive (scales with viewBox, not a fixed pixel size) */}
-            <div className="rd-gauge-arc" style={{ flex: "0 0 36%", maxWidth: 220, minWidth: 120 }}>
-              <svg viewBox="0 0 220 100" style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
-                <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
-                <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
-                <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
-                <text x="110" y="94" textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--text-muted)", letterSpacing: "0.05em" }}>/ 100 · {scoreLabel}</text>
-              </svg>
-            </div>
-            {/* Legend — title, description, and the 5 sub-score bars (mirrors the Wellness row's right-hand column) */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Retirement Readiness</p>
-              <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 6px", lineHeight: 1.4 }}>
-                5-dimension age-banded composite — FRS, Income, Stress, Longevity, Healthcare.
-                Stress defaults to 50 when Monte Carlo is off.
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[
-                  {
-                    label: "FRS Coverage",
-                    pct: Math.round(frsRatio * 100),
-                    tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}`,
-                  },
-                  {
-                    label: "Income Coverage",
-                    pct: incomeRatio !== null ? Math.round(incomeRatio * 100) : null,
-                    tip: target > 0
-                      ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target · ${incomeTierLabel}`
-                      : `${incomeTierLabel} · Set a Target Monthly Income in the sidebar to compare`,
-                  },
-                  {
-                    label: "Stress Resilience",
-                    pct: p10SubScore,
-                    tip: p10SubScore != null
-                      ? perfectStormData
-                        ? `Perfect Storm: −${perfectStormData.deltaPct}% net worth (SORR+inflation+property+CPF rate+healthcare). ${monteCarloData ? "Combined with P10 Monte Carlo." : ""}`
-                        : `P10 Monte Carlo: ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} at age ${pa}`
-                      : "Enable Stress Centre (⚡ Worst Case) or Monte Carlo for live stress resilience figures",
-                  },
-                  {
-                    label: "Longevity Cover",
-                    pct: longevitySubScore,
-                    tip: oaDrawActive
-                      ? (oaDepletionAge
-                          ? `OA covers to age ${oaDepletionAge} vs age-90 planning benchmark`
-                          : "OA drawdown sustained to planning horizon")
-                      : `Real CPF LIFE at age 90: ${formatCurrency(realPayoutAt90)}/mo vs BRS payout floor ${formatCurrency(brsPayoutAtPA)}/mo (${inflRateVal * 100}% inflation)`,
-                  },
-                  {
-                    label: "Healthcare Shield",
-                    pct: maSubScore,
-                    tip: `MA at payout age vs projected Basic Healthcare Sum (BHS) of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}`,
-                  },
-                ].map(({ label, pct, tip }) => (
-                  <div key={label} title={tip}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: subBarColor(pct) }}>
-                        {pct == null ? "—" : `${pct}%`}
-                      </span>
-                    </div>
-                    <div style={{ height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: subBarColor(pct), transition: "width 0.5s ease" }} />
-                    </div>
-                  </div>
-                ))}
+        {/* Gauge card — horizontal layout matching MAS Wellness gauge style */}
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "row", alignItems: "flex-start", gap: 16 }}>
+          {/* Arc — left side, fixed width */}
+          <div style={{ flexShrink: 0 }}>
+            <svg width="180" viewBox="0 0 220 100" style={{ overflow: "visible", display: "block" }}>
+              <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
+              <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+              <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
+              <text x="110" y="94" textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--text-muted)", letterSpacing: "0.05em" }}>/ 100</text>
+            </svg>
+          </div>
+          {/* Legend — right side, title + sub-bars */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 2px" }}>Retirement Readiness</p>
+            <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 8px", lineHeight: 1.4 }}>
+              {scoreLabel} · 5-dimension score. Weights shift by age band.
+            </p>
+            {[
+              {
+                label: "FRS Coverage",
+                pct: Math.round(frsRatio * 100),
+                tip: `RA at payout vs projected FRS of ${formatCurrency(projFRS)}`,
+              },
+              {
+                label: "Income Cover",
+                pct: incomeRatio !== null ? Math.round(incomeRatio * 100) : null,
+                tip: target > 0
+                  ? `${formatCurrency(Math.round(stdMonthly))}/mo vs ${formatCurrency(target)}/mo target · ${incomeTierLabel}`
+                  : `${incomeTierLabel} · Set a Target Monthly Income in the sidebar to compare`,
+              },
+              {
+                label: "Stress Resilience",
+                pct: p10SubScore,
+                tip: p10SubScore != null
+                  ? perfectStormData
+                    ? `Perfect Storm: −${perfectStormData.deltaPct}% net worth. ${monteCarloData ? "Combined with P10 Monte Carlo." : ""}`
+                    : `P10 Monte Carlo: ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} at age ${pa}`
+                  : "Enable Stress Centre or Monte Carlo for live stress resilience figures",
+              },
+              {
+                label: "Longevity Cover",
+                pct: longevitySubScore,
+                tip: oaDrawActive
+                  ? (oaDepletionAge
+                      ? `OA covers to age ${oaDepletionAge} vs age-90 planning benchmark`
+                      : "OA drawdown sustained to planning horizon")
+                  : `Real CPF LIFE at age 90: ${formatCurrency(realPayoutAt90)}/mo vs BRS payout floor ${formatCurrency(brsPayoutAtPA)}/mo`,
+              },
+              {
+                label: "Healthcare Shield",
+                pct: maSubScore,
+                tip: `MA at payout age vs projected BHS of ${formatCurrency(Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow)))}`,
+              },
+            ].map(({ label, pct, tip }) => (
+              <div key={label} title={tip} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)", width: 96, flexShrink: 0 }}>{label}</span>
+                <div style={{ flex: 1, height: 4, borderRadius: 4, background: "var(--border-subtle)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pct ?? 0}%`, borderRadius: 4, background: subBarColor(pct), transition: "width 0.5s ease" }} />
+                </div>
+                <span style={{ fontSize: 10, color: subBarColor(pct), fontWeight: 700, width: 28, textAlign: "right" }}>
+                  {pct == null ? "—" : `${pct}`}
+                </span>
               </div>
-            </div>
+            ))}
+            <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "6px 0 0", lineHeight: 1.4 }}>
+              Stress defaults to 50 when MC is off — enable Stress Centre for a live score.
+            </p>
           </div>
         </div>
 
@@ -5788,7 +5811,7 @@ function ReadinessTab({
         const wClr  = wellnessScore >= 75 ? "#f59e0b" : wellnessScore >= 50 ? "#fb923c" : "#ef4444";
         const wLbl  = wellnessScore >= 75 ? "Good" : wellnessScore >= 50 ? "Fair" : "Needs Work";
         // SVG arc geometry — half-circle gauge (same maths as main Readiness gauge)
-        const W2 = 140, H2 = 78, cx2 = 70, cy2 = 74, r2 = 58;
+        const W2 = 200, H2 = 112, cx2 = 100, cy2 = 106, r2 = 83;
         const arcPct2 = Math.min(1, Math.max(0, wellnessScore / 100));
         const startA2 = Math.PI, endA2 = Math.PI + arcPct2 * Math.PI;
         const sx2 = cx2 + r2 * Math.cos(startA2), sy2 = cy2 + r2 * Math.sin(startA2);
@@ -5806,9 +5829,7 @@ function ReadinessTab({
               @media (max-width: 640px) {
                 .mas-tiles-grid { grid-template-columns: repeat(2, 1fr); }
                 .mas-wellness-row { flex-direction: column; align-items: center; }
-                .mas-wellness-gauge { flex: none; width: 60%; max-width: 200px; margin: 0 auto 8px; }
-                .rd-gauge-row { flex-direction: column; align-items: center; }
-                .rd-gauge-arc { flex: none; width: 60%; max-width: 200px; margin: 0 auto 10px; }
+                .mas-wellness-gauge { margin-bottom: 8px; }
               }
             `}</style>
             {/* ── MAS panel header ── */}
@@ -5820,9 +5841,9 @@ function ReadinessTab({
             </div>
             {/* ── Wellness gauge row ── */}
             <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 12, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
-              {/* Arc gauge — ~1/3 of the row's width, responsive (scales with viewBox, not a fixed pixel size) */}
-              <div className="mas-wellness-gauge" style={{ flex: "0 0 34%", maxWidth: 260, minWidth: 130 }}>
-                <svg viewBox={`0 0 ${W2} ${H2}`} style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
+              {/* Arc gauge */}
+              <div className="mas-wellness-gauge" style={{ flexShrink: 0 }}>
+                <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible" }}>
                   {/* Track */}
                   <path d={`M ${sx2} ${sy2} A ${r2} ${r2} 0 1 1 ${cx2 + r2} ${cy2}`}
                     fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
@@ -10163,7 +10184,11 @@ function CPFPlannerApp() {
     if (activeTab !== 'strategy' || goalStratTab !== 'turbo') return {};
     const d    = debouncedInputs;
     const pa   = payoutAge65;
-    const isMale = d.isMale !== false;        // BUGFIX: was referencing an undeclared `isMale` — caused "isMale is not defined" crash on app load
+    // BUG-ISMALE fix: isMale is NOT a CPFPlannerApp-scope variable — the identifier of
+    // that name lives only inside the sibling ReadinessTab component and inside the
+    // separate householdData useMemo's own callback, neither of which this useMemo can
+    // see. Derive it locally from `d` (debouncedInputs, already a dependency below).
+    const isMale = d.isMale !== false;
     const isRSSMode = d.cpfScheme === 'rss';
     if (isRSSMode) return {};                        // RSS mode — most levers inapplicable
 
