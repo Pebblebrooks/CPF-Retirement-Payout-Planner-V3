@@ -27684,13 +27684,21 @@ ${milestoneSnapshotHtml}
                     // (Goal Simulator's existing useEffect on vcSaTopup/vc3aCash is allowed to
                     // fire normally and clear any stale "Applied: Strategy X" badge there — see
                     // note at the turboSnapshot state declaration.)
-                    const snapshotIfFirst = () => { if (!turboSnapshot) setTurboSnapshot({ ...inputs }); };
-                    const applyRSTU  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, vcSaTopup: 8000 })); };
-                    const applyVC3A  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, vc3aCash: Math.max(vc3aMaxRoom, curVC3A) })); };
-                    const applyVCMA  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, vcMaCash: Math.max(vcmaRoom, curVCMA) })); };
-                    const applyOaSa  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, oaToSaTransfer: Math.max(oaBal, curOaSa) })); };
-                    const applyVHR   = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, vcVhr: Math.max(housing, curVHR) })); };
-                    const applyProp  = () => { snapshotIfFirst(); setInputs(prev => ({ ...prev, propMonetiseEnabled: true })); };
+                    // turboSnapshot is keyed per-lever: { [leverId]: { field, value } } — the
+                    // ORIGINAL value of that lever's field, captured the first time (and only
+                    // the first time) that lever is applied. This lets each card revert itself
+                    // independently, in addition to the existing "Undo All" which replays every
+                    // captured entry at once.
+                    const snapshotLever = (id, field, value) => {
+                      if (turboSnapshot?.[id]) return; // already captured — don't overwrite with a later, already-modified value
+                      setTurboSnapshot(prev => ({ ...(prev || {}), [id]: { field, value } }));
+                    };
+                    const applyRSTU  = () => { snapshotLever("rstu", "vcSaTopup", curRSTU); setInputs(prev => ({ ...prev, vcSaTopup: 8000 })); };
+                    const applyVC3A  = () => { snapshotLever("vc3a", "vc3aCash", curVC3A); setInputs(prev => ({ ...prev, vc3aCash: Math.max(vc3aMaxRoom, curVC3A) })); };
+                    const applyVCMA  = () => { snapshotLever("vcma", "vcMaCash", curVCMA); setInputs(prev => ({ ...prev, vcMaCash: Math.max(vcmaRoom, curVCMA) })); };
+                    const applyOaSa  = () => { snapshotLever("oaSa", "oaToSaTransfer", curOaSa); setInputs(prev => ({ ...prev, oaToSaTransfer: Math.max(oaBal, curOaSa) })); };
+                    const applyVHR   = () => { snapshotLever("vhr", "vcVhr", curVHR); setInputs(prev => ({ ...prev, vcVhr: Math.max(housing, curVHR) })); };
+                    const applyProp  = () => { snapshotLever("prop", "propMonetiseEnabled", propOn); setInputs(prev => ({ ...prev, propMonetiseEnabled: true })); };
                     const applyDefer = () => {
                       setConfirmModal({
                         title: "Defer Payout to Age 70?",
@@ -27698,20 +27706,37 @@ ${milestoneSnapshotHtml}
                         confirmLabel: "Confirm — Defer to 70",
                         confirmColor: "#f97316",
                         onConfirm: () => {
-                          snapshotIfFirst();
+                          snapshotLever("defer", "payoutAge", pa);
                           setInputs(prev => ({ ...prev, payoutAge: 70 }));
                         },
+                      });
+                    };
+                    // Reverts a single lever's field back to its captured pre-Turbo value, and
+                    // removes that entry from turboSnapshot (clearing the snapshot to null once
+                    // the last entry is removed, so the Undo All button correctly disappears).
+                    const undoLever = (id) => {
+                      const snap = turboSnapshot?.[id];
+                      if (!snap) return;
+                      setInputs(prev => ({ ...prev, [snap.field]: snap.value }));
+                      setTurboSnapshot(prev => {
+                        const next = { ...(prev || {}) };
+                        delete next[id];
+                        return Object.keys(next).length > 0 ? next : null;
                       });
                     };
                     const undoAllTurbo = () => {
                       if (!turboSnapshot) return;
                       setConfirmModal({
                         title: "Undo All Turbo Changes?",
-                        message: "This restores every input to what it was before your first Turbo apply in this session. Any other manual edits you made since then will also be reverted.",
+                        message: "This restores every lever you've applied via the Turbocharger back to its original value. Manual edits you made to other fields are not affected.",
                         confirmLabel: "Undo All",
                         confirmColor: "#f97316",
                         onConfirm: () => {
-                          setInputs({ ...turboSnapshot });
+                          setInputs(prev => {
+                            const reverted = { ...prev };
+                            Object.values(turboSnapshot).forEach(({ field, value }) => { reverted[field] = value; });
+                            return reverted;
+                          });
                           setTurboSnapshot(null);
                         },
                       });
@@ -27811,12 +27836,29 @@ ${milestoneSnapshotHtml}
                             <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>How the Turbocharger works</span>
                           </summary>
                           <div style={{ padding: "0 16px 14px", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                            Each card scans one CPF scheme and shows the maximum gain available if you max it out, compared to your current profile. Unlike the Goal Simulator (which solves backward from a target), every lever here is shown regardless of any target — this is "what am I leaving on the table" across your whole profile. Click Apply to write a lever's max value into your profile; click Undo All at any time to revert every Turbo change made this session. MRSS and MMSS government matches are not separate levers — they're automatically captured inside the RSTU and VCMA gain figures when you're eligible.
+                            Each card scans one CPF scheme and shows the maximum gain available if you max it out, compared to your current profile. Unlike the Goal Simulator (which solves backward from a target), every lever here is shown regardless of any target — this is "what am I leaving on the table" across your whole profile. Click Apply to write a lever's max value into your profile; click ↩ Undo on any card (or Undo All) to revert it. MRSS and MMSS government matches are not separate levers — they're automatically captured inside the RSTU and VCMA gain figures when you're eligible.
                             {dwzOn && (
                               <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", color: "var(--clr-amber)" }}>
                                 ⚠ Die with Zero is enabled on your profile. The gain figures below compare raw CPF balances at payout age, which isn't the right lens once DWZ is drawing your balances down to ~$0 — treat these as directional rather than exact while DWZ is on.
                               </div>
                             )}
+                            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                              {[
+                                ["💰 RSTU", "Retirement Sum Topping-Up — voluntary cash top-up to your own or a loved one's SA (pre-55) or RA (post-55), up to $8,000/yr in tax relief. Government may match it dollar-for-dollar via MRSS if you're 55+ and your RA is below BRS."],
+                                ["📈 VC3A", "Voluntary Contribution under Section 3A — tops up OA, SA and MA together (split by a fixed ratio), capped by the $37,740/yr Annual Limit minus whatever mandatory contributions already use."],
+                                ["🏥 VCMA", "Cash top-up directly to MediSave, up to the Basic Healthcare Sum (BHS). Tax-deductible. Government may match it via MMSS (2026–2030 pilot) if you're 55–70 and MA is below half-BHS."],
+                                ["🔁 OA→SA/RA", "Moves OA savings into SA (pre-55) or RA (post-55), which earn roughly 1.5% more interest than OA. The engine caps the actual transfer each year at your remaining FRS/ERS headroom."],
+                                ["🏠 VHR", "Voluntary Housing Refund — puts cash you've withdrawn from OA for housing back into OA, so it resumes earning CPF interest instead of sitting in property equity."],
+                                ["⏳ Deferment", "Delaying your CPF LIFE payout start (up to age 70) permanently raises your monthly payout — roughly 6–7% more for each year deferred, since the same RA balance is spread over fewer expected years."],
+                                ["🏘️ Property Monetisation", "Right-sizing, lease buyback, or other home-equity schemes that convert property value into RA top-ups and/or cash proceeds, usually from age 65 onward."],
+                                ["📅 1st Jan Timing", "Contributing your annual RSTU/VC3A top-ups in January rather than spread through the year (or late) captures up to ~11 extra months of interest on that year's contribution."],
+                              ].map(([title, desc]) => (
+                                <div key={title} style={{ display: "flex", gap: 8 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-bright)", flexShrink: 0, width: 150 }}>{title}</span>
+                                  <span style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </details>
 
@@ -27861,15 +27903,35 @@ ${milestoneSnapshotHtml}
                                       )
                                     )}
                                     <div className="turbo-lever-note">{lev.note}</div>
-                                    <button
-                                      className="turbo-lever-btn"
-                                      disabled={lev.isApplied}
-                                      onClick={() => !lev.isApplied && lev.onApply()}>
-                                      {lev.isApplied ? "✓ Active" : "Apply to Profile"}
-                                    </button>
+                                    <div style={{ display: "flex", gap: 8 }}>
+                                      <button
+                                        className="turbo-lever-btn"
+                                        disabled={lev.isApplied}
+                                        onClick={() => !lev.isApplied && lev.onApply()}>
+                                        {lev.isApplied ? "✓ Active" : "Apply to Profile"}
+                                      </button>
+                                      {lev.isApplied && turboSnapshot?.[lev.id] && (
+                                        <button
+                                          className="turbo-undo-btn"
+                                          style={{ padding: "9px 14px", fontSize: 13 }}
+                                          onClick={() => undoLever(lev.id)}>
+                                          ↩ Undo
+                                        </button>
+                                      )}
+                                    </div>
                                   </>
                                 ) : (
-                                  <div className="turbo-lever-note">{lev.isApplied ? lev.note : lev.ineligibleNote}</div>
+                                  <>
+                                    <div className="turbo-lever-note">{lev.isApplied ? lev.note : lev.ineligibleNote}</div>
+                                    {lev.isApplied && turboSnapshot?.[lev.id] && (
+                                      <button
+                                        className="turbo-undo-btn"
+                                        style={{ padding: "9px 14px", fontSize: 13, alignSelf: "flex-start" }}
+                                        onClick={() => undoLever(lev.id)}>
+                                        ↩ Undo
+                                      </button>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             );
