@@ -27851,7 +27851,7 @@ ${milestoneSnapshotHtml}
                                 ["🏠 VHR", "Voluntary Housing Refund — puts cash you've withdrawn from OA for housing back into OA, so it resumes earning CPF interest instead of sitting in property equity."],
                                 ["⏳ Deferment", "Delaying your CPF LIFE payout start (up to age 70) permanently raises your monthly payout — roughly 6–7% more for each year deferred, since the same RA balance is spread over fewer expected years."],
                                 ["🏘️ Property Monetisation", "Right-sizing, lease buyback, or other home-equity schemes that convert property value into RA top-ups and/or cash proceeds, usually from age 65 onward."],
-                                ["📅 1st Jan Timing", "Contributing your annual RSTU/VC3A top-ups in January rather than spread through the year (or late) captures up to ~11 extra months of interest on that year's contribution."],
+                                ["📅 Contribution Timing", "Cash top-ups (RSTU/VC3A/VCMA/VHR) in January still face a 1-month posting lag before earning interest (CPF credits on the lowest monthly balance) — better than mid-year, but not instant. OA→SA/RA transfers have no such lag — moving early captures the higher rate immediately."],
                               ].map(([title, desc]) => (
                                 <div key={title} style={{ display: "flex", gap: 8 }}>
                                   <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-bright)", flexShrink: 0, width: 150 }}>{title}</span>
@@ -27937,19 +27937,47 @@ ${milestoneSnapshotHtml}
                             );
                           })}
 
-                          {/* ── 1st Jan Timing — informational only, no Apply button ──── */}
-                          {(curRSTU > 0 || curVC3A > 0) && (() => {
-                            const timingRate = 0.025; // approximate blended OA/SA rate for illustration
-                            const timingGain = Math.round((curRSTU + curVC3A) * timingRate * (11/12));
+                          {/* ── Contribution Timing (1st Jan) — informational only, no Apply button ──
+                               Two distinct real CPF interest-timing rules, both compared against this
+                               app's own mid-year (6/12) averaging convention to get the NET bonus of
+                               acting on 1 Jan instead:
+                               - Cash top-ups (RSTU/VC3A/VCMA/VHR) are new money entering CPF, subject to
+                                 CPF's "lowest balance in the month" rule — a deposit made on 1 Jan doesn't
+                                 start earning interest until February (11/12 months in year 1), still
+                                 better than the engine's implicit 6/12 mid-year assumption, but NOT a
+                                 full 12/12 — net bonus = (11/12 − 6/12) = 5/12 of one year's rate.
+                               - OA→SA/RA transfers move money ALREADY inside CPF — no posting lag, full
+                                 effect within the month itself. Net bonus = (12/12 − 6/12) = 6/12 of the
+                                 SA/RA-vs-OA RATE DIFFERENTIAL (not the full rate, since the money was
+                                 already earning OA's rate regardless of transfer timing).
+                               This is a standalone estimate, not wired into the engine — see the explicit
+                               disclaimer in the card copy below. */}
+                          {(curRSTU > 0 || curVC3A > 0 || curVCMA > 0 || curVHR > 0 || curOaSa > 0) && (() => {
+                            const cashTopUpAmt   = curRSTU + curVC3A + curVCMA; // lands mostly in SA/MA
+                            const cashTopUpBonus = Math.round(cashTopUpAmt * CPF_RATES.SA * (5/12));
+                            const vhrBonus       = Math.round(curVHR * CPF_RATES.OA * (5/12)); // VHR refunds to OA specifically
+                            const transferDiff    = CPF_RATES.SA - CPF_RATES.OA; // 1.5%
+                            const transferBonus   = Math.round(curOaSa * transferDiff * (6/12));
+                            const totalBonus      = cashTopUpBonus + vhrBonus + transferBonus;
+                            const hasCash         = (cashTopUpBonus + vhrBonus) > 0;
+                            const hasTransfer     = transferBonus > 0;
                             return (
                               <div className="turbo-lever-card is-eligible">
                                 <div className="turbo-lever-title">
                                   <span>📅</span>
-                                  <span>1st Jan Timing</span>
+                                  <span>Contribution Timing</span>
                                 </div>
-                                <div className="turbo-lever-gain" style={{ fontSize: 15 }}>+{formatCurrency(timingGain)}/yr</div>
+                                <div className="turbo-lever-gain" style={{ fontSize: 15 }}>+{formatCurrency(totalBonus)}/yr</div>
                                 <div className="turbo-lever-note">
-                                  Contributing your RSTU + VC3A top-ups on 1 January instead of spread through the year captures ~11 extra months of interest. The engine already models annual lump sums — just top up early each calendar year to realise this in practice.
+                                  {hasCash && (
+                                    <div>Cash top-ups (RSTU/VC3A/VCMA{curVHR > 0 ? "/VHR" : ""}) made on 1 Jan only start earning interest the following month — CPF credits interest on each month's lowest balance. Still ~{formatCurrency(cashTopUpBonus + vhrBonus)}/yr more than this app's own mid-year assumption.</div>
+                                  )}
+                                  {hasTransfer && (
+                                    <div style={{ marginTop: hasCash ? 6 : 0 }}>OA→SA/RA transfers move money already inside CPF — no posting lag, so doing this in Jan instead of mid-year captures the higher rate sooner: ~{formatCurrency(transferBonus)}/yr more.</div>
+                                  )}
+                                </div>
+                                <div className="turbo-lever-note" style={{ marginTop: 4, fontStyle: "italic" }}>
+                                  Standalone estimate — not included in the Total CPF figures shown on the chart, KPI tiles, or Turbo Score above. Make these contributions/transfers as early in January as possible each year to actually capture it.
                                 </div>
                               </div>
                             );
