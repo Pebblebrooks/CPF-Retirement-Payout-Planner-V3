@@ -5560,13 +5560,13 @@ function ReadinessTab({
       </details>
 
       {/* ── ROW 1: Gauge (4 sub-scores) + 5-col KPI hero ── */}
-      <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) 2fr", gap: 16 }}>
+      <div className="rd-row1" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16 }}>
 
         {/* Gauge card — horizontal layout matching MAS Wellness gauge style */}
-        <div className="rd-gauge-row" style={{ ...cardStyle, display: "flex", gap: 16 }}>
-          {/* Arc — left side, ~1/3 of the card's width, responsive (scales with viewBox, not a fixed pixel size) */}
-          <div className="rd-gauge-arc" style={{ flex: "0 0 36%", maxWidth: 220, minWidth: 120 }}>
-            <svg viewBox="0 0 220 100" style={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
+        <div style={{ ...cardStyle, display: "flex", flexDirection: "row", alignItems: "flex-start", gap: 16 }}>
+          {/* Arc — left side, fixed width */}
+          <div style={{ flexShrink: 0 }}>
+            <svg width="180" viewBox="0 0 220 100" style={{ overflow: "visible", display: "block" }}>
               <path d={gaugeArc(100)} fill="none" stroke="var(--border-subtle)" strokeWidth="10" strokeLinecap="round" />
               <path d={gaugeArc(score)} fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
               <text x="110" y="78" textAnchor="middle" style={{ fontSize: 32, fontWeight: 700, fill: scoreColor }}>{score}</text>
@@ -5826,13 +5826,10 @@ function ReadinessTab({
               .mas-tiles-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
               .mas-tile-card:focus, .mas-tile-card:focus-visible, .mas-tile-card:active { outline: 0 !important; box-shadow: none !important; -webkit-tap-highlight-color: transparent; }
               .mas-tile-card { -webkit-tap-highlight-color: transparent; }
-              .rd-gauge-row { flex-direction: row; align-items: flex-start; }
               @media (max-width: 640px) {
                 .mas-tiles-grid { grid-template-columns: repeat(2, 1fr); }
                 .mas-wellness-row { flex-direction: column; align-items: center; }
-                .mas-wellness-gauge { flex: none; width: 60%; max-width: 200px; margin: 0 auto 8px; }
-                .rd-gauge-row { flex-direction: column; align-items: center; }
-                .rd-gauge-arc { flex: none; width: 60%; max-width: 200px; margin: 0 auto 10px; }
+                .mas-wellness-gauge { margin-bottom: 8px; }
               }
             `}</style>
             {/* ── MAS panel header ── */}
@@ -5845,8 +5842,8 @@ function ReadinessTab({
             {/* ── Wellness gauge row ── */}
             <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 12, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
               {/* Arc gauge */}
-              <div className="mas-wellness-gauge" style={{ flex: "0 0 34%", maxWidth: 260, minWidth: 130 }}>
-                <svg viewBox={`0 0 ${W2} ${H2}`} style={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
+              <div className="mas-wellness-gauge" style={{ flexShrink: 0 }}>
+                <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ overflow: "visible" }}>
                   {/* Track */}
                   <path d={`M ${sx2} ${sy2} A ${r2} ${r2} 0 1 1 ${cx2 + r2} ${cy2}`}
                     fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
