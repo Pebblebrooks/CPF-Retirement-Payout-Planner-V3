@@ -5732,7 +5732,6 @@ function ReadinessTab({
                 .mas-tiles-grid { grid-template-columns: repeat(2, 1fr); }
                 .mas-wellness-row { flex-direction: column; align-items: center; }
                 .mas-wellness-gauge { flex: none; width: 60%; max-width: 200px; margin: 0 auto 8px; }
-                .rd-kpi-header { grid-template-columns: repeat(3, 1fr) !important; }
                 .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
               }
             `}</style>
