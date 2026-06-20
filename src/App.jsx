@@ -22792,13 +22792,6 @@ ${milestoneSnapshotHtml}
                       <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>💡 <strong>Tip:</strong> Use the plan selector (Standard / Escalating / Basic) to highlight one plan's line. The other two are dimmed for clarity.</p>
                     </div>
                   </details>
-                  <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 10, gap: 2, alignSelf: "flex-start" }}>
-                    {["standard", "escalating", "basic"].map(plan => (
-                      <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
-                        {plan}
-                      </button>
-                    ))}
-                  </div>
 
                 {/* ── RA→OA Transfer reference card (LIFE tab) ─────────────────────────
                      Surfaces the transfer toggle inline so users understand which RA base
@@ -22913,21 +22906,34 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                 </div>
-                {/* View mode button strip.
-                    Mobile fix: buttons use flex:"0 0 auto" + whiteSpace:nowrap so they don't compress;
-                    the container scrolls horizontally. A right-edge gradient fade on viewportWidth<768
-                    signals to the user that Total Yield and Eff. Return % are reachable by swiping. */}
-                <div style={{ position: "relative" }}>
-                  <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-                    {[["payout", "Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
-                      <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
-                        {label}
+                {/* View mode button strip + plan selector — combined into one row directly
+                    above the chart, since both control what the chart displays. Plan
+                    selector is right-justified; wraps below on narrow screens.
+                    Mobile fix: view-mode buttons use flex:"0 0 auto" + whiteSpace:nowrap so
+                    they don't compress; that group scrolls horizontally on its own. A
+                    right-edge gradient fade on viewportWidth<768 signals to the user that
+                    Total Yield and Eff. Return % are reachable by swiping. */}
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ position: "relative", flex: "1 1 auto", minWidth: 0 }}>
+                    <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+                      {[["payout", "Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
+                        <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {viewportWidth < 768 && (
+                      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36, background: "linear-gradient(to right, transparent, var(--bg-base))", pointerEvents: "none", borderRadius: "0 12px 12px 0" }} />
+                    )}
+                  </div>
+                  {/* Plan selector — right-justified, controls which plan's line is highlighted in the chart */}
+                  <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 10, gap: 2, flex: "0 0 auto" }}>
+                    {["standard", "escalating", "basic"].map(plan => (
+                      <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                        {plan}
                       </button>
                     ))}
                   </div>
-                  {viewportWidth < 768 && (
-                    <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36, background: "linear-gradient(to right, transparent, var(--bg-base))", pointerEvents: "none", borderRadius: "0 12px 12px 0" }} />
-                  )}
                 </div>
                 {/* Item 3: Monthly/Annual/Cumulative sub-toggle — only visible in payout mode */}
                 {viewMode === "payout" && (
