@@ -8282,7 +8282,7 @@ function CPFPlannerApp() {
     const _cpfRel_t    = _cappedOW_t * _empRate_t * 12 + Math.min(Number(inputs.salaryBonus) || 0, _awCeil_t) * _empRate_t;
     const _eir_t       = currentAge_ui < 55 ? 1000 : currentAge_ui < 60 ? 6000 : 8000;
     const _vcma_t      = Math.min(Number(inputs.vcMaCash) || 0, Math.max(0, 8000 - eligibleRSTU));
-    const _srsCap_t    = inputs.srsCitizenPR === false ? 35700 : 15300;
+    const _srsCap_t    = (inputs.citizenStatus || 'SC').toUpperCase() === 'FG' ? 35700 : 15300; // Bug 2: use live citizenStatus, not dead srsCitizenPR
     const _srs_t       = Math.min(Number(inputs.srsAnnualContribution) || 0, _srsCap_t);
     const _chargeable_t = Math.max(0, annualGross - _cpfRel_t - _eir_t - eligibleRSTU - _vcma_t - _srs_t);
     estimatedTaxRate   = getMarginalRate(_chargeable_t); // overwrite placeholder above
@@ -11790,7 +11790,7 @@ function CPFPlannerApp() {
     const annualCpfRelief  = cpfEmployeeOW * 12 + cpfEmployeeAW;
     const rstRelief_b      = Math.min(Number(debouncedInputs.vcSaTopup)           || 0, 8000);
     const vcmaRelief_b     = Math.min(Number(debouncedInputs.vcMaCash)            || 0, Math.max(0, 8000 - rstRelief_b));
-    const srsCap_b         = debouncedInputs.srsCitizenPR === false ? 35700 : 15300;
+    const srsCap_b         = (debouncedInputs.citizenStatus || 'SC').toUpperCase() === 'FG' ? 35700 : 15300; // Bug 2: use live citizenStatus, not dead srsCitizenPR
     const srsRelief_b      = Math.min(Number(debouncedInputs.srsAnnualContribution) || 0, srsCap_b);
     const annualChargeable = Math.max(0, grossMonthly * 12 + grossBonus - annualCpfRelief - eir - rstRelief_b - vcmaRelief_b - srsRelief_b);
     // If user has enabled manual override, use their budgetTaxRate; otherwise auto progressive slabs
@@ -11822,7 +11822,7 @@ function CPFPlannerApp() {
       debouncedInputs.budgetTaxRate, debouncedInputs.budgetTaxOverride,
       debouncedInputs.budgetLivingExpenses, debouncedInputs.budgetExpenseInflation,
       debouncedInputs.payoutAge, debouncedInputs.vcSaTopup, debouncedInputs.vcMaCash,
-      debouncedInputs.srsAnnualContribution, debouncedInputs.srsCitizenPR]);
+      debouncedInputs.srsAnnualContribution, debouncedInputs.citizenStatus]);
 
   // ── Perfect Storm: single combined engine run across all active stressors ──
   // Gated by showPerfectStorm toggle; runs at most 1 extra engine call.
