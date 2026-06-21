@@ -4318,7 +4318,7 @@ function KpiCard({ label, sublabel, value, color, tip, isFirst = false, isEarly 
       )}
       <div
         className="cpf-kpi-value"
-        style={{ fontSize: 17, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)" }}
+        style={{ fontSize: 17, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
       >
         {value}
       </div>
@@ -8610,7 +8610,7 @@ function CPFPlannerApp() {
       return { passes: (frsTarget <= 0 || ra >= frsTarget) && (incomeTarget <= 0 || payout >= incomeTarget), ra, payout };
     };
     if (!check(hiAge).passes) return { feasible: false };
-    let lo = ca_r + 1, hi = hiAge, best = hiAge;
+    let lo = ca_r, hi = hiAge, best = hiAge;
     for (let i = 0; i < 14; i++) {
       if (lo > hi) break;
       const mid = Math.floor((lo + hi) / 2);
@@ -10075,7 +10075,13 @@ function CPFPlannerApp() {
   // which silently applies the wrong transfer % for ~1957/1958 boundary members.
   const _birthYear = (Number(debouncedInputs.birthYear) > 0)
     ? Number(debouncedInputs.birthYear)
-    : ((Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35));
+    : (() => {
+        const _approx = (Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35);
+        // RSS eligibility (SC/PR) requires birth year ≤1957 — a structural fact, not an estimate.
+        // The ±1yr age-based approximation can otherwise compute exactly 1958 for borderline ages
+        // (e.g. a 68-year-old in 2026), contradicting RSS membership itself. Clamp when in RSS mode.
+        return _isRSSForTransfer ? Math.min(_approx, 1957) : _approx;
+      })();
   const raTransferBase = _isRSSForTransfer ? 0 : Math.max(0, raAtPayout - cumulativeCashTopUps);
   const _raTransferPct    = _birthYear >= 1958 ? 0.20 : _birthYear === 1957 ? 0.10 : 0;
   const _raOaTransferRaw  = Math.round(raTransferBase * _raTransferPct);
@@ -10087,9 +10093,13 @@ function CPFPlannerApp() {
   // ── end of payoutAge65 / raAfterTransfer block ────────────────────────────
   // ── Spouse raAtPayout / raAfterTransfer block ─────────────────────────────
   const spouseRaAtPayout = spouseProjectionByAge.get(spousePayoutAge)?.ra || 0;
+  const _sIsRSSForTransfer = debouncedSpouseInputs.cpfScheme === 'rss';
   const _sBirthYearForTransfer = (Number(debouncedSpouseInputs.birthYear) > 0)
     ? Number(debouncedSpouseInputs.birthYear)
-    : ((Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35));
+    : (() => {
+        const _sApprox = (Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35);
+        return _sIsRSSForTransfer ? Math.min(_sApprox, 1957) : _sApprox;
+      })();
   const _sCumTopUpsForTransfer = spouseProjectionByAge.get(spousePayoutAge)?.cumRaCashTopUps ?? 0;
   const _sTransferBase    = Math.max(0, spouseRaAtPayout - _sCumTopUpsForTransfer);
   const _sTransferPct     = _sBirthYearForTransfer >= 1958 ? 0.20 : _sBirthYearForTransfer === 1957 ? 0.10 : 0;
@@ -15213,7 +15223,7 @@ ${milestoneSnapshotHtml}
              body-level pull-to-refresh or page bounce on iOS Safari. */
           .cpf-tabs { overscroll-behavior-x: contain !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
-          .kpi-strip { grid-template-columns: 1fr 1fr !important; }
+          .kpi-strip { grid-template-columns: 1fr 1fr !important; grid-auto-flow: row !important; }
           .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
           .cpf-kpi-value { font-size: 14px !important; }
           .cpf-kpi-label { font-size: 10px !important; }
@@ -26157,7 +26167,7 @@ ${milestoneSnapshotHtml}
                       { id: "turbo",   label: "⚡ Turbo"           },
                     ].map(({ id, label }) => (
                       <button key={id} onClick={() => setGoalStratTab(id)}
-                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
+                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", outline: "none", WebkitTapHighlightColor: "transparent", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
                         {label}
                       </button>
                     ))}
@@ -26548,6 +26558,20 @@ ${milestoneSnapshotHtml}
                         {goalSimView !== "combined" && (() => {
                           const ca_r       = Number(inputs.currentAge) || 35;
                           const pa_r       = Number(inputs.payoutAge)  || 65;
+                          const isRSSForSolver = inputs.cpfScheme === 'rss';
+                          // RSS members draw down RA on a fixed payout schedule, not a CPF LIFE
+                          // payout-age target — "earliest age to stop contributing" isn't a
+                          // meaningful question until/unless they've set a CPF LIFE migration age.
+                          if (isRSSForSolver) {
+                            return (
+                              <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 12, padding: "14px 18px" }}>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: "var(--text-bright)" }}>⏱ When Can I Retire?</span>
+                                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.5 }}>
+                                  Not applicable on RSS — your RA pays out on a fixed schedule rather than a CPF LIFE payout-age target. If you've set a CPF LIFE migration age in the RSS panel, this solver will apply to that migration once supported.
+                                </p>
+                              </div>
+                            );
+                          }
                           // Fix: project FRS to payout age, not just the current-year FRS
                           // currentFRS uses yearsFrom2026 = currentYear−2026 (may be 0), not years to PA.
                           const rsGrowth_r  = (Number(inputs.retirementSumGrowth) || 3) / 100;
@@ -26555,7 +26579,7 @@ ${milestoneSnapshotHtml}
                           const yFromNow_r  = Math.max(0, (cy_r + (pa_r - ca_r)) - 2026);
                           const frs_r       = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth_r, yFromNow_r));
                           const inc_r  = Number(inputs.targetMonthlyIncome) || 0;
-                          const canRun = pa_r > ca_r + 1;
+                          const canRun = pa_r > ca_r;
                           return (
                             <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 12, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -26598,7 +26622,12 @@ ${milestoneSnapshotHtml}
                                     <div style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                                       <span>RA at age {pa_r}: <strong>{formatCurrency(Math.round(retireSolveResult.raAtAge))}</strong></span>
                                       <span>CPF LIFE payout: <strong>{formatCurrency(Math.round(retireSolveResult.payoutAtAge))}/mo</strong></span>
-                                      {retireSolveResult.earliestAge === (Number(inputs.contributionStopAge)||65) && (
+                                      {retireSolveResult.earliestAge === ca_r && (
+                                        <span style={{ color: "var(--clr-amber)", marginTop: 2 }}>
+                                          This is your current age — your existing balance plus compounding alone is projected to clear the target by age {pa_r}, even with no further contributions. Note: "stop contributing" stops mandatory <em>and</em> voluntary CPF inflows in this projection; it does not model stopping work or income, or whether you have other savings to live on between now and payout age.
+                                        </span>
+                                      )}
+                                      {retireSolveResult.earliestAge === (Number(inputs.contributionStopAge)||65) && retireSolveResult.earliestAge !== ca_r && (
                                         <span style={{ color: "var(--clr-amber)", marginTop: 2 }}>Already at your current stop age — you're on track.</span>
                                       )}
                                     </div>
