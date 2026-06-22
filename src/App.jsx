@@ -14353,6 +14353,11 @@ ${milestoneSnapshotHtml}
             grid-template-columns: 0 1fr !important;
             gap: 0 !important;
           }
+          /* When sidebar is hidden, tab strip anchors to the left so buttons sit at
+             the same left edge as the content below, not floating in empty space. */
+          .cpf-layout[data-sidebar-open="false"] .cpf-tabs-full-width .cpf-tabs {
+            justify-content: flex-start !important;
+          }
           .cpf-layout[data-sidebar-open="false"] .cpf-sidebar-wrap {
             overflow: hidden !important;   /* clip content during collapse animation */
             min-width: 0;                  /* allow grid item to shrink below content width */
@@ -15117,6 +15122,9 @@ ${milestoneSnapshotHtml}
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
           .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
+          /* Fix 3: tabs anchor left on tablet so first tabs aren't clipped off-screen.
+             overflow-x:auto on .cpf-tabs already allows rightward scrolling. */
+          .cpf-tabs-full-width .cpf-tabs { justify-content: flex-start !important; }
           .cpf-tab-content { overflow-y: visible !important; padding: 10px 0 !important; }
           /* Fix 1: when inputs sidebar is open on tablet, hide tab content so only inputs show */
           .cpf-layout[data-sidebar-open="true"] .cpf-tab-content { display: none !important; }
@@ -15170,7 +15178,8 @@ ${milestoneSnapshotHtml}
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
           /* Readiness tab responsive — tablet */
           .rd-kpi-header { grid-template-columns: repeat(3, 1fr) !important; }
-          .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
+          /* rd-readiness-gauge-row stays row (side-by-side) on tablet — matches
+             mas-wellness-row behaviour. Only stack below 640px (Fix 2b). */
           .rd-row2 { grid-template-columns: 1fr 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr 1fr !important; }
           .rd-row3-milestones { grid-column: 1 / -1; }
@@ -15259,9 +15268,8 @@ ${milestoneSnapshotHtml}
           .nw-mini-legend { flex-direction: row !important; flex-wrap: wrap !important; gap: 6px !important; }
           .cpf-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
           /* cpf-tabs mobile: base rule already sets overflow-x:auto and flex-wrap:nowrap.
-             Add overscroll-behavior-x:contain so swiping the tab strip doesn't trigger
-             body-level pull-to-refresh or page bounce on iOS Safari. */
-          .cpf-tabs { overscroll-behavior-x: contain !important; }
+             flex-start so tabs begin at left edge and scroll rightward (fix 3b). */
+          .cpf-tabs { overscroll-behavior-x: contain !important; justify-content: flex-start !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
           .kpi-strip { grid-template-columns: 1fr 1fr !important; }
           .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
@@ -15298,7 +15306,8 @@ ${milestoneSnapshotHtml}
           .wi-sliders-grid { grid-template-columns: 1fr !important; }
           /* Readiness tab — stack all rows vertically on mobile */
           .rd-kpi-header { grid-template-columns: 1fr 1fr !important; }
-          .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
+          /* rd-readiness-gauge-row: keep row on 641–768px landscape (Fix 2b).
+             Stacking happens only via the ≤640px local style block. */
           .rd-row2 { grid-template-columns: 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr !important; }
           .rd-row3-milestones { grid-column: 1 !important; }
