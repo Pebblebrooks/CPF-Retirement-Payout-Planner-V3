@@ -15975,7 +15975,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <div style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "10px" }}>
                     <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER} By using this tool, you acknowledge and accept that you are using the information provided at your own risk.</p>
-                    <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Pebblebrooks. All rights reserved.</p>
+                    <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 CPF Planner Pro. All rights reserved.</p>
                   </div>
                 </div>
               )}
@@ -16089,7 +16089,7 @@ ${milestoneSnapshotHtml}
             <div>
               <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>CPF Planner Pro</div>
               <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
-              <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1 }}>© 2026 Pebblebrooks. All rights reserved.</div>
+              <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1 }}>© 2026 CPF Planner Pro. All rights reserved.</div>
             </div>
           </div>
 
@@ -20596,7 +20596,7 @@ ${milestoneSnapshotHtml}
                       </div>
                       <div id="qs-disclaimer" style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "12px" }}>
                         <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER}</p>
-                        <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Pebblebrooks. All rights reserved.</p>
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 CPF Planner Pro. All rights reserved.</p>
                       </div>
                     </div>
                   </div>
@@ -29208,7 +29208,7 @@ function LockScreen({ initiallyExpired, onUnlock }) {
           Unlock
         </button>
         <p style={{ fontSize: 11, color: '#a0b4cc', margin: '20px 0 0' }}>
-          {'\u00A9'} 2026 Pebblebrooks. All rights reserved.
+          {'\u00A9'} 2026 CPF Planner Pro. All rights reserved.
         </p>
       </div>
     </div>
