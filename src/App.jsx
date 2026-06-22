@@ -1899,17 +1899,13 @@ function runRSSEngine(inputs, {
         const wisMASpill = wisToMA_sep - actualToMAWis;
         ma += (actualMandatoryMA_sep + actualVcMA_sep + actualToMAWis);
         const projFRS_sep = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-        // BUG-SEP-RSTU fix: moved up from below (was previously computed only for MRSS
-        // sizing, never credited to any account — see mirrored fix in runProjectionEngine
-        // for full rationale). Computation itself is unchanged.
-        const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
         if (age >= 55) {
           const raRoom_sep = Math.max(0, projFRS_sep - ra);
-          const toRA_sep = Math.min(toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep, raRoom_sep);
-          ra += toRA_sep; oa += (toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep - toRA_sep);
+          const toRA_sep = Math.min(toSA_vc3a + maSpill + wisMASpill, raRoom_sep);
+          ra += toRA_sep; oa += (toSA_vc3a + maSpill + wisMASpill - toRA_sep);
         } else {
           const saRoomSep = Math.max(0, projFRS_sep - sa);
-          const toSA_total = toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep;
+          const toSA_total = toSA_vc3a + maSpill + wisMASpill;
           const actualToSA_sep = Math.min(toSA_total, saRoomSep);
           sa += actualToSA_sep; oa += (toSA_total - actualToSA_sep);
         }
@@ -1918,18 +1914,17 @@ function runRSSEngine(inputs, {
         const mrssAgeOk_sep = age >= 55 || (isPwD && age < 55);
         const mrssBalOk_sep = age >= 55 ? ra < projBRS_sep : (oa + sa) < projBRS_sep;
         const mrssIncomeOk_sep = mmssMonthlyIncome <= 4000;
-        // BUG-SEP-RSTU fix: vcSaThis_sep now computed above, before the SA/RA routing block.
+        const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
         const mrssEligible_sep = isSC && mrssAgeOk_sep && mrssBalOk_sep && mrssIncomeOk_sep && cumMrssReceived < 20000 && vcSaThis_sep > 0;
         const actualMrss_sep = mrssEligible_sep ? Math.min(vcSaThis_sep, 2000, 20000 - cumMrssReceived) : 0;
         if (actualMrss_sep > 0) cumMrssReceived += actualMrss_sep;
         const govGrant_sep = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
         if (age >= 55) { ra += govGrant_sep + actualMrss_sep; } else { sa += govGrant_sep + actualMrss_sep; }
-        // BUG-SEP-RSTU fix: vcSaThis_sep added to inflow/voluntary/cumRaCashTopUps tracking below.
-        const sepContribInflow = vc3aTotal + vcVhrAmt * effVcVhrFreq + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep + vcSaThis_sep;
+        const sepContribInflow = vc3aTotal + vcVhrAmt * effVcVhrFreq + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep;
         yearInflow += sepContribInflow; totalInjected += sepContribInflow;
-        cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep + govGrant_sep + actualMrss_sep;
+        cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + govGrant_sep + actualMrss_sep;
         yearMandatory += actualMandatoryMA_sep;
-        yearVoluntary += vc3aTotal + vcVhrAmt * effVcVhrFreq + vcSaThis_sep;
+        yearVoluntary += vc3aTotal + vcVhrAmt * effVcVhrFreq;
         yearGovGrants += govGrant_sep + actualMrss_sep + wisToMA_sep;
       } else {
         let mandatoryOA_i, mandatorySA_dyn, mandatoryMA_i;
@@ -3057,32 +3052,18 @@ function runProjectionEngine(inputs, {
         ma += (actualMandatoryMA_sep + actualVcMA_sep + actualToMAWis);
         // M3: projFRS_sep is shared by both age branches — identical formula, computed once
         const projFRS_sep = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-        // BUG-SEP-RSTU fix: vcSaThis_sep (the member's RSTU/vcSaTopup contribution) is moved
-        // up from its previous position (just above mrssEligible_sep) so it can actually be
-        // credited to SA/RA below. Previously this value was computed ONLY to size the MRSS
-        // government match — the underlying user-contributed dollar amount itself was never
-        // added to any account, silently dropping every self-employed member's RSTU top-up.
-        // The computation itself is unchanged (same overrideVcSA ternary, same effVcSaFreq) —
-        // only its position moved earlier in the block; all values it depends on are already
-        // available at this point in the per-year loop.
-        const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
         if (age >= 55) {
           // VC3A: RA cap is FRS (not ERS — ERS applies only to RSTU cash top-ups)
           const raRoom_sep = Math.max(0, projFRS_sep - ra);
           // B2: include wisMASpill in SA/RA routing alongside vc3a SA and maSpill
-          // BUG-SEP-RSTU fix: vcSaThis_sep folded into the same pool, capped by the same
-          // FRS-headroom-in-RA, with any overflow routed to OA — mirrors the employed
-          // branch's vcToRA treatment of cappedVcSA exactly.
-          const toRA_sep = Math.min(toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep, raRoom_sep);
+          const toRA_sep = Math.min(toSA_vc3a + maSpill + wisMASpill, raRoom_sep);
           ra += toRA_sep;
-          oa += (toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep - toRA_sep);
+          oa += (toSA_vc3a + maSpill + wisMASpill - toRA_sep);
         } else {
           // MA spill to SA is capped at FRS — excess above FRS overflows to OA
           const saRoomSep = Math.max(0, projFRS_sep - sa);
           // B2: include wisMASpill in SA routing
-          // BUG-SEP-RSTU fix: vcSaThis_sep folded into the same pool — mirrors the employed
-          // branch's totalToSA treatment of cappedVcSA exactly.
-          const toSA_total = toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep;
+          const toSA_total = toSA_vc3a + maSpill + wisMASpill;
           const actualToSA_sep = Math.min(toSA_total, saRoomSep);
           sa += actualToSA_sep;
           oa += (toSA_total - actualToSA_sep); // FRS overflow to OA
@@ -3097,9 +3078,9 @@ function runProjectionEngine(inputs, {
         // use the same single monthly-income source for the ≤$4,000 income gate.
         // For SEPs: mmssMonthlyIncome = NTI / 12 (same formula; AW not applicable).
         const mrssIncomeOk_sep = mmssMonthlyIncome <= 4000;
-        // (BUG-SEP-RSTU fix: vcSaThis_sep now computed earlier, above the SA/RA routing
-        // block, so it can be credited — see comment there. Eligibility/match math below
-        // is otherwise unchanged.)
+        // C4 fix: same overrideVcSA ternary as employed path — MRSS in SEP branch must
+        // also respect the What-If slider rather than reading live inputs.vcSaTopup directly.
+        const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
         const mrssEligible_sep = isSC && mrssAgeOk_sep && mrssBalOk_sep && mrssIncomeOk_sep && cumMrssReceived < 20000 && vcSaThis_sep > 0;
         const actualMrss_sep = mrssEligible_sep ? Math.min(vcSaThis_sep, 2000, 20000 - cumMrssReceived) : 0;
         if (actualMrss_sep > 0) cumMrssReceived += actualMrss_sep;
@@ -3110,19 +3091,13 @@ function runProjectionEngine(inputs, {
         // Fix: use a local variable for the contribution-phase inflow so that vcMaCash and
         // any MMSS carry already accumulated into yearInflow (before this block) are not
         // overwritten. yearInflow must be += (not =) to preserve those earlier additions.
-        // BUG-SEP-RSTU fix: vcSaThis_sep added so RSTU contributions are actually counted
-        // in yearInflow/totalInjected (previously silently excluded entirely).
-        const sepContribInflow = vc3aTotal + vcVhrAmt * effVcVhrFreq + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep + vcSaThis_sep; // E1 fix: VHR frequency-gated
+        const sepContribInflow = vc3aTotal + vcVhrAmt * effVcVhrFreq + sepMandatoryMA + govGrant_sep + actualMrss_sep + wisToMA_sep; // E1 fix: VHR frequency-gated
         yearInflow += sepContribInflow;
         totalInjected += sepContribInflow;
-        // BUG-SEP-RSTU fix: vcSaThis_sep added — mirrors the employed branch's
-        // cumRaCashTopUps treatment, which already bundles the RSTU amount via cappedVcSA.
-        cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + vcSaThis_sep + govGrant_sep + actualMrss_sep;
+        cumRaCashTopUps += toSA_vc3a + maSpill + wisMASpill + govGrant_sep + actualMrss_sep;
         // Cashflow ledger breakdown (SEP)
         yearMandatory += actualMandatoryMA_sep;          // B3: actual amount credited to MA, not nominal
-        // BUG-SEP-RSTU fix: vcSaThis_sep added to yearVoluntary — mirrors the employed
-        // branch, where yearVoluntary already includes the vcSaTopup portion of cappedVcSA.
-        yearVoluntary += vc3aTotal + vcVhrAmt * effVcVhrFreq + vcSaThis_sep; // E1 fix: VHR frequency-gated
+        yearVoluntary += vc3aTotal + vcVhrAmt * effVcVhrFreq; // E1 fix: VHR frequency-gated
         yearGovGrants += govGrant_sep + actualMrss_sep + wisToMA_sep; // B2: WIS included
       } else {
         // Mandatory contribution calculation — three paths:
@@ -4343,7 +4318,7 @@ function KpiCard({ label, sublabel, value, color, tip, isFirst = false, isEarly 
       )}
       <div
         className="cpf-kpi-value"
-        style={{ fontSize: 17, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)" }}
+        style={{ fontSize: 17, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
       >
         {value}
       </div>
@@ -5779,7 +5754,7 @@ function ReadinessTab({
             tip: target > 0 ? `CPF LIFE payout covers ${coveragePct}% of your ${formatCurrency(target)}/mo target` : "Enter Target Monthly Income in the Retirement Drawdown section",
           },
         ].map(({ label, sublabel, value, placeholder, color, tip }) => (
-          <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+          <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <p style={labelStyle}>{label}</p>
             {placeholder ? (
               <>
@@ -5803,7 +5778,7 @@ function ReadinessTab({
           title={p10DropPct != null
             ? `Bad-luck (P10) scenario: total CPF at ${pa} = ${formatCurrency(p10TotalAtPA)} vs base ${formatCurrency(totalCPFNom)} · −${p10DropPct}%. Enable Monte Carlo in the Grow tab.`
             : "Enable Monte Carlo in the Grow tab to see the P10 downside scenario"}
-          style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+          style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <p style={labelStyle}>P10 downside</p>
           {p10TotalAtPA > 0 ? (
             <>
@@ -5830,7 +5805,7 @@ function ReadinessTab({
           title={oaDepletionAge
             ? `OA drawdown exhausts at age ${oaDepletionAge}. ${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy}. ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk.` : ""}`
             : "No OA drawdown active, or OA is sustained to the planning horizon"}
-          style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0,
+          style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center",
             borderColor: oaDepletionAge && oaIncomeGapYrs > 0 ? "rgba(239,68,68,0.4)" : "var(--border-subtle)" }}>
           <p style={labelStyle}>OA depletes</p>
           {oaDepletionAge ? (
@@ -5939,14 +5914,13 @@ function ReadinessTab({
               .mas-tile-card { -webkit-tap-highlight-color: transparent; }
               .rd-mas-side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
               .mas-wellness-gauge { flex: 0 0 34%; max-width: 220px; min-width: 110px; }
-              @media (max-width: 900px) {
+              @media (max-width: 1024px) {
                 .rd-mas-side-by-side { grid-template-columns: 1fr; }
+                .rd-readiness-gauge-row, .mas-wellness-row { flex-direction: column; align-items: stretch; }
+                .rd-readiness-gauge-row .mas-wellness-gauge, .mas-wellness-row .mas-wellness-gauge { width: 60%; max-width: 200px; margin: 0 auto 8px; flex: none; }
               }
               @media (max-width: 640px) {
                 .mas-tiles-grid { grid-template-columns: repeat(2, 1fr); }
-                .mas-wellness-row { flex-direction: column; align-items: center; }
-                .mas-wellness-gauge { flex: none; width: 60%; max-width: 200px; margin: 0 auto 8px; }
-                .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
               }
             `}</style>
 
@@ -8282,7 +8256,7 @@ function CPFPlannerApp() {
     const _cpfRel_t    = _cappedOW_t * _empRate_t * 12 + Math.min(Number(inputs.salaryBonus) || 0, _awCeil_t) * _empRate_t;
     const _eir_t       = currentAge_ui < 55 ? 1000 : currentAge_ui < 60 ? 6000 : 8000;
     const _vcma_t      = Math.min(Number(inputs.vcMaCash) || 0, Math.max(0, 8000 - eligibleRSTU));
-    const _srsCap_t    = (inputs.citizenStatus || 'SC').toUpperCase() === 'FG' ? 35700 : 15300; // Bug 2: use live citizenStatus, not dead srsCitizenPR
+    const _srsCap_t    = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
     const _srs_t       = Math.min(Number(inputs.srsAnnualContribution) || 0, _srsCap_t);
     const _chargeable_t = Math.max(0, annualGross - _cpfRel_t - _eir_t - eligibleRSTU - _vcma_t - _srs_t);
     estimatedTaxRate   = getMarginalRate(_chargeable_t); // overwrite placeholder above
@@ -8635,7 +8609,7 @@ function CPFPlannerApp() {
       return { passes: (frsTarget <= 0 || ra >= frsTarget) && (incomeTarget <= 0 || payout >= incomeTarget), ra, payout };
     };
     if (!check(hiAge).passes) return { feasible: false };
-    let lo = ca_r + 1, hi = hiAge, best = hiAge;
+    let lo = ca_r, hi = hiAge, best = hiAge;
     for (let i = 0; i < 14; i++) {
       if (lo > hi) break;
       const mid = Math.floor((lo + hi) / 2);
@@ -10100,7 +10074,13 @@ function CPFPlannerApp() {
   // which silently applies the wrong transfer % for ~1957/1958 boundary members.
   const _birthYear = (Number(debouncedInputs.birthYear) > 0)
     ? Number(debouncedInputs.birthYear)
-    : ((Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35));
+    : (() => {
+        const _approx = (Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35);
+        // RSS eligibility (SC/PR) requires birth year ≤1957 — a structural fact, not an estimate.
+        // The ±1yr age-based approximation can otherwise compute exactly 1958 for borderline ages
+        // (e.g. a 68-year-old in 2026), contradicting RSS membership itself. Clamp when in RSS mode.
+        return _isRSSForTransfer ? Math.min(_approx, 1957) : _approx;
+      })();
   const raTransferBase = _isRSSForTransfer ? 0 : Math.max(0, raAtPayout - cumulativeCashTopUps);
   const _raTransferPct    = _birthYear >= 1958 ? 0.20 : _birthYear === 1957 ? 0.10 : 0;
   const _raOaTransferRaw  = Math.round(raTransferBase * _raTransferPct);
@@ -10112,9 +10092,13 @@ function CPFPlannerApp() {
   // ── end of payoutAge65 / raAfterTransfer block ────────────────────────────
   // ── Spouse raAtPayout / raAfterTransfer block ─────────────────────────────
   const spouseRaAtPayout = spouseProjectionByAge.get(spousePayoutAge)?.ra || 0;
+  const _sIsRSSForTransfer = debouncedSpouseInputs.cpfScheme === 'rss';
   const _sBirthYearForTransfer = (Number(debouncedSpouseInputs.birthYear) > 0)
     ? Number(debouncedSpouseInputs.birthYear)
-    : ((Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35));
+    : (() => {
+        const _sApprox = (Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35);
+        return _sIsRSSForTransfer ? Math.min(_sApprox, 1957) : _sApprox;
+      })();
   const _sCumTopUpsForTransfer = spouseProjectionByAge.get(spousePayoutAge)?.cumRaCashTopUps ?? 0;
   const _sTransferBase    = Math.max(0, spouseRaAtPayout - _sCumTopUpsForTransfer);
   const _sTransferPct     = _sBirthYearForTransfer >= 1958 ? 0.20 : _sBirthYearForTransfer === 1957 ? 0.10 : 0;
@@ -11790,7 +11774,7 @@ function CPFPlannerApp() {
     const annualCpfRelief  = cpfEmployeeOW * 12 + cpfEmployeeAW;
     const rstRelief_b      = Math.min(Number(debouncedInputs.vcSaTopup)           || 0, 8000);
     const vcmaRelief_b     = Math.min(Number(debouncedInputs.vcMaCash)            || 0, Math.max(0, 8000 - rstRelief_b));
-    const srsCap_b         = (debouncedInputs.citizenStatus || 'SC').toUpperCase() === 'FG' ? 35700 : 15300; // Bug 2: use live citizenStatus, not dead srsCitizenPR
+    const srsCap_b         = ((debouncedInputs.citizenStatus || 'SC').toLowerCase() === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
     const srsRelief_b      = Math.min(Number(debouncedInputs.srsAnnualContribution) || 0, srsCap_b);
     const annualChargeable = Math.max(0, grossMonthly * 12 + grossBonus - annualCpfRelief - eir - rstRelief_b - vcmaRelief_b - srsRelief_b);
     // If user has enabled manual override, use their budgetTaxRate; otherwise auto progressive slabs
@@ -14493,16 +14477,10 @@ ${milestoneSnapshotHtml}
           pointer-events: none;
           z-index: 2;
         }
-        /* On mobile the kpi-strip switches to a 2-column grid that fills the full width —
-           no horizontal overflow, so the right-edge fade overlay is not needed and would
-           visually clip the rightmost KPI card content. Hide it on mobile.
-           On tablet (769-1024px) the strip can still overflow (3+ items with 1fr 1fr CSS),
-           so the fade hint is kept but narrowed from 36px to 20px so it no longer obscures
-           the rightmost card's value. */
-        @media (max-width: 768px) {
-          .kpi-strip-wrap::after { display: none; }
-        }
-        @media (min-width: 769px) and (max-width: 1024px) {
+        /* KPI strip is a single-row horizontally-scrollable strip at all viewport widths
+           (mobile, tablet, desktop) — narrow the fade hint on mobile/tablet so it doesn't
+           obscure the rightmost card's value as much as the 36px desktop version would. */
+        @media (max-width: 1024px) {
           .kpi-strip-wrap::after { width: 20px; }
         }
         /* On desktop with sidebar hidden, the KPI strip fills the full content width and
@@ -15144,7 +15122,7 @@ ${milestoneSnapshotHtml}
           .z4-plans-grid { grid-template-columns: 1fr 1fr !important; }
           .z6-stats-grid { grid-template-columns: 1fr 1fr !important; }
           /* Readiness tab responsive — tablet */
-          .rd-kpi-header { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+          .rd-kpi-header { grid-template-columns: repeat(3, 1fr) !important; }
           .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
           .rd-row2 { grid-template-columns: 1fr 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr 1fr !important; }
@@ -15238,7 +15216,7 @@ ${milestoneSnapshotHtml}
              body-level pull-to-refresh or page bounce on iOS Safari. */
           .cpf-tabs { overscroll-behavior-x: contain !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
-          .kpi-strip { grid-template-columns: 1fr 1fr !important; }
+          .kpi-strip { grid-template-columns: none !important; grid-auto-flow: column !important; grid-auto-columns: minmax(120px, 1fr) !important; }
           .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
           .cpf-kpi-value { font-size: 14px !important; }
           .cpf-kpi-label { font-size: 10px !important; }
@@ -15272,12 +15250,7 @@ ${milestoneSnapshotHtml}
           .wi-summary-grid { grid-template-columns: 1fr !important; }
           .wi-sliders-grid { grid-template-columns: 1fr !important; }
           /* Readiness tab — stack all rows vertically on mobile */
-          .rd-kpi-header { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-          /* Tighter padding + smaller type on phones — 5 cards in 2 cols means each card
-             is narrow; the desktop 18px/20px padding + 26px value + uppercase label was
-             contributing to text needing more room than minWidth:0 alone comfortably gives. */
-          .rd-kpi-header > div { padding: 12px 14px !important; }
-          .rd-kpi-header > div > p:first-child { font-size: 10px !important; }
+          .rd-kpi-header { grid-template-columns: 1fr 1fr !important; }
           .rd-readiness-gauge-row { flex-direction: column; align-items: center; }
           .rd-row2 { grid-template-columns: 1fr !important; }
           .rd-row3 { grid-template-columns: 1fr !important; }
@@ -18512,7 +18485,7 @@ ${milestoneSnapshotHtml}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
 
-              <SidebarSectionHeader id="outflows" label="Medical & Insurance" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
+              <SidebarSectionHeader id="outflows" label="Housing, Insurance & Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -22320,7 +22293,7 @@ ${milestoneSnapshotHtml}
                         : accumChartMode === 'stacked'
                           ? `Stacked — wealth composition by account until CPF LIFE begins at age ${inputs.payoutAge}.`
                           : accumChartMode === 'attribution'
-                            ? `Attribution — annual CPF growth by source: Mandatory, Voluntary, Govt Grants, Interest.${isRealDollars ? " Showing nominal values." : ""}`
+                            ? `Attribution — annual CPF growth by source: Mandatory, Voluntary, Govt Grants, Interest.${isRealDollars ? " Showing real (inflation-adjusted) dollars." : ""}`
                             : `Lines — individual account balances. SA terminates at 55; RA starts at 55.`}
                     </p>
                   </div>
@@ -23331,34 +23304,29 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
                 </div>
-                {/* View mode button strip + plan selector — combined into one row directly
-                    above the chart, since both control what the chart displays. Plan
-                    selector is right-justified; wraps below on narrow screens.
-                    Mobile fix: view-mode buttons use flex:"0 0 auto" + whiteSpace:nowrap so
-                    they don't compress; that group scrolls horizontally on its own. A
-                    right-edge gradient fade on viewportWidth<768 signals to the user that
-                    Total Yield and Eff. Return % are reachable by swiping. */}
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <div style={{ position: "relative", flex: "1 1 auto", minWidth: 0 }}>
-                    <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-                      {[["payout", "Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
-                        <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
-                          {label}
+                {/* View mode button strip.
+                    Mobile fix: buttons use flex:"0 0 auto" + whiteSpace:nowrap so they don't compress;
+                    the container scrolls horizontally. A right-edge gradient fade on viewportWidth<768
+                    signals to the user that Total Yield and Eff. Return % are reachable by swiping. */}
+                <div style={{ position: "relative" }}>
+                  <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+                    {[["payout", "Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
+                      <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                        {label}
+                      </button>
+                    ))}
+                    {/* Plan selector — shifted onto this row, right-justified (was previously its own row above) */}
+                    <div style={{ display: "flex", flex: "0 0 auto", marginLeft: "auto", background: "var(--bg-input)", padding: 2, borderRadius: 8, gap: 2 }}>
+                      {["standard", "escalating", "basic"].map(plan => (
+                        <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ flex: "0 0 auto", padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                          {plan}
                         </button>
                       ))}
                     </div>
-                    {viewportWidth < 768 && (
-                      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36, background: "linear-gradient(to right, transparent, var(--bg-base))", pointerEvents: "none", borderRadius: "0 12px 12px 0" }} />
-                    )}
                   </div>
-                  {/* Plan selector — right-justified, controls which plan's line is highlighted in the chart */}
-                  <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 10, gap: 2, flex: "0 0 auto" }}>
-                    {["standard", "escalating", "basic"].map(plan => (
-                      <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
-                        {plan}
-                      </button>
-                    ))}
-                  </div>
+                  {viewportWidth < 768 && (
+                    <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36, background: "linear-gradient(to right, transparent, var(--bg-base))", pointerEvents: "none", borderRadius: "0 12px 12px 0" }} />
+                  )}
                 </div>
                 {/* Item 3: Monthly/Annual/Cumulative sub-toggle — only visible in payout mode */}
                 {viewMode === "payout" && (
@@ -26179,20 +26147,20 @@ ${milestoneSnapshotHtml}
               return (
                 <div className="fhd-tab-inner strategy-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 0, borderRadius: 24, display: "flex", flexDirection: "column", gap: 0 }}>
 
-                  {/* ── Sub-navigation: Goal | Roadmap | Stress | Turbo ── */}
+                  {/* ── Sub-navigation: Goal Simulator | Income Roadmap | Stress Centre | Turbo ── */}
                   {/* strategy-subnav: inline bg is var(--bg-panel) — fully opaque — so
                       scrolling content cannot bleed through when the bar sticks. overflow:clip
                       (not hidden) preserves border-radius without creating a stacking context
                       that would break position:sticky inside the scroll container. */}
                   <div ref={strategySubnavRef} className="strategy-subnav" style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-panel)", borderRadius: "24px 24px 0 0", overflow: "clip" }}>
                     {[
-                      { id: "goal",     label: "🎯 Goal"    },
-                      { id: "roadmap",  label: "📅 Roadmap" },
-                      { id: "stress",   label: "🛡️ Stress"  },
-                      { id: "turbo",    label: "⚡ Turbo"   },
+                      { id: "goal",    label: "🎯 Goal Simulator"  },
+                      { id: "roadmap", label: "📅 Income Roadmap"  },
+                      { id: "stress",  label: "🛡️ Stress Centre"   },
+                      { id: "turbo",   label: "⚡ Turbo"           },
                     ].map(({ id, label }) => (
                       <button key={id} onClick={() => setGoalStratTab(id)}
-                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
+                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", outline: "none", WebkitTapHighlightColor: "transparent", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
                         {label}
                       </button>
                     ))}
@@ -26583,6 +26551,20 @@ ${milestoneSnapshotHtml}
                         {goalSimView !== "combined" && (() => {
                           const ca_r       = Number(inputs.currentAge) || 35;
                           const pa_r       = Number(inputs.payoutAge)  || 65;
+                          const isRSSForSolver = inputs.cpfScheme === 'rss';
+                          // RSS members draw down RA on a fixed payout schedule, not a CPF LIFE
+                          // payout-age target — "earliest age to stop contributing" isn't a
+                          // meaningful question until/unless they've set a CPF LIFE migration age.
+                          if (isRSSForSolver) {
+                            return (
+                              <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 12, padding: "14px 18px" }}>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: "var(--text-bright)" }}>⏱ When Can I Retire?</span>
+                                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.5 }}>
+                                  Not applicable on RSS — your RA pays out on a fixed schedule rather than a CPF LIFE payout-age target. If you've set a CPF LIFE migration age in the RSS panel, this solver will apply to that migration once supported.
+                                </p>
+                              </div>
+                            );
+                          }
                           // Fix: project FRS to payout age, not just the current-year FRS
                           // currentFRS uses yearsFrom2026 = currentYear−2026 (may be 0), not years to PA.
                           const rsGrowth_r  = (Number(inputs.retirementSumGrowth) || 3) / 100;
@@ -26590,7 +26572,7 @@ ${milestoneSnapshotHtml}
                           const yFromNow_r  = Math.max(0, (cy_r + (pa_r - ca_r)) - 2026);
                           const frs_r       = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth_r, yFromNow_r));
                           const inc_r  = Number(inputs.targetMonthlyIncome) || 0;
-                          const canRun = pa_r > ca_r + 1;
+                          const canRun = pa_r > ca_r;
                           return (
                             <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 12, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -26633,7 +26615,12 @@ ${milestoneSnapshotHtml}
                                     <div style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                                       <span>RA at age {pa_r}: <strong>{formatCurrency(Math.round(retireSolveResult.raAtAge))}</strong></span>
                                       <span>CPF LIFE payout: <strong>{formatCurrency(Math.round(retireSolveResult.payoutAtAge))}/mo</strong></span>
-                                      {retireSolveResult.earliestAge === (Number(inputs.contributionStopAge)||65) && (
+                                      {retireSolveResult.earliestAge === ca_r && (
+                                        <span style={{ color: "var(--clr-amber)", marginTop: 2 }}>
+                                          This is your current age — your existing balance plus compounding alone is projected to clear the target by age {pa_r}, even with no further contributions. Note: "stop contributing" stops mandatory <em>and</em> voluntary CPF inflows in this projection; it does not model stopping work or income, or whether you have other savings to live on between now and payout age.
+                                        </span>
+                                      )}
+                                      {retireSolveResult.earliestAge === (Number(inputs.contributionStopAge)||65) && retireSolveResult.earliestAge !== ca_r && (
                                         <span style={{ color: "var(--clr-amber)", marginTop: 2 }}>Already at your current stop age — you're on track.</span>
                                       )}
                                     </div>
