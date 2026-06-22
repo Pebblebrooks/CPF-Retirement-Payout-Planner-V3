@@ -29097,7 +29097,7 @@ ${milestoneSnapshotHtml}
 
 const ACCESS_GATE_KEY = 'cpf_access_gate';
 const ACCESS_GATE_BETA_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const ACCESS_GATE_PASSPHRASES = { admin: 'admin$$1188$$', beta: 'beta$$2026$$' };
+const ACCESS_GATE_PASSPHRASES = { admin: 'admin$$1188$$', beta: 'beta2026' };
 
 function readAccessGate() {
   try {
