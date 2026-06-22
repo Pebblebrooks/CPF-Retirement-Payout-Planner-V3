@@ -5078,6 +5078,18 @@ function ReadinessTab({
   onSrsCtaClick,
   // Inflows CTA: opens + scrolls to Inflows (topups) section in the sidebar
   onInflowsCtaClick,
+  // B-01: household parallel readiness — null/false when household mode is off
+  householdEnabled,
+  spouseInputs,
+  spouseAccumulationByAge,
+  spouseNominalAccumulationByAge,
+  spouseLifePlans,
+  spousePayoutAge,
+  spouseBasicPremiumPct,
+  spouseLifePlan,
+  spouseEffectiveOaDrawMonthly,
+  spouseEffectiveOaDrawStartAge,
+  spouseMilestones,
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
   const [expandedRdTile,  setExpandedRdTile]  = useState(null); // Readiness sub-factor tile expansion
