@@ -29346,7 +29346,7 @@ ${milestoneSnapshotHtml}
                               </div>
                             </div>
                           )}
-                               Two distinct real CPF interest-timing rules, both compared against this
+                          {/*      Two distinct real CPF interest-timing rules, both compared against this
                                app's own mid-year (6/12) averaging convention to get the NET bonus of
                                acting on 1 Jan instead:
                                - Cash top-ups (RSTU/VC3A/VCMA/VHR) are new money entering CPF, subject to
