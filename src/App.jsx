@@ -29571,7 +29571,7 @@ ${milestoneSnapshotHtml}
 
                         </div>{/* /turbo-lever-grid */}
 
-                      </div>{/* /outer turbo IIFE div */}
+
                     );
                   })()}
 
