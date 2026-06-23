@@ -29573,7 +29573,7 @@ ${milestoneSnapshotHtml}
 
 
                     );
-                  })()}
+                  })()
 
 
                 </div>
