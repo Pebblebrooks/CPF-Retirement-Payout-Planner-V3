@@ -1,10 +1,10 @@
 /**
  * CPF Planner Pro
  * ------------------------------------------------------------------------
- * Copyright (c) 2026 CPF Planner Pro. All rights reserved.
+ * Copyright (c) 2026 Pebblebrooks. All rights reserved.
  *
  * This source code and the software it forms part of are the proprietary
- * and confidential property of CPF Planner Pro (owner & developer). No part
+ * and confidential property of Pebblebrooks (owner & developer). No part
  * of this file may be copied, reproduced, distributed, or used to create
  * derivative works, in whole or in part, without prior written permission
  * from the owner.
@@ -811,6 +811,12 @@ const DEFAULT_INPUTS = {
   hasWill: false,
   hasCPFNomination: false,
   hasLPA: false,
+  // ── Protection Coverage (Q3 — Insurance Wellness Tile) ──────────────────────────────────
+  // Non-CPF insurance held outside the DPS/HPS that the engine already tracks.
+  // Used for the Protection Adequacy tile in the MAS Wellness Score panel.
+  termLifeSumAssured:         0,   // $: existing term life + whole life sum assured (excl. DPS $70K/55K)
+  criticalIllnessSumAssured:  0,   // $: CI sum assured from any CI or ECI policy
+  hasISP:                     false, // bool: has Integrated Shield Plan (MediShield Life upgrade)
 };
 
 // ── Household: spouse/partner default inputs ──────────────────────────────────
@@ -1295,6 +1301,10 @@ const INPUT_LABELS = {
   cpfisOaDur: "CPFIS OA Duration (yrs)", cpfisSaDur: "CPFIS SA Duration (yrs)",
   housingDur: "Housing Duration (yrs)", oaToMaDur: "OA-MA Duration (yrs)",
   oaToSaDur: "OA-SA Duration (yrs)", oaEduLoanDur: "OA Edu Loan Duration (yrs)", oaWithdrawalDur: "OA Withdrawal Duration (yrs)",
+  // ── Protection Coverage labels ───────────────────────────────────────────────
+  termLifeSumAssured:        "Term / Whole Life SA ($)",
+  criticalIllnessSumAssured: "Critical Illness SA ($)",
+  hasISP:                    "Has Integrated Shield Plan",
 };
 
 // Alias used by the Compare tab — same labels, one source of truth
@@ -1577,8 +1587,7 @@ function runRSSEngine(inputs, {
   const baseHousing   = overrideHousingOutflow !== undefined ? overrideHousingOutflow : (Number(inputs.housingOutflow) || 0);
   const oaEduLoanAnnual = Number(inputs.oaEduLoan)    || 0;
   const oaEduLoanFreq   = inputs.oaEduLoanFreq || 'one-time';
-  const _medishieldAuto = inputs.medishieldMode === 'auto'; // B-04: gate for age-banded MSL
-  const baseMedical = (Number(inputs.medicalUsage) || 0) + (_medishieldAuto ? 0 : (Number(inputs.medishieldIP) || 0));
+  const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0);
   const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
   const medInfl     = (Number(inputs.medicalInflationRate) || 0) / 100;
   const isSEP       = inputs.isSelfEmployed === true;
@@ -2167,7 +2176,7 @@ function runRSSEngine(inputs, {
 
     // Medical outflow — CareShield Life (elderCareShieldAmt) only begins at age 30 per MOH policy
     const yrSince = Math.max(0, age - startAge);
-    const totalMaOut = Math.round((baseMedical + (age >= 30 ? elderCareShieldAmt : 0)) * Math.pow(1 + medInfl, yrSince) + (_medishieldAuto ? getMslPremiumForAge(age) : 0));
+    const totalMaOut = Math.round((baseMedical + (age >= 30 ? elderCareShieldAmt : 0)) * Math.pow(1 + medInfl, yrSince));
     ma = Math.max(0, ma - totalMaOut); yearMedOut = totalMaOut;
     totalOutSpent += activeHousing + totalMaOut;
 
@@ -2497,8 +2506,7 @@ function runProjectionEngine(inputs, {
   const baseHousing = overrideHousingOutflow !== undefined ? overrideHousingOutflow : (Number(inputs.housingOutflow) || 0);
   const oaEduLoanAnnual = Number(inputs.oaEduLoan) || 0;  // D1: OA Education Loan Scheme outflow
   const oaEduLoanFreq   = inputs.oaEduLoanFreq || 'one-time';
-  const _medishieldAutoPE = inputs.medishieldMode === 'auto'; // B-04: gate for age-banded MSL (SEP path)
-  const baseMedical = (Number(inputs.medicalUsage) || 0) + (_medishieldAutoPE ? 0 : (Number(inputs.medishieldIP) || 0));
+  const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0);
   const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
   // Housing grants + insurance — declared here so engine loop can reference them
   const _totalHousingGrantsPE = (Number(inputs.ehgAmount)||0) + (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) + (Number(inputs.stepUpGrantAmount)||0);
@@ -3455,7 +3463,7 @@ function runProjectionEngine(inputs, {
     }
     // Medical outflow — CareShield Life (elderCareShieldAmt) only begins at age 30 per MOH policy
     const yrSince = Math.max(0, age - startAge);
-    const totalMaOut = Math.round((baseMedical + (age >= 30 ? elderCareShieldAmt : 0)) * Math.pow(1 + medInfl, yrSince) + (_medishieldAutoPE ? getMslPremiumForAge(age) : 0));
+    const totalMaOut = Math.round((baseMedical + (age >= 30 ? elderCareShieldAmt : 0)) * Math.pow(1 + medInfl, yrSince));
     ma = Math.max(0, ma - totalMaOut);
     yearMedOut = totalMaOut;
     const yearTotalOut = activeHousing + totalMaOut;
@@ -4315,7 +4323,7 @@ function KpiCard({ label, sublabel, value, color, tip, isFirst = false, isEarly 
       )}
       <div
         className="cpf-kpi-value"
-        style={{ fontSize: 17, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+        style={{ fontSize: 17, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)" }}
       >
         {value}
       </div>
@@ -5879,16 +5887,51 @@ function ReadinessTab({
         const legacyLabel  = legacyChecks === 3 ? "All 3 ✓" : `${legacyChecks}/3 done`;
         const legacyTip    = `Will: ${inputs.hasWill ? "✓" : "✗"}  ·  CPF Nomination: ${inputs.hasCPFNomination ? "✓" : "✗"}  ·  LPA: ${inputs.hasLPA ? "✓" : "✗"}. Set in Profile sidebar. MAS recommends all three for complete estate readiness.`;
 
+        // ── Tile 6: Protection Adequacy (Q3 — Insurance wellness) ───────────
+        // Framework: MAS/MoneySense guidelines for Singapore residents.
+        // (i) Life cover: MAS benchmark ~9-10× gross annual income; baseline DPS $70K (age 21-60) / $55K (age 60-65).
+        // (ii) CI cover: MAS benchmark ~3-5× gross annual income (ECI preferred; min CI acceptable).
+        // (iii) H&S: MediShield Life is mandatory baseline; Integrated Shield Plan (ISP) = better.
+        // NOTE: this tile scores ADEQUACY GAPS only — it does not recommend specific products.
+        //       Actual coverage must be verified with a licensed financial adviser (FAA).
+        const annualGross_t     = (Number(inputs.salaryGross) || 0) * 12;
+        const dpsBase           = ca >= 21 && ca <= 60 ? 70000 : ca > 60 && ca <= 65 ? 55000 : 0;
+        const totalLifeSA       = dpsBase + (Number(inputs.termLifeSumAssured) || 0);
+        const targetLifeSA      = annualGross_t * 9;           // MAS 9× income guideline
+        const lifeAdeqPct       = targetLifeSA > 0 ? Math.min(100, Math.round(totalLifeSA / targetLifeSA * 100)) : (dpsBase > 0 ? 40 : 0);
+        const ciSA              = Number(inputs.criticalIllnessSumAssured) || 0;
+        const targetCISA        = annualGross_t * 4;           // MAS 4× income midpoint
+        const ciAdeqPct         = targetCISA > 0 ? Math.min(100, Math.round(ciSA / targetCISA * 100)) : (ciSA > 0 ? 50 : 0);
+        const hsPct             = inputs.hasISP ? 90 : 50;    // MediShield Life baseline=50; ISP=90
+        // Weighted composite: Life 40%, CI 40%, H&S 20%
+        const protScore         = annualGross_t > 0
+          ? Math.round(lifeAdeqPct * 0.40 + ciAdeqPct * 0.40 + hsPct * 0.20)
+          : (dpsBase > 0 || ciSA > 0 || inputs.hasISP ? 35 : null);   // partial if no salary set
+        const protStatus        = protScore == null ? "grey" : protScore >= 75 ? "green" : protScore >= 45 ? "amber" : "red";
+        const protLabel         = protScore == null ? "Add salary + coverage"
+          : protScore >= 75 ? "Adequately covered"
+          : protScore >= 45 ? `${Math.round((protScore / 100) * 100)}% adequate`
+          : "Coverage gaps found";
+        const lifeDelta         = Math.max(0, targetLifeSA - totalLifeSA);
+        const ciDelta           = Math.max(0, targetCISA - ciSA);
+        const protTip           = annualGross_t > 0
+          ? `Life cover: ${formatCurrency(totalLifeSA)} (DPS $${(dpsBase/1000).toFixed(0)}K + term ${formatCurrency(Number(inputs.termLifeSumAssured)||0)}) vs MAS 9× income target ${formatCurrency(targetLifeSA)}${lifeDelta > 0 ? ` — gap: ${formatCurrency(lifeDelta)}` : " ✓"}.  `
+            + `CI: ${formatCurrency(ciSA)} vs MAS 4× income target ${formatCurrency(targetCISA)}${ciDelta > 0 ? ` — gap: ${formatCurrency(ciDelta)}` : " ✓"}.  `
+            + `H&S: ${inputs.hasISP ? "ISP upgrade ✓" : "MediShield Life only — consider ISP upgrade"}.  `
+            + `Weighted score: life 40% + CI 40% + H&S 20%. Set coverage in the Protection sidebar. Consult a licensed FA for product recommendations (FAA regulated).`
+          : `Set gross salary in the Profile sidebar to compute life and CI adequacy gaps. H&S: ${inputs.hasISP ? "ISP ✓" : "MediShield Life only"}.`;
+
         const clr = { green: "var(--clr-green)", amber: "var(--clr-amber)", red: "var(--clr-red)", grey: "var(--text-muted)" };
         const tiles = [
-          { icon: "🏦", title: "Emergency Buffer",  label: emLabel,      status: emStatus,     score: emScore,     tip: emTip,     pillar: "Emergency Funds"  },
-          { icon: "💰", title: "Savings Rate",       label: srLabel,      status: srStatus,     score: savingsRate, tip: srTip,     pillar: "Investments"      },
-          { icon: "📈", title: "Inflation Hedge",    label: hedgeLabel,   status: hedgeStatus,  score: hedgeScore,  tip: hedgeTip,  pillar: "Investments"      },
-          { icon: "💧", title: "Liquidity Ratio",    label: liqLabel,     status: liqStatus,    score: liqScore,    tip: liqTip,    pillar: "Protection"       },
-          { icon: "📋", title: "Legacy Readiness",   label: legacyLabel,  status: legacyStatus, score: legacyScore, tip: legacyTip, pillar: "Legacy Planning"  },
+          { icon: "🏦", title: "Emergency Buffer",    label: emLabel,     status: emStatus,    score: emScore,     tip: emTip,     pillar: "Emergency Funds" },
+          { icon: "💰", title: "Savings Rate",         label: srLabel,     status: srStatus,    score: savingsRate, tip: srTip,     pillar: "Investments"     },
+          { icon: "📈", title: "Inflation Hedge",      label: hedgeLabel,  status: hedgeStatus, score: hedgeScore,  tip: hedgeTip,  pillar: "Investments"     },
+          { icon: "💧", title: "Liquidity Ratio",      label: liqLabel,    status: liqStatus,   score: liqScore,    tip: liqTip,    pillar: "Wealth"          },
+          { icon: "📋", title: "Legacy Readiness",     label: legacyLabel, status: legacyStatus,score: legacyScore, tip: legacyTip, pillar: "Legacy Planning" },
+          { icon: "🛡", title: "Protection Adequacy",  label: protLabel,   status: protStatus,  score: protScore,   tip: protTip,   pillar: "Protection"      },
         ];
-        // ── MAS Wellness composite (straight average of 5 tile scores) ──────
-        const tileScores = [emScore, savingsRate, hedgeScore, liqScore, legacyScore].filter(s => s != null);
+        // ── MAS Wellness composite (straight average of non-null tile scores) ─
+        const tileScores = [emScore, savingsRate, hedgeScore, liqScore, legacyScore, protScore].filter(s => s != null);
         const wellnessScore = tileScores.length > 0
           ? Math.round(tileScores.reduce((a, b) => a + b, 0) / tileScores.length)
           : 0;
@@ -5912,7 +5955,7 @@ function ReadinessTab({
               .mas-tile-card { -webkit-tap-highlight-color: transparent; }
               .rd-mas-side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
               .mas-wellness-gauge { flex: 0 0 34%; max-width: 220px; min-width: 110px; }
-              @media (max-width: 1024px) {
+              @media (max-width: 900px) {
                 .rd-mas-side-by-side { grid-template-columns: 1fr; }
               }
               @media (max-width: 640px) {
@@ -6948,6 +6991,8 @@ function CPFPlannerApp() {
   // existing useEffect (line ~6796) — if Turbo overwrites the value, the Goal Sim
   // badge would otherwise show a stale strategy letter next to a non-matching amount.
   const [turboSnapshot,   setTurboSnapshot]   = useState(null);  // inputs snapshot before first Turbo Apply — enables Undo All
+  const [turboBudget,     setTurboBudget]     = useState("");    // optional annual cash deploy cap (empty = unlimited)
+  const [turboChangeLog,  setTurboChangeLog]  = useState([]);   // timestamped audit trail of Turbo Apply/Undo actions
   const [goalResult,   setGoalResult]   = useState(null);             // solver output object
   const [goalSolving,  setGoalSolving]  = useState(false);            // spinner while computing
   const [goalApplied,  setGoalApplied]  = useState(null);             // "A"|"B"|"C"|null last-applied strategy
@@ -7237,9 +7282,9 @@ function CPFPlannerApp() {
     const maxPAv = Number(inp.maxProjectionAge) || 95; // F1: dynamic upper bound for input validation
     if (ca < 0 || ca > 95) errs.currentAge = "Age must be 0–95";
     // D3: under-16 info note — cash top-ups locked, CPF nominations and CPFIS not yet available
-    if (!errs.currentAge && ca >= 0 && ca < 16) errs.currentAge = "Members under 16 are managed by a parent or guardian. Cash top-ups to SA/MA (VC3A, RSTU, VCMA) can be entered here on the child's behalf. CPF nominations require age 16+. CPFIS requires age 18+ and is locked in the CPFIS Investments section.";
+    if (!errs.currentAge && ca >= 0 && ca < 16) errs.currentAge = "Members under 16 are managed by a parent or guardian. Cash top-ups to SA/MA (VC3A, RSTU, VCMA) can be entered here on the child's behalf. CPF nominations require age 16+. CPFIS requires age 18+ and is locked in the Outflows section.";
     // D3: age 16–17 info note — nominations OK, CPFIS still locked
-    if (!errs.currentAge && ca >= 16 && ca < 18) errs.currentAge = "CPF nominations are available from age 16. CPFIS requires age 18+ and is locked in the CPFIS Investments section.";
+    if (!errs.currentAge && ca >= 16 && ca < 18) errs.currentAge = "CPF nominations are available from age 16. CPFIS requires age 18+ and is locked in the Outflows section.";
     // A7: soft warning when current age is at or beyond payout age (no hard block)
     // RSS guard: RSS members use rssPayoutStartAge, not payoutAge — this warning is CPF LIFE-only.
     if (inp.cpfScheme !== 'rss' && !errs.currentAge && ca > 0 && ca >= pa) errs.currentAge = `Age ${ca} ≥ payout age ${pa} — CPF LIFE has likely started. Most contribution fields will have no effect.`;
@@ -8269,7 +8314,7 @@ function CPFPlannerApp() {
     const _cpfRel_t    = _cappedOW_t * _empRate_t * 12 + Math.min(Number(inputs.salaryBonus) || 0, _awCeil_t) * _empRate_t;
     const _eir_t       = currentAge_ui < 55 ? 1000 : currentAge_ui < 60 ? 6000 : 8000;
     const _vcma_t      = Math.min(Number(inputs.vcMaCash) || 0, Math.max(0, 8000 - eligibleRSTU));
-    const _srsCap_t    = isForeigner ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
+    const _srsCap_t    = (inputs.citizenStatus || 'SC').toUpperCase() === 'FG' ? 35700 : 15300;
     const _srs_t       = Math.min(Number(inputs.srsAnnualContribution) || 0, _srsCap_t);
     const _chargeable_t = Math.max(0, annualGross - _cpfRel_t - _eir_t - eligibleRSTU - _vcma_t - _srs_t);
     estimatedTaxRate   = getMarginalRate(_chargeable_t);
@@ -8619,7 +8664,7 @@ function CPFPlannerApp() {
       return { passes: (frsTarget <= 0 || ra >= frsTarget) && (incomeTarget <= 0 || payout >= incomeTarget), ra, payout };
     };
     if (!check(hiAge).passes) return { feasible: false };
-    let lo = ca_r, hi = hiAge, best = hiAge;
+    let lo = ca_r + 1, hi = hiAge, best = hiAge;
     for (let i = 0; i < 14; i++) {
       if (lo > hi) break;
       const mid = Math.floor((lo + hi) / 2);
@@ -9806,7 +9851,7 @@ function CPFPlannerApp() {
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
       cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
-      medicalUsage, medishieldIP, medishieldMode, elderCareShield,
+      medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
       salaryGross, salaryBonus, salaryGrowthRate, netTradeIncome,
@@ -9855,7 +9900,7 @@ function CPFPlannerApp() {
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
       cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
-      medicalUsage, medishieldIP, medishieldMode, elderCareShield,
+      medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
       salaryGross, salaryBonus, salaryGrowthRate, netTradeIncome,
@@ -10085,13 +10130,7 @@ function CPFPlannerApp() {
   // which silently applies the wrong transfer % for ~1957/1958 boundary members.
   const _birthYear = (Number(debouncedInputs.birthYear) > 0)
     ? Number(debouncedInputs.birthYear)
-    : (() => {
-        const _approx = (Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35);
-        // RSS eligibility (SC/PR) requires birth year ≤1957 — a structural fact, not an estimate.
-        // The ±1yr age-based approximation can otherwise compute exactly 1958 for borderline ages
-        // (e.g. a 68-year-old in 2026), contradicting RSS membership itself. Clamp when in RSS mode.
-        return _isRSSForTransfer ? Math.min(_approx, 1957) : _approx;
-      })();
+    : ((Number(debouncedInputs.currentYear) || 2026) - (Number(debouncedInputs.currentAge) || 35));
   const raTransferBase = _isRSSForTransfer ? 0 : Math.max(0, raAtPayout - cumulativeCashTopUps);
   const _raTransferPct    = _birthYear >= 1958 ? 0.20 : _birthYear === 1957 ? 0.10 : 0;
   const _raOaTransferRaw  = Math.round(raTransferBase * _raTransferPct);
@@ -10103,13 +10142,9 @@ function CPFPlannerApp() {
   // ── end of payoutAge65 / raAfterTransfer block ────────────────────────────
   // ── Spouse raAtPayout / raAfterTransfer block ─────────────────────────────
   const spouseRaAtPayout = spouseProjectionByAge.get(spousePayoutAge)?.ra || 0;
-  const _sIsRSSForTransfer = debouncedSpouseInputs.cpfScheme === 'rss';
   const _sBirthYearForTransfer = (Number(debouncedSpouseInputs.birthYear) > 0)
     ? Number(debouncedSpouseInputs.birthYear)
-    : (() => {
-        const _sApprox = (Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35);
-        return _sIsRSSForTransfer ? Math.min(_sApprox, 1957) : _sApprox;
-      })();
+    : ((Number(debouncedSpouseInputs.currentYear) || 2026) - (Number(debouncedSpouseInputs.currentAge) || 35));
   const _sCumTopUpsForTransfer = spouseProjectionByAge.get(spousePayoutAge)?.cumRaCashTopUps ?? 0;
   const _sTransferBase    = Math.max(0, spouseRaAtPayout - _sCumTopUpsForTransfer);
   const _sTransferPct     = _sBirthYearForTransfer >= 1958 ? 0.20 : _sBirthYearForTransfer === 1957 ? 0.10 : 0;
@@ -10684,6 +10719,17 @@ function CPFPlannerApp() {
       ? run({ propMonetiseEnabled: true })
       : 0;
 
+    // 8. SRS — max annual contribution to cap for SC/PR (not applicable to foreigners)
+    // Foreigners have no CPF but CAN contribute to SRS — however the Turbocharger
+    // is already gated to SC/PR only (isForeigner early-return above), so this
+    // always runs with the SC/PR cap ($15,300). Engine already models SRS drawdown
+    // starting at srsDrawdownStartAge with the 50% taxable fraction applied.
+    const srsCap_t    = SRS_CAP_SC_PR; // $15,300 for SC/PR
+    const curSrsContrib_t = Number(d.srsAnnualContribution) || 0;
+    const srsGain     = curSrsContrib_t < srsCap_t
+      ? run({ srsAnnualContribution: srsCap_t })
+      : 0;
+
     // 7. Deferment — compare payout at current payoutAge vs deferred age 70
     // Uses interpolateCpfLife directly (no engine re-run) since RA at payout age
     // is already in projectionByAge. Expressed as monthly payout delta, not CPF delta.
@@ -10693,6 +10739,41 @@ function CPFPlannerApp() {
     const payAt70     = pa < 70 ? interpolateCpfLife(raForDefer, curPlanKey, isMale, 70) : payAtCur;
     const deferGainMonthly = Math.max(0, payAt70 - payAtCur);
 
+    // ── RSTU payout sensitivity (Q1) ──────────────────────────────────────────
+    // How much more monthly CPF LIFE payout does maxing RSTU today generate?
+    // Approach: re-run interpolateCpfLife with (raAtPayout + rstuGain) — most of
+    // rstuGain routes SA→RA (pre-55) or directly to RA (post-55) and stays there
+    // until payout, so raAtPayout + rstuGain is a sound approximation of the RA
+    // at payout age if RSTU is maxed. The difference from payAtCur is the monthly
+    // payout uplift attributable to the RSTU lever.
+    const rstuGapToMax    = Math.max(0, 8000 - (Number(d.vcSaTopup) || 0));
+    const payWithMaxRSTU  = rstuGain > 0
+      ? interpolateCpfLife(raForDefer + rstuGain, curPlanKey, isMale, pa)
+      : payAtCur;
+    const rstuMonthlyLift     = Math.max(0, Math.round(payWithMaxRSTU - payAtCur));
+    // Per-$1,000 RSTU: how much extra monthly payout at payout age
+    const rstuPerThousand     = rstuGapToMax > 0 && rstuMonthlyLift > 0
+      ? Math.round((rstuMonthlyLift / rstuGapToMax) * 1000 * 10) / 10   // 1dp
+      : 0;
+    // Breakeven: how many months of extra payout to recoup the cash cost of maxing RSTU
+    const rstuBreakevenMonths = rstuMonthlyLift > 0 && rstuGapToMax > 0
+      ? Math.ceil(rstuGapToMax / rstuMonthlyLift)
+      : null;
+
+    // ── SRS payout sensitivity ─────────────────────────────────────────────────
+    // SRS doesn't route into CPF LIFE — it is a separate drawdown stream. So we
+    // express SRS sensitivity as: additional annual SRS income at drawdown vs the
+    // cash cost of maxing contributions. srsGain is total SRS balance uplift at
+    // payout age; apply the 50% taxable fraction and the user-set drawdown years.
+    const srsDrawdownYrs  = Math.max(1, Number(d.srsDrawdownYears) || 10);
+    const srsAnnualIncome = srsGain > 0 ? Math.round(srsGain / srsDrawdownYrs) : 0;  // raw annual draw
+    const srsMonthlyIncome= Math.round(srsAnnualIncome / 12);                          // monthly equivalent
+    const srsCap_t        = SRS_CAP_SC_PR;
+    const srsGapToMax     = Math.max(0, srsCap_t - (Number(d.srsAnnualContribution) || 0));
+    const srsPerThousand  = srsGapToMax > 0 && srsMonthlyIncome > 0
+      ? Math.round((srsMonthlyIncome / srsGapToMax) * 1000 * 10) / 10
+      : 0;
+
     return {
       rstu:       rstuGain,
       vc3a:       vc3aGain,
@@ -10700,8 +10781,17 @@ function CPFPlannerApp() {
       oaSa:       oaSaGain,
       vhr:        vhrGain,
       prop:       propGain,
-      deferMonthly:     deferGainMonthly,  // $/month
-      deferPctIncrease: payAtCur > 0 ? Math.round((deferGainMonthly / payAtCur) * 100) : 0,
+      srs:        srsGain,
+      srsCap:     srsCap_t,
+      deferMonthly:         deferGainMonthly,
+      deferPctIncrease:     payAtCur > 0 ? Math.round((deferGainMonthly / payAtCur) * 100) : 0,
+      // Q1 — RSTU sensitivity
+      rstuMonthlyLift,       // $/month more CPF LIFE from maxing RSTU
+      rstuPerThousand,       // $/month per $1,000 RSTU contributed today
+      rstuBreakevenMonths,   // months of extra payout to recoup RSTU cash cost
+      // Q1 — SRS sensitivity
+      srsMonthlyIncome,      // $/month SRS drawdown from maxing SRS (over drawdownYrs)
+      srsPerThousand,        // $/month per $1,000 SRS contributed today
       vc3aMaxRoom,
       vcmaRoom,
     };
@@ -11784,7 +11874,7 @@ function CPFPlannerApp() {
     const annualCpfRelief  = cpfEmployeeOW * 12 + cpfEmployeeAW;
     const rstRelief_b      = Math.min(Number(debouncedInputs.vcSaTopup)           || 0, 8000);
     const vcmaRelief_b     = Math.min(Number(debouncedInputs.vcMaCash)            || 0, Math.max(0, 8000 - rstRelief_b));
-    const srsCap_b         = ((debouncedInputs.citizenStatus || 'SC').toLowerCase() === 'foreigner') ? SRS_CAP_FOREIGNER : SRS_CAP_SC_PR;
+    const srsCap_b         = (debouncedInputs.citizenStatus || 'SC').toUpperCase() === 'FG' ? 35700 : 15300; // Bug 2: use live citizenStatus, not dead srsCitizenPR
     const srsRelief_b      = Math.min(Number(debouncedInputs.srsAnnualContribution) || 0, srsCap_b);
     const annualChargeable = Math.max(0, grossMonthly * 12 + grossBonus - annualCpfRelief - eir - rstRelief_b - vcmaRelief_b - srsRelief_b);
     // If user has enabled manual override, use their budgetTaxRate; otherwise auto progressive slabs
@@ -14535,10 +14625,16 @@ ${milestoneSnapshotHtml}
           pointer-events: none;
           z-index: 2;
         }
-        /* KPI strip is a single-row horizontally-scrollable strip at all viewport widths
-           (mobile, tablet, desktop) — narrow the fade hint on mobile/tablet so it doesn't
-           obscure the rightmost card's value as much as the 36px desktop version would. */
-        @media (max-width: 1024px) {
+        /* On mobile the kpi-strip switches to a 2-column grid that fills the full width —
+           no horizontal overflow, so the right-edge fade overlay is not needed and would
+           visually clip the rightmost KPI card content. Hide it on mobile.
+           On tablet (769-1024px) the strip can still overflow (3+ items with 1fr 1fr CSS),
+           so the fade hint is kept but narrowed from 36px to 20px so it no longer obscures
+           the rightmost card's value. */
+        @media (max-width: 768px) {
+          .kpi-strip-wrap::after { display: none; }
+        }
+        @media (min-width: 769px) and (max-width: 1024px) {
           .kpi-strip-wrap::after { width: 20px; }
         }
         /* On desktop with sidebar hidden, the KPI strip fills the full content width and
@@ -15123,11 +15219,11 @@ ${milestoneSnapshotHtml}
           .theme-dark, .theme-light { height: auto !important; overflow: visible !important; }
           .cpf-layout { grid-template-columns: 1fr !important; gap: 0 !important; padding: 0 !important; max-width: 100% !important; height: auto !important; overflow: visible !important; flex: none !important; }
           /* Row 1 sticky: header always visible */
-          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; height: 48px; box-sizing: border-box; background: var(--header-bg); transform: translateZ(0); will-change: transform; backface-visibility: hidden; }
+          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; box-sizing: border-box; background: var(--header-bg); }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
-          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; height: 44px; box-sizing: border-box; background: var(--bg-panel); transform: translateZ(0); will-change: transform; backface-visibility: hidden; }
+          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
           /* Fix 3: tabs anchor left on tablet so first tabs aren't clipped off-screen.
              overflow-x:auto on .cpf-tabs already allows rightward scrolling. */
           .cpf-tabs-full-width .cpf-tabs { justify-content: flex-start !important; }
@@ -15146,14 +15242,13 @@ ${milestoneSnapshotHtml}
           .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
           .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
             position: sticky !important; top: 136px !important; z-index: 40 !important;
-            transform: translateZ(0); will-change: transform; backface-visibility: hidden;
           }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           /* Logo alignment: match header left/right padding to sidebar-inner (14px) */
           .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Row 3 sticky: Input Parameters bar sits just below tab strip (~92px) */
-          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; height: 44px; box-sizing: border-box; transform: translateZ(0); will-change: transform; backface-visibility: hidden; }
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Responsive nav: hide desktop-only Display btn, show ⚙ gear */
@@ -15224,11 +15319,11 @@ ${milestoneSnapshotHtml}
           .cpf-page-wrap { padding-left: 12px !important; padding-right: 12px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Row 1 sticky: header always visible on mid-mobile (641-768px) */
-          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; height: 48px; box-sizing: border-box; background: var(--header-bg); transform: translateZ(0); will-change: transform; backface-visibility: hidden; }
+          header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; box-sizing: border-box; background: var(--header-bg); }
           /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
-          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; height: 44px; box-sizing: border-box; background: var(--bg-panel); transform: translateZ(0); will-change: transform; backface-visibility: hidden; }
+          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
           /* Row 3 sticky: Input Parameters bar */
-          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; height: 44px; box-sizing: border-box; transform: translateZ(0); will-change: transform; backface-visibility: hidden; }
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Hide desktop+tablet-only nav buttons; show gear */
@@ -15262,7 +15357,6 @@ ${milestoneSnapshotHtml}
           .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
             position: -webkit-sticky !important;
             position: sticky !important; top: 136px !important; z-index: 40 !important;
-            transform: translateZ(0); will-change: transform; backface-visibility: hidden;
           }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
@@ -15279,7 +15373,7 @@ ${milestoneSnapshotHtml}
              flex-start so tabs begin at left edge and scroll rightward (fix 3b). */
           .cpf-tabs { overscroll-behavior-x: contain !important; justify-content: flex-start !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
-          .kpi-strip { grid-template-columns: none !important; grid-auto-flow: column !important; grid-auto-columns: minmax(120px, 1fr) !important; }
+          .kpi-strip { grid-template-columns: 1fr 1fr !important; }
           .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
           .cpf-kpi-value { font-size: 14px !important; }
           .cpf-kpi-label { font-size: 10px !important; }
@@ -15977,7 +16071,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <div style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "10px" }}>
                     <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER} By using this tool, you acknowledge and accept that you are using the information provided at your own risk.</p>
-                    <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 CPF Planner Pro. All rights reserved.</p>
+                    <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Pebblebrooks. All rights reserved.</p>
                   </div>
                 </div>
               )}
@@ -16091,7 +16185,7 @@ ${milestoneSnapshotHtml}
             <div>
               <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>CPF Planner Pro</div>
               <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
-              <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1 }}>© 2026 CPF Planner Pro. All rights reserved.</div>
+              <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1 }}>© 2026 Pebblebrooks. All rights reserved.</div>
             </div>
           </div>
 
@@ -16727,7 +16821,7 @@ ${milestoneSnapshotHtml}
                   )}
                   {(Number(inputs.currentAge) || 0) >= 16 && (Number(inputs.currentAge) || 0) < 18 && (
                     <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(var(--clr-blue-rgb),0.08)", border: "1px solid rgba(var(--clr-blue-rgb),0.3)", fontSize: 12, color: "#93c5fd", lineHeight: 1.5 }}>
-                      ℹ️ <strong>Age 16–17:</strong> CPF nominations are available. CPFIS requires age 18+ and is disabled in the CPFIS Investments section below.
+                      ℹ️ <strong>Age 16–17:</strong> CPF nominations are available. CPFIS requires age 18+ and is disabled in the Outflows section below.
                     </div>
                   )}
                   {/* Gender toggle — affects CPF LIFE monthly payout ratio; locked for foreigners */}
@@ -16911,7 +17005,55 @@ ${milestoneSnapshotHtml}
                         </div>
                       </div>
                     ))}
-                  </div>
+
+                    {/* Protection Coverage inputs — feeds Tile 6: Protection Adequacy */}
+                    <div style={{ marginTop: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 10 }}>
+                      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 6px", display: "flex", alignItems: "center", gap: 6 }}>
+                        🛡 Protection Coverage
+                        <span style={{ fontSize: 10, color: "var(--text-subtle)", fontWeight: 600 }}>feeds Wellness Tile 6</span>
+                      </p>
+                      <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "0 0 8px", lineHeight: 1.5 }}>
+                        DPS ($70K baseline) is counted automatically. Enter your additional policies below.
+                        Not financial advice — consult a licensed FA for product recommendations.
+                      </p>
+                      {/* Term / Whole Life sum assured */}
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
+                          Term / Whole Life SA ($) <span style={{ color: "var(--text-subtle)" }}>excl. DPS</span>
+                        </label>
+                        <input
+                          type="number" min={0} step={50000}
+                          value={inputs.termLifeSumAssured || ""}
+                          placeholder="e.g. 500000"
+                          onChange={e => setInputs(p => ({ ...p, termLifeSumAssured: Number(e.target.value) || 0 }))}
+                          style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }}
+                        />
+                      </div>
+                      {/* Critical Illness sum assured */}
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
+                          Critical Illness SA ($) <span style={{ color: "var(--text-subtle)" }}>CI or ECI</span>
+                        </label>
+                        <input
+                          type="number" min={0} step={50000}
+                          value={inputs.criticalIllnessSumAssured || ""}
+                          placeholder="e.g. 300000"
+                          onChange={e => setInputs(p => ({ ...p, criticalIllnessSumAssured: Number(e.target.value) || 0 }))}
+                          style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }}
+                        />
+                      </div>
+                      {/* Integrated Shield Plan toggle */}
+                      <div
+                        onClick={() => setInputs(p => ({ ...p, hasISP: !p.hasISP }))}
+                        title="Integrated Shield Plan (ISP) upgrades your MediShield Life to private hospital class B1/A or private coverage. If you have a rider that covers your deductible/co-insurance, toggle this on."
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", cursor: "pointer" }}>
+                        <span style={{ fontSize: 12, color: "var(--text-main)" }}>Integrated Shield Plan (ISP)</span>
+                        <div style={{ width: 28, height: 16, borderRadius: 8, background: inputs.hasISP ? "var(--clr-green)" : "var(--bg-panel)", border: `1px solid ${inputs.hasISP ? "var(--clr-green)" : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                          <div style={{ position: "absolute", top: 2, left: inputs.hasISP ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: inputs.hasISP ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>{/* /profile sidebar section */}
 
                   {/* ── CPF SCHEME — RSS vs CPF LIFE (SC/PR only; foreigners have no CPF) ── */}
                   {/* Birth-year auto-suggest banner: shown when estimated birth year < 1958    */}
@@ -17291,7 +17433,7 @@ ${milestoneSnapshotHtml}
                             onChange={e => setHousingSharePct(Number(e.target.value))}
                             style={{ width: "100%", accentColor: "#8b5cf6" }} />
                           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
-                            This splits the primary member's housing outflow between both profiles in the Household view. If the spouse has separate housing costs, model them as private assets in the spouse's inputs.
+                            This splits the primary member's housing outflow between both profiles in the Household view. Enter spouse's additional housing separately in spouse's Outflows if needed.
                           </p>
                         </div>
                       </div>
@@ -17915,28 +18057,16 @@ ${milestoneSnapshotHtml}
               {openSections.has("cashBudget") && (
                 <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
 
-                  {/* Read-only income bridge: OW + AW → Employee CPF → Take-home (A-04/I-12) */}
+                  {/* Read-only income bridge: Gross → Employee CPF → Take-home */}
                   <div style={{ background: "var(--bg-muted)", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", flexDirection: "column", gap: 5 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "var(--text-muted)" }}>Monthly gross salary (OW)</span>
+                      <span style={{ color: "var(--text-muted)" }}>Monthly gross salary</span>
                       <span style={{ fontWeight: 700, color: "var(--text-bright)" }}>{formatCurrency(budgetTakeHome.grossMonthly)}/mo</span>
                     </div>
-                    {budgetTakeHome.awMonthlyAvg > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "var(--text-muted)" }}>Annual bonus avg/mo (AW)</span>
-                        <span style={{ fontWeight: 700, color: "var(--clr-emerald)" }}>+{formatCurrency(budgetTakeHome.awMonthlyAvg)}/mo</span>
-                      </div>
-                    )}
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "var(--text-muted)" }}>Less: employee CPF on OW ({budgetTakeHome.empRatePct}%)</span>
-                      <span style={{ fontWeight: 700, color: "var(--clr-amber)" }}>−{formatCurrency(budgetTakeHome.cpfEmployeeOW)}/mo</span>
+                      <span style={{ color: "var(--text-muted)" }}>Less: employee CPF ({budgetTakeHome.empRatePct}%)</span>
+                      <span style={{ fontWeight: 700, color: "var(--clr-amber)" }}>−{formatCurrency(budgetTakeHome.cpfEmployee)}/mo</span>
                     </div>
-                    {budgetTakeHome.cpfEmployeeAWmo > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "var(--text-muted)" }}>Less: employee CPF on AW avg/mo</span>
-                        <span style={{ fontWeight: 700, color: "var(--clr-amber)" }}>−{formatCurrency(budgetTakeHome.cpfEmployeeAWmo)}/mo</span>
-                      </div>
-                    )}
                     <div style={{ borderTop: "0.5px solid var(--border-subtle)", paddingTop: 5, display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-muted)" }}>Estimated take-home</span>
                       <span style={{ fontWeight: 700, color: "var(--clr-emerald)" }}>{formatCurrency(budgetTakeHome.takeHome)}/mo</span>
@@ -18038,7 +18168,7 @@ ${milestoneSnapshotHtml}
                       </span>
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 3 }}>
-                      {formatCurrency(budgetTakeHome.surplus * 12)}/yr · take-home minus living & estimated tax
+                      {formatCurrency(budgetTakeHome.surplus * 12)}/yr · take-home minus living{Number(inputs.budgetTaxRate) > 0 ? " & estimated tax" : ""}
                     </div>
                   </div>
 
@@ -18550,7 +18680,7 @@ ${milestoneSnapshotHtml}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
 
-              <SidebarSectionHeader id="outflows" label="Medical & Insurance" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
+              <SidebarSectionHeader id="outflows" label="Housing, Insurance & Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -20598,7 +20728,7 @@ ${milestoneSnapshotHtml}
                       </div>
                       <div id="qs-disclaimer" style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "12px" }}>
                         <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER}</p>
-                        <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 CPF Planner Pro. All rights reserved.</p>
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Pebblebrooks. All rights reserved.</p>
                       </div>
                     </div>
                   </div>
@@ -22324,7 +22454,7 @@ ${milestoneSnapshotHtml}
                     { id: "decumulation", label: "📉 Decumulation" },
                   ].map(({ id, label }) => (
                     <button key={id} onClick={() => setGrowSubTab(id)}
-                      style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", outline: "none", WebkitTapHighlightColor: "transparent", cursor: "pointer", borderBottom: growSubTab === id ? "3px solid var(--clr-blue2)" : "3px solid transparent", color: growSubTab === id ? "var(--clr-blue2)" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
+                      style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: growSubTab === id ? "3px solid var(--clr-blue2)" : "3px solid transparent", color: growSubTab === id ? "var(--clr-blue2)" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
                       {label}
                     </button>
                   ))}
@@ -22420,7 +22550,7 @@ ${milestoneSnapshotHtml}
                 </div>
 
                 {/* ── Account legend + key-transitions strip ── */}
-                {!isForeigner && accumChartMode !== 'attribution' && (
+                {!isForeigner && (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(170px,1fr))", gap: 8, marginBottom: 16 }}>
                     {(debouncedInputs.cpfScheme === 'rss' ? [
                       { name: "OA", col: "#378ADD", rate: "2.5% p.a.", note: "Continues growing — use OA Drawdown to supplement RSS." },
@@ -24047,6 +24177,13 @@ ${milestoneSnapshotHtml}
                       <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>💡 <strong>Tip:</strong> Use the plan selector (Standard / Escalating / Basic) to highlight one plan's line. The other two are dimmed for clarity.</p>
                     </div>
                   </details>
+                  <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 10, gap: 2, alignSelf: "flex-start" }}>
+                    {["standard", "escalating", "basic"].map(plan => (
+                      <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                        {plan}
+                      </button>
+                    ))}
+                  </div>
 
                 {/* ── RA→OA Transfer reference card (LIFE tab) ─────────────────────────
                      Surfaces the transfer toggle inline so users understand which RA base
@@ -24172,14 +24309,6 @@ ${milestoneSnapshotHtml}
                         {label}
                       </button>
                     ))}
-                    {/* Plan selector — shifted onto this row, right-justified (was previously its own row above) */}
-                    <div style={{ display: "flex", flex: "0 0 auto", marginLeft: "auto", background: "var(--bg-input)", padding: 2, borderRadius: 8, gap: 2 }}>
-                      {["standard", "escalating", "basic"].map(plan => (
-                        <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ flex: "0 0 auto", padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
-                          {plan}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                   {viewportWidth < 768 && (
                     <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36, background: "linear-gradient(to right, transparent, var(--bg-base))", pointerEvents: "none", borderRadius: "0 12px 12px 0" }} />
@@ -24883,7 +25012,7 @@ ${milestoneSnapshotHtml}
                           <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
                             {[
                               ["🔵 Independent engines", "Each member (primary + spouse) runs a completely separate full CPF projection. Balances, contributions, top-ups, outflows, and CPF LIFE payouts are all computed independently."],
-                              ["🏠 Property stays on primary", "The property model, housing outflow, and SRS are all anchored to the primary member's profile. If the spouse has separate housing costs, model them as private assets in the spouse's inputs."],
+                              ["🏠 Property stays on primary", "The property model, housing outflow, and SRS are all anchored to the primary member's profile. Enter the spouse's separate housing in the spouse's Outflows section."],
                               ["⚖ Housing Split", `The ${housingSharePct}% / ${100-housingSharePct}% housing split allocates the primary member's housing cost across both members for the combined net worth view. Adjust in the Household sidebar.`],
                               ["💰 Combined CPF LIFE", "The 'Combined Monthly' figure is the arithmetic sum of both members' individually computed CPF LIFE payouts. Female payouts are ~7% lower than male due to longer life expectancy."],
                               ["👶 Children & Dependants", "The Children section is a milestone guide only — it shows when each child reaches secondary and tertiary education relative to the primary member's age. No engine run; no CPF impact modelled."],
@@ -26497,7 +26626,7 @@ ${milestoneSnapshotHtml}
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-green)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Under 16 — Parent/Guardian Managed:</strong> CPF accounts for members under 16 are administered by a parent or guardian. Cash top-ups to SA and MA (VC3A, RSTU, VCMA) can be entered directly to represent the parent's contributions. CPF nominations require age 16+. CPFIS requires age 18+ and is locked in the CPFIS Investments section. SRS requires age 18+ and is locked. CareShield Life premiums begin at age 30.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>Under 16 — Parent/Guardian Managed:</strong> CPF accounts for members under 16 are administered by a parent or guardian. Cash top-ups to SA and MA (VC3A, RSTU, VCMA) can be entered directly to represent the parent's contributions. CPF nominations require age 16+. CPFIS requires age 18+ and is locked in the Outflows section. SRS requires age 18+ and is locked. CareShield Life premiums begin at age 30.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
@@ -26538,7 +26667,7 @@ ${milestoneSnapshotHtml}
                         </li>
                         <li style={{ display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-purple)", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>How to Use:</strong> Enter the annual loan amount in the <strong>OA Education Loan</strong> field in the CPFIS Investments section. Use the frequency toggle to select Recurring (e.g. annual draw over a 3-year course) or One-Time (single lump-sum).</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>How to Use:</strong> Enter the annual loan amount in the <strong>OA Education Loan</strong> field in the Outflows section. Use the frequency toggle to select Recurring (e.g. annual draw over a 3-year course) or One-Time (single lump-sum).</div>
                         </li>
                       </ul>
                     </div>
@@ -27014,9 +27143,10 @@ ${milestoneSnapshotHtml}
                       { id: "goal",    label: "🎯 Goal Simulator"  },
                       { id: "stress",  label: "🛡️ Stress Centre"   },
                       { id: "turbo",   label: "⚡ Turbo"           },
+                      { id: "taxopt",  label: "💰 Tax Optimizer"   },
                     ].map(({ id, label }) => (
                       <button key={id} onClick={() => setGoalStratTab(id)}
-                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", outline: "none", WebkitTapHighlightColor: "transparent", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
+                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
                         {label}
                       </button>
                     ))}
@@ -27407,20 +27537,6 @@ ${milestoneSnapshotHtml}
                         {goalSimView !== "combined" && (() => {
                           const ca_r       = Number(inputs.currentAge) || 35;
                           const pa_r       = Number(inputs.payoutAge)  || 65;
-                          const isRSSForSolver = inputs.cpfScheme === 'rss';
-                          // RSS members draw down RA on a fixed payout schedule, not a CPF LIFE
-                          // payout-age target — "earliest age to stop contributing" isn't a
-                          // meaningful question until/unless they've set a CPF LIFE migration age.
-                          if (isRSSForSolver) {
-                            return (
-                              <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 12, padding: "14px 18px" }}>
-                                <span style={{ fontWeight: 700, fontSize: 13, color: "var(--text-bright)" }}>⏱ When Can I Retire?</span>
-                                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.5 }}>
-                                  Not applicable on RSS — your RA pays out on a fixed schedule rather than a CPF LIFE payout-age target. If you've set a CPF LIFE migration age in the RSS panel, this solver will apply to that migration once supported.
-                                </p>
-                              </div>
-                            );
-                          }
                           // Fix: project FRS to payout age, not just the current-year FRS
                           // currentFRS uses yearsFrom2026 = currentYear−2026 (may be 0), not years to PA.
                           const rsGrowth_r  = (Number(inputs.retirementSumGrowth) || 3) / 100;
@@ -27428,7 +27544,7 @@ ${milestoneSnapshotHtml}
                           const yFromNow_r  = Math.max(0, (cy_r + (pa_r - ca_r)) - 2026);
                           const frs_r       = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth_r, yFromNow_r));
                           const inc_r  = Number(inputs.targetMonthlyIncome) || 0;
-                          const canRun = pa_r > ca_r;
+                          const canRun = pa_r > ca_r + 1;
                           return (
                             <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 12, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -27471,12 +27587,7 @@ ${milestoneSnapshotHtml}
                                     <div style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                                       <span>RA at age {pa_r}: <strong>{formatCurrency(Math.round(retireSolveResult.raAtAge))}</strong></span>
                                       <span>CPF LIFE payout: <strong>{formatCurrency(Math.round(retireSolveResult.payoutAtAge))}/mo</strong></span>
-                                      {retireSolveResult.earliestAge === ca_r && (
-                                        <span style={{ color: "var(--clr-amber)", marginTop: 2 }}>
-                                          This is your current age — your existing balance plus compounding alone is projected to clear the target by age {pa_r}, even with no further contributions. Note: "stop contributing" stops mandatory <em>and</em> voluntary CPF inflows in this projection; it does not model stopping work or income, or whether you have other savings to live on between now and payout age.
-                                        </span>
-                                      )}
-                                      {retireSolveResult.earliestAge === (Number(inputs.contributionStopAge)||65) && retireSolveResult.earliestAge !== ca_r && (
+                                      {retireSolveResult.earliestAge === (Number(inputs.contributionStopAge)||65) && (
                                         <span style={{ color: "var(--clr-amber)", marginTop: 2 }}>Already at your current stop age — you're on track.</span>
                                       )}
                                     </div>
@@ -28628,19 +28739,25 @@ ${milestoneSnapshotHtml}
                   })()}
 
                   {/* ══ TURBOCHARGER ══════════════════════════════════════════
-                       7 levers: RSTU, VC3A, VCMA, OA→SA/RA, VHR, Deferment, Property.
+                       8 levers: RSTU, VC3A, VCMA, OA→SA/RA, VHR, SRS, Deferment, Property.
                        MRSS/MMSS are NOT separate levers — the engine auto-derives them
                        as a government match on top of RSTU/VCMA when eligible (see note
                        in turboImpacts, line ~10145), so they appear as inline call-outs
                        on the RSTU and VCMA cards instead of standalone cards.
+                       SRS (lever 8) routes to srsAnnualContribution; the engine already
+                       models SRS accumulation, drawdown, and 50% taxable fraction.
                        Impact $ figures come from turboImpacts (useMemo gated to this
                        sub-tab — see line ~10141). Apply buttons write directly to
                        `inputs`; lever cards read live `inputs` (not debounced) so the
                        "Active" badge flips the instant a button is clicked.
+                       Safety features: Annual Cash Budget cap (greys out over-budget
+                       levers), tax-saving badges (RSTU, SRS), age-expiry pills
+                       (OA→SA window), Annual Limit proximity warnings (VC3A), and
+                       conflict detection (VHR vs $0 housing, OA→SA vs $0 OA balance).
                        Foreigners are handled with a single early-return panel (below)
                        rather than per-lever messaging — every lever requires SC/PR
                        status, so a grid of individually-"ineligible" cards would be
-                       noise; one clear explanation is more honest than seven of them.
+                       noise; one clear explanation is more honest than eight of them.
                   ═══════════════════════════════════════════════════════════ */}
                   {goalStratTab === "turbo" && (() => {
                     const fmtK = v => v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : v >= 1e3 ? `$${Math.round(v/1e3)}k` : `$${Math.round(v)}`;
@@ -28686,11 +28803,53 @@ ${milestoneSnapshotHtml}
                     const pmAge     = Number(inputs.propMonetiseAge) || 65;
                     const dwzOn     = debouncedInputs.dieWithZeroEnabled === true;
 
+                    // Derived timing / planning helpers
+                    const yearsToPA     = Math.max(1, pa - ca);  // years until payout age (floor 1 to avoid /0)
+                    const currentYear   = new Date().getFullYear();
+                    const mmssYearsLeft = Math.max(0, 2030 - currentYear);
+
+                    // Life events: check for early retirement that would create an income gap with deferment
+                    const earlyRetireEvent = (inputs.lifeEvents || []).find(e =>
+                      e.enabled !== false && e.type === "early_retirement" && Number(e.startAge) < 70
+                    );
+                    const defermentIncomeGap = pa < 70 && earlyRetireEvent
+                      ? `⚠ Early Retirement life event at age ${earlyRetireEvent.startAge} + Deferment to 70 creates a ${70 - Number(earlyRetireEvent.startAge)}-year income gap — verify your Income Roadmap.`
+                      : null;
+
                     const vc3aMaxRoom = turboImpacts.vc3aMaxRoom || 0;
                     const vcmaRoom    = turboImpacts.vcmaRoom    || 0;
                     const mrssAgeBand = isSC && ca >= 55;     // informational call-out condition, not a hard gate
                     const mmssAgeBand = isSC && ca >= 55 && ca <= 70;
                     const deferEligible = pa < 70;
+
+                    // SRS lever variables
+                    const curSRS      = Number(inputs.srsAnnualContribution) || 0;
+                    const srsCapNow   = turboImpacts.srsCap || SRS_CAP_SC_PR; // $15,300 for SC/PR
+                    const srsEligRoom = Math.max(0, srsCapNow - curSRS);
+                    const srsTaxSaving = srsEligRoom > 0 && estimatedTaxRate > 0
+                      ? Math.round(srsEligRoom * estimatedTaxRate)
+                      : 0;
+
+                    // Budget constraint: annual cash that would be deployed by each lever
+                    // OA→SA and Deferment/Prop are internal/decisions — no cash cost.
+                    const budgetLimit  = turboBudget !== "" ? (Number(turboBudget) || 0) : null;
+                    const leverCash = {
+                      rstu:  Math.max(0, 8000 - curRSTU),
+                      vc3a:  vc3aMaxRoom > 0 ? Math.max(0, vc3aMaxRoom - curVC3A) : 0,
+                      vcma:  vcmaRoom    > 0 ? Math.max(0, vcmaRoom    - curVCMA) : 0,
+                      vhr:   housing     > 0 ? Math.max(0, housing     - curVHR)  : 0,
+                      srs:   srsEligRoom,
+                      oaSa:  0, defer: 0, prop: 0,
+                    };
+                    const totalCashDeployed = Object.entries(leverCash)
+                      .filter(([id]) => {
+                        const snap = turboSnapshot?.[id];
+                        const curVal = { rstu: curRSTU, vc3a: curVC3A, vcma: curVCMA, vhr: curVHR, srs: curSRS, oaSa: curOaSa }[id];
+                        return snap !== undefined || (id === "rstu" && curRSTU >= 8000) || (id === "srs" && curSRS >= srsCapNow);
+                      })
+                      .reduce((s, [, v]) => s + v, 0);
+                    const isOverBudget = (leverCashAmt) =>
+                      budgetLimit !== null && (totalCashDeployed + leverCashAmt) > budgetLimit;
 
                     // ── Apply handlers — each is self-contained; no shared guard needed ──
                     // (Goal Simulator's existing useEffect on vcSaTopup/vc3aCash is allowed to
@@ -28704,17 +28863,36 @@ ${milestoneSnapshotHtml}
                     const snapshotLever = (id, field, value) => {
                       if (turboSnapshot?.[id]) return; // already captured — don't overwrite with a later, already-modified value
                       setTurboSnapshot(prev => ({ ...(prev || {}), [id]: { field, value } }));
+                      // Append to change log
+                      const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation" };
+                      setTurboChangeLog(prev => [
+                        { ts, action: "apply", id, label: labelMap[id] || id, from: value },
+                        ...(prev || []),
+                      ].slice(0, 20)); // keep last 20 entries
                     };
                     const applyRSTU  = () => { snapshotLever("rstu", "vcSaTopup", curRSTU); setInputs(prev => ({ ...prev, vcSaTopup: 8000 })); };
                     const applyVC3A  = () => { snapshotLever("vc3a", "vc3aCash", curVC3A); setInputs(prev => ({ ...prev, vc3aCash: Math.max(vc3aMaxRoom, curVC3A) })); };
                     const applyVCMA  = () => { snapshotLever("vcma", "vcMaCash", curVCMA); setInputs(prev => ({ ...prev, vcMaCash: Math.max(vcmaRoom, curVCMA) })); };
                     const applyOaSa  = () => { snapshotLever("oaSa", "oaToSaTransfer", curOaSa); setInputs(prev => ({ ...prev, oaToSaTransfer: Math.max(oaBal, curOaSa) })); };
                     const applyVHR   = () => { snapshotLever("vhr", "vcVhr", curVHR); setInputs(prev => ({ ...prev, vcVhr: Math.max(housing, curVHR) })); };
-                    const applyProp  = () => { snapshotLever("prop", "propMonetiseEnabled", propOn); setInputs(prev => ({ ...prev, propMonetiseEnabled: true })); };
+                    const applyProp  = () => {
+                      setConfirmModal({
+                        title: "Enable Property Monetisation?",
+                        message: `This models right-sizing or lease-buyback of your home at age ${pmAge}, topping up your RA and unlocking cash proceeds. The planner will model the financial impact — you'll need to action this separately in real life. You can change the trigger age in the sidebar at any time.`,
+                        confirmLabel: "Confirm — Enable Property Monetisation",
+                        confirmColor: "#f97316",
+                        onConfirm: () => {
+                          snapshotLever("prop", "propMonetiseEnabled", propOn);
+                          setInputs(prev => ({ ...prev, propMonetiseEnabled: true }));
+                        },
+                      });
+                    };
+                    const applySRS   = () => { snapshotLever("srs", "srsAnnualContribution", curSRS); setInputs(prev => ({ ...prev, srsAnnualContribution: srsCapNow })); };
                     const applyDefer = () => {
                       setConfirmModal({
                         title: "Defer Payout to Age 70?",
-                        message: `This changes your CPF LIFE payout age from ${pa} to 70 across your entire profile — the Growth chart, LIFE tab payout table, and Goal Simulator baseline will all recompute. You can change this back anytime in the sidebar.`,
+                        message: `This changes your CPF LIFE payout age from ${pa} to 70 across your entire profile — the Growth chart, LIFE tab payout table, and Goal Simulator baseline will all recompute. You can change this back anytime in the sidebar.${defermentIncomeGap ? "\n\n" + defermentIncomeGap : ""}`,
                         confirmLabel: "Confirm — Defer to 70",
                         confirmColor: "#f97316",
                         onConfirm: () => {
@@ -28735,6 +28913,13 @@ ${milestoneSnapshotHtml}
                         delete next[id];
                         return Object.keys(next).length > 0 ? next : null;
                       });
+                      // Log the undo
+                      const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation" };
+                      setTurboChangeLog(prev => [
+                        { ts, action: "undo", id, label: labelMap[id] || id },
+                        ...(prev || []),
+                      ].slice(0, 20));
                     };
                     const undoAllTurbo = () => {
                       if (!turboSnapshot) return;
@@ -28750,6 +28935,13 @@ ${milestoneSnapshotHtml}
                             return reverted;
                           });
                           setTurboSnapshot(null);
+                          // Log the undo-all
+                          const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                          const count = Object.keys(turboSnapshot || {}).length;
+                          setTurboChangeLog(prev => [
+                            { ts, action: "undo-all", label: `Undo All (${count} lever${count !== 1 ? "s" : ""} reverted)` },
+                            ...(prev || []),
+                          ].slice(0, 20));
                         },
                       });
                     };
@@ -28765,9 +28957,21 @@ ${milestoneSnapshotHtml}
                     const levers = [
                       {
                         id: "rstu", icon: "💰", title: "RSTU — SA/RA Top-Up",
+                        seq: 1, // Optimal execution order (1 = do first)
                         eligible: curRSTU < 8000,
                         isApplied: curRSTU >= 8000,
                         gain: turboImpacts.rstu || 0,
+                        cashCost: leverCash.rstu,
+                        yearCost: (turboImpacts.rstu || 0) > 0 ? Math.round((turboImpacts.rstu || 0) / yearsToPA) : 0,
+                        taxBadge: estimatedTaxSavings > 0 && curRSTU < 8000
+                          ? `📋 Tax saving: ~${formatCurrency(estimatedTaxSavings)}/yr at your ~${Math.round(estimatedTaxRate * 100)}% marginal rate`
+                          : null,
+                        sensitivityBadge: turboImpacts.rstuMonthlyLift > 0 && curRSTU < 8000
+                          ? `📊 +${formatCurrency(turboImpacts.rstuMonthlyLift)}/mo more CPF LIFE at age ${pa} · ${turboImpacts.rstuPerThousand > 0 ? `${turboImpacts.rstuPerThousand.toFixed(1)}¢/mo per $1 · ` : ""}breakeven: ${turboImpacts.rstuBreakevenMonths != null ? `${turboImpacts.rstuBreakevenMonths} months` : "—"}`
+                          : null,
+                        expiryPill: ca < 55
+                          ? `⏰ SA closes at 55 — ${55 - ca} yr${55 - ca !== 1 ? "s" : ""} left to top up at 4% + 1% bonus interest`
+                          : null,
                         note: curRSTU >= 8000
                           ? "Already at the $8,000/yr RSTU tax-relief cap."
                           : `Top up $${(8000-curRSTU).toLocaleString()} more to reach the $8,000/yr tax-relief cap. Routes to SA pre-55, RA post-55.`
@@ -28777,18 +28981,30 @@ ${milestoneSnapshotHtml}
                       },
                       {
                         id: "vc3a", icon: "📈", title: "VC3A — Voluntary OA",
+                        seq: 4, // after VCMA (which fills MA first) and OA→SA
                         eligible: vc3aMaxRoom > 0,
                         isApplied: curVC3A >= vc3aMaxRoom && vc3aMaxRoom > 0,
                         gain: turboImpacts.vc3a || 0,
+                        cashCost: leverCash.vc3a,
+                        yearCost: (turboImpacts.vc3a || 0) > 0 ? Math.round((turboImpacts.vc3a || 0) / yearsToPA) : 0,
+                        warningNote: vc3aMaxRoom > 0 && vc3aMaxRoom < 2000
+                          ? `⚠ Only $${vc3aMaxRoom.toLocaleString()} of Annual Limit room left — mandatory contributions are using most of the $37,740 cap.`
+                          : null,
                         note: `$${vc3aMaxRoom.toLocaleString()}/yr of Annual Limit room unused after mandatory contributions.`,
                         ineligibleNote: "Mandatory contributions already use up your full $37,740 Annual Limit.",
                         onApply: applyVC3A,
                       },
                       {
                         id: "vcma", icon: "🏥", title: "VCMA — MediSave Top-Up",
+                        seq: 2, // before OA→SA so MediSave is at BHS before computing headroom
                         eligible: !isUnder16 && vcmaRoom > 0,
                         isApplied: curVCMA >= vcmaRoom && vcmaRoom > 0,
                         gain: turboImpacts.vcma || 0,
+                        cashCost: leverCash.vcma,
+                        yearCost: (turboImpacts.vcma || 0) > 0 ? Math.round((turboImpacts.vcma || 0) / yearsToPA) : 0,
+                        expiryPill: mmssAgeBand && mmssYearsLeft > 0
+                          ? `⏰ MMSS pilot ends 2030 — only ${mmssYearsLeft} yr${mmssYearsLeft !== 1 ? "s" : ""} to claim government match`
+                          : null,
                         note: `$${vcmaRoom.toLocaleString()} of MediSave headroom to BHS — tax-deductible top-up.`
                           + (mmssAgeBand ? " Government may match this dollar-for-dollar (MMSS, up to $1,000/yr, 2026–2030 pilot) if your MA is below half-BHS — already reflected in the gain shown." : ""),
                         ineligibleNote: isUnder16 ? "Cash top-ups require age 16+ (a parent/guardian may action this on the member's behalf)." : "MediSave Account is already at or above the Basic Healthcare Sum.",
@@ -28796,21 +29012,56 @@ ${milestoneSnapshotHtml}
                       },
                       {
                         id: "oaSa", icon: "🔁", title: "OA→SA/RA Transfer",
+                        seq: 3, // internal transfer — no Annual Limit impact, do before VC3A
                         eligible: oaBal > 0,
                         isApplied: curOaSa >= oaBal && oaBal > 0,
                         gain: turboImpacts.oaSa || 0,
+                        cashCost: 0,
+                        yearCost: (turboImpacts.oaSa || 0) > 0 ? Math.round((turboImpacts.oaSa || 0) / yearsToPA) : 0,
+                        expiryPill: ca < 55
+                          ? `⏰ SA closes at 55 — ${55 - ca} yr${55 - ca !== 1 ? "s" : ""} left to route into SA`
+                          : null,
+                        conflictNote: curOaSa > 0 && oaBal <= 0
+                          ? "⚠ OA→SA/RA is active but your OA balance is $0 — this lever has no effect. Check your OA balance in the sidebar."
+                          : null,
                         note: `Move $${oaBal.toLocaleString()} OA → ${ca < 55 ? "SA" : "RA"}. ${ca < 55 ? "SA" : "RA"} earns ~1.5% more interest than OA. Engine caps each year at your FRS/ERS headroom.`,
                         ineligibleNote: "No OA balance available to transfer.",
                         onApply: applyOaSa,
                       },
                       {
                         id: "vhr", icon: "🏠", title: "VHR — Housing Refund",
+                        seq: 5, // outside Annual Limit — any time, but after CPF allowance levers
                         eligible: housing > 0,
                         isApplied: curVHR >= housing && housing > 0,
                         gain: turboImpacts.vhr || 0,
+                        cashCost: leverCash.vhr,
+                        yearCost: (turboImpacts.vhr || 0) > 0 ? Math.round((turboImpacts.vhr || 0) / yearsToPA) : 0,
+                        conflictNote: housing > 0 && curVHR > 0 && curVHR >= housing && oaBal <= 0
+                          ? "⚠ VHR is active but your OA balance is $0 — verify housing outflow is configured correctly."
+                          : null,
                         note: `Refund $${housing.toLocaleString()}/yr of housing OA usage back into your OA to keep compounding.`,
                         ineligibleNote: "No housing OA outflow configured in your profile.",
                         onApply: applyVHR,
+                      },
+                      {
+                        id: "srs", icon: "💼", title: "SRS — Suppl. Retirement Scheme",
+                        seq: 6, // separate from CPF — do after maximising all CPF levers
+                        eligible: srsEligRoom > 0,
+                        isApplied: curSRS >= srsCapNow && srsCapNow > 0,
+                        gain: turboImpacts.srs || 0,
+                        cashCost: leverCash.srs,
+                        yearCost: (turboImpacts.srs || 0) > 0 ? Math.round((turboImpacts.srs || 0) / yearsToPA) : 0,
+                        taxBadge: srsTaxSaving > 0
+                          ? `📋 Tax saving: ~${formatCurrency(srsTaxSaving)}/yr · only 50% taxable at drawdown from 63`
+                          : `💡 50% of SRS withdrawals taxable from age 63 — often 0% in practice`,
+                        sensitivityBadge: turboImpacts.srsMonthlyIncome > 0 && srsEligRoom > 0
+                          ? `📊 +${formatCurrency(turboImpacts.srsMonthlyIncome)}/mo SRS drawdown at ${pa} · ${turboImpacts.srsPerThousand > 0 ? `${turboImpacts.srsPerThousand.toFixed(1)}¢/mo per $1` : ""} · tax-free growth until 63`
+                          : null,
+                        note: curSRS >= srsCapNow
+                          ? `Already at the $${srsCapNow.toLocaleString()}/yr SRS cap (SC/PR). Growth inside SRS is tax-free until drawdown.`
+                          : `$${srsEligRoom.toLocaleString()} more to the $${srsCapNow.toLocaleString()}/yr SRS cap (SC/PR). Reduces chargeable income dollar-for-dollar. Growth inside SRS is tax-free; only 50% taxable on drawdown from age 63.`,
+                        ineligibleNote: `SRS Annual Contribution already at the $${srsCapNow.toLocaleString()}/yr SC/PR cap.`,
+                        onApply: applySRS,
                       },
                       {
                         id: "defer", icon: "⏳", title: "Deferment to 70",
@@ -28820,6 +29071,7 @@ ${milestoneSnapshotHtml}
                         note: pa >= 70
                           ? "Already deferred to the maximum CPF LIFE payout age of 70 — the best payout multiplier available."
                           : `Deferring from ${pa} to 70 raises your monthly CPF LIFE payout by ~${turboImpacts.deferPctIncrease || 0}% (+${formatCurrency(turboImpacts.deferMonthly || 0)}/mo).`,
+                        conflictNote: defermentIncomeGap,
                         ineligibleNote: "Already deferred to the maximum payout age of 70.",
                         onApply: applyDefer,
                       },
@@ -28828,6 +29080,7 @@ ${milestoneSnapshotHtml}
                         eligible: !propOn,
                         isApplied: propOn,
                         gain: turboImpacts.prop || 0,
+                        cashCost: 0,
                         note: `Right-size or lease-buyback your home at age ${pmAge} to top up RA and unlock cash proceeds. Change the trigger age in the sidebar.`,
                         ineligibleNote: "Already enabled in your profile.",
                         onApply: applyProp,
@@ -28847,7 +29100,21 @@ ${milestoneSnapshotHtml}
                     // setInputs/setTurboSnapshot updater, so calling several in a row
                     // here batches cleanly into one re-render — no race condition.
                     const applyAllLevers = levers.filter(l => l.eligible && !l.isApplied && l.id !== "defer" && l.id !== "prop");
-                    const applyAllTurbo  = () => { applyAllLevers.forEach(l => l.onApply()); };
+                    const applyAllTurbo  = () => {
+                      if (applyAllLevers.length === 0) return;
+                      const cashRequired = applyAllLevers.reduce((s, l) => s + (l.cashCost || 0), 0);
+                      const leverSummary = applyAllLevers
+                        .map(l => `${l.icon} ${l.title}${(l.cashCost || 0) > 0 ? ` ($${(l.cashCost).toLocaleString()}/yr cash)` : " (internal — no cash)"}`)
+                        .join("\n");
+                      setConfirmModal({
+                        title: `Apply ${applyAllLevers.length} Levers at Once?`,
+                        message: `The following levers will be written to your profile:\n\n${leverSummary}${cashRequired > 0 ? `\n\nTotal annual cash required: $${cashRequired.toLocaleString()}/yr outside CPF.` : ""}\n\nDeferment and Property Monetisation are excluded — those are separate decisions.`,
+                        confirmLabel: `⚡ Apply All ${applyAllLevers.length} Levers`,
+                        confirmColor: "#f97316",
+                        onConfirm: () => { applyAllLevers.forEach(l => l.onApply()); },
+                      });
+                    };
+                    const totalCashNeeded = applyAllLevers.reduce((s, l) => s + (l.cashCost || 0), 0);
 
                     return (
                       <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -28875,6 +29142,7 @@ ${milestoneSnapshotHtml}
                                 ["🏠 VHR", "Voluntary Housing Refund — puts cash you've withdrawn from OA for housing back into OA, so it resumes earning CPF interest instead of sitting in property equity."],
                                 ["⏳ Deferment", "Delaying your CPF LIFE payout start (up to age 70) permanently raises your monthly payout — roughly 6–7% more for each year deferred, since the same RA balance is spread over fewer expected years."],
                                 ["🏘️ Property Monetisation", "Right-sizing, lease buyback, or other home-equity schemes that convert property value into RA top-ups and/or cash proceeds, usually from age 65 onward."],
+                                ["💼 SRS", "Supplementary Retirement Scheme — annual contributions (SC/PR cap: $15,300) reduce your chargeable income dollar-for-dollar. Growth inside SRS is tax-free; only 50% is taxable at drawdown from age 63, often landing in the 0% tax band when spread over 10 years."],
                                 ["📅 Contribution Timing", "Cash top-ups (RSTU/VC3A/VCMA/VHR) in January still face a 1-month posting lag before earning interest (CPF credits on the lowest monthly balance) — better than mid-year, but not instant. OA→SA/RA transfers have no such lag — moving early captures the higher rate immediately."],
                               ].map(([title, desc]) => (
                                 <div key={title} style={{ display: "flex", gap: 8 }}>
@@ -28885,6 +29153,31 @@ ${milestoneSnapshotHtml}
                             </div>
                           </div>
                         </details>
+
+                        {/* ── Annual Cash Budget Constraint ───────────────────────────── */}
+                        <div style={{ background: "var(--bg-panel-muted)", borderRadius: 12, padding: "12px 16px", border: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)", flexShrink: 0 }}>💵 Annual Cash Budget</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 180px" }}>
+                            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
+                            <input
+                              type="number"
+                              placeholder="Unlimited"
+                              value={turboBudget}
+                              onChange={e => setTurboBudget(e.target.value)}
+                              style={{ background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "5px 10px", fontSize: 13, color: "var(--text-bright)", width: 120, outline: "none" }}
+                            />
+                            {turboBudget !== "" && (
+                              <button onClick={() => setTurboBudget("")} style={{ fontSize: 11, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>✕ Clear</button>
+                            )}
+                          </div>
+                          {budgetLimit !== null && totalCashNeeded > 0 && (
+                            <span style={{ fontSize: 12, color: totalCashNeeded > budgetLimit ? "var(--clr-red)" : "var(--clr-green)", fontWeight: 700 }}>
+                              {totalCashNeeded > budgetLimit
+                                ? `⚠ All levers need $${totalCashNeeded.toLocaleString()} — exceeds $${budgetLimit.toLocaleString()} budget`
+                                : `✓ All levers fit within budget ($${totalCashNeeded.toLocaleString()} of $${budgetLimit.toLocaleString()})`}
+                            </span>
+                          )}
+                        </div>
 
                         {/* ── Turbo Score header ──────────────────────────────────────── */}
                         <div className="turbo-score-header">
@@ -28913,15 +29206,29 @@ ${milestoneSnapshotHtml}
                         <div className="turbo-lever-grid">
                           {levers.map(lev => {
                             const cardClass = lev.isApplied ? "is-active" : lev.eligible ? "is-eligible" : "is-ineligible";
+                            const overBudget = !lev.isApplied && budgetLimit !== null && (lev.cashCost || 0) > 0 && isOverBudget(lev.cashCost || 0);
                             return (
                               <div key={lev.id} className={`turbo-lever-card ${cardClass}`}>
                                 <div className="turbo-lever-title">
                                   <span>{lev.icon}</span>
+                                  {lev.seq != null && (lev.eligible || lev.isApplied) && (
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 900, color: "var(--text-muted)",
+                                      border: "1px solid var(--border-subtle)", borderRadius: "50%",
+                                      width: 18, height: 18, display: "inline-flex", alignItems: "center",
+                                      justifyContent: "center", flexShrink: 0,
+                                      background: lev.isApplied ? "rgba(16,185,129,0.12)" : "var(--bg-panel-muted)",
+                                      color: lev.isApplied ? "#10b981" : "var(--text-muted)",
+                                    }} title={`Step ${lev.seq} of the optimal execution sequence`}>
+                                      {lev.seq}
+                                    </span>
+                                  )}
                                   <span>{lev.title}</span>
                                   {lev.isApplied && <CheckCircle2 style={{ width: 14, height: 14, color: "#10b981", marginLeft: "auto" }} />}
                                 </div>
                                 {(lev.eligible || lev.isApplied) ? (
                                   <>
+                                    {/* Gain figure */}
                                     {lev.id === "defer" ? (
                                       !lev.isApplied && (
                                         <div className="turbo-lever-gain" style={{ fontSize: 15 }}>
@@ -28934,11 +29241,65 @@ ${milestoneSnapshotHtml}
                                       )
                                     )}
                                     <div className="turbo-lever-note">{lev.note}</div>
+                                    {/* Tax saving badge (RSTU / SRS) */}
+                                    {lev.taxBadge && (
+                                      <div style={{ marginTop: 4, fontSize: 11, fontWeight: 600, color: "var(--clr-purple, #a855f7)", background: "rgba(168,85,247,0.08)", borderRadius: 6, padding: "3px 8px", display: "inline-block" }}>
+                                        {lev.taxBadge}
+                                      </div>
+                                    )}
+                                    {/* Payout sensitivity badge (RSTU / SRS) — Q1 */}
+                                    {lev.sensitivityBadge && (
+                                      <div style={{ marginTop: 4, fontSize: 11, fontWeight: 600, color: "#06b6d4", background: "rgba(6,182,212,0.08)", borderRadius: 6, padding: "3px 8px", display: "inline-block" }}>
+                                        {lev.sensitivityBadge}
+                                      </div>
+                                    )}
+                                    {/* Annual Limit proximity warning (VC3A) */}
+                                    {lev.warningNote && (
+                                      <div style={{ marginTop: 4, fontSize: 11, color: "var(--clr-amber)", background: "rgba(245,158,11,0.08)", borderRadius: 6, padding: "3px 8px" }}>
+                                        {lev.warningNote}
+                                      </div>
+                                    )}
+                                    {/* Age-expiry countdown pill (OA→SA) */}
+                                    {lev.expiryPill && (
+                                      <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: "var(--clr-amber)", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 20, padding: "2px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                        {lev.expiryPill}
+                                      </div>
+                                    )}
+                                    {/* Conflict / stale-state warning (VHR) */}
+                                    {lev.conflictNote && (
+                                      <div style={{ marginTop: 4, fontSize: 11, color: "var(--clr-red, #ef4444)", background: "rgba(239,68,68,0.07)", borderRadius: 6, padding: "3px 8px" }}>
+                                        {lev.conflictNote}
+                                      </div>
+                                    )}
+                                    {/* Budget lockout warning */}
+                                    {overBudget && (
+                                      <div style={{ marginTop: 4, fontSize: 11, color: "var(--clr-red, #ef4444)", background: "rgba(239,68,68,0.07)", borderRadius: 6, padding: "3px 8px" }}>
+                                        ⚠ Applying this would exceed your ${budgetLimit.toLocaleString()} annual cash budget
+                                      </div>
+                                    )}
+                                    {/* Cash cost + year cost display */}
+                                    {(lev.cashCost || 0) > 0 && !lev.isApplied && (
+                                      <div style={{ marginTop: 3, fontSize: 11, color: "var(--text-muted)", display: "flex", gap: 10, flexWrap: "wrap" }}>
+                                        <span>💵 Cash required: ${(lev.cashCost).toLocaleString()}/yr</span>
+                                        {(lev.yearCost || 0) > 0 && (
+                                          <span style={{ color: "var(--clr-red, #ef4444)" }}>
+                                            · Skipping this year costs ~{fmtK(lev.yearCost)} in lost compounding
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                    {/* Year cost for zero-cash levers (OA→SA) */}
+                                    {(lev.cashCost || 0) === 0 && (lev.yearCost || 0) > 0 && !lev.isApplied && lev.id !== "defer" && lev.id !== "prop" && (
+                                      <div style={{ marginTop: 3, fontSize: 11, color: "var(--clr-red, #ef4444)" }}>
+                                        Skipping this year costs ~{fmtK(lev.yearCost)} in lost compounding
+                                      </div>
+                                    )}
                                     <div style={{ display: "flex", gap: 8 }}>
                                       <button
                                         className="turbo-lever-btn"
-                                        disabled={lev.isApplied}
-                                        onClick={() => !lev.isApplied && lev.onApply()}>
+                                        disabled={lev.isApplied || overBudget}
+                                        style={overBudget ? { opacity: 0.45, cursor: "not-allowed" } : {}}
+                                        onClick={() => !lev.isApplied && !overBudget && lev.onApply()}>
                                         {lev.isApplied ? "✓ Active" : "Apply to Profile"}
                                       </button>
                                       {lev.isApplied && turboSnapshot?.[lev.id] && (
@@ -28960,7 +29321,31 @@ ${milestoneSnapshotHtml}
                             );
                           })}
 
-                          {/* ── Contribution Timing (1st Jan) — informational only, no Apply button ──
+                          {/* ── Spouse / Parent RSTU — informational card ────────────────
+                               Not a lever (we can't write to another person's RA from here)
+                               but surfaces the $8,000 separate-relief cap that most users
+                               don't know exists. Points them to the sidebar Docs tab.
+                          ────────────────────────────────────────────────────────────── */}
+                          {estimatedTaxRate > 0 && (
+                            <div className="turbo-lever-card" style={{ borderStyle: "dashed", opacity: 0.85 }}>
+                              <div className="turbo-lever-title">
+                                <span>👪</span>
+                                <span>Spouse / Parent RSTU</span>
+                                <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "1px 6px" }}>INFO</span>
+                              </div>
+                              <div className="turbo-lever-note">
+                                Topping up a <strong>spouse's or parent's RA</strong> gives a <em>separate</em> $8,000/yr income tax relief on top of your own $8,000 RSTU cap — combined: up to $16,000/yr deduction.
+                                {estimatedTaxRate > 0 && (
+                                  <span style={{ display: "block", marginTop: 4, color: "var(--clr-purple, #a855f7)", fontWeight: 700 }}>
+                                    📋 At your ~{Math.round(estimatedTaxRate * 100)}% marginal rate, topping up $8,000 for a spouse/parent saves ~{formatCurrency(Math.round(8000 * estimatedTaxRate))}/yr in tax.
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
+                                This can't be applied here (it's a top-up to another person's CPF account). Action it directly at <a href="https://www.cpf.gov.sg" target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>cpf.gov.sg</a> before 31 December for the current YA's tax relief.
+                              </div>
+                            </div>
+                          )}
                                Two distinct real CPF interest-timing rules, both compared against this
                                app's own mid-year (6/12) averaging convention to get the NET bonus of
                                acting on 1 Jan instead:
@@ -28975,6 +29360,56 @@ ${milestoneSnapshotHtml}
                                  already earning OA's rate regardless of transfer timing).
                                This is a standalone estimate, not wired into the engine — see the explicit
                                disclaimer in the card copy below. */}
+                          {/* ── Housing OA Accrued Interest (Q2) ─────────────────────────────
+                               Shadow liability: CPF charges 2.5% p.a. on every OA dollar used
+                               for housing. On sale, refund = principal + all accrued interest.
+                               This panel shows the FUTURE component from today to housingStopAge.
+                               Past-withdrawn accruals require the CPF portal — we link to it.
+                          ────────────────────────────────────────────────────────────── */}
+                          {housing > 0 && (() => {
+                            const housingStop       = Number(inputs.housingStopAge) || 65;
+                            const n                 = Math.max(0, housingStop - ca);
+                            // Closed-form sum_{t=1}^{n} (1.025^t − 1) = 1.025×(1.025ⁿ−1)/0.025 − n
+                            const sumAccrual        = n > 0 ? 1.025 * (Math.pow(1.025, n) - 1) / 0.025 - n : 0;
+                            const futureAccrued     = Math.round(housing * sumAccrual);
+                            const futurePrin        = housing * n;
+                            const totalFutureRefund = futurePrin + futureAccrued;
+                            if (n === 0) return null;
+                            const rows = [
+                              ["Housing OA outflow / yr",       `$${housing.toLocaleString()}`],
+                              [`Years remaining (→ age ${housingStop})`, `${n} yrs`],
+                              ["Future OA principal withdrawn",  `$${futurePrin.toLocaleString()}`],
+                              ["Future accrued interest @ 2.5%", `$${futureAccrued.toLocaleString()}`],
+                              ["Total refund required on sale",   `$${totalFutureRefund.toLocaleString()}`],
+                              ["Past-withdrawn accrual (to-date)", "→ cpf.gov.sg portal"],
+                            ];
+                            return (
+                              <div className="turbo-lever-card" style={{ borderColor: "rgba(245,158,11,0.4)", gridColumn: "1 / -1" }}>
+                                <div className="turbo-lever-title">
+                                  <span>🏡</span>
+                                  <span>Housing OA Accrued Interest</span>
+                                  <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--clr-amber)", fontWeight: 800, border: "1px solid rgba(245,158,11,0.4)", borderRadius: 6, padding: "1px 6px" }}>SHADOW LIABILITY</span>
+                                </div>
+                                <div className="turbo-lever-note">
+                                  CPF charges 2.5% p.a. on every OA dollar withdrawn for housing. On property sale, you must refund <strong>principal + all accrued interest</strong> to CPF — this reduces your net cash proceeds.
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "5px 12px", marginTop: 10, padding: "8px 10px", background: "var(--bg-color)", borderRadius: 8, border: "1px solid var(--border-subtle)" }}>
+                                  {rows.map(([lbl, val], i) => (
+                                    <React.Fragment key={i}>
+                                      <div style={{ fontSize: 11, color: i === 4 ? "var(--clr-amber)" : "var(--text-muted)", fontWeight: i === 4 ? 700 : 400 }}>{lbl}</div>
+                                      <div style={{ fontSize: 12, fontWeight: 800, color: i === 4 ? "var(--clr-amber)" : "var(--text-bright)", textAlign: "right", whiteSpace: "nowrap" }}>{val}</div>
+                                    </React.Fragment>
+                                  ))}
+                                </div>
+                                <div style={{ marginTop: 8, fontSize: 11, color: "var(--clr-amber)", background: "rgba(245,158,11,0.06)", borderRadius: 6, padding: "5px 8px", lineHeight: 1.6 }}>
+                                  ⚠ Future component only — past withdrawals compound from the date of each draw. Log in to{" "}
+                                  <a href="https://www.cpf.gov.sg" target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>cpf.gov.sg</a>
+                                  {" "}→ My CPF → Property to see your full accrued interest to date. Activate <strong>VHR</strong> above to begin recovering this liability.
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           {(curRSTU > 0 || curVC3A > 0 || curVCMA > 0 || curVHR > 0 || curOaSa > 0) && (() => {
                             const cashTopUpAmt   = curRSTU + curVC3A + curVCMA; // lands mostly in SA/MA
                             const cashTopUpBonus = Math.round(cashTopUpAmt * CPF_RATES.SA * (5/12));
@@ -29005,9 +29440,138 @@ ${milestoneSnapshotHtml}
                               </div>
                             );
                           })()}
-                        </div>
+                          {/* ── Annual Action Checklist ──────────────────────────────────
+                               Generates a prioritised, deadline-anchored to-do list based on
+                               live `inputs`. Purely presentational — does not apply anything.
+                               Only shown when at least one eligible lever is not yet applied.
+                          ────────────────────────────────────────────────────────────── */}
+                          {(() => {
+                            const checklist = [];
+                            const yr = new Date().getFullYear();
 
-                      </div>
+                            // 1. RSTU (31 Dec deadline for YA tax relief)
+                            if (curRSTU < 8000)
+                              checklist.push({ done: false, deadline: `31 Dec ${yr}`, label: `RSTU top-up: $${(8000 - curRSTU).toLocaleString()} to reach $8,000/yr cap`, sub: "SA pre-55 / RA post-55 · income tax relief", urgent: true });
+                            else
+                              checklist.push({ done: true,  deadline: `31 Dec ${yr}`, label: `RSTU at cap ($8,000/yr)`, sub: "Income tax relief captured" });
+
+                            // 2. SRS (31 Dec deadline for YA tax relief)
+                            if (srsEligRoom > 0)
+                              checklist.push({ done: false, deadline: `31 Dec ${yr}`, label: `SRS contribution: $${srsEligRoom.toLocaleString()} to cap ($${srsCapNow.toLocaleString()}/yr)`, sub: "Reduce chargeable income · SC/PR", urgent: true });
+                            else if (curSRS >= srsCapNow && srsCapNow > 0)
+                              checklist.push({ done: true,  deadline: `31 Dec ${yr}`, label: `SRS at cap ($${srsCapNow.toLocaleString()}/yr)`, sub: "Tax deferral captured" });
+
+                            // 3. VCMA (31 Dec for IRAS deduction)
+                            if (vcmaRoom > 0)
+                              checklist.push({ done: false, deadline: `31 Dec ${yr}`, label: `VCMA: $${vcmaRoom.toLocaleString()} to BHS ($${(Number(inputs.maBal || 0) + vcmaRoom).toLocaleString()})`, sub: "MediSave top-up · tax-deductible", urgent: false });
+
+                            // 4. OA→SA/RA (do in January — no Annual Limit, just interest timing)
+                            if (oaBal > 0 && curOaSa < oaBal)
+                              checklist.push({ done: false, deadline: `1 Jan ${yr + 1}`, label: `OA→${ca < 55 ? "SA" : "RA"} transfer: $${oaBal.toLocaleString()}`, sub: "No Annual Limit · captures 1.5% rate differential immediately in January", urgent: false });
+
+                            // 5. VC3A (31 Dec — Annual Limit resets each calendar year)
+                            if (vc3aMaxRoom > 0 && curVC3A < vc3aMaxRoom)
+                              checklist.push({ done: false, deadline: `31 Dec ${yr}`, label: `VC3A: $${(vc3aMaxRoom - curVC3A).toLocaleString()} of Annual Limit remaining`, sub: "Voluntary contribution to OA/SA/MA", urgent: false });
+
+                            // 6. VHR (no strict deadline but sooner = more compounding)
+                            if (housing > 0 && curVHR < housing)
+                              checklist.push({ done: false, deadline: "Any time", label: `VHR: refund $${housing.toLocaleString()}/yr housing OA usage`, sub: "Restores OA compounding · outside Annual Limit", urgent: false });
+
+                            // 7. MRSS hint (if eligible)
+                            if (mrssAgeBand && curRSTU < 2000)
+                              checklist.push({ done: false, deadline: `31 Dec ${yr}`, label: `Top up at least $2,000 RA to trigger MRSS government match`, sub: "Dollar-for-dollar match (up to $2,000/yr) · confirm eligibility at cpf.gov.sg", urgent: true });
+
+                            if (checklist.length === 0) return null;
+                            const pending = checklist.filter(c => !c.done);
+                            return (
+                              <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", gridColumn: "1 / -1" }}>
+                                <summary style={{ padding: "11px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
+                                  <span style={{ fontSize: 14 }}>📋</span>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>
+                                    Annual Action Checklist {yr}
+                                  </span>
+                                  {pending.length > 0 && (
+                                    <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 800, background: "rgba(249,115,22,0.15)", color: "#f97316", borderRadius: 20, padding: "2px 8px" }}>
+                                      {pending.length} pending before 31 Dec
+                                    </span>
+                                  )}
+                                  <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)", marginLeft: "auto" }} />
+                                </summary>
+                                <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 10px", lineHeight: 1.5 }}>
+                                    Actions to complete before their deadlines. CPF top-ups (RSTU/SRS/VCMA) must reach CPF by 31 December to count for the current Year of Assessment's income tax relief. OA→SA/RA transfers: do as close to 1 January as possible to capture the full year of the 1.5% rate differential.
+                                  </p>
+                                  {checklist.map((item, i) => (
+                                    <div key={i} style={{
+                                      display: "flex", gap: 12, padding: "10px 14px", borderRadius: 10,
+                                      background: item.done ? "rgba(16,185,129,0.06)" : item.urgent ? "rgba(249,115,22,0.06)" : "var(--bg-color)",
+                                      border: `1px solid ${item.done ? "rgba(16,185,129,0.2)" : item.urgent ? "rgba(249,115,22,0.25)" : "var(--border-subtle)"}`,
+                                      alignItems: "flex-start",
+                                    }}>
+                                      <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{item.done ? "✅" : item.urgent ? "⏰" : "⬜"}</span>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: item.done ? "#10b981" : "var(--text-bright)", lineHeight: 1.4 }}>{item.label}</div>
+                                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.4 }}>{item.sub}</div>
+                                      </div>
+                                      <span style={{
+                                        fontSize: 10, fontWeight: 800, flexShrink: 0, padding: "2px 8px", borderRadius: 20, marginTop: 1,
+                                        background: item.done ? "rgba(16,185,129,0.12)" : item.urgent ? "rgba(249,115,22,0.12)" : "rgba(100,116,139,0.1)",
+                                        color: item.done ? "#10b981" : item.urgent ? "#f97316" : "var(--text-muted)",
+                                      }}>{item.deadline}</span>
+                                    </div>
+                                  ))}
+                                  <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.5, fontStyle: "italic" }}>
+                                    ⏰ = Act before deadline for this year's tax relief · ⬜ = No strict deadline, but earlier = more compounding
+                                  </p>
+                                </div>
+                              </details>
+                            );
+                          })()}
+
+                          {/* ── Turbocharger Change Log ─────────────────────────────────
+                               Timestamped audit trail of every Apply / Undo in this session.
+                               Stored in turboChangeLog state (max 20 entries, newest first).
+                               Session-only — cleared on page reload.
+                          ────────────────────────────────────────────────────────────── */}
+                          {turboChangeLog.length > 0 && (
+                            <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", gridColumn: "1 / -1" }}>
+                              <summary style={{ padding: "11px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
+                                <span style={{ fontSize: 14 }}>🕒</span>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>Session Change Log</span>
+                                <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 800, background: "rgba(100,116,139,0.15)", color: "var(--text-muted)", borderRadius: 20, padding: "2px 8px" }}>
+                                  {turboChangeLog.length} action{turboChangeLog.length !== 1 ? "s" : ""}
+                                </span>
+                                <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)", marginLeft: "auto" }} />
+                              </summary>
+                              <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+                                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 10px", lineHeight: 1.5 }}>
+                                  All Turbocharger actions this session. Cleared on page reload. Useful for sharing with an advisor or spouse.
+                                </p>
+                                {turboChangeLog.map((entry, i) => (
+                                  <div key={i} style={{
+                                    display: "flex", gap: 10, alignItems: "center", padding: "7px 12px", borderRadius: 8,
+                                    background: entry.action === "apply" ? "rgba(16,185,129,0.06)" : "rgba(239,68,68,0.06)",
+                                    border: `1px solid ${entry.action === "apply" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)"}`,
+                                  }}>
+                                    <span style={{ fontSize: 13 }}>{entry.action === "apply" ? "✅" : "↩"}</span>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-bright)", flex: 1 }}>
+                                      {entry.action === "apply" ? "Applied" : entry.action === "undo-all" ? "Undo All" : "Undone"}: {entry.label}
+                                    </span>
+                                    <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>{entry.ts}</span>
+                                  </div>
+                                ))}
+                                <button
+                                  onClick={() => setTurboChangeLog([])}
+                                  style={{ alignSelf: "flex-start", marginTop: 4, fontSize: 11, color: "var(--text-muted)", background: "none", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>
+                                  Clear Log
+                                </button>
+                              </div>
+                            </details>
+                          )}
+
+                        </div>{/* /turbo-lever-grid */}
+
+                      </div>{/* /outer turbo IIFE div */}
                     );
                   })()}
 
@@ -29099,7 +29663,7 @@ ${milestoneSnapshotHtml}
 
 const ACCESS_GATE_KEY = 'cpf_access_gate';
 const ACCESS_GATE_BETA_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const ACCESS_GATE_PASSPHRASES = { admin: 'admin$$1188$$', beta: 'Beta2026' };
+const ACCESS_GATE_PASSPHRASES = { admin: 'admin$$1188$$', beta: 'beta$$2026$$' };
 
 function readAccessGate() {
   try {
@@ -29210,7 +29774,7 @@ function LockScreen({ initiallyExpired, onUnlock }) {
           Unlock
         </button>
         <p style={{ fontSize: 11, color: '#a0b4cc', margin: '20px 0 0' }}>
-          {'\u00A9'} 2026 CPF Planner Pro. All rights reserved.
+          {'\u00A9'} 2026 Pebblebrooks. All rights reserved.
         </p>
       </div>
     </div>
