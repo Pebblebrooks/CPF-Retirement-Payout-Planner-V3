@@ -1889,9 +1889,11 @@ function runRSSEngine(inputs, {
         else if (age <= 70) { vc3aOaRatio=0.01; vc3aSaRatio=0.05;  vc3aMaRatio=0.105; }
         else                { vc3aOaRatio=0.01; vc3aSaRatio=0.01;  vc3aMaRatio=0.105; }
         const ratioSum = vc3aOaRatio + vc3aSaRatio + vc3aMaRatio;
-        const toOA_vc3a = Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) + vcVhrAmt * effVcVhrFreq;
-        const toMA_vc3a = Math.round(vc3aTotal * (vc3aMaRatio / ratioSum));
-        const toSA_vc3a = vc3aTotal - Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) - toMA_vc3a;
+        // VHR-FRS-FIX SEP: remove VHR from toOA_vc3a so it can be routed to RA/SA first if below FRS
+        const sepVhrAmt  = vcVhrAmt * effVcVhrFreq;
+        const toOA_vc3a  = Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)); // VC3A OA portion only
+        const toMA_vc3a  = Math.round(vc3aTotal * (vc3aMaRatio / ratioSum));
+        const toSA_vc3a  = vc3aTotal - Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) - toMA_vc3a;
         const wisToMA_sep = wisAmount > 0 ? Math.round(wisAmount * effWisFreq * 0.9) : 0;
         yearWisCash = wisAmount > 0 ? Math.round(wisAmount * effWisFreq * 0.1) : 0;
         const projBHS_i = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
@@ -1916,7 +1918,21 @@ function runRSSEngine(inputs, {
           sa += actualToSA_sep; oa += (toSA_total - actualToSA_sep);
         }
         oa += toOA_vc3a;
-        const projBRS_sep = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        // VHR-FRS-FIX SEP: route housing refund to RA/SA before OA when below FRS
+        if (sepVhrAmt > 0) {
+          const yrOffVhr_sep = Math.max(0, (baseYear + (age - startAge)) - 2026);
+          const projFRS_vhr_sep = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yrOffVhr_sep));
+          if (age >= 55) {
+            const raRm = Math.max(0, projFRS_vhr_sep - ra);
+            const toRA = Math.min(sepVhrAmt, raRm);
+            ra += toRA; oa += (sepVhrAmt - toRA);
+            if (toRA > 0) cumRaCashTopUps += toRA;
+          } else {
+            const saRm = Math.max(0, projFRS_vhr_sep - sa);
+            const toSA = Math.min(sepVhrAmt, saRm);
+            sa += toSA; oa += (sepVhrAmt - toSA);
+          }
+        } = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
         const mrssAgeOk_sep = age >= 55 || (isPwD && age < 55);
         const mrssBalOk_sep = age >= 55 ? ra < projBRS_sep : (oa + sa) < projBRS_sep;
         const mrssIncomeOk_sep = mmssMonthlyIncome <= 4000;
@@ -2014,7 +2030,7 @@ function runRSSEngine(inputs, {
         // overflow BHS and redirect to SA/RA/OA are tracked in totalInjected.
         // Previously maSpillEmp credited SA or RA but was excluded from yearInflow /
         // totalInjected, causing the "How your CPF grew" formula to undercount by ~$9k.
-        const empContribInflowBase = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + maSpillEmp + wisSA;
+        const empContribInflowBase = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + maSpillEmp + wisSA + vcVhrAmtEff; // VHR-FRS-FIX: restored after removal from cappedVcOA
         yearMandatory += mandatoryOA_i + mandatorySA_dyn + actualMandatoryMA_emp;
         const govGrantContrib_emp = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
         yearVoluntary += cappedVcOA + (vc3aCashEff > 0 ? actualVcMA_emp : 0) + (cappedVcSA - govGrantContrib_emp) + vcVhrAmtEff;
@@ -3058,7 +3074,9 @@ function runProjectionEngine(inputs, {
         else if (age <= 70) { vc3aOaRatio = 0.01;  vc3aSaRatio = 0.05;  vc3aMaRatio = 0.105; }
         else               { vc3aOaRatio = 0.01;  vc3aSaRatio = 0.01;  vc3aMaRatio = 0.105; }
         const ratioSum = vc3aOaRatio + vc3aSaRatio + vc3aMaRatio;
-        const toOA_vc3a = Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) + vcVhrAmt * effVcVhrFreq; // E1 fix: apply frequency gate to VHR in SEP branch
+        // VHR-FRS-FIX SEP (engine 2): remove VHR from toOA_vc3a so FRS routing applies below
+        const sepVhrAmt2 = vcVhrAmt * effVcVhrFreq;
+        const toOA_vc3a = Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)); // VC3A OA only
         const toMA_vc3a = Math.round(vc3aTotal * (vc3aMaRatio / ratioSum));
         const toSA_vc3a = vc3aTotal - Math.round(vc3aTotal * (vc3aOaRatio / ratioSum)) - toMA_vc3a;
         // WIS for SEP: 90% goes to MA (subject to BHS), 10% is cash (not modelled here)
@@ -3096,6 +3114,21 @@ function runProjectionEngine(inputs, {
           oa += (toSA_total - actualToSA_sep); // FRS overflow to OA
         }
         oa += toOA_vc3a;
+        // VHR-FRS-FIX SEP (engine 2): route VHR to RA/SA before OA when below FRS
+        if (sepVhrAmt2 > 0) {
+          const yrOff2 = Math.max(0, (baseYear + (age - startAge)) - 2026);
+          const frs2   = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yrOff2));
+          if (age >= 55) {
+            const raRm2 = Math.max(0, frs2 - ra);
+            const toRA2 = Math.min(sepVhrAmt2, raRm2);
+            ra += toRA2; oa += (sepVhrAmt2 - toRA2);
+            if (toRA2 > 0) cumRaCashTopUps += toRA2;
+          } else {
+            const saRm2 = Math.max(0, frs2 - sa);
+            const toSA2 = Math.min(sepVhrAmt2, saRm2);
+            sa += toSA2; oa += (sepVhrAmt2 - toSA2);
+          }
+        }
         // MRSS eligibility: SC only · age >= 55 (or PwD) · RA/balance below BRS · income ≤ $4,000/mo · lifetime cap $20,000
         // Auto-derived: grant = min(RSTU top-up this year, $2,000, cap remaining). No separate user input.
         const projBRS_sep = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
@@ -3247,7 +3280,7 @@ function runProjectionEngine(inputs, {
         // in empContribInflow so yearInflow and totalInjected are accurate.
         // FIX-maSpill (RSS engine): include maSpillEmp so MA contributions that overflow
         // BHS and redirect to SA/RA/OA are tracked in totalInjected (same fix as LIFE engine).
-        const empContribInflowBase = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + maSpillEmp + wisSA;
+        const empContribInflowBase = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + maSpillEmp + wisSA + vcVhrAmtEff; // VHR-FRS-FIX: restored
         // yearInflow and totalInjected updated below after actualMrss_emp is resolved.
         // Cashflow ledger breakdown (employed) — B3: use priority-split actuals, not Math.min on raw
         yearMandatory += mandatoryOA_i + mandatorySA_dyn + actualMandatoryMA_emp;
@@ -5933,7 +5966,7 @@ function ReadinessTab({
         // (iii) H&S: MediShield Life is mandatory baseline; Integrated Shield Plan (ISP) = better.
         // NOTE: this tile scores ADEQUACY GAPS only — it does not recommend specific products.
         //       Actual coverage must be verified with a licensed financial adviser (FAA).
-        const annualGross_t     = (Number(inputs.salaryGross) || 0) * 12;
+        const annualGross_t     = (Number(inputs.salaryGross) || 0) * 12 + (Number(inputs.salaryBonus) || 0); // include bonus for MAS coverage adequacy benchmarks
         const dpsBase           = ca >= 21 && ca <= 60 ? 70000 : ca > 60 && ca <= 65 ? 55000 : 0;
         const totalLifeSA       = dpsBase + (Number(inputs.termLifeSumAssured) || 0);
         const targetLifeSA      = annualGross_t * 9;           // MAS 9× income guideline
@@ -10717,7 +10750,7 @@ function CPFPlannerApp() {
       : ((Number(d.empOaCont) || 0) + (Number(d.empSaCont) || 0) + (Number(d.empMaCont) || 0));
     const vc3aMaxRoom = Math.max(0, ANNUAL_LIMIT - mandatoryContribs);
     const maBal  = Number(d.maBalance) || 0;
-    const bhsNow = 77500;                            // 2026 BHS — display; engine uses projected BHS
+    const bhsNow = 79000;                            // 2026 BHS — display; engine uses projected BHS
     const vcmaRoom = Math.max(0, bhsNow - maBal);
     const oaBal  = Number(d.oaBalance)  || 0;
     const housing = Number(d.housingOutflow) || 0;
@@ -10779,22 +10812,25 @@ function CPFPlannerApp() {
     const deferGainMonthly = Math.max(0, payAt70 - payAtCur);
 
     // ── RSTU payout sensitivity (Q1) ──────────────────────────────────────────
-    // How much more monthly CPF LIFE payout does maxing RSTU today generate?
-    // Approach: re-run interpolateCpfLife with (raAtPayout + rstuGain) — most of
-    // rstuGain routes SA→RA (pre-55) or directly to RA (post-55) and stays there
-    // until payout, so raAtPayout + rstuGain is a sound approximation of the RA
-    // at payout age if RSTU is maxed. The difference from payAtCur is the monthly
-    // payout uplift attributable to the RSTU lever.
-    const rstuGapToMax    = Math.max(0, 8000 - (Number(d.vcSaTopup) || 0));
-    const payWithMaxRSTU  = rstuGain > 0
-      ? interpolateCpfLife(raForDefer + rstuGain, curPlanKey, isMale, pa)
-      : payAtCur;
-    const rstuMonthlyLift     = Math.max(0, Math.round(payWithMaxRSTU - payAtCur));
-    // Per-$1,000 RSTU: how much extra monthly payout at payout age
-    const rstuPerThousand     = rstuGapToMax > 0 && rstuMonthlyLift > 0
-      ? Math.round((rstuMonthlyLift / rstuGapToMax) * 1000 * 10) / 10   // 1dp
+    // Use a dedicated runner that returns RA at payout age (not total CPF) so the
+    // interpolateCpfLife call is seeded with an accurate RA estimate rather than
+    // the total-CPF delta (which included OA/MA compounding effects as a proxy).
+    const raAtPayoutRunner = (overrides) => {
+      try {
+        const rows = runProjectionEngine({ ...d, ...overrides });
+        const payoutRow = rows.find(r => r.age >= pa) || rows[rows.length - 1];
+        return payoutRow ? (payoutRow.ra || 0) : raAtPayout;
+      } catch { return raAtPayout; }
+    };
+    const rstuGapToMax     = Math.max(0, 8000 - (Number(d.vcSaTopup) || 0));
+    const raWithMaxRSTU    = rstuGapToMax > 0 ? raAtPayoutRunner({ vcSaTopup: 8000 }) : raForDefer;
+    const payWithMaxRSTU   = interpolateCpfLife(raWithMaxRSTU, curPlanKey, isMale, pa);
+    const rstuMonthlyLift  = Math.max(0, Math.round(payWithMaxRSTU - payAtCur));
+    // Per-$1,000 RSTU: extra monthly payout at payout age (age-sensitive — shows cost of delay)
+    const rstuPerThousand  = rstuGapToMax > 0 && rstuMonthlyLift > 0
+      ? Math.round((rstuMonthlyLift / rstuGapToMax) * 1000 * 10) / 10   // 1 d.p.
       : 0;
-    // Breakeven: how many months of extra payout to recoup the cash cost of maxing RSTU
+    // Breakeven: months of extra payout to fully recoup the cash cost of maxing RSTU
     const rstuBreakevenMonths = rstuMonthlyLift > 0 && rstuGapToMax > 0
       ? Math.ceil(rstuGapToMax / rstuMonthlyLift)
       : null;
@@ -26071,6 +26107,10 @@ ${milestoneSnapshotHtml}
                     <option value="#doc-household" style={{ fontSize: 13 }}>👨‍👩‍👧 Household</option>
                     <option value="#doc-rss" style={{ fontSize: 13 }}>🕐 RSS Scheme</option>
                     <option value="#doc-baby" style={{ fontSize: 13 }}>👶 Baby Millionaire</option>
+                    <option value="#doc-turbocharger" style={{ fontSize: 13 }}>⚡ Turbocharger</option>
+                    <option value="#doc-taxopt" style={{ fontSize: 13 }}>💰 Tax Optimizer</option>
+                    <option value="#doc-protection" style={{ fontSize: 13 }}>🛡 Protection Tile</option>
+                    <option value="#doc-vhr" style={{ fontSize: 13 }}>🏡 VHR &amp; Accrued Interest</option>
                   </select>
                   {/* Desktop/tablet (≥641px): pill buttons — same scroll logic as select above */}
                   <div className="docs-nav-pills" style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -26097,6 +26137,10 @@ ${milestoneSnapshotHtml}
                     ["#doc-household",   Users,            "Household",            "#8b5cf6"                ],
                     ["#doc-rss",         Clock,            "RSS Scheme",           "var(--clr-blue)"        ],
                     ["#doc-baby",        Baby,             "Baby Millionaire",     "#ec4899"                ],
+                    ["#doc-turbocharger",Zap,              "Turbocharger",         "#f97316"                ],
+                    ["#doc-taxopt",      Calculator,       "Tax Optimizer",        "#22d3ee"                ],
+                    ["#doc-protection",  ShieldCheck,      "Protection Tile",      "#a855f7"                ],
+                    ["#doc-vhr",         Home,             "VHR & Accrued Interest","#f59e0b"               ],
                   ].map(([href, NavIcon, label, accent]) => (
                     <a key={href} href={href} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 6, fontSize: 14, fontWeight: 700, background: "transparent", color: accent, border: `1px solid ${accent}44`, textDecoration: "none", cursor: "pointer", transition: "background 0.15s" }}
                       onMouseEnter={e => { e.currentTarget.style.background = `${accent}14`; }}
@@ -26924,6 +26968,112 @@ ${milestoneSnapshotHtml}
                         <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
                           <div style={{ background: "rgba(236,72,153,0.08)", borderBottom: "1px solid rgba(236,72,153,0.2)", borderLeft: "4px solid #ec4899", padding: "9px 16px" }}>
                             <h5 style={{ fontWeight: 700, color: "#ec4899", fontSize: 14, margin: 0 }}>{title}</h5>
+                          </div>
+                          <div style={{ padding: "11px 16px", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* ── Turbocharger ──────────────────────────────────────────── */}
+                  <section id="doc-turbocharger">
+                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "#f97316", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                      <Zap style={{ width: 18, height: 18 }} />⚡ Turbocharger — 8-Lever CPF Optimiser
+                    </h4>
+                    <div style={{ background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.25)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                      <strong style={{ color: "#f97316" }}>What is the Turbocharger?</strong> The Turbocharger (⚡ sub-tab in Strategy) scans all 8 CPF levers simultaneously and shows exactly what yield you are leaving on the table today. It works <em>forward</em> from your current profile — unlike the Goal Simulator, which works backwards from a target. Apply individual levers or hit <strong>Apply All</strong> to write every eligible lever to your profile in one click; <strong>Undo All</strong> reverts everything instantly via the snapshot system.
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {[
+                        ["The 8 Levers", "① RSTU — SA/RA Top-Up ($8,000/yr cap, tax-deductible, potential MRSS match). ② VCMA — MediSave Top-Up (to BHS $79,000, tax-deductible, potential MMSS match). ③ OA→SA/RA Transfer (internal, no cash, +1.5% rate uplift, capped at FRS/ERS headroom). ④ VC3A — Voluntary OA Contribution (remaining Annual Limit room $37,740 − mandatory). ⑤ VHR — Housing Refund (refund OA housing usage, no Annual Limit). ⑥ SRS — Supplementary Retirement Scheme ($15,300/yr SC/PR cap, tax-deferred, 50% taxable at drawdown from 63). ⑦ Deferment to 70 (CPF LIFE payout age, +7%/yr). ⑧ Property Monetisation (right-size or LBS trigger)."],
+                        ["Sequence Badges ①–⑥", "Each financial lever card shows a sequence badge (circled number) indicating the optimal execution order: RSTU first (captures MRSS match eligibility + tax relief), VCMA second (fills MA before OA→SA so BHS headroom is correctly computed), OA→SA/RA third (no Annual Limit, pure rate arbitrage), VC3A fourth (remaining Annual Limit), VHR fifth (outside Annual Limit, any time), SRS sixth (separate vehicle, after CPF). Deferment and Property Monetisation have no sequence badge — they are lifestyle decisions, not allowance levers."],
+                        ["Safety Features", "Annual Cash Budget cap — enter a maximum annual cash budget; over-budget levers grey out with a warning. Tax Saving Badges — RSTU and SRS cards show the estimated annual income tax saving at your marginal rate (live). Age-Expiry Pills — OA→SA and RSTU show a countdown pill when SA closes in fewer than 10 years (SA closes permanently at 55). Annual Limit Proximity Warning — VC3A card warns when <$2,000 of Annual Limit room remains. Conflict Detection — VHR flags when the housing outflow is $0 (stale lever); OA→SA flags when OA balance is $0. Deferment and Property Monetisation require explicit confirmation before applying. Apply All also requires confirmation listing all levers to be applied."],
+                        ["Payout Sensitivity — RSTU", "The RSTU card shows: +$X/mo more CPF LIFE at your payout age from maxing RSTU · Y¢/mo per $1 contributed today · breakeven Z months. The monthly payout uplift is computed via a dedicated engine run that returns RA at payout age under max-RSTU vs current, then re-interpolates through the CPF LIFE payout table — not a proxy calculation. The per-$1 figure is age-sensitive: younger members get more per dollar because the contribution compounds for more years before payout."],
+                        ["Payout Sensitivity — SRS", "The SRS card shows: +$X/mo SRS drawdown at payout age · Y¢/mo per $1. SRS doesn't route into CPF LIFE — it is a separate drawdown stream. The monthly figure is the total SRS balance uplift at payout age (from maxing SRS) divided by the configured SRS drawdown years (default 10), then expressed as a monthly equivalent. Note: only 50% of SRS withdrawals are taxable from age 63, and spread over 10 years the taxable amount often falls in the 0% tax band."],
+                        ["Session Change Log", "Every Apply and Undo action in the Turbocharger is recorded in a collapsible Session Change Log with timestamps. The log is session-only (cleared on page reload). It is useful when sharing the screen with a spouse or financial adviser during a planning session."],
+                        ["Annual Action Checklist", "A collapsible panel generated from your live profile showing exactly what to do before key deadlines: RSTU (31 Dec for YA tax relief), SRS (31 Dec), VCMA (31 Dec), VC3A (31 Dec), OA→SA/RA (1 Jan — no Annual Limit, no posting lag), VHR (any time, but sooner = more compounding), MRSS (31 Dec if eligible). Urgent items (31 Dec deadline) show ⏰; non-urgent items show ⬜."],
+                      ].map(([title, desc]) => (
+                        <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
+                          <div style={{ background: "rgba(249,115,22,0.08)", borderBottom: "1px solid rgba(249,115,22,0.2)", borderLeft: "4px solid #f97316", padding: "9px 16px" }}>
+                            <h5 style={{ fontWeight: 700, color: "#f97316", fontSize: 14, margin: 0 }}>{title}</h5>
+                          </div>
+                          <div style={{ padding: "11px 16px", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* ── Tax Bracket Optimizer ─────────────────────────────────── */}
+                  <section id="doc-taxopt">
+                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "#22d3ee", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                      <Calculator style={{ width: 18, height: 18 }} />💰 Tax Bracket Optimizer
+                    </h4>
+                    <div style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.25)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                      <strong style={{ color: "#22d3ee" }}>What is the Tax Optimizer?</strong> A dedicated sub-tab in Strategy (💰 Tax Optimizer) that finds the optimal combination of RSTU, VCMA, SRS, and RSTU-for-others to reduce your chargeable income to the nearest lower IRAS income tax bracket boundary. It shows up to 4 bracket-drop scenarios ranked by tax saving, with one-click Apply buttons that write each relief amount directly to your profile.
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {[
+                        ["How chargeable income is computed", "Starting from gross salary × 12 + bonus, the engine deducts: CPF employee contribution relief (employee OA + SA + MA contributions, capped at $20,400/yr — the IRAS cap for CPF relief under the OW ceiling), plus any existing RSTU, VCMA, and SRS allocations already entered in your profile. The result is the estimated chargeable income before the optimiser's recommended additional relief."],
+                        ["Allocation priority order", "The optimiser allocates relief in this order: ① Own RSTU (to $8,000 cap) — highest ROI because it also earns 4% CPF interest. ② VCMA (to BHS headroom) — also 4% interest + tax-deductible. ③ SRS (to $15,300 cap for SC/PR) — tax-deferred, no CPF interest but flexible investment. ④ RSTU for others/spouse/parent RA (separate $8,000 cap) — 4% interest on another person's RA."],
+                        ["Reading the scenarios", "Each scenario shows the target IRAS marginal rate, relief needed, allocation breakdown, cash required per year, new chargeable income, new estimated tax, tax saving, and tax ROI (tax saved per $1 of cash deployed). The best achievable scenario is starred. If insufficient headroom exists to reach a target, the scenario is marked 'partially achievable' and the unmet amount is shown."],
+                        ["IRAS 2026 rates used", "The optimizer uses the current IRAS YA2025/2026 resident tax table: 0% (≤$20,000), 2% ($20,001–$30,000), 3.5% ($30,001–$40,000), 7% ($40,001–$80,000), 11.5% ($80,001–$120,000), 15% ($120,001–$160,000), 18% ($160,001–$200,000), 19% ($200,001–$240,000), 19.5% ($240,001–$280,000), 20% ($280,001–$320,000), 22% (>$320,000)."],
+                        ["Disclaimer", "The optimizer is an illustrative planning guide. Actual tax position depends on all reliefs, personal deductions, and final assessable income (including capital gains, foreign income, etc.). Always verify with your tax agent or myTax Portal before making decisions. IRAS brackets, personal reliefs, and CPF contribution limits may change in future budgets."],
+                      ].map(([title, desc]) => (
+                        <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
+                          <div style={{ background: "rgba(34,211,238,0.08)", borderBottom: "1px solid rgba(34,211,238,0.2)", borderLeft: "4px solid #22d3ee", padding: "9px 16px" }}>
+                            <h5 style={{ fontWeight: 700, color: "#22d3ee", fontSize: 14, margin: 0 }}>{title}</h5>
+                          </div>
+                          <div style={{ padding: "11px 16px", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* ── Protection Adequacy Tile ──────────────────────────────── */}
+                  <section id="doc-protection">
+                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "#a855f7", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                      <ShieldCheck style={{ width: 18, height: 18 }} />🛡 Protection Adequacy — Wellness Tile 6
+                    </h4>
+                    <div style={{ background: "rgba(168,85,247,0.06)", border: "1px solid rgba(168,85,247,0.25)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                      <strong style={{ color: "#a855f7" }}>What is the Protection Tile?</strong> The sixth tile in the MAS Financial Health Panel (Readiness tab) scores your insurance coverage adequacy against MAS/MoneySense benchmarks for Singapore residents. Enter your coverage in the Profile sidebar under "🛡 Protection Coverage" (after the Legacy Planning checkboxes).
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {[
+                        ["Coverage inputs", "Three inputs in the sidebar: (1) Term / Whole Life SA ($) — enter your total death benefit excluding DPS. The engine automatically adds the DPS baseline ($70,000 for ages 21–60; $55,000 for ages 60–65; $0 outside these ranges). (2) Critical Illness SA ($) — total CI or ECI sum assured from any CI policy. (3) Integrated Shield Plan toggle — indicates whether you have upgraded MediShield Life to private hospital or B1/A class coverage."],
+                        ["Scoring — Life Cover (40% weight)", "MAS benchmark: 9× gross annual income (including bonus). Total cover = DPS baseline + entered Term/Whole Life SA. Score = min(100, total_cover / target_cover × 100). Example: income $100,000/yr → target $900,000. DPS $70K + term SA $400K = $470K → score 52%. Gap shown in $: $430,000 additional cover recommended."],
+                        ["Scoring — CI Cover (40% weight)", "MAS benchmark: 4× gross annual income (MAS midpoint between 3× and 5× income ranges). Score = min(100, ci_SA / target_CI × 100). If no salary is configured, a partial credit of 50 is given if any CI SA exists. CI covers a Critical Illness event that would otherwise deplete CPF savings early — making it directly relevant to retirement planning."],
+                        ["Scoring — H&S (20% weight)", "MediShield Life baseline = 50 points (adequate for B2/C ward coverage). Integrated Shield Plan (ISP) = 90 points. No adjustments for riders — only the presence/absence of an ISP is scored. MediSave contributes to H&S readiness via BHS; this is separately scored under the Readiness tab CPF balances check."],
+                        ["Weighted composite & disclaimers", "Overall Protection Score = Life 40% + CI 40% + H&S 20%. Green (≥75): adequately covered. Amber (45–74): coverage gaps exist. Red (<45): significant gaps. This tile is an illustrative self-assessment guide aligned to MAS/MoneySense guidance. It does NOT constitute financial advice or an insurance recommendation. All product and coverage decisions should be made with a licensed financial adviser (FAA-regulated in Singapore)."],
+                      ].map(([title, desc]) => (
+                        <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
+                          <div style={{ background: "rgba(168,85,247,0.08)", borderBottom: "1px solid rgba(168,85,247,0.2)", borderLeft: "4px solid #a855f7", padding: "9px 16px" }}>
+                            <h5 style={{ fontWeight: 700, color: "#a855f7", fontSize: 14, margin: 0 }}>{title}</h5>
+                          </div>
+                          <div style={{ padding: "11px 16px", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* ── VHR & Housing Accrued Interest ────────────────────────── */}
+                  <section id="doc-vhr">
+                    <h4 style={{ fontSize: 16, fontWeight: 800, color: "#f59e0b", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                      <Home style={{ width: 18, height: 18 }} />🏡 VHR & Housing OA Accrued Interest
+                    </h4>
+                    <div style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                      <strong style={{ color: "#f59e0b" }}>VHR — Voluntary Housing Refund.</strong> When you use OA funds for housing (down payment, monthly mortgage), CPF charges 2.5% p.a. accrued interest on the amount withdrawn. On property sale, you must refund <em>principal + all accrued interest</em> to OA — this reduces your net cash proceeds. VHR lets you voluntarily refund housing withdrawals early to stop the accrual compounding and restore OA compounding.
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {[
+                        ["FRS Priority Routing (2026 Policy)", "From 2026, when a Voluntary Housing Refund is made and your RA (post-55) or SA (pre-55) is below the cohort Full Retirement Sum (FRS), the refund flows to RA/SA first until FRS is reached. Any surplus above the FRS headroom flows to OA. This is modelled in the engine for both the employed and self-employed paths. If RA/SA is already at or above FRS, the full VHR amount credits to OA as in prior policy. This routing maximises long-term CPF LIFE payout by filling RA sooner."],
+                        ["Accrued Interest Shadow Liability Panel", "The Turbocharger shows a Housing OA Accrued Interest panel (labelled SHADOW LIABILITY) whenever a housing outflow is configured. It computes the future accrued interest that will accumulate from today to the configured housing stop age using the correct closed-form formula: Σ(t=1..n)(1.025^t − 1) = (1.025^n − 1)/0.025 − n. This is the interest on future withdrawals only. Past-withdrawn accruals are not modelled (they require CPF portal data) — the panel links directly to cpf.gov.sg → My CPF → Property."],
+                        ["How to check past accrued interest", "Log in to cpf.gov.sg → My CPF Overview → Property. Under 'CPF usage for housing', the page shows total CPF principal withdrawn and total accrued interest to date. This figure should be added mentally to the Turbocharger panel's future-component estimate to get the total shadow liability at the configured sale age."],
+                        ["VHR vs OA→SA/RA", "VHR and OA→SA/RA are complementary levers. OA→SA captures a +1.5% rate arbitrage on existing OA balances with zero cash outlay. VHR restores OA balance by injecting external cash — the refunded amount then compounds at 2.5% (OA) or, with FRS-priority routing, at 4.0% (SA/RA). For members with significant housing OA withdrawals and RA below FRS, VHR is often the highest-yield cash lever available, especially when the FRS routing causes the refund to flow to RA at 4% immediately."],
+                        ["Annual Limit interaction", "VHR is explicitly excluded from the $37,740 annual CPF contribution limit. You can make VHR top-ups on top of VC3A, RSTU, and VCMA in the same year without exceeding the Annual Limit. This makes VHR uniquely valuable for members who have maxed their Annual Limit headroom through mandatory contributions."],
+                      ].map(([title, desc]) => (
+                        <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
+                          <div style={{ background: "rgba(245,158,11,0.08)", borderBottom: "1px solid rgba(245,158,11,0.2)", borderLeft: "4px solid #f59e0b", padding: "9px 16px" }}>
+                            <h5 style={{ fontWeight: 700, color: "#f59e0b", fontSize: 14, margin: 0 }}>{title}</h5>
                           </div>
                           <div style={{ padding: "11px 16px", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</div>
                         </div>
@@ -29480,7 +29630,7 @@ ${milestoneSnapshotHtml}
                             const housingStop       = Number(inputs.housingStopAge) || 65;
                             const n                 = Math.max(0, housingStop - ca);
                             // Closed-form sum_{t=1}^{n} (1.025^t − 1) = 1.025×(1.025ⁿ−1)/0.025 − n
-                            const sumAccrual        = n > 0 ? 1.025 * (Math.pow(1.025, n) - 1) / 0.025 - n : 0;
+                            const sumAccrual        = n > 0 ? (Math.pow(1.025, n) - 1) / 0.025 - n : 0;
                             const futureAccrued     = Math.round(housing * sumAccrual);
                             const futurePrin        = housing * n;
                             const totalFutureRefund = futurePrin + futureAccrued;
