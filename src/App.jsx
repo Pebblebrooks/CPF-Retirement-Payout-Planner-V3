@@ -29680,8 +29680,8 @@ ${milestoneSnapshotHtml}
                           )}
 
                         </div>{/* /turbo-lever-grid */}
-
-                      </div>{/* /outer turbo IIFE div */}
+                        {/* /outer turbo IIFE div */}
+                      </div>
                     );
                   })()}
 
@@ -29929,8 +29929,8 @@ ${milestoneSnapshotHtml}
                       </div>
                     );
                   })()}
-
-                </div>{/* /strategy sub-tab panels */}
+                  {/* /strategy sub-tab panels */}
+                </div>
               );
             })()}
           </div>{/* /tab content panels */}
