@@ -1991,7 +1991,10 @@ function runRSSEngine(inputs, {
         const totalMandatory = mandatoryOA_i + mandatorySA_dyn + mandatoryMA_i;
         const vcRoomThisYear = Math.max(0, ANNUAL_LIMIT - totalMandatory);
         const vc3aScale = vc3aCashEff > 0 && vc3aCashEff > vcRoomThisYear ? vcRoomThisYear / vc3aCashEff : 1;
-        const cappedVcOA = Math.round(vc3aOA * vc3aScale) + vcVhrAmtEff;
+        // VHR-FRS-FIX: VHR is no longer bundled into cappedVcOA.
+        // It is applied separately AFTER SA/RA crediting so the FRS routing
+        // logic below can correctly fill RA (post-55) / SA (pre-55) before OA.
+        const cappedVcOA = Math.round(vc3aOA * vc3aScale); // VC3A OA portion only — VHR handled below
         const cappedVcSA = overrideVcSA !== undefined
           ? Math.round(overrideVcSA * vc3aScale) + (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq
           : Math.round(vc3aSA * vc3aScale) + (Number(inputs.vcSaTopup) || 0) * effVcSaFreq + (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
@@ -2014,7 +2017,7 @@ function runRSSEngine(inputs, {
         const empContribInflowBase = totalOA + mandatorySA_dyn + cappedVcSA + actualMA + maSpillEmp + wisSA;
         yearMandatory += mandatoryOA_i + mandatorySA_dyn + actualMandatoryMA_emp;
         const govGrantContrib_emp = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
-        yearVoluntary += (cappedVcOA - vcVhrAmtEff) + (vc3aCashEff > 0 ? actualVcMA_emp : 0) + (cappedVcSA - govGrantContrib_emp) + vcVhrAmtEff;
+        yearVoluntary += cappedVcOA + (vc3aCashEff > 0 ? actualVcMA_emp : 0) + (cappedVcSA - govGrantContrib_emp) + vcVhrAmtEff;
         const projBRS_emp = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
         const mrssAgeOk_emp = age >= 55 || (isPwD && age < 55);
         const mrssBalOk_emp = age >= 55 ? ra < projBRS_emp : (oa + sa) < projBRS_emp;
@@ -2043,6 +2046,25 @@ function runRSSEngine(inputs, {
           const actualToSA = Math.min(totalToSA, saRoom);
           sa += actualToSA; oa += (totalToSA - actualToSA);
           cumRaCashTopUps += cappedVcSA + maSpillEmp + wisSA + actualMrss_emp;
+        }
+
+        // ── VHR: Housing Refund — route to RA/SA before OA when below FRS ─────
+        // CPF policy: when a voluntary housing refund is made and RA (post-55) or
+        // SA (pre-55) is below the cohort FRS, refund flows to RA/SA first until
+        // FRS is reached; any surplus flows to OA.
+        if (vcVhrAmtEff > 0) {
+          const yrOffsetVhr = Math.max(0, (baseYear + (age - startAge)) - 2026);
+          const projFRS_vhr  = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yrOffsetVhr));
+          if (age >= 55) {
+            const raRoomVhr = Math.max(0, projFRS_vhr - ra);
+            const vhrToRA   = Math.min(vcVhrAmtEff, raRoomVhr);
+            ra += vhrToRA; oa += (vcVhrAmtEff - vhrToRA);
+            if (vhrToRA > 0) cumRaCashTopUps += vhrToRA;
+          } else {
+            const saRoomVhr = Math.max(0, projFRS_vhr - sa);
+            const vhrToSA   = Math.min(vcVhrAmtEff, saRoomVhr);
+            sa += vhrToSA; oa += (vcVhrAmtEff - vhrToSA);
+          }
         }
       }
     }
@@ -3197,7 +3219,8 @@ function runProjectionEngine(inputs, {
         const vcRoomThisYear = Math.max(0, ANNUAL_LIMIT - totalMandatory);
         // Scale VC3A if it exceeds the room (VHR + RSTU handled separately outside limit)
         const vc3aScale = vc3aCashEff > 0 && vc3aCashEff > vcRoomThisYear ? vcRoomThisYear / vc3aCashEff : 1;
-        const cappedVcOA = Math.round(vc3aOA * vc3aScale) + vcVhrAmtEff;
+        // VHR-FRS-FIX: VHR removed from cappedVcOA — applied separately with FRS routing below
+        const cappedVcOA = Math.round(vc3aOA * vc3aScale);
         const cappedVcSA = overrideVcSA !== undefined
           ? Math.round(overrideVcSA * vc3aScale) + (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq
           : Math.round(vc3aSA * vc3aScale) + (Number(inputs.vcSaTopup) || 0) * effVcSaFreq + (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
@@ -3234,7 +3257,7 @@ function runProjectionEngine(inputs, {
         // (it flowed into yearInflow via cappedVcSA but never into any sub-ledger bucket).
         // annualGovGrant is correctly owned by yearGovGrants — subtract it to avoid overlap.
         const govGrantContrib_emp = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
-        yearVoluntary += (cappedVcOA - vcVhrAmtEff) + (vc3aCashEff > 0 ? actualVcMA_emp : 0) + (cappedVcSA - govGrantContrib_emp) + vcVhrAmtEff;
+        yearVoluntary += cappedVcOA + (vc3aCashEff > 0 ? actualVcMA_emp : 0) + (cappedVcSA - govGrantContrib_emp) + vcVhrAmtEff;
         // MRSS eligibility: SC only · age >= 55 (or PwD) · RA/balance below BRS · income ≤ $4,000/mo · lifetime cap $20,000
         // Auto-derived: grant = min(RSTU top-up this year, $2,000, cap remaining). No separate user input.
         const projBRS_emp = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
@@ -3284,6 +3307,22 @@ function runProjectionEngine(inputs, {
           sa += actualToSA;
           oa += saOverflow; // FRS overflow goes to OA
           cumRaCashTopUps += cappedVcSA + maSpillEmp + wisSA + actualMrss_emp;
+        }
+
+        // ── VHR: Housing Refund — route to RA/SA before OA when below FRS ─────
+        if (vcVhrAmtEff > 0) {
+          const yrOffsetVhr2 = Math.max(0, (baseYear + (age - startAge)) - 2026);
+          const projFRS_vhr2  = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yrOffsetVhr2));
+          if (age >= 55) {
+            const raRoomVhr2 = Math.max(0, projFRS_vhr2 - ra);
+            const vhrToRA2   = Math.min(vcVhrAmtEff, raRoomVhr2);
+            ra += vhrToRA2; oa += (vcVhrAmtEff - vhrToRA2);
+            if (vhrToRA2 > 0) cumRaCashTopUps += vhrToRA2;
+          } else {
+            const saRoomVhr2 = Math.max(0, projFRS_vhr2 - sa);
+            const vhrToSA2   = Math.min(vcVhrAmtEff, saRoomVhr2);
+            sa += vhrToSA2; oa += (vcVhrAmtEff - vhrToSA2);
+          }
         }
       }
     }
@@ -10627,7 +10666,7 @@ function CPFPlannerApp() {
     [displayAccumulation]);
 
   const turboImpacts = useMemo(() => {
-    if (activeTab !== 'strategy' || goalStratTab !== 'turbo') return {};
+    if (activeTab !== 'strategy' || (goalStratTab !== 'turbo' && goalStratTab !== 'taxopt')) return {};
     const d    = debouncedInputs;
     const pa   = payoutAge65;
     // BUG-ISMALE fix: isMale is NOT a CPFPlannerApp-scope variable — the identifier of
@@ -29346,7 +29385,7 @@ ${milestoneSnapshotHtml}
                               </div>
                             </div>
                           )}
-                          {/*      Two distinct real CPF interest-timing rules, both compared against this
+                               Two distinct real CPF interest-timing rules, both compared against this
                                app's own mid-year (6/12) averaging convention to get the NET bonus of
                                acting on 1 Jan instead:
                                - Cash top-ups (RSTU/VC3A/VCMA/VHR) are new money entering CPF, subject to
@@ -29360,6 +29399,77 @@ ${milestoneSnapshotHtml}
                                  already earning OA's rate regardless of transfer timing).
                                This is a standalone estimate, not wired into the engine — see the explicit
                                disclaimer in the card copy below. */}
+                          {/* ── BHS/FRS Scissors Chart (2.6) ───────────────────────────────
+                               Shows projected RA/SA balance vs projected FRS by year.
+                               When the two lines cross, RA/SA reaches FRS — mission accomplished.
+                               If they diverge, the user is falling behind the rising target.
+                               Uses displayAccumulation rows + rsGrowth already in render scope.
+                          ────────────────────────────────────────────────────────────── */}
+                          {(() => {
+                            const rsGrowth_sc = ((Number(inputs.retirementSumGrowth) || 3) / 100);
+                            const baseYear_sc = Number(inputs.currentYear) || 2026;
+                            const targetAge   = Math.min(pa, 65);
+                            // Build RA/SA + projected FRS series from current age to targetAge
+                            const series = [];
+                            let crossoverAge  = null;
+                            let crossoverGap  = null;
+                            displayAccumulation.forEach(row => {
+                              if (row.age < ca || row.age > targetAge + 10) return;
+                              const projFRS_row = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth_sc, Math.max(0, (baseYear_sc + (row.age - ca)) - 2026)));
+                              const raOrSa     = row.age >= 55 ? (row.ra || 0) : ((row.sa || 0) + (row.ra || 0));
+                              series.push({ age: row.age, raOrSa, frs: projFRS_row });
+                              if (crossoverAge === null && raOrSa >= projFRS_row) crossoverAge = row.age;
+                              crossoverGap = projFRS_row - raOrSa;
+                            });
+                            if (series.length < 2) return null;
+                            // Normalize to SVG viewBox (0–230 x 0–90)
+                            const maxVal = Math.max(...series.map(s => Math.max(s.raOrSa, s.frs))) * 1.05 || 1;
+                            const W = 230, H = 90;
+                            const toX = age  => Math.round(((age  - series[0].age) / Math.max(1, series[series.length-1].age - series[0].age)) * W);
+                            const toY = val  => Math.round(H - (val / maxVal) * H);
+                            const raPath  = series.map((s, i) => `${i === 0 ? 'M' : 'L'} ${toX(s.age)} ${toY(s.raOrSa)}`).join(' ');
+                            const frsPath = series.map((s, i) => `${i === 0 ? 'M' : 'L'} ${toX(s.age)} ${toY(s.frs)}`).join(' ');
+                            const isOnTrack = crossoverAge !== null && crossoverAge <= 55;
+                            const lastSeries = series[series.length - 1];
+                            const finalGap   = lastSeries.frs - lastSeries.raOrSa;
+                            return (
+                              <div className="turbo-lever-card" style={{ gridColumn: "1 / -1", borderColor: isOnTrack ? "rgba(16,185,129,0.35)" : "rgba(245,158,11,0.35)" }}>
+                                <div className="turbo-lever-title">
+                                  <span>📈</span>
+                                  <span>RA/SA vs FRS Trajectory</span>
+                                  <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 6, border: "1px solid", color: isOnTrack ? "#10b981" : "var(--clr-amber)", borderColor: isOnTrack ? "rgba(16,185,129,0.4)" : "rgba(245,158,11,0.4)" }}>
+                                    {isOnTrack ? `✓ Crosses FRS at ${crossoverAge}` : finalGap > 0 ? `⚠ $${Math.round(finalGap/1000)}K gap at ${lastSeries.age}` : "✓ Above FRS"}
+                                  </span>
+                                </div>
+                                <div className="turbo-lever-note">
+                                  Green line = your projected {ca < 55 ? "SA" : "RA"} balance. Orange line = rising FRS target ({(rsGrowth_sc*100).toFixed(1)}%/yr). When they cross, you hit FRS. Activate RSTU and OA→SA levers above to close the gap.
+                                </div>
+                                <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 90, overflow: "visible", marginTop: 8 }}>
+                                  {/* RA/SA line */}
+                                  <path d={raPath} stroke="#10b981" strokeWidth="2" fill="none"/>
+                                  {/* FRS line */}
+                                  <path d={frsPath} stroke="#f59e0b" strokeWidth="1.5" fill="none" strokeDasharray="4 2"/>
+                                  {/* Crossover marker */}
+                                  {crossoverAge && (() => {
+                                    const cx = toX(crossoverAge);
+                                    const cs = series.find(s => s.age === crossoverAge);
+                                    if (!cs) return null;
+                                    return <circle cx={cx} cy={toY(cs.raOrSa)} r="4" fill="#10b981" stroke="var(--bg-panel)" strokeWidth="1.5"/>;
+                                  })()}
+                                  {/* Age labels */}
+                                  <text x={toX(series[0].age)} y={H + 10} fontSize="7" fill="var(--text-muted)" textAnchor="middle">{series[0].age}</text>
+                                  <text x={W / 2} y={H + 10} fontSize="7" fill="var(--text-muted)" textAnchor="middle">{Math.round((series[0].age + lastSeries.age) / 2)}</text>
+                                  <text x={W} y={H + 10} fontSize="7" fill="var(--text-muted)" textAnchor="middle">{lastSeries.age}</text>
+                                </svg>
+                                <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 10, flexWrap: "wrap" }}>
+                                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 2, background: "#10b981", display: "inline-block" }}/> {ca < 55 ? "SA" : "RA"} balance</span>
+                                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 2, background: "#f59e0b", borderTop: "2px dashed #f59e0b", display: "inline-block" }}/> Rising FRS ({(rsGrowth_sc*100).toFixed(1)}%/yr)</span>
+                                  {crossoverAge && <span style={{ color: "#10b981", fontWeight: 700 }}>● Crossover at {crossoverAge}</span>}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           {/* ── Housing OA Accrued Interest (Q2) ─────────────────────────────
                                Shadow liability: CPF charges 2.5% p.a. on every OA dollar used
                                for housing. On sale, refund = principal + all accrued interest.
@@ -29571,12 +29681,256 @@ ${milestoneSnapshotHtml}
 
                         </div>{/* /turbo-lever-grid */}
 
-
+                      </div>{/* /outer turbo IIFE div */}
                     );
                   })()}
 
+                  {/* ══ TAX BRACKET OPTIMIZER ═════════════════════════════════
+                       New 4th Strategy sub-tab. Solves the optimal combination of
+                       RSTU (own), VCMA, SRS, and RSTU (spouse/parent) to reduce
+                       chargeable income to the nearest lower IRAS tax bracket
+                       boundary. Uses the same IRAS_SLABS, computeIrasTax, and
+                       getMarginalRate already defined at the top of this file.
+                       Allocation priority: RSTU → VCMA → SRS → RSTU (other).
+                       Output: up to 3 bracket-drop scenarios ranked by tax saving.
+                       DISCLAIMER (shown in UI): this is an illustrative guide.
+                       Actual tax position depends on all reliefs, deductions, and
+                       assessable income — users should verify with a tax agent.
+                  ═══════════════════════════════════════════════════════════ */}
+                  {goalStratTab === "taxopt" && (() => {
+                    const ca_tx  = Number(inputs.currentAge)   || 30;
+                    const pa_tx  = Number(inputs.payoutAge)    || 65;
 
-                </div>
+                    // ── Gross chargeable income before relief levers ──────────
+                    const annualGross   = (Number(inputs.salaryGross)  || 0) * 12
+                                        + (Number(inputs.salaryBonus)  || 0);
+                    const netTrade      = Number(inputs.netTradeIncome) || 0;
+                    const totalIncome   = annualGross + netTrade;
+
+                    // CPF employee contribution relief (auto-deducted by IRAS, capped at $20,400/yr)
+                    const mthlyEmpCont  = (Number(inputs.empOaCont) || 0)
+                                        + (Number(inputs.empSaCont) || 0)
+                                        + (Number(inputs.empMaCont) || 0);
+                    const cpfEmpRelief  = Math.min(mthlyEmpCont * 12, 20400);
+
+                    // Base chargeable before our three relief levers
+                    const baseChargeable = Math.max(0, totalIncome - cpfEmpRelief);
+
+                    // Current allocations (from live inputs)
+                    const curRSTU_tx   = Number(inputs.vcSaTopup)             || 0;
+                    const curVCMA_tx   = Number(inputs.vcMaCash)              || 0;
+                    const curSRS_tx    = Number(inputs.srsAnnualContribution) || 0;
+                    const curRelief    = curRSTU_tx + curVCMA_tx + curSRS_tx;
+                    const curChargeable= Math.max(0, baseChargeable - curRelief);
+                    const curTax       = computeIrasTax(curChargeable);
+                    const curMargRate  = getMarginalRate(curChargeable);
+
+                    // Available headroom for each relief lever
+                    const vcmaRoom_tx  = turboImpacts.vcmaRoom || 0;
+                    const rstuHead     = Math.max(0, 8000 - curRSTU_tx);
+                    const vcmaHead     = vcmaRoom_tx;
+                    const srsHead      = Math.max(0, SRS_CAP_SC_PR - curSRS_tx);
+                    const rstuOtherHead= 8000; // spouse/parent separate cap
+
+                    // Greedy allocator: fills RSTU → VCMA → SRS → RSTU(other) to hit a target relief
+                    const allocate = (targetRelief) => {
+                      let rem = targetRelief;
+                      const a = { rstu: 0, vcma: 0, srs: 0, rstuOther: 0 };
+                      a.rstu      = Math.min(rem, rstuHead);     rem -= a.rstu;
+                      a.vcma      = Math.min(rem, vcmaHead);     rem -= a.vcma;
+                      a.srs       = Math.min(rem, srsHead);      rem -= a.srs;
+                      a.rstuOther = Math.min(rem, rstuOtherHead); rem -= a.rstuOther;
+                      return { alloc: a, unmet: Math.max(0, rem) };
+                    };
+
+                    // Build bracket-drop scenarios: every slab floor below current chargeable
+                    const scenarios = IRAS_SLABS
+                      .filter(s => s.floor > 0 && s.floor < curChargeable)
+                      .sort((a, b) => b.floor - a.floor)   // nearest bracket first
+                      .slice(0, 4)
+                      .map(s => {
+                        const needed         = curChargeable - s.floor + 1;
+                        const { alloc, unmet } = allocate(needed);
+                        const actualRelief   = needed - unmet;
+                        const newChargeable  = Math.max(0, curChargeable - actualRelief);
+                        const newTax         = computeIrasTax(newChargeable);
+                        const taxSaving      = Math.round(curTax - newTax);
+                        const cashRequired   = alloc.rstu + alloc.vcma + alloc.srs + alloc.rstuOther;
+                        const roiPct         = cashRequired > 0 ? Math.round(taxSaving / cashRequired * 100) : 0;
+                        const achievable     = unmet === 0;
+                        return { targetFloor: s.floor, targetMargRate: s.marginal, needed, alloc, unmet, newChargeable, newTax, taxSaving, cashRequired, roiPct, achievable };
+                      })
+                      .filter(s => s.taxSaving > 0);
+
+                    // Best achievable scenario
+                    const best = scenarios.find(s => s.achievable) || scenarios[0];
+
+                    if (totalIncome === 0) return (
+                      <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)" }}>
+                        <div style={{ fontSize: 28, marginBottom: 12 }}>💰</div>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Set your gross salary in the sidebar to use the Tax Bracket Optimizer</p>
+                        <p style={{ fontSize: 12, marginTop: 6, lineHeight: 1.6 }}>The optimizer uses your gross salary, bonus, CPF employee contributions, RSTU, VCMA, and SRS allocations to find the optimal relief combination that drops you to the next lower IRAS tax bracket.</p>
+                      </div>
+                    );
+
+                    return (
+                      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+
+                        {/* ── Current Tax Position ─────────────────────────────── */}
+                        <div style={{ background: "var(--bg-panel-muted)", borderRadius: 12, padding: 16, border: "1px solid var(--border-subtle)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", marginBottom: 10 }}>📊 Current Tax Position</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
+                            {[
+                              ["Total income",           `$${totalIncome.toLocaleString()}`],
+                              ["CPF employee relief",    `−$${cpfEmpRelief.toLocaleString()}`],
+                              ["RSTU relief",            curRSTU_tx > 0 ? `−$${curRSTU_tx.toLocaleString()}` : "Not applied"],
+                              ["VCMA relief",            curVCMA_tx > 0 ? `−$${curVCMA_tx.toLocaleString()}` : "Not applied"],
+                              ["SRS relief",             curSRS_tx  > 0 ? `−$${curSRS_tx.toLocaleString()}`  : "Not applied"],
+                              ["Chargeable income",      `$${curChargeable.toLocaleString()}`],
+                              ["Marginal rate",          `${(curMargRate * 100).toFixed(1)}%`],
+                              ["Estimated annual tax",   `$${curTax.toLocaleString()}`],
+                            ].map(([lbl, val], i) => (
+                              <React.Fragment key={i}>
+                                <div style={{ fontSize: 12, color: i >= 5 ? "var(--text-bright)" : "var(--text-muted)", fontWeight: i >= 5 ? 700 : 400 }}>{lbl}</div>
+                                <div style={{ fontSize: 12, fontWeight: i >= 5 ? 800 : 600, color: i === 7 ? "#ef4444" : i >= 5 ? "var(--text-bright)" : "var(--text-muted)", textAlign: "right" }}>{val}</div>
+                              </React.Fragment>
+                            ))}
+                          </div>
+                          {curMargRate === 0 && (
+                            <div style={{ marginTop: 8, fontSize: 11, color: "var(--clr-green)", background: "rgba(16,185,129,0.08)", borderRadius: 6, padding: "4px 8px" }}>
+                              ✓ Already in the 0% band — no further income tax optimisation needed.
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ── Disclaimer ───────────────────────────────────────── */}
+                        <div style={{ fontSize: 11, color: "var(--text-subtle)", background: "rgba(100,116,139,0.08)", borderRadius: 8, padding: "6px 10px", lineHeight: 1.6 }}>
+                          ℹ This is an illustrative guide. Actual tax depends on all reliefs, personal deductions, and final assessable income. Verify with a tax agent or myTax Portal. RSTU for others ($8K cap) is a separate cap from your own RSTU — total combined potential: $16K.
+                        </div>
+
+                        {/* ── Bracket-Drop Scenarios ───────────────────────────── */}
+                        {scenarios.length === 0 && curMargRate > 0 && (
+                          <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+                            No bracket-drop scenarios available — you may already be applying maximum reliefs.
+                          </div>
+                        )}
+
+                        {scenarios.map((sc, i) => (
+                          <div key={i} style={{
+                            borderRadius: 12, padding: 16,
+                            background: sc.achievable ? (i === 0 ? "rgba(16,185,129,0.06)" : "var(--bg-color)") : "rgba(100,116,139,0.05)",
+                            border: `1.5px solid ${sc.achievable && i === 0 ? "rgba(16,185,129,0.35)" : "var(--border-subtle)"}`,
+                          }}>
+                            {/* Header row */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+                              <div style={{ fontWeight: 800, fontSize: 13, color: sc.achievable ? "var(--text-bright)" : "var(--text-muted)" }}>
+                                {sc.achievable ? (i === 0 ? "⭐ Best Option" : `Option ${i + 1}`) : "⚠ Partially achievable"}
+                                {" "}— Drop to {(sc.targetMargRate * 100).toFixed(1)}% bracket
+                              </div>
+                              <div style={{ marginLeft: "auto", fontSize: 13, fontWeight: 900, color: "#10b981" }}>
+                                Save ${sc.taxSaving.toLocaleString()}/yr
+                              </div>
+                            </div>
+
+                            {/* Allocation breakdown */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: "5px 10px", marginBottom: 10 }}>
+                              <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase" }}>Relief lever</div>
+                              <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "right" }}>Allocate</div>
+                              <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", textAlign: "right" }}>Headroom</div>
+                              {[
+                                ["💰 RSTU (own SA/RA)", sc.alloc.rstu, rstuHead, true],
+                                ["🏥 VCMA (MediSave)", sc.alloc.vcma, vcmaHead, vcmaHead > 0],
+                                ["💼 SRS", sc.alloc.srs, srsHead, srsHead > 0],
+                                ["👪 RSTU (spouse/parent RA)", sc.alloc.rstuOther, rstuOtherHead, true],
+                              ].map(([lbl, amt, headroom, show], j) => show ? (
+                                <React.Fragment key={j}>
+                                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{lbl}</div>
+                                  <div style={{ fontSize: 12, fontWeight: amt > 0 ? 800 : 400, color: amt > 0 ? "var(--text-bright)" : "var(--text-subtle)", textAlign: "right" }}>
+                                    {amt > 0 ? `$${amt.toLocaleString()}` : "—"}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: "var(--text-subtle)", textAlign: "right" }}>
+                                    of ${headroom.toLocaleString()}
+                                  </div>
+                                </React.Fragment>
+                              ) : null)}
+                            </div>
+
+                            {/* Summary metrics */}
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border-subtle)", paddingTop: 8 }}>
+                              {[
+                                ["Cash required", `$${sc.cashRequired.toLocaleString()}/yr`],
+                                ["New chargeable", `$${sc.newChargeable.toLocaleString()}`],
+                                ["New tax", `$${sc.newTax.toLocaleString()}`],
+                                ["Tax ROI", `${sc.roiPct}% (tax/$1 cash)`],
+                              ].map(([lbl, val], j) => (
+                                <div key={j} style={{ flex: "1 1 110px", background: "var(--bg-panel-muted)", borderRadius: 8, padding: "6px 10px" }}>
+                                  <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{lbl}</div>
+                                  <div style={{ fontSize: 13, fontWeight: 900, color: "var(--text-bright)", marginTop: 2 }}>{val}</div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {!sc.achievable && sc.unmet > 0 && (
+                              <div style={{ marginTop: 8, fontSize: 11, color: "var(--clr-amber)", background: "rgba(245,158,11,0.07)", borderRadius: 6, padding: "4px 8px" }}>
+                                ⚠ ${sc.unmet.toLocaleString()} of relief needed to hit this bracket floor cannot be covered by available headroom — the bracket drop is partially achievable.
+                              </div>
+                            )}
+
+                            {/* Apply buttons for achievable scenarios */}
+                            {sc.achievable && (
+                              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                                {sc.alloc.rstu > 0 && rstuHead > 0 && (
+                                  <button className="turbo-lever-btn" style={{ margin: 0, fontSize: 12, padding: "7px 12px" }}
+                                    onClick={() => setInputs(p => ({ ...p, vcSaTopup: Math.min(8000, (Number(p.vcSaTopup) || 0) + sc.alloc.rstu) }))}>
+                                    Apply RSTU +${sc.alloc.rstu.toLocaleString()}
+                                  </button>
+                                )}
+                                {sc.alloc.vcma > 0 && vcmaHead > 0 && (
+                                  <button className="turbo-lever-btn" style={{ margin: 0, fontSize: 12, padding: "7px 12px" }}
+                                    onClick={() => setInputs(p => ({ ...p, vcMaCash: Math.min(vcmaRoom_tx, (Number(p.vcMaCash) || 0) + sc.alloc.vcma) }))}>
+                                    Apply VCMA +${sc.alloc.vcma.toLocaleString()}
+                                  </button>
+                                )}
+                                {sc.alloc.srs > 0 && srsHead > 0 && (
+                                  <button className="turbo-lever-btn" style={{ margin: 0, fontSize: 12, padding: "7px 12px" }}
+                                    onClick={() => setInputs(p => ({ ...p, srsAnnualContribution: Math.min(SRS_CAP_SC_PR, (Number(p.srsAnnualContribution) || 0) + sc.alloc.srs) }))}>
+                                    Apply SRS +${sc.alloc.srs.toLocaleString()}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* ── Comparison table: current vs optimised ────────────── */}
+                        {best && (
+                          <div style={{ borderRadius: 12, padding: 16, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", marginBottom: 10 }}>📋 Before vs After (Best Option)</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px 8px" }}>
+                              {[["", "Current", "Optimised"],
+                                ["Chargeable Income", `$${curChargeable.toLocaleString()}`, `$${best.newChargeable.toLocaleString()}`],
+                                ["Marginal Rate",     `${(curMargRate * 100).toFixed(1)}%`, `${(best.targetMargRate * 100).toFixed(1)}%`],
+                                ["Annual Tax",        `$${curTax.toLocaleString()}`,        `$${best.newTax.toLocaleString()}`],
+                                ["Tax Saving",        "—",                                  `$${best.taxSaving.toLocaleString()}/yr`],
+                              ].map(([lbl, a, b], i) => (
+                                <React.Fragment key={i}>
+                                  <div style={{ fontSize: 11, color: i === 0 ? "transparent" : "var(--text-muted)", fontWeight: 700, borderBottom: i === 0 ? "1px solid var(--border-subtle)" : "none", paddingBottom: i === 0 ? 4 : 0 }}>{lbl}</div>
+                                  <div style={{ fontSize: i === 0 ? 10 : 12, fontWeight: i === 0 ? 800 : i >= 3 ? 900 : 600, color: i === 0 ? "var(--text-muted)" : "var(--text-bright)", textAlign: "right", borderBottom: i === 0 ? "1px solid var(--border-subtle)" : "none", textTransform: i === 0 ? "uppercase" : "none", letterSpacing: i === 0 ? "0.05em" : 0 }}>{a}</div>
+                                  <div style={{ fontSize: i === 0 ? 10 : 12, fontWeight: i === 0 ? 800 : i >= 3 ? 900 : 600, color: i === 4 ? "#10b981" : i === 0 ? "var(--text-muted)" : "var(--text-bright)", textAlign: "right", borderBottom: i === 0 ? "1px solid var(--border-subtle)" : "none", textTransform: i === 0 ? "uppercase" : "none", letterSpacing: i === 0 ? "0.05em" : 0 }}>{b}</div>
+                                </React.Fragment>
+                              ))}
+                            </div>
+                            <div style={{ marginTop: 10, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, fontStyle: "italic" }}>
+                              Over 10 years, the best-option tax saving of ${best.taxSaving.toLocaleString()}/yr compounds in SRS/CPF to approximately ${Math.round(best.taxSaving * ((Math.pow(1.04, 10) - 1) / 0.04)).toLocaleString()} at 4% p.a. — tax savings reinvested.
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
+                    );
+                  })()}
+
+                </div>{/* /strategy sub-tab panels */}
               );
             })()}
           </div>{/* /tab content panels */}
