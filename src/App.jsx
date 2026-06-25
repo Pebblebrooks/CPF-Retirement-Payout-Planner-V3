@@ -11092,7 +11092,7 @@ function CPFPlannerApp() {
     return { rows, effPA, effST, effH, effSB, effCS, effOAD, effSRS, effPG };
   }, [whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump,
       whatIfContribStop, whatIfOaDrawdown, whatIfSrsContrib, whatIfPrivGrowth,
-      debouncedInputs]);
+      debouncedInputs, activeTab]);
 
   const comparisonData = useMemo(() => {
     // E4 fix: pre-build O(1) Maps per scenario so getNetWorth() doesn't scan arrays on every age iteration
@@ -15358,10 +15358,11 @@ ${milestoneSnapshotHtml}
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
           /* Row 1 sticky: header always visible on mid-mobile (641-768px) */
           header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; box-sizing: border-box; background: var(--header-bg); }
-          /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
-          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
-          /* Row 3 sticky: Input Parameters bar */
-          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
+          /* Row 2 sticky: tab strip sits below sticky header. At 641-768px the full
+             3-line logo is visible (sub/copy hidden only at ≤640px) → header ~60px. */
+          .cpf-tabs-full-width { position: sticky; top: 60px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
+          /* Row 3 sticky: Input Parameters bar (60 header + 44 tab strip = 104px) */
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 104px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Hide desktop+tablet-only nav buttons; show gear */
@@ -15390,11 +15391,11 @@ ${milestoneSnapshotHtml}
           }
           /* Fix M-KPI-2 (mobile): KPI strip — hidden when input panel is open (DOM order puts it
              below all input fields: sidebar→main-wrap); sticky at correct offset
-             (header 48 + tab strip 44 + input-params-bar 44 = 136px) when inputs closed */
+             (header 60 + tab strip 44 + input-params-bar 44 = 148px at 641-768px) when inputs closed */
           .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
           .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
             position: -webkit-sticky !important;
-            position: sticky !important; top: 136px !important; z-index: 40 !important;
+            position: sticky !important; top: 148px !important; z-index: 40 !important;
           }
           .desktop-only { display: none !important; }
           .rg-6 { grid-template-columns: repeat(2,1fr) !important; gap: 6px !important; }
@@ -24243,14 +24244,6 @@ ${milestoneSnapshotHtml}
                       <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>💡 <strong>Tip:</strong> Use the plan selector (Standard / Escalating / Basic) to highlight one plan's line. The other two are dimmed for clarity.</p>
                     </div>
                   </details>
-                  <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 10, gap: 2, alignSelf: "flex-start" }}>
-                    {["standard", "escalating", "basic"].map(plan => (
-                      <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
-                        {plan}
-                      </button>
-                    ))}
-                  </div>
-
                 {/* ── RA→OA Transfer reference card (LIFE tab) ─────────────────────────
                      Surfaces the transfer toggle inline so users understand which RA base
                      the chart is using — critical for born-1958+ members where the swing
@@ -24368,16 +24361,29 @@ ${milestoneSnapshotHtml}
                     Mobile fix: buttons use flex:"0 0 auto" + whiteSpace:nowrap so they don't compress;
                     the container scrolls horizontally. A right-edge gradient fade on viewportWidth<768
                     signals to the user that Total Yield and Eff. Return % are reachable by swiping. */}
-                <div style={{ position: "relative" }}>
-                  <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-                    {[["payout", "Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
-                      <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
-                        {label}
-                      </button>
-                    ))}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  {/* View mode pills — Payout / Bequest / Total Yield / Eff. Return % */}
+                  <div style={{ position: "relative", flex: "1 1 auto", minWidth: 0 }}>
+                    <div style={{ display: "flex", background: "var(--bg-base)", padding: 4, borderRadius: 12, border: "1px solid var(--border-subtle)", gap: 2, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+                      {[["payout", "Payout"], ["bequest", "Bequest"], ["total", "Total Yield"], ...(!isRSSMode ? [["effRate", "Eff. Return %"]] : [])].map(([id, label]) => (
+                        <button key={id} onClick={() => setViewMode(id)} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: "uppercase", border: "none", cursor: "pointer", whiteSpace: "nowrap", background: viewMode === id ? "var(--clr-emerald)" : "transparent", color: viewMode === id ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {viewportWidth < 768 && (
+                      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36, background: "linear-gradient(to right, transparent, var(--bg-base))", pointerEvents: "none", borderRadius: "0 12px 12px 0" }} />
+                    )}
                   </div>
-                  {viewportWidth < 768 && (
-                    <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36, background: "linear-gradient(to right, transparent, var(--bg-base))", pointerEvents: "none", borderRadius: "0 12px 12px 0" }} />
+                  {/* CPF LIFE plan selector — right-justified, hidden in RSS mode (no LIFE plans) */}
+                  {!isRSSMode && (
+                    <div style={{ display: "flex", background: "var(--bg-input)", padding: 4, borderRadius: 10, gap: 2, flexShrink: 0 }}>
+                      {["standard", "escalating", "basic"].map(plan => (
+                        <button key={plan} onClick={() => setHighlightPlan(plan)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 800, textTransform: "uppercase", border: "none", cursor: "pointer", background: highlightPlan === plan ? "var(--clr-emerald)" : "transparent", color: highlightPlan === plan ? "var(--btn-on-accent)" : "var(--text-muted)" }}>
+                          {plan}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
                 {/* Item 3: Monthly/Annual/Cumulative sub-toggle — only visible in payout mode */}
