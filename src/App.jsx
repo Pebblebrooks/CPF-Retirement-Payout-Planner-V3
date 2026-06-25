@@ -11043,7 +11043,7 @@ function CPFPlannerApp() {
     // Gate: compute when any slider is set OR when on the compare/summary tab.
     // anySliderSet already handles the "don't compute when nothing is set" case cleanly.
     const anySliderSet = whatIfPayoutAge !== null || whatIfSaTopup !== null || whatIfHousing !== null || whatIfSalaryBump !== null || whatIfContribStop !== null || whatIfOaDrawdown !== null || whatIfSrsContrib !== null || whatIfPrivGrowth !== null;
-    if (activeTab !== "compare" && activeTab !== "summary" && !anySliderSet) return null;
+    if (activeTab !== "compare" && activeTab !== "summary" && activeTab !== "readiness" && !anySliderSet) return null;
     // NX8 fix: use debouncedInputs (not live inputs) so the What-If baseline stays in sync
     // with the main projection — previously the 180ms debounce window caused the What-If
     // chart to show new input values against a stale main projection baseline.
@@ -15260,8 +15260,8 @@ ${milestoneSnapshotHtml}
           header { position: sticky !important; top: 0 !important; z-index: 50; flex-shrink: 0; min-height: 48px; box-sizing: border-box; background: var(--header-bg); }
           .cpf-sidebar-wrap { width: 100%; border-bottom: 2px solid var(--border-subtle); position: static !important; background: var(--bg-base); height: auto !important; overflow-y: visible !important; align-self: auto !important; }
           .cpf-main-wrap { height: auto !important; overflow: visible !important; display: flex !important; grid-template-rows: none !important; flex-direction: column !important; padding: 8px 14px 72px; }
-          /* Row 2 sticky: tab strip sits just below sticky header (~48px) */
-          .cpf-tabs-full-width { position: sticky; top: 48px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
+          /* Row 2 sticky: tab strip sits just below sticky header (~60px — full 3-line logo visible on tablet) */
+          .cpf-tabs-full-width { position: sticky; top: 60px; z-index: 42; min-height: 44px; box-sizing: border-box; background: var(--bg-panel); }
           /* Fix 3: tabs anchor left on tablet so first tabs aren't clipped off-screen.
              overflow-x:auto on .cpf-tabs already allows rightward scrolling. */
           .cpf-tabs-full-width .cpf-tabs { justify-content: flex-start !important; }
@@ -15276,17 +15276,17 @@ ${milestoneSnapshotHtml}
           }
           /* Fix M-KPI-2 (tablet): KPI strip — hidden when input panel is open (would render
              below all input fields due to DOM order sidebar→main-wrap); sticky at the correct
-             offset (header 48 + tab strip 44 + input-params-bar 44 = 136px) when inputs closed */
+             offset (header 60 + tab strip 44 + input-params-bar 44 = 148px) when inputs closed */
           .cpf-layout[data-sidebar-open="true"] .cpf-tabs-kpi-header { display: none !important; }
           .cpf-layout[data-sidebar-open="false"] .cpf-tabs-kpi-header {
-            position: sticky !important; top: 136px !important; z-index: 40 !important;
+            position: sticky !important; top: 148px !important; z-index: 40 !important;
           }
           .cpf-sidebar-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px 16px; animation: sidebarIn 0.2s ease-out; overflow-y: visible; }
           /* Logo alignment: match header left/right padding to sidebar-inner (14px) */
           .cpf-page-wrap { padding-left: 14px !important; padding-right: 14px !important; }
           .cpf-sidebar-inner.sidebar-collapsed { display: none !important; }
-          /* Row 3 sticky: Input Parameters bar sits just below tab strip (~92px) */
-          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 92px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
+          /* Row 3 sticky: Input Parameters bar sits just below tab strip (~104px = 60 header + 44 tab strip) */
+          .cpf-input-params-bar { display: block !important; position: sticky !important; top: 104px !important; z-index: 48 !important; min-height: 44px; box-sizing: border-box; }
           /* Push sidebar content below the sticky input-params-bar (~44px) */
           .cpf-sidebar-wrap { padding-top: 44px; }
           /* Responsive nav: hide desktop-only Display btn, show ⚙ gear */
@@ -15326,11 +15326,11 @@ ${milestoneSnapshotHtml}
           /* Tablet sticky bottom action bar — always shown on tablet, hidden elsewhere */
           .tablet-action-bar { display: flex !important; }
           /* Docs/QS sticky nav: parent fhd-tab-inner now has padding:0, so banners sit at the
-             container's top edge. On tablet the page scrolls so we need top:136px to clear the
-             fixed header stack: navbar 48 + tab strip 44 + input-params-bar 44 = 136px.
+             container's top edge. On tablet the page scrolls so we need top:148px to clear the
+             fixed header stack: navbar 60 + tab strip 44 + input-params-bar 44 = 148px.
              On desktop the scroll container is cpf-tab-content so top:0 is correct (below). */
-          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
-          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 136px !important; }
+          #docs-sticky-nav { position: sticky !important; margin-top: 0 !important; top: 148px !important; }
+          #qs-sticky-banner  { position: sticky !important; margin-top: 0 !important; top: 148px !important; }
           /* Hide the "JUMP TO SECTION" label — on mobile/tablet the <select> placeholder
              already reads "↓ Jump to section…", making the label above it redundant.
              On desktop (≥1025px) the label introduces the pill-button grid and stays visible. */
@@ -18101,6 +18101,12 @@ ${milestoneSnapshotHtml}
                       <span style={{ color: "var(--text-muted)" }}>Monthly gross salary</span>
                       <span style={{ fontWeight: 700, color: "var(--text-bright)" }}>{formatCurrency(budgetTakeHome.grossMonthly)}/mo</span>
                     </div>
+                    {budgetTakeHome.grossBonus > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "var(--text-muted)" }}>Annual bonus (avg/mo)</span>
+                        <span style={{ fontWeight: 600, color: "var(--text-bright)" }}>+{formatCurrency(budgetTakeHome.awMonthlyAvg)}/mo</span>
+                      </div>
+                    )}
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-muted)" }}>Less: employee CPF ({budgetTakeHome.empRatePct}%)</span>
                       <span style={{ fontWeight: 700, color: "var(--clr-amber)" }}>−{formatCurrency(budgetTakeHome.cpfEmployee)}/mo</span>
@@ -18165,7 +18171,7 @@ ${milestoneSnapshotHtml}
                     )}
                     <div style={{ fontSize: 11, display: "flex", flexDirection: "column", gap: 3 }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "var(--text-subtle)" }}>Gross annual income</span>
+                        <span style={{ color: "var(--text-subtle)" }}>Gross annual income{budgetTakeHome.grossBonus > 0 ? " (salary + bonus)" : ""}</span>
                         <span style={{ color: "var(--text-muted)" }}>{formatCurrency(budgetTakeHome.grossMonthly * 12 + budgetTakeHome.grossBonus)}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -22537,6 +22543,7 @@ ${milestoneSnapshotHtml}
                     {[
                       ["⊞ Stacked mode", "Shows CPF wealth composition year-by-year — OA (blue), SA/RA (green), MA (purple) stacked to reveal how accounts build toward your payout age. Note: the visible MA dip at age 55 is a display artefact from stacking — switch to Lines mode to see true individual balances."],
                       ["∿ Lines mode", "Renders each account as an independent curve. SA terminates at 55 and RA appears from 55 onwards. Best for spotting when individual accounts hit caps or deplete."],
+                      ["∑ Attribution mode", "Annual stacked bar chart showing how your CPF balance grew each year by source: Mandatory contributions (dark blue), Voluntary top-ups (green), Government grants (amber), and Interest earned (purple). Reveals the crossover point where compound interest overtakes your own contributions — the most powerful signal of whether your CPF is compounding strongly."],
                       ["📉 Baseline ghost", "The dashed grey line shows the mandatory-contributions-only projection with all voluntary top-ups, transfers, and grants zeroed. The gap between the ghost and the solid line is the value your active voluntary strategy adds."],
                       ["🎲 Monte Carlo band", "200 simulations with randomised CPF interest rates each year. The shaded purple band is the P10–P90 range; the dashed line is P50. The Probability of Sufficiency badge shows the share of runs where CPF at payout age ≥ projected FRS. Variance presets: Mild ±0.5%, Base ±1%, Stress ±2%."],
                       ["🔔 Life Events overlay", "Coloured vertical bands mark active life events (retrenchment, career break, windfall, etc.). Toggle the Events button to show or hide them. Events are configured in the Life Events & Stress Tests panel in the sidebar."],
@@ -22550,42 +22557,6 @@ ${milestoneSnapshotHtml}
                   </div>
                 </details>
 
-                {/* ── Title row + controls ── */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                  <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 800, margin: "0 0 2px" }}>
-                      {debouncedInputs.cpfScheme === 'rss'
-                        ? `Full Projection — RSS Drawdown (Age ${debouncedInputs.currentAge} → ${maxPA})`
-                        : `Growth Phase — Age ${inputs.currentAge} → ${inputs.payoutAge}`}
-                    </h3>
-                    <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
-                      {debouncedInputs.cpfScheme === 'rss'
-                        ? "Stacked area chart: RA drawn down each month — OA and MA continue accumulating."
-                        : accumChartMode === 'stacked'
-                          ? `Stacked — wealth composition by account until CPF LIFE begins at age ${inputs.payoutAge}.`
-                          : `Lines — individual account balances. SA terminates at 55; RA starts at 55.`}
-                    </p>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    {/* Chart mode toggle */}
-                    <div style={{ display: "flex", background: "var(--bg-input)", borderRadius: 10, border: "1px solid var(--border-strong)", padding: 3, gap: 2 }}>
-                      <button onClick={() => setAccumChartMode('stacked')} style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'stacked' ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'stacked' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Stacked area — total CPF wealth composition">⊞ Stacked</button>
-                      <button onClick={() => setAccumChartMode('lines')}   style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'lines'   ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'lines'   ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Lines — independent account curves, eliminates MA stacking artifact">∿ Lines</button>
-                      <button onClick={() => setAccumChartMode('attribution')} style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'attribution' ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'attribution' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Attribution — annual growth by source: mandatory, voluntary, grants, interest">∑ Attribution</button>
-                    </div>
-                    <button onClick={() => setShowBaseline(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showBaseline ? "rgba(148,163,184,0.5)" : "var(--border-strong)"}`, background: showBaseline ? "rgba(148,163,184,0.12)" : "var(--bg-input)", color: showBaseline ? "var(--clr-slate)" : "var(--text-muted)", cursor: "pointer" }}>
-                      <MinusCircle style={{ width: 13, height: 13 }} />{showBaseline ? "Hide" : "Show"} Baseline
-                    </button>
-                    <button onClick={() => setShowMonteCarlo(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showMonteCarlo ? "rgba(139,92,246,0.5)" : "var(--border-strong)"}`, background: showMonteCarlo ? "rgba(139,92,246,0.15)" : "var(--bg-input)", color: showMonteCarlo ? "var(--clr-violet)" : "var(--text-muted)", cursor: "pointer" }}>
-                      <Activity style={{ width: 13, height: 13 }} />{showMonteCarlo ? "Hide" : "Show"} Monte Carlo (200 runs)
-                    </button>
-                    {(inputs.lifeEvents || []).filter(e => e.enabled !== false).length > 0 && (
-                      <button onClick={() => setShowLifeEventMarkers(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showLifeEventMarkers ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showLifeEventMarkers ? "rgba(239,68,68,0.12)" : "var(--bg-input)", color: showLifeEventMarkers ? "#ef4444" : "var(--text-muted)", cursor: "pointer" }}>
-                        <Bell style={{ width: 13, height: 13 }} />{showLifeEventMarkers ? "Hide" : "Show"} Events
-                      </button>
-                    )}
-                  </div>
-                </div>
 
                 {/* ── Account legend + key-transitions strip ── */}
                 {!isForeigner && (
@@ -22661,27 +22632,68 @@ ${milestoneSnapshotHtml}
                         <span style={{ fontSize: 28, fontWeight: 900, color: c, fontFamily: "monospace" }}>{prob}%</span>
                       </div>
                     </div>
-                    {/* Plain-English Monte Carlo explanation */}
-                    <div style={{ marginBottom: 16, padding: 14, borderRadius: 12, background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.2)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
-                      <p style={{ fontWeight: 700, color: "var(--clr-violet)", marginBottom: 8, fontSize: 14 }}>🎲 What is Monte Carlo simulation?</p>
-                      <p style={{ marginBottom: 8 }}>A Monte Carlo simulation runs your retirement projection <strong style={{ color: "var(--text-bright)" }}>200 times</strong>, each time with slightly different CPF interest rates. The variance band is user-selectable: <strong style={{ color: "var(--clr-blue)" }}>Mild ±0.5%</strong>, <strong style={{ color: "var(--clr-violet)" }}>Base ±1%</strong> (default), or <strong style={{ color: "var(--clr-red)" }}>Stress ±2%</strong>. This mimics real-world rate uncertainty. The result is a <strong style={{ color: "var(--text-bright)" }}>range of possible outcomes</strong>, not just one single prediction.</p>
-                      <p style={{ fontWeight: 700, color: "var(--clr-violet)", marginBottom: 6 }}>How to read the chart bands:</p>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8, alignItems: "stretch" }}>
-                        {[
-                          ["Purple band (shaded)", "The full range between the worst 10% of outcomes (P10) and best 10% of outcomes (P90). Wider = more uncertainty.", "rgba(var(--clr-purple2-rgb),0.15)"],
-                          ["Dashed purple line (P50)", "The median outcome — half the simulations finished above this line, half below. Think of it as the most likely single scenario.", "rgba(var(--clr-violet-rgb),0.15)"],
-                          ["Probability of Sufficiency", "The % of all 200 runs where your CPF at payout age was enough to meet the FRS target. 80%+ is strong; below 50% suggests risk.", "rgba(var(--clr-green-rgb),0.1)"],
-                        ].map(([title, desc, bg]) => (
-                          <div key={title} style={{ padding: "8px 10px", borderRadius: 8, background: bg, border: "1px solid rgba(139,92,246,0.2)", display: "flex", flexDirection: "column" }}>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-violet)", marginBottom: 3 }}>{title}</div>
-                            <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, flex: 1 }}>{desc}</div>
-                          </div>
-                        ))}
+                    {/* Plain-English Monte Carlo explanation — collapsible so it doesn't push chart down */}
+                    <details style={{ marginBottom: 8, borderRadius: 12, overflow: "hidden" }}>
+                      <summary style={{ listStyle: "none", outline: "none", cursor: "pointer", padding: "8px 14px", background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.2)", borderRadius: 12, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "var(--clr-violet)" }}>
+                        🎲 What is Monte Carlo simulation?
+                        <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)", marginLeft: 4 }}>click to expand</span>
+                      </summary>
+                      <div style={{ padding: 14, background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.2)", borderTop: "none", borderRadius: "0 0 12px 12px", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                        <p style={{ marginBottom: 8 }}>A Monte Carlo simulation runs your retirement projection <strong style={{ color: "var(--text-bright)" }}>200 times</strong>, each time with slightly different CPF interest rates. The variance band is user-selectable: <strong style={{ color: "var(--clr-blue)" }}>Mild ±0.5%</strong>, <strong style={{ color: "var(--clr-violet)" }}>Base ±1%</strong> (default), or <strong style={{ color: "var(--clr-red)" }}>Stress ±2%</strong>. This mimics real-world rate uncertainty. The result is a <strong style={{ color: "var(--text-bright)" }}>range of possible outcomes</strong>, not just one single prediction.</p>
+                        <p style={{ fontWeight: 700, color: "var(--clr-violet)", marginBottom: 6 }}>How to read the chart bands:</p>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8, alignItems: "stretch" }}>
+                          {[
+                            ["Purple band (shaded)", "The full range between the worst 10% of outcomes (P10) and best 10% of outcomes (P90). Wider = more uncertainty.", "rgba(var(--clr-purple2-rgb),0.15)"],
+                            ["Dashed purple line (P50)", "The median outcome — half the simulations finished above this line, half below. Think of it as the most likely single scenario.", "rgba(var(--clr-violet-rgb),0.15)"],
+                            ["Probability of Sufficiency", "The % of all 200 runs where your CPF at payout age was enough to meet the FRS target. 80%+ is strong; below 50% suggests risk.", "rgba(var(--clr-green-rgb),0.1)"],
+                          ].map(([title, desc, bg]) => (
+                            <div key={title} style={{ padding: "8px 10px", borderRadius: 8, background: bg, border: "1px solid rgba(139,92,246,0.2)", display: "flex", flexDirection: "column" }}>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-violet)", marginBottom: 3 }}>{title}</div>
+                              <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, flex: 1 }}>{desc}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>💡 <strong>What to do with this:</strong> If the probability is low, consider increasing your RSTU top-ups or deferring your payout age. The What-If Explorer (Dashboard → CPF Overview) lets you test these adjustments instantly.</p>
                       </div>
-                      <p style={{ fontSize: 12, color: "var(--text-subtle)" }}>💡 <strong>What to do with this:</strong> If the probability is low, consider increasing your RSTU top-ups or deferring your payout age. The What-If Explorer (Dashboard → CPF Overview) lets you test these adjustments instantly.</p>
-                    </div>
+                    </details>
                   </>);
                 })()}
+                {/* ── Chart controls — title + mode buttons, moved directly above chart ── */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <h3 style={{ fontSize: 18, fontWeight: 800, margin: "0 0 2px" }}>
+                      {debouncedInputs.cpfScheme === 'rss'
+                        ? `Full Projection — RSS Drawdown (Age ${debouncedInputs.currentAge} → ${maxPA})`
+                        : `Growth Phase — Age ${inputs.currentAge} → ${inputs.payoutAge}`}
+                    </h3>
+                    <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
+                      {debouncedInputs.cpfScheme === 'rss'
+                        ? "Stacked area chart: RA drawn down each month — OA and MA continue accumulating."
+                        : accumChartMode === 'stacked'
+                          ? `Stacked — wealth composition by account until CPF LIFE begins at age ${inputs.payoutAge}.`
+                          : `Lines — individual account balances. SA terminates at 55; RA starts at 55.`}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {/* Chart mode toggle */}
+                    <div style={{ display: "flex", background: "var(--bg-input)", borderRadius: 10, border: "1px solid var(--border-strong)", padding: 3, gap: 2 }}>
+                      <button onClick={() => setAccumChartMode('stacked')} style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'stacked' ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'stacked' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Stacked area — total CPF wealth composition">⊞ Stacked</button>
+                      <button onClick={() => setAccumChartMode('lines')}   style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'lines'   ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'lines'   ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Lines — independent account curves, eliminates MA stacking artifact">∿ Lines</button>
+                      <button onClick={() => setAccumChartMode('attribution')} style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'attribution' ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'attribution' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Attribution — annual growth by source: mandatory, voluntary, grants, interest">∑ Attribution</button>
+                    </div>
+                    <button onClick={() => setShowBaseline(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showBaseline ? "rgba(148,163,184,0.5)" : "var(--border-strong)"}`, background: showBaseline ? "rgba(148,163,184,0.12)" : "var(--bg-input)", color: showBaseline ? "var(--clr-slate)" : "var(--text-muted)", cursor: "pointer" }}>
+                      <MinusCircle style={{ width: 13, height: 13 }} />{showBaseline ? "Hide" : "Show"} Baseline
+                    </button>
+                    <button onClick={() => setShowMonteCarlo(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showMonteCarlo ? "rgba(139,92,246,0.5)" : "var(--border-strong)"}`, background: showMonteCarlo ? "rgba(139,92,246,0.15)" : "var(--bg-input)", color: showMonteCarlo ? "var(--clr-violet)" : "var(--text-muted)", cursor: "pointer" }}>
+                      <Activity style={{ width: 13, height: 13 }} />{showMonteCarlo ? "Hide" : "Show"} Monte Carlo (200 runs)
+                    </button>
+                    {(inputs.lifeEvents || []).filter(e => e.enabled !== false).length > 0 && (
+                      <button onClick={() => setShowLifeEventMarkers(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showLifeEventMarkers ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showLifeEventMarkers ? "rgba(239,68,68,0.12)" : "var(--bg-input)", color: showLifeEventMarkers ? "#ef4444" : "var(--text-muted)", cursor: "pointer" }}>
+                        <Bell style={{ width: 13, height: 13 }} />{showLifeEventMarkers ? "Hide" : "Show"} Events
+                      </button>
+                    )}
+                  </div>
+                </div>
                 <div className="fhd-chart-grow" style={{ height: 380, minHeight: 220 }}>
                   <ResponsiveContainer width="99%" height="100%">
                     {/* Conditional: 'stacked' = AreaChart; 'lines' = LineChart.
@@ -22864,6 +22876,22 @@ ${milestoneSnapshotHtml}
                     })()}
                   </ResponsiveContainer>
                 </div>
+                {accumChartMode === 'attribution' && (
+                  <div style={{ marginTop: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(var(--clr-blue2-rgb),0.06)", border: "1px solid rgba(var(--clr-blue2-rgb),0.2)", display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                    <BarChart3 style={{ width: 16, height: 16, color: "var(--clr-blue2)", flexShrink: 0, marginTop: 2 }} />
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue2)", marginBottom: 4 }}>∑ Attribution — Annual Growth by Source</p>
+                      <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
+                        Each bar shows how your total CPF grew that year:
+                        {" "}<strong style={{ color: "#1d4ed8" }}>Mandatory</strong> (employer + employee contributions),
+                        {" "}<strong style={{ color: "#059669" }}>Voluntary</strong> (RSTU, VC3A, VCMA, and other top-ups you make),
+                        {" "}<strong style={{ color: "#f59e0b" }}>Govt Grants</strong> (MRSS, MMSS, WIS, and other government co-contributions),
+                        {" "}and <strong style={{ color: "#7c3aed" }}>Interest</strong> (OA 2.5% + SA/RA/MA 4% credited annually).
+                        Watch for the year where the Interest bar overtakes Mandatory — that is the compounding crossover point where your CPF starts growing on its own momentum.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {showBaseline && baselineProjection && (() => {
                   const pa = payoutAge65; // CQ-2 fix: use debounced value to match displayAccumulation data
                   const withRow = accumulationByAge.get(pa) || {}; // CQ-2 perf: O(1) Map lookup
