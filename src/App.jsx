@@ -1,7 +1,7 @@
 /**
- * CPF Planner Pro
+ * Fusion (富生)
  * ------------------------------------------------------------------------
- * Copyright (c) 2026 Pebblebrooks. All rights reserved.
+ * 
  *
  * This source code and the software it forms part of are the proprietary
  * and confidential property of Pebblebrooks (owner & developer). No part
@@ -4232,7 +4232,7 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     // Log to console for debugging — swap to a real error-reporting service if needed
-    console.error('[CPF Planner] Render error caught by ErrorBoundary:', error, info?.componentStack);
+    console.error('[Fusion] Render error caught by ErrorBoundary:', error, info?.componentStack);
   }
 
   handleReset() {
@@ -4940,7 +4940,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>CPF Planner Pro</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Fusion (富生)</span>
             {advMode && <span style={{ fontSize: 11, fontWeight: 700, color: "#a855f7", background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 5, padding: "1px 6px", marginLeft: 4 }}>ADVANCED</span>}
           </div>
           <button type="button" onClick={onSkip}
@@ -7046,6 +7046,8 @@ function CPFPlannerApp() {
   const [spouseGoalApplied,     setSpouseGoalApplied]     = useState(null);      // "A"|"B"|"C"|null
   const [spousePreApplySnapshot,setSpousePreApplySnapshot]= useState(null);      // { vcSaTopup, vc3aCash } for spouse revert
   const [marginalTaxRate,       setMarginalTaxRate]       = useState(15);        // % marginal income tax rate for Strategy D
+  const [taxOptSnapshot,        setTaxOptSnapshot]        = useState(null);      // { vcSaTopup, vcMaCash, srsAnnualContribution } captured before first Tax Optimizer apply — enables Revert
+  const [taxOptApplied,         setTaxOptApplied]         = useState(null);      // null | targetFloor of the scenario that was applied — gates further applies
   const [retireSolveResult, setRetireSolveResult] = useState(null);
   const [retireSolving,     setRetireSolving]     = useState(false);
   const isApplyingSpouseStratRef = useRef(false);                                // guards spouse lever-change useEffect
@@ -9270,7 +9272,7 @@ function CPFPlannerApp() {
           ? p.inputs
           : (p && typeof p === 'object' && !Array.isArray(p) ? p : null);
         if (!rawInputs) {
-          setConfirmModal({ title: "Invalid Profile File", message: "No inputs found in this file. Make sure you are loading a CPF Planner Pro JSON export.", onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
+          setConfirmModal({ title: "Invalid Profile File", message: "No inputs found in this file. Make sure you are loading a Fusion (富生) JSON export.", onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
           return; // target.value already cleared before the read
         }
         // BUG-1 fix: use module-level buildSafeInputs instead of local sanitiseInputs —
@@ -9446,7 +9448,7 @@ function CPFPlannerApp() {
           showToast("✓ Profile inputs imported (legacy format)");
         }
       } catch (err) {
-        setConfirmModal({ title: "Could Not Read Profile", message: `Make sure you are loading a CPF Planner Pro JSON export (.json). If the file was saved with an older version of the app, try the Share Code import instead.\n\nTechnical detail: ${err.message}`, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
+        setConfirmModal({ title: "Could Not Read Profile", message: `Make sure you are loading a Fusion (富生) JSON export (.json). If the file was saved with an older version of the app, try the Share Code import instead.\n\nTechnical detail: ${err.message}`, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
       }
     };
     reader.readAsText(file);
@@ -15977,7 +15979,7 @@ ${milestoneSnapshotHtml}
                 </div>
                 <div>
                   <h2 style={{ fontSize: 17, fontWeight: 800, color: "var(--text-bright)", marginBottom: 2 }}>
-                    {welcomeStep === 0 && "Welcome to CPF Planner Pro"}
+                    {welcomeStep === 0 && "Welcome to Fusion (富生)"}
                     {welcomeStep === 1 && "Setting Up Your Profile"}
                     {welcomeStep === 2 && "Exploring the Dashboard"}
                     {welcomeStep === 3 && "Advanced Features & Disclaimer"}
@@ -16165,7 +16167,7 @@ ${milestoneSnapshotHtml}
               </div>
               <div>
                 <h2 style={{ fontSize: 16, fontWeight: 900, color: "var(--text-bright)", margin: 0, marginBottom: 2 }}>How would you like to begin?</h2>
-                <p style={{ fontSize: 12, color: "var(--text-subtle)", margin: 0 }}>CPF Planner Pro is ready</p>
+                <p style={{ fontSize: 12, color: "var(--text-subtle)", margin: 0 }}>Fusion (富生) is ready</p>
               </div>
             </div>
             {/* Card body — two choice buttons */}
@@ -16222,7 +16224,7 @@ ${milestoneSnapshotHtml}
               <Calculator style={{ color: "#ffffff", width: 18, height: 18 }} />
             </div>
             <div>
-              <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>CPF Planner Pro</div>
+              <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>Fusion (富生)</div>
               <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
               <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1 }}>© 2026 Pebblebrooks. All rights reserved.</div>
             </div>
@@ -20703,7 +20705,7 @@ ${milestoneSnapshotHtml}
                   <div id="qs-page-1" style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(16,185,129,0.12)" }}>
                     <div className="welcome-banner-green" style={{ background: "linear-gradient(145deg, #022c22 0%, #065f46 45%, #10b981 80%, #6ee7b7 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
                       <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><Calculator style={{ width: 20, height: 20, color: "#ecfdf5" }} /></div>
-                      <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#ecfdf5", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Welcome to CPF Planner Pro</h4><p style={{ fontSize: 13, color: "rgba(236,253,245,0.8)", margin: 0 }}>Your end-to-end Singapore retirement simulation engine</p></div>
+                      <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#ecfdf5", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Welcome to Fusion (富生)</h4><p style={{ fontSize: 13, color: "rgba(236,253,245,0.8)", margin: 0 }}>Your end-to-end Singapore retirement simulation engine</p></div>
                     </div>
                     <div style={{ padding: "16px 20px" }}>
                       <p style={{ color: "var(--text-main)", fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
@@ -26885,7 +26887,7 @@ ${milestoneSnapshotHtml}
                     {/* ── XIRR sub-section ── */}
                     <h4 style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-violet)", marginBottom: 10, marginTop: 20, display: "flex", alignItems: "center", gap: 8 }}><Percent style={{ width: 16, height: 16 }} />XIRR — Internal Rate of Return</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
-                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What XIRR measures:</strong> The XIRR column in the Data Table tab shows the <em>Extended Internal Rate of Return</em> of the highlighted CPF LIFE plan at each projection age. It answers: <em>"If I treat all my CPF contributions as money out and all my payouts + final bequest as money in, what annual return did I earn on the whole strategy?"</em> A positive XIRR above the CPF SA/RA rate (4%) means your overall strategy is generating value faster than simply leaving money in SA/RA. <strong style={{ color: "var(--clr-amber)" }}>Important:</strong> XIRR covers your <em>entire contribution history</em> from your current age — not just the CPF LIFE payout phase. A member aged 35 includes 30 years of accumulation outflows in the denominator, which depresses XIRR values relative to "effective returns from payout age" figures sometimes shown in financial articles. Those article figures treat the RA at payout age as the starting investment; CPF Planner Pro's XIRR is the more conservative, whole-of-strategy measure.</p>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What XIRR measures:</strong> The XIRR column in the Data Table tab shows the <em>Extended Internal Rate of Return</em> of the highlighted CPF LIFE plan at each projection age. It answers: <em>"If I treat all my CPF contributions as money out and all my payouts + final bequest as money in, what annual return did I earn on the whole strategy?"</em> A positive XIRR above the CPF SA/RA rate (4%) means your overall strategy is generating value faster than simply leaving money in SA/RA. <strong style={{ color: "var(--clr-amber)" }}>Important:</strong> XIRR covers your <em>entire contribution history</em> from your current age — not just the CPF LIFE payout phase. A member aged 35 includes 30 years of accumulation outflows in the denominator, which depresses XIRR values relative to "effective returns from payout age" figures sometimes shown in financial articles. Those article figures treat the RA at payout age as the starting investment; Fusion (富生)'s XIRR is the more conservative, whole-of-strategy measure.</p>
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>How it is computed:</strong> The engine builds a cashflow timeline: contributions made each year are negative (money leaving your pocket), and CPF LIFE payouts received each year plus the terminal bequest value are positive (money coming back). Newton-Raphson iteration then finds the single discount rate that makes the net present value of that entire cashflow stream equal to zero. That rate is the XIRR. Up to 100 iterations per age-point are run; if it fails to converge, the cell shows <strong>—</strong>.</p>
                       <p style={{ marginBottom: 12 }}><strong style={{ color: "var(--text-highlight)" }}>Colour coding in the Table:</strong></p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
@@ -27217,7 +27219,15 @@ ${milestoneSnapshotHtml}
                       { id: "turbo",   label: "⚡ Turbo"           },
                       { id: "taxopt",  label: "💰 Tax Optimizer"   },
                     ].map(({ id, label }) => (
-                      <button key={id} onClick={() => setGoalStratTab(id)}
+                      <button key={id} onClick={() => {
+                        setGoalStratTab(id);
+                        // Reset Tax Optimizer apply state when leaving the tab so
+                        // stale "applied" badges / blocked buttons don't persist on return
+                        if (id !== "taxopt") {
+                          setTaxOptApplied(null);
+                          setTaxOptSnapshot(null);
+                        }
+                      }}
                         style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
                         {label}
                       </button>
@@ -27263,7 +27273,6 @@ ${milestoneSnapshotHtml}
                     );
 
                     // Strategy D: tax-optimised — lowest effective after-tax annual cash outflow
-                    const SG_TAX_BRACKETS = [7, 11.5, 15, 19.5, 22];
                     const taxRate = marginalTaxRate / 100;
                     const computeStratD = (result) => {
                       if (!result) return null;
@@ -29835,7 +29844,36 @@ ${milestoneSnapshotHtml}
                               ✓ Already in the 0% band — no further income tax optimisation needed.
                             </div>
                           )}
+                          {Math.abs((curMargRate * 100) - marginalTaxRate) > 1 && curMargRate > 0 && (
+                            <div style={{ marginTop: 8, fontSize: 11, color: "var(--clr-amber)", background: "rgba(245,158,11,0.07)", borderRadius: 6, padding: "4px 8px" }}>
+                              ⚠ Strategy D uses a {marginalTaxRate}% marginal rate (slider in Goal Simulator) but your actual IRAS marginal rate is {(curMargRate * 100).toFixed(1)}%. Consider aligning the slider so Strategy D's cost comparison reflects your real tax position.
+                            </div>
+                          )}
                         </div>
+
+                        {/* ── Revert banner — shown when a Tax Optimizer apply is active ── */}
+                        {taxOptApplied !== null && taxOptSnapshot && (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 10, padding: "10px 14px" }}>
+                            <div style={{ fontSize: 12, color: "var(--clr-green)", fontWeight: 700 }}>
+                              ✓ Tax optimisation applied — inputs updated to reflect chosen bracket strategy.
+                            </div>
+                            <button
+                              className="turbo-lever-btn"
+                              style={{ margin: 0, fontSize: 12, padding: "6px 14px", background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.25)" }}
+                              onClick={() => {
+                                setInputs(p => ({
+                                  ...p,
+                                  vcSaTopup:             String(taxOptSnapshot.vcSaTopup),
+                                  vcMaCash:              String(taxOptSnapshot.vcMaCash),
+                                  srsAnnualContribution: String(taxOptSnapshot.srsAnnualContribution),
+                                }));
+                                setTaxOptSnapshot(null);
+                                setTaxOptApplied(null);
+                              }}>
+                              ↩ Revert to pre-optimisation values
+                            </button>
+                          </div>
+                        )}
 
                         {/* ── Disclaimer ───────────────────────────────────────── */}
                         <div style={{ fontSize: 11, color: "var(--text-subtle)", background: "rgba(100,116,139,0.08)", borderRadius: 8, padding: "6px 10px", lineHeight: 1.6 }}>
@@ -29910,29 +29948,70 @@ ${milestoneSnapshotHtml}
                               </div>
                             )}
 
-                            {/* Apply buttons for achievable scenarios */}
-                            {sc.achievable && (
-                              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                                {sc.alloc.rstu > 0 && rstuHead > 0 && (
-                                  <button className="turbo-lever-btn" style={{ margin: 0, fontSize: 12, padding: "7px 12px" }}
-                                    onClick={() => setInputs(p => ({ ...p, vcSaTopup: Math.min(8000, (Number(p.vcSaTopup) || 0) + sc.alloc.rstu) }))}>
-                                    Apply RSTU +${sc.alloc.rstu.toLocaleString()}
+                            {/* Apply / Applied / Blocked state for achievable scenarios */}
+                            {sc.achievable && (() => {
+                              const isThisApplied = taxOptApplied === sc.targetFloor;
+                              const anyApplied    = taxOptApplied !== null;
+
+                              // Already applied this scenario — show confirmation badge
+                              if (isThisApplied) {
+                                return (
+                                  <div style={{ marginTop: 10, fontSize: 12, color: "var(--clr-green)", background: "rgba(16,185,129,0.08)", borderRadius: 8, padding: "7px 12px", display: "flex", alignItems: "center", gap: 6 }}>
+                                    ✓ Applied — use the Revert button above to undo.
+                                  </div>
+                                );
+                              }
+
+                              // A different scenario was applied — block further applies to prevent cascade
+                              if (anyApplied) {
+                                return (
+                                  <div style={{ marginTop: 10, fontSize: 11, color: "var(--text-subtle)", fontStyle: "italic" }}>
+                                    Revert the current optimisation before applying a different option.
+                                  </div>
+                                );
+                              }
+
+                              // Build label listing the levers this apply will touch
+                              const parts = [];
+                              if (sc.alloc.rstu  > 0 && rstuHead > 0) parts.push(`RSTU +$${sc.alloc.rstu.toLocaleString()}`);
+                              if (sc.alloc.vcma  > 0 && vcmaHead > 0) parts.push(`VCMA +$${sc.alloc.vcma.toLocaleString()}`);
+                              if (sc.alloc.srs   > 0 && srsHead  > 0) parts.push(`SRS +$${sc.alloc.srs.toLocaleString()}`);
+                              if (sc.alloc.rstuOther > 0)              parts.push(`RSTU (other) +$${sc.alloc.rstuOther.toLocaleString()}`);
+
+                              return (
+                                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                                  <button
+                                    className="turbo-lever-btn"
+                                    style={{
+                                      margin: 0, fontSize: 12, padding: "7px 14px",
+                                      background: i === 0 ? "rgba(16,185,129,0.15)" : undefined,
+                                    }}
+                                    onClick={() => {
+                                      // Capture snapshot of pre-apply values for Revert
+                                      setTaxOptSnapshot({
+                                        vcSaTopup:             Number(inputs.vcSaTopup)             || 0,
+                                        vcMaCash:              Number(inputs.vcMaCash)              || 0,
+                                        srsAnnualContribution: Number(inputs.srsAnnualContribution) || 0,
+                                      });
+                                      // Apply all levers for this scenario atomically
+                                      setInputs(p => {
+                                        const next = { ...p };
+                                        if (sc.alloc.rstu  > 0 && rstuHead > 0)
+                                          next.vcSaTopup             = String(Math.min(8000, (Number(p.vcSaTopup) || 0) + sc.alloc.rstu));
+                                        if (sc.alloc.vcma  > 0 && vcmaHead > 0)
+                                          next.vcMaCash              = String(Math.min(vcmaRoom_tx, (Number(p.vcMaCash) || 0) + sc.alloc.vcma));
+                                        if (sc.alloc.srs   > 0 && srsHead  > 0)
+                                          next.srsAnnualContribution = String(Math.min(SRS_CAP_SC_PR, (Number(p.srsAnnualContribution) || 0) + sc.alloc.srs));
+                                        return next;
+                                      });
+                                      // Lock further applies until Revert is clicked
+                                      setTaxOptApplied(sc.targetFloor);
+                                    }}>
+                                    Apply this option{parts.length > 0 ? ` · ${parts.join(" · ")}` : ""}
                                   </button>
-                                )}
-                                {sc.alloc.vcma > 0 && vcmaHead > 0 && (
-                                  <button className="turbo-lever-btn" style={{ margin: 0, fontSize: 12, padding: "7px 12px" }}
-                                    onClick={() => setInputs(p => ({ ...p, vcMaCash: Math.min(vcmaRoom_tx, (Number(p.vcMaCash) || 0) + sc.alloc.vcma) }))}>
-                                    Apply VCMA +${sc.alloc.vcma.toLocaleString()}
-                                  </button>
-                                )}
-                                {sc.alloc.srs > 0 && srsHead > 0 && (
-                                  <button className="turbo-lever-btn" style={{ margin: 0, fontSize: 12, padding: "7px 12px" }}
-                                    onClick={() => setInputs(p => ({ ...p, srsAnnualContribution: Math.min(SRS_CAP_SC_PR, (Number(p.srsAnnualContribution) || 0) + sc.alloc.srs) }))}>
-                                    Apply SRS +${sc.alloc.srs.toLocaleString()}
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         ))}
 
@@ -30118,7 +30197,7 @@ function LockScreen({ initiallyExpired, onUnlock }) {
           </div>
           <div style={{ textAlign: 'left' }}>
             <div style={{ fontWeight: 900, fontSize: 16, background: 'linear-gradient(90deg,#10b981,#3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', whiteSpace: 'nowrap' }}>
-              CPF Planner Pro
+              Fusion (富生)
             </div>
             <div style={{ fontSize: 11, color: '#10b981', fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
               Retirement Engine v2026
