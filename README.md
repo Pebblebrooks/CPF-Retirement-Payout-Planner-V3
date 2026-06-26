@@ -8,8 +8,8 @@ A privacy-first, client-side React application built with Vite. Designed to help
 
 | | |
 |---|---|
-| **Marketing Site** | https://cpfplanner.ehtan2022.workers.dev/ |
-| **Main Application** | https://cpfplannerappv3.ehtan2022.workers.dev/ |
+| **Marketing Site** | https://fusionweb.ehtan2022.workers.dev/ |
+| **Main Application** | https://fusion.ehtan2022.workers.dev/ |
 
 ---
 
