@@ -1,5 +1,5 @@
 /**
- * FUSION (富生)
+ * Fusion 富生
  * ------------------------------------------------------------------------
  * © 2026 Pebblebrooks. All rights reserved.
  *
@@ -4232,7 +4232,7 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     // Log to console for debugging — swap to a real error-reporting service if needed
-    console.error('[FUSION] Render error caught by ErrorBoundary:', error, info?.componentStack);
+    console.error('[Fusion] Render error caught by ErrorBoundary:', error, info?.componentStack);
   }
 
   handleReset() {
@@ -4940,7 +4940,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>FUSION (富生)</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Fusion 富生</span>
             {advMode && <span style={{ fontSize: 11, fontWeight: 700, color: "#a855f7", background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 5, padding: "1px 6px", marginLeft: 4 }}>ADVANCED</span>}
           </div>
           <button type="button" onClick={onSkip}
@@ -9272,7 +9272,7 @@ function CPFPlannerApp() {
           ? p.inputs
           : (p && typeof p === 'object' && !Array.isArray(p) ? p : null);
         if (!rawInputs) {
-          setConfirmModal({ title: "Invalid Profile File", message: "No inputs found in this file. Make sur0e you are loading a FUSION (富生) JSON export.", onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
+          setConfirmModal({ title: "Invalid Profile File", message: "No inputs found in this file. Make sure you are loading a Fusion 富生 JSON export.", onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
           return; // target.value already cleared before the read
         }
         // BUG-1 fix: use module-level buildSafeInputs instead of local sanitiseInputs —
@@ -9448,7 +9448,7 @@ function CPFPlannerApp() {
           showToast("✓ Profile inputs imported (legacy format)");
         }
       } catch (err) {
-        setConfirmModal({ title: "Could Not Read Profile", message: `Make sure you are loading a FUSION (富生) JSON export (.json). If the file was saved with an older version of the app, try the Share Code import instead.\n\nTechnical detail: ${err.message}`, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
+        setConfirmModal({ title: "Could Not Read Profile", message: `Make sure you are loading a Fusion 富生 JSON export (.json). If the file was saved with an older version of the app, try the Share Code import instead.\n\nTechnical detail: ${err.message}`, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" });
       }
     };
     reader.readAsText(file);
@@ -15979,7 +15979,7 @@ ${milestoneSnapshotHtml}
                 </div>
                 <div>
                   <h2 style={{ fontSize: 17, fontWeight: 800, color: "var(--text-bright)", marginBottom: 2 }}>
-                    {welcomeStep === 0 && "Welcome to FUSION (富生)"}
+                    {welcomeStep === 0 && "Welcome to Fusion 富生"}
                     {welcomeStep === 1 && "Setting Up Your Profile"}
                     {welcomeStep === 2 && "Exploring the Dashboard"}
                     {welcomeStep === 3 && "Advanced Features & Disclaimer"}
@@ -16167,7 +16167,7 @@ ${milestoneSnapshotHtml}
               </div>
               <div>
                 <h2 style={{ fontSize: 16, fontWeight: 900, color: "var(--text-bright)", margin: 0, marginBottom: 2 }}>How would you like to begin?</h2>
-                <p style={{ fontSize: 12, color: "var(--text-subtle)", margin: 0 }}>FUSION (富生) is ready</p>
+                <p style={{ fontSize: 12, color: "var(--text-subtle)", margin: 0 }}>Fusion 富生 is ready</p>
               </div>
             </div>
             {/* Card body — two choice buttons */}
@@ -16224,7 +16224,7 @@ ${milestoneSnapshotHtml}
               <Calculator style={{ color: "#ffffff", width: 18, height: 18 }} />
             </div>
             <div>
-              <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>FUSION (富生)</div>
+              <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>Fusion 富生</div>
               <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
               <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1 }}>© 2026 Pebblebrooks. All rights reserved.</div>
             </div>
@@ -20705,7 +20705,7 @@ ${milestoneSnapshotHtml}
                   <div id="qs-page-1" style={{ background: "var(--bg-muted)", borderRadius: 20, border: "1px solid var(--border-strong)", overflow: "hidden", boxShadow: "0 4px 20px rgba(16,185,129,0.12)" }}>
                     <div className="welcome-banner-green" style={{ background: "linear-gradient(145deg, #022c22 0%, #065f46 45%, #10b981 80%, #6ee7b7 100%)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
                       <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(6px)", padding: 8, borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}><Calculator style={{ width: 20, height: 20, color: "#ecfdf5" }} /></div>
-                      <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#ecfdf5", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Welcome to FUSION (富生)</h4><p style={{ fontSize: 13, color: "rgba(236,253,245,0.8)", margin: 0 }}>Your end-to-end Singapore retirement simulation engine</p></div>
+                      <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#ecfdf5", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Welcome to Fusion 富生</h4><p style={{ fontSize: 13, color: "rgba(236,253,245,0.8)", margin: 0 }}>Your end-to-end Singapore retirement simulation engine</p></div>
                     </div>
                     <div style={{ padding: "16px 20px" }}>
                       <p style={{ color: "var(--text-main)", fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
@@ -26887,7 +26887,7 @@ ${milestoneSnapshotHtml}
                     {/* ── XIRR sub-section ── */}
                     <h4 style={{ fontSize: 15, fontWeight: 800, color: "var(--clr-violet)", marginBottom: 10, marginTop: 20, display: "flex", alignItems: "center", gap: 8 }}><Percent style={{ width: 16, height: 16 }} />XIRR — Internal Rate of Return</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
-                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What XIRR measures:</strong> The XIRR column in the Data Table tab shows the <em>Extended Internal Rate of Return</em> of the highlighted CPF LIFE plan at each projection age. It answers: <em>"If I treat all my CPF contributions as money out and all my payouts + final bequest as money in, what annual return did I earn on the whole strategy?"</em> A positive XIRR above the CPF SA/RA rate (4%) means your overall strategy is generating value faster than simply leaving money in SA/RA. <strong style={{ color: "var(--clr-amber)" }}>Important:</strong> XIRR covers your <em>entire contribution history</em> from your current age — not just the CPF LIFE payout phase. A member aged 35 includes 30 years of accumulation outflows in the denominator, which depresses XIRR values relative to "effective returns from payout age" figures sometimes shown in financial articles. Those article figures treat the RA at payout age as the starting investment; FUSION (富生)'s XIRR is the more conservative, whole-of-strategy measure.</p>
+                      <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>What XIRR measures:</strong> The XIRR column in the Data Table tab shows the <em>Extended Internal Rate of Return</em> of the highlighted CPF LIFE plan at each projection age. It answers: <em>"If I treat all my CPF contributions as money out and all my payouts + final bequest as money in, what annual return did I earn on the whole strategy?"</em> A positive XIRR above the CPF SA/RA rate (4%) means your overall strategy is generating value faster than simply leaving money in SA/RA. <strong style={{ color: "var(--clr-amber)" }}>Important:</strong> XIRR covers your <em>entire contribution history</em> from your current age — not just the CPF LIFE payout phase. A member aged 35 includes 30 years of accumulation outflows in the denominator, which depresses XIRR values relative to "effective returns from payout age" figures sometimes shown in financial articles. Those article figures treat the RA at payout age as the starting investment; Fusion 富生's XIRR is the more conservative, whole-of-strategy measure.</p>
                       <p style={{ marginBottom: 10 }}><strong style={{ color: "var(--text-highlight)" }}>How it is computed:</strong> The engine builds a cashflow timeline: contributions made each year are negative (money leaving your pocket), and CPF LIFE payouts received each year plus the terminal bequest value are positive (money coming back). Newton-Raphson iteration then finds the single discount rate that makes the net present value of that entire cashflow stream equal to zero. That rate is the XIRR. Up to 100 iterations per age-point are run; if it fails to converge, the cell shows <strong>—</strong>.</p>
                       <p style={{ marginBottom: 12 }}><strong style={{ color: "var(--text-highlight)" }}>Colour coding in the Table:</strong></p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
@@ -30197,7 +30197,7 @@ function LockScreen({ initiallyExpired, onUnlock }) {
           </div>
           <div style={{ textAlign: 'left' }}>
             <div style={{ fontWeight: 900, fontSize: 16, background: 'linear-gradient(90deg,#10b981,#3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', whiteSpace: 'nowrap' }}>
-              FUSION (富生)
+              Fusion 富生
             </div>
             <div style={{ fontSize: 11, color: '#10b981', fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
               Retirement Engine v2026
