@@ -34,7 +34,6 @@ import {
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
-const SEAL_B64 = "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";
 const ArrowDownToLine = Download;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -7005,6 +7004,15 @@ function CPFPlannerApp() {
   }, [spouseInputs.payoutAge]);
   // LIFE tab member toggle — "primary" | "spouse". Resets when household mode is disabled.
   const [lifeTabMember, setLifeTabMember] = useState("primary");
+  // PORT 4 — CPF LIFE Plan Recommender (Payout Plans tab)
+  const [lifeQ1, setLifeQ1] = useState(null); // "yes"|"no" — prioritise bequest
+  const [lifeQ2, setLifeQ2] = useState(null); // "yes"|"no" — expects to outlive 85
+  const [lifeQ3, setLifeQ3] = useState(null); // "yes"|"no" — has other inflation-linked income
+  // PORT 5 — Spouse/Parent RSTU interactive calc (Turbocharger panel)
+  const [spouseRstuName,   setSpouseRstuName]   = useState("");
+  const [spouseRstuAmount, setSpouseRstuAmount] = useState(0); // annual top-up capped at $8,000
+  // PORT 6 — CPF Nomination & Estate tracker (Turbocharger panel)
+  const [nomineeCount, setNomineeCount] = useState(1);
   useEffect(() => { if (!householdEnabled) setLifeTabMember("primary"); }, [householdEnabled]);
   const [pdfOrientation, setPdfOrientation] = useState("portrait");
 
@@ -10755,6 +10763,15 @@ function CPFPlannerApp() {
       const row = new Map(proj.map(r => [r.age, r])).get(pa);
       return row ? (row.oa || 0) + (row.sa || 0) + (row.ra || 0) + (row.ma || 0) : 0;
     };
+    // PORT 1 — SRS balance probe. SRS is a private-sector account (not CPF), so
+    // totalCpfAt() always returns 0 delta for SRS contribution overrides. This reads
+    // srsBalance directly from the projection row at drawdown start age (or payout age
+    // if earlier). srsBalance is present in both engine branches (lines 2342 & ~3612).
+    const srsAt = (proj) => {
+      const targetAge = Math.max(pa, Number(d.srsDrawdownStartAge) || pa);
+      const row = new Map(proj.map(r => [r.age, r])).get(targetAge);
+      return row ? (row.srsBalance || 0) : 0;
+    };
 
     // Compute baseline — use runProjectionEngine directly (without DWZ) for a fair
     // apples-to-apples comparison since each override run also skips DWZ.
@@ -10834,13 +10851,20 @@ function CPFPlannerApp() {
     // 8. SRS — max annual contribution to cap for SC/PR (not applicable to foreigners)
     // Foreigners have no CPF but CAN contribute to SRS — however the Turbocharger
     // is already gated to SC/PR only (isForeigner early-return above), so this
-    // always runs with the SC/PR cap ($15,300). Engine already models SRS drawdown
-    // starting at srsDrawdownStartAge with the 50% taxable fraction applied.
-    const srsCap_t    = SRS_CAP_SC_PR; // $15,300 for SC/PR
+    // PORT 1 FIX — srsGain previously used run() which only sums CPF accounts.
+    // SRS is a private scheme — contributions never affect CPF balances, so
+    // run({ srsAnnualContribution: srsCap_t }) always returned 0. Fixed by reading
+    // srsBalance directly from the projection row via the srsAt() helper above.
+    const srsCap_t        = SRS_CAP_SC_PR; // $15,300 for SC/PR
     const curSrsContrib_t = Number(d.srsAnnualContribution) || 0;
-    const srsGain     = curSrsContrib_t < srsCap_t
-      ? run({ srsAnnualContribution: srsCap_t })
-      : 0;
+    let srsGain = 0;
+    if (curSrsContrib_t < srsCap_t) {
+      try {
+        const srsBaseProj = runProjectionEngine(d);
+        const srsMaxProj  = runProjectionEngine({ ...d, srsAnnualContribution: srsCap_t });
+        srsGain           = Math.max(0, srsAt(srsMaxProj) - srsAt(srsBaseProj));
+      } catch { srsGain = 0; }
+    }
 
     // 7. Deferment — compare payout at current payoutAge vs deferred age 70
     // Uses interpolateCpfLife directly (no engine re-run) since RA at payout age
@@ -13818,12 +13842,12 @@ ${milestoneSnapshotHtml}
           font-weight: 800 !important;
         }
 
-        /* ── Seal icon box: white bg + subtle red border in both themes ──
-           The Chinese seal is red-on-white; keep white bg so the seal reads clearly
-           against both the dark navy header and the light steel header. ── */
+        /* ── Calculator icon box: soft tinted bg in light mode ──
+           Dark icon (#020617) on solid emerald (#065f46) = 2.63:1 FAIL — fixed in JSX (white icon).
+           This rule keeps the bg tinted so the box reads as a light-mode element. ── */
         .theme-light .cpf-calc-icon-box {
-          background: #ffffff !important;
-          border: 1px solid rgba(220,38,38,0.25) !important;
+          background: rgba(6,95,70,0.18) !important;
+          border: 1px solid rgba(6,95,70,0.35) !important;
         }
 
         /* ── All primary action buttons: white text on emerald bg ──
@@ -16302,8 +16326,8 @@ ${milestoneSnapshotHtml}
 
           {/* ── Logo ── */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 10, border: "1px solid rgba(220,38,38,0.25)", overflow: "hidden", flexShrink: 0 }}>
-              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Pebblebrooks seal" style={{ width: 36, height: 36, display: "block" }} />
+            <div className="cpf-calc-icon-box" style={{ background: "var(--clr-emerald)", padding: 8, borderRadius: 12 }}>
+              <Calculator style={{ color: "#ffffff", width: 18, height: 18 }} />
             </div>
             <div>
               <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>Fusion 富生</div>
@@ -18809,7 +18833,7 @@ ${milestoneSnapshotHtml}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
 
-              <SidebarSectionHeader id="outflows" label="Medical & Insurance Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
+              <SidebarSectionHeader id="outflows" label="Housing, Insurance & Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -24269,6 +24293,94 @@ ${milestoneSnapshotHtml}
                       </span>
                     </div>
                   )}
+                  {/* ── PORT 4 — CPF LIFE Plan Recommender ──────────────────────────
+                       3-question toggle survey → scoring logic → plan recommendation.
+                       Uses interpolateCpfLife already in scope. Auto-opens on first visit.
+                       Placed above the chart so users confirm their plan before reading
+                       projections. Collapsible — recommendation badge shows in summary.
+                  ────────────────────────────────────────────────────────────── */}
+                  {(() => {
+                    const lifeRecommendation = (() => {
+                      if (!lifeQ1 || !lifeQ2 || !lifeQ3) return null;
+                      const wantsBequest  = lifeQ1 === "yes";
+                      const longLived     = lifeQ2 === "yes";
+                      const hasOtherInflL = lifeQ3 === "yes";
+                      if (wantsBequest && !longLived)
+                        return { plan: "basic",     planLabel: "Basic Plan",      clr: "#8b5cf6",
+                          reason: "Basic Plan maximises bequest — it returns the highest premium refund and suits members with shorter life expectancy who prioritise estate transfer over lifetime payout." };
+                      if (!wantsBequest && longLived)
+                        return { plan: "standard",  planLabel: "Standard Plan",   clr: "#10b981",
+                          reason: "Standard Plan maximises total lifetime payout and is the best choice for above-average longevity when estate preservation is not a priority." };
+                      if (!wantsBequest && !longLived && hasOtherInflL)
+                        return { plan: "escalating", planLabel: "Escalating Plan", clr: "#f59e0b",
+                          reason: "Escalating Plan's inflation-adjusted payout suits members with a solid base income layer who want CPF LIFE to protect purchasing power over time." };
+                      return { plan: "standard",    planLabel: "Standard Plan",   clr: "#10b981",
+                        reason: "Standard Plan is the balanced default — higher early payouts and the largest pool of total lifetime income across typical longevity scenarios." };
+                    })();
+                    const Q = ({ text, val, setter }) => (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, color: "var(--text-muted)", flex: 1, minWidth: 180 }}>{text}</span>
+                        {["yes", "no"].map(opt => (
+                          <button key={opt} onClick={() => setter(val === opt ? null : opt)}
+                            style={{ padding: "4px 18px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                              cursor: "pointer", border: "1.5px solid", transition: "all 0.15s",
+                              background:  val === opt ? (opt === "yes" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.12)") : "var(--bg-muted)",
+                              color:       val === opt ? (opt === "yes" ? "#10b981" : "#f87171") : "var(--text-muted)",
+                              borderColor: val === opt ? (opt === "yes" ? "rgba(16,185,129,0.45)" : "rgba(239,68,68,0.35)") : "var(--border-subtle)" }}>
+                            {opt === "yes" ? "Yes" : "No"}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                    return (
+                      <details style={{ borderRadius: 12, border: "1px solid var(--border-subtle)", overflow: "hidden", marginBottom: 16 }}
+                        open={!lifeQ1 && !lifeQ2 && !lifeQ3}>
+                        <summary style={{ padding: "12px 18px", cursor: "pointer", fontSize: 14, fontWeight: 700,
+                          color: "var(--text-muted)", userSelect: "none", listStyle: "none",
+                          background: "var(--bg-panel-muted)", display: "flex", alignItems: "center", gap: 8 }}>
+                          <span>🧭</span>
+                          <span>CPF LIFE Plan Recommender</span>
+                          {lifeRecommendation ? (
+                            <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, padding: "2px 10px",
+                              borderRadius: 20, background: `${lifeRecommendation.clr}22`,
+                              color: lifeRecommendation.clr, border: `1px solid ${lifeRecommendation.clr}44` }}>
+                              → {lifeRecommendation.planLabel}
+                            </span>
+                          ) : (
+                            <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)" }}>Answer 3 quick questions</span>
+                          )}
+                        </summary>
+                        <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+                          <Q text="Do you want to leave a CPF estate / bequest for dependants?" val={lifeQ1} setter={setLifeQ1} />
+                          <Q text="Do you expect to live past age 85?" val={lifeQ2} setter={setLifeQ2} />
+                          <Q text="Do you have other inflation-linked income in retirement (pension, annuity, rental)?" val={lifeQ3} setter={setLifeQ3} />
+                          {lifeRecommendation && (
+                            <div style={{ marginTop: 4, padding: "14px 16px", borderRadius: 10,
+                              background: `${lifeRecommendation.clr}11`, border: `1.5px solid ${lifeRecommendation.clr}44` }}>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: lifeRecommendation.clr, marginBottom: 6 }}>
+                                Recommendation: {lifeRecommendation.planLabel}
+                              </div>
+                              <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.65 }}>
+                                {lifeRecommendation.reason}
+                              </div>
+                              <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-dim)" }}>
+                                Decision-support guide only — consult a licensed financial adviser before changing your CPF LIFE plan. The chart below lets you compare all three plans side-by-side.
+                              </div>
+                            </div>
+                          )}
+                          {(lifeQ1 || lifeQ2 || lifeQ3) && (
+                            <button onClick={() => { setLifeQ1(null); setLifeQ2(null); setLifeQ3(null); }}
+                              style={{ alignSelf: "flex-start", fontSize: 11, color: "var(--text-dim)",
+                                background: "none", border: "1px solid var(--border-subtle)",
+                                borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>
+                              Reset answers
+                            </button>
+                          )}
+                        </div>
+                      </details>
+                    );
+                  })()}
+
                   <h3 style={{ fontSize: 18, fontWeight: 800 }}>Chart Projection (Age {activePayoutAge} – {maxPA})</h3>
                   {/* P1 fix: Foreigner gate — CPF LIFE is SC/PR only. Show a prominent warning when
                       citizenStatus === 'foreigner' so the user knows the payout estimates below do not apply.
@@ -29274,10 +29386,14 @@ ${milestoneSnapshotHtml}
                     // is maxed, `isApplied` flips true and (for RSTU/defer/property, where
                     // eligible depends on remaining room) `eligible` flips false — `note`
                     // text is written to read sensibly in both states.
+                    // PORT 2/3 — Sequence dependency helper flags
+                    const rstuApplied = curRSTU >= 8000;
+                    const vcmaApplied = curVCMA >= vcmaRoom && vcmaRoom > 0;
+
                     const levers = [
                       {
                         id: "rstu", icon: "💰", title: "RSTU — SA/RA Top-Up",
-                        seq: 1, // Optimal execution order (1 = do first)
+                        seq: 1, seqNum: "②",   // PORT 2 — visual sequence badge
                         eligible: curRSTU < 8000,
                         isApplied: curRSTU >= 8000,
                         gain: turboImpacts.rstu || 0,
@@ -29292,6 +29408,10 @@ ${milestoneSnapshotHtml}
                         expiryPill: ca < 55
                           ? `⏰ SA closes at 55 — ${55 - ca} yr${55 - ca !== 1 ? "s" : ""} left to top up at 4% + 1% bonus interest`
                           : null,
+                        // PORT 3 — MRSS alert for members aged 55–70
+                        depWarning: mrssAgeBand
+                          ? "① MRSS: your top-up triggers a dollar-for-dollar government match — highest-priority lever for members aged 55–70."
+                          : null,
                         note: curRSTU >= 8000
                           ? "Already at the $8,000/yr RSTU tax-relief cap."
                           : `Top up $${(8000-curRSTU).toLocaleString()} more to reach the $8,000/yr tax-relief cap. Routes to SA pre-55, RA post-55.`
@@ -29301,7 +29421,7 @@ ${milestoneSnapshotHtml}
                       },
                       {
                         id: "vc3a", icon: "📈", title: "VC3A — Voluntary OA",
-                        seq: 4, // after VCMA (which fills MA first) and OA→SA
+                        seq: 4, seqNum: "⑤",   // PORT 2
                         eligible: vc3aMaxRoom > 0,
                         isApplied: curVC3A >= vc3aMaxRoom && vc3aMaxRoom > 0,
                         gain: turboImpacts.vc3a || 0,
@@ -29310,13 +29430,17 @@ ${milestoneSnapshotHtml}
                         warningNote: vc3aMaxRoom > 0 && vc3aMaxRoom < 2000
                           ? `⚠ Only $${vc3aMaxRoom.toLocaleString()} of Annual Limit room left — mandatory contributions are using most of the $37,740 cap.`
                           : null,
+                        // PORT 3 — nudge to apply RSTU before VC3A
+                        depWarning: !rstuApplied
+                          ? `② Apply RSTU first — it sits outside the Annual Limit and won't reduce the $${vc3aMaxRoom.toLocaleString()} room shown here.`
+                          : null,
                         note: `$${vc3aMaxRoom.toLocaleString()}/yr of Annual Limit room unused after mandatory contributions.`,
                         ineligibleNote: "Mandatory contributions already use up your full $37,740 Annual Limit.",
                         onApply: applyVC3A,
                       },
                       {
                         id: "vcma", icon: "🏥", title: "VCMA — MediSave Top-Up",
-                        seq: 2, // before OA→SA so MediSave is at BHS before computing headroom
+                        seq: 2, seqNum: "③",   // PORT 2
                         eligible: !isUnder16 && vcmaRoom > 0,
                         isApplied: curVCMA >= vcmaRoom && vcmaRoom > 0,
                         gain: turboImpacts.vcma || 0,
@@ -29332,7 +29456,7 @@ ${milestoneSnapshotHtml}
                       },
                       {
                         id: "oaSa", icon: "🔁", title: "OA→SA/RA Transfer",
-                        seq: 3, // internal transfer — no Annual Limit impact, do before VC3A
+                        seq: 3, seqNum: "④",   // PORT 2
                         eligible: oaBal > 0,
                         isApplied: curOaSa >= oaBal && oaBal > 0,
                         gain: turboImpacts.oaSa || 0,
@@ -29350,7 +29474,7 @@ ${milestoneSnapshotHtml}
                       },
                       {
                         id: "vhr", icon: "🏠", title: "VHR — Housing Refund",
-                        seq: 5, // outside Annual Limit — any time, but after CPF allowance levers
+                        seq: 5, seqNum: "⑥",   // PORT 2
                         eligible: housing > 0,
                         isApplied: curVHR >= housing && housing > 0,
                         gain: turboImpacts.vhr || 0,
@@ -29359,13 +29483,17 @@ ${milestoneSnapshotHtml}
                         conflictNote: housing > 0 && curVHR > 0 && curVHR >= housing && oaBal <= 0
                           ? "⚠ VHR is active but your OA balance is $0 — verify housing outflow is configured correctly."
                           : null,
+                        // PORT 3 — sequence nudge: RSTU+VCMA compound harder than OA refund
+                        depWarning: (!rstuApplied || !vcmaApplied)
+                          ? `Apply ${[!rstuApplied && "RSTU ②", !vcmaApplied && "VCMA ③"].filter(Boolean).join(" and ")} first — they compound at 4% vs OA's 2.5%.`
+                          : null,
                         note: `Refund $${housing.toLocaleString()}/yr of housing OA usage back into your OA to keep compounding.`,
                         ineligibleNote: "No housing OA outflow configured in your profile.",
                         onApply: applyVHR,
                       },
                       {
                         id: "srs", icon: "💼", title: "SRS — Suppl. Retirement Scheme",
-                        seq: 6, // separate from CPF — do after maximising all CPF levers
+                        seq: 6, seqNum: "⓪",   // PORT 2 — parallel to CPF, not in CPF sequence
                         eligible: srsEligRoom > 0,
                         isApplied: curSRS >= srsCapNow && srsCapNow > 0,
                         gain: turboImpacts.srs || 0,
@@ -29531,17 +29659,28 @@ ${milestoneSnapshotHtml}
                               <div key={lev.id} className={`turbo-lever-card ${cardClass}`}>
                                 <div className="turbo-lever-title">
                                   <span>{lev.icon}</span>
-                                  {lev.seq != null && (lev.eligible || lev.isApplied) && (
-                                    <span style={{
-                                      fontSize: 10, fontWeight: 900, color: "var(--text-muted)",
-                                      border: "1px solid var(--border-subtle)", borderRadius: "50%",
-                                      width: 18, height: 18, display: "inline-flex", alignItems: "center",
-                                      justifyContent: "center", flexShrink: 0,
-                                      background: lev.isApplied ? "rgba(16,185,129,0.12)" : "var(--bg-panel-muted)",
-                                      color: lev.isApplied ? "#10b981" : "var(--text-muted)",
-                                    }} title={`Step ${lev.seq} of the optimal execution sequence`}>
-                                      {lev.seq}
-                                    </span>
+                                  {/* PORT 2 — seqNum: Unicode circled char (②③…) when defined;
+                                      falls back to numeric bordered badge for Defer/Prop */}
+                                  {(lev.seqNum != null || lev.seq != null) && (lev.eligible || lev.isApplied) && (
+                                    lev.seqNum ? (
+                                      <span style={{
+                                        fontSize: 14, fontWeight: 800, lineHeight: 1, flexShrink: 0,
+                                        color: lev.isApplied ? "#10b981" : "var(--text-dim)",
+                                      }} title={`Step ${lev.seq} of the optimal execution sequence`}>
+                                        {lev.seqNum}
+                                      </span>
+                                    ) : (
+                                      <span style={{
+                                        fontSize: 10, fontWeight: 900,
+                                        border: "1px solid var(--border-subtle)", borderRadius: "50%",
+                                        width: 18, height: 18, display: "inline-flex", alignItems: "center",
+                                        justifyContent: "center", flexShrink: 0,
+                                        background: lev.isApplied ? "rgba(16,185,129,0.12)" : "var(--bg-panel-muted)",
+                                        color: lev.isApplied ? "#10b981" : "var(--text-muted)",
+                                      }} title={`Step ${lev.seq} of the optimal execution sequence`}>
+                                        {lev.seq}
+                                      </span>
+                                    )
                                   )}
                                   <span>{lev.title}</span>
                                   {lev.isApplied && <CheckCircle2 style={{ width: 14, height: 14, color: "#10b981", marginLeft: "auto" }} />}
@@ -29579,10 +29718,18 @@ ${milestoneSnapshotHtml}
                                         {lev.warningNote}
                                       </div>
                                     )}
-                                    {/* Age-expiry countdown pill (OA→SA) */}
+                                    {/* Age-expiry countdown pill (OA→SA, VCMA MMSS) */}
                                     {lev.expiryPill && (
                                       <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: "var(--clr-amber)", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 20, padding: "2px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}>
                                         {lev.expiryPill}
+                                      </div>
+                                    )}
+                                    {/* PORT 3 — sequence dependency warning (MRSS alert, RSTU→VC3A, VHR ordering) */}
+                                    {lev.depWarning && !lev.isApplied && (
+                                      <div style={{ marginTop: 4, fontSize: 11, color: "#818cf8",
+                                        background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.2)",
+                                        borderRadius: 6, padding: "3px 8px", lineHeight: 1.5 }}>
+                                        {lev.depWarning}
                                       </div>
                                     )}
                                     {/* Conflict / stale-state warning (VHR) */}
@@ -29641,28 +29788,68 @@ ${milestoneSnapshotHtml}
                             );
                           })}
 
-                          {/* ── Spouse / Parent RSTU — informational card ────────────────
-                               Not a lever (we can't write to another person's RA from here)
-                               but surfaces the $8,000 separate-relief cap that most users
-                               don't know exists. Points them to the sidebar Docs tab.
+                          {/* ── PORT 5 — Spouse / Parent RSTU Coordination Panel ─────────
+                               Upgraded from static info card to interactive calculator.
+                               Separate $8,000/yr relief cap — topping up another person's RA
+                               gives additional tax relief beyond the user's own RSTU cap.
+                               No engine re-run — pure tax math from estimatedTaxRate.
                           ────────────────────────────────────────────────────────────── */}
                           {estimatedTaxRate > 0 && (
-                            <div className="turbo-lever-card" style={{ borderStyle: "dashed", opacity: 0.85 }}>
+                            <div className="turbo-lever-card" style={{ borderStyle: "dashed", gridColumn: "1 / -1" }}>
                               <div className="turbo-lever-title">
                                 <span>👪</span>
-                                <span>Spouse / Parent RSTU</span>
-                                <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "1px 6px" }}>INFO</span>
+                                <span>Spouse / Parent RSTU Coordination</span>
+                                <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "1px 6px" }}>INFO + CALC</span>
                               </div>
                               <div className="turbo-lever-note">
-                                Topping up a <strong>spouse's or parent's RA</strong> gives a <em>separate</em> $8,000/yr income tax relief on top of your own $8,000 RSTU cap — combined: up to $16,000/yr deduction.
-                                {estimatedTaxRate > 0 && (
-                                  <span style={{ display: "block", marginTop: 4, color: "var(--clr-purple, #a855f7)", fontWeight: 700 }}>
-                                    📋 At your ~{Math.round(estimatedTaxRate * 100)}% marginal rate, topping up $8,000 for a spouse/parent saves ~{formatCurrency(Math.round(8000 * estimatedTaxRate))}/yr in tax.
-                                  </span>
-                                )}
+                                Topping up a <strong>spouse's or parent's RA</strong> gives a <em>separate</em> $8,000/yr income tax relief on top of your own RSTU cap — combined household deduction: up to $16,000/yr.
                               </div>
-                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
-                                This can't be applied here (it's a top-up to another person's CPF account). Action it directly at <a href="https://www.cpf.gov.sg" target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>cpf.gov.sg</a> before 31 December for the current YA's tax relief.
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)" }}>Recipient name (optional)</label>
+                                  <input type="text" value={spouseRstuName} placeholder="e.g. Spouse, Mum…"
+                                    onChange={e => setSpouseRstuName(e.target.value)}
+                                    style={{ padding: "5px 9px", borderRadius: 7, fontSize: 13,
+                                      border: "1px solid var(--border-subtle)", background: "var(--bg-input)",
+                                      color: "var(--text-primary)" }} />
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)" }}>Annual top-up amount (max $8,000)</label>
+                                  <input type="number" min="0" max="8000" step="100"
+                                    value={spouseRstuAmount || ""}
+                                    placeholder="0"
+                                    onChange={e => setSpouseRstuAmount(Math.min(8000, Math.max(0, Number(e.target.value) || 0)))}
+                                    style={{ padding: "5px 9px", borderRadius: 7, fontSize: 13, textAlign: "right",
+                                      border: "1px solid var(--border-subtle)", background: "var(--bg-input)",
+                                      color: "var(--text-primary)" }} />
+                                </div>
+                              </div>
+                              {spouseRstuAmount > 0 && (() => {
+                                const capped      = Math.min(8000, spouseRstuAmount);
+                                const taxSaving   = Math.round(capped * estimatedTaxRate);
+                                const selfRelief  = Math.min(8000, Number(inputs.vcSaTopup) || 0);
+                                const totalRelief = selfRelief + capped;
+                                return (
+                                  <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                                    {[
+                                      { label: `${spouseRstuName || "Spouse/Parent"} relief`, val: `$${capped.toLocaleString()}/yr`, clr: "#a78bfa" },
+                                      { label: "Your extra tax saving", val: `~${formatCurrency(taxSaving)}/yr`, clr: "#10b981" },
+                                      { label: "Total combined relief", val: `$${totalRelief.toLocaleString()}/yr`, clr: totalRelief >= 16000 ? "#f59e0b" : "var(--text-primary)" },
+                                    ].map(({ label, val, clr }) => (
+                                      <div key={label} style={{ padding: "8px 10px", borderRadius: 8,
+                                        background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", textAlign: "center" }}>
+                                        <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>{label}</div>
+                                        <div style={{ fontSize: 14, fontWeight: 800, color: clr }}>{val}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.5 }}>
+                                Action this top-up directly at{" "}
+                                <a href="https://www.cpf.gov.sg" target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>cpf.gov.sg</a>{" "}
+                                before 31 December for the current YA's tax relief.
+                                {spouseRstuAmount >= 8000 && <span style={{ color: "#f59e0b", fontWeight: 700 }}> ✓ At the $8,000 spouse/parent relief cap.</span>}
                               </div>
                             </div>
                           )}
@@ -29747,6 +29934,88 @@ ${milestoneSnapshotHtml}
                                   <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 2, background: "#10b981", display: "inline-block" }}/> {ca < 55 ? "SA" : "RA"} balance</span>
                                   <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 2, background: "#f59e0b", borderTop: "2px dashed #f59e0b", display: "inline-block" }}/> Rising FRS ({(rsGrowth_sc*100).toFixed(1)}%/yr)</span>
                                   {crossoverAge && <span style={{ color: "#10b981", fontWeight: 700 }}>● Crossover at {crossoverAge}</span>}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* ── PORT 6 — CPF Nomination & Estate Planning Dashboard ────────
+                               Uses existing hasCPFNomination + hasWill boolean inputs.
+                               Shows nomination status, per-nominee share estimate, and
+                               intestacy warning when no nomination is on file.
+                          ────────────────────────────────────────────────────────────── */}
+                          {(() => {
+                            const hasNom   = !!inputs.hasCPFNomination;
+                            const hasWill  = !!inputs.hasWill;
+                            const nomCount = nomineeCount || 1;
+                            const paRow    = accumulationByAge.get(payoutAge65);
+                            const oaEst    = paRow ? (paRow.oa || 0) : 0;
+                            const maEst    = paRow ? (paRow.ma || 0) : 0;
+                            const raEst    = paRow ? (paRow.ra || 0) : 0;
+                            const cpfEstate = oaEst + maEst + raEst;
+                            return (
+                              <div className="turbo-lever-card" style={{ gridColumn: "1 / -1",
+                                borderColor: hasNom ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)" }}>
+                                <div className="turbo-lever-title">
+                                  <span>📋</span>
+                                  <span>CPF Nomination & Estate Planning</span>
+                                  <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 800,
+                                    padding: "1px 7px", borderRadius: 6, border: "1px solid",
+                                    color:       hasNom ? "#10b981" : "#f87171",
+                                    borderColor: hasNom ? "rgba(16,185,129,0.4)" : "rgba(239,68,68,0.35)" }}>
+                                    {hasNom ? "✓ Nomination on file" : "⚠ No nomination"}
+                                  </span>
+                                </div>
+                                {!hasNom && (
+                                  <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 7,
+                                    background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)",
+                                    fontSize: 12, color: "#f87171", lineHeight: 1.6 }}>
+                                    ⚠ Without a CPF nomination your CPF assets follow the Intestate Succession Act (non-Muslim) or Inheritance Certificate (Muslim) — <strong>not your Will</strong>. This causes delays and legal fees. File a nomination at{" "}
+                                    <a href="https://www.cpf.gov.sg/member/account-services/nominations"
+                                       target="_blank" rel="noopener noreferrer" style={{ color: "#f87171", fontWeight: 700 }}>cpf.gov.sg</a>.
+                                  </div>
+                                )}
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                    <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)" }}>Number of nominees</label>
+                                    <input type="number" min="1" max="10" step="1"
+                                      value={nomCount}
+                                      onChange={e => setNomineeCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
+                                      style={{ padding: "5px 9px", borderRadius: 7, fontSize: 13, textAlign: "right",
+                                        border: "1px solid var(--border-subtle)", background: "var(--bg-input)",
+                                        color: "var(--text-primary)", width: 80 }} />
+                                  </div>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                    <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)" }}>Per-nominee share (equal split)</label>
+                                    <div style={{ padding: "5px 9px", fontSize: 13, fontWeight: 800,
+                                      color: "var(--text-primary)", borderRadius: 7,
+                                      background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
+                                      {cpfEstate > 0 ? formatCurrency(Math.round(cpfEstate / nomCount)) : "—"}
+                                    </div>
+                                  </div>
+                                </div>
+                                {cpfEstate > 0 && (
+                                  <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                                    {[
+                                      { label: `OA at age ${payoutAge65}`, val: oaEst, note: "→ Nominees (bypasses Will)" },
+                                      { label: `RA at age ${payoutAge65}`, val: raEst, note: "→ Nominees (bypasses Will)" },
+                                      { label: `MA at age ${payoutAge65}`, val: maEst, note: "→ Eligible dependants" },
+                                    ].map(({ label, val, note }) => (
+                                      <div key={label} style={{ padding: "7px 9px", borderRadius: 8,
+                                        background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
+                                        <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{label}</div>
+                                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)", margin: "2px 0" }}>
+                                          {val > 0 ? formatCurrency(val) : "—"}
+                                        </div>
+                                        <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{note}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.55 }}>
+                                  Toggle <strong>CPF Nomination</strong> and <strong>Will</strong> status in the Profile → Legacy Planning sidebar section.
+                                  CPF nominations bypass your Will — nominees receive directly from CPF Board, avoiding probate.
+                                  {!hasWill && <span style={{ color: "#f59e0b", fontWeight: 700 }}> ⚠ No Will on file — non-CPF assets also follow intestacy rules.</span>}
                                 </div>
                               </div>
                             );
