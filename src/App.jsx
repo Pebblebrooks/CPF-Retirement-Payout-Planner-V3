@@ -12036,7 +12036,6 @@ function CPFPlannerApp() {
   // ── Perfect Storm: single combined engine run across all active stressors ──
   // Gated by showPerfectStorm toggle; runs at most 1 extra engine call.
   const perfectStormData = useMemo(() => {
-    if (!showPerfectStorm) return null;
     const anyActive = showSorr || showInflationStress || showPropertyStress || showCpfRateStress || showHealthcareStress;
     if (!anyActive) return null;
     const pa = payoutAge65;
@@ -12072,7 +12071,7 @@ function CPFPlannerApp() {
     const deltaPct = baseNetWorth > 0 ? Math.round(delta / baseNetWorth * 100) : 0;
     const cpfDelta = Math.max(0, baseTotalCPF - psTotalCPF);
     return { pa, psTotalCPF, psPriv, stressProp, baseTotalCPF, basePriv, baseProp, psNetWorth, baseNetWorth, delta, deltaPct, cpfDelta, hcTotal, lifeExp };
-  }, [showPerfectStorm, showSorr, showInflationStress, showPropertyStress, showCpfRateStress,
+  }, [showSorr, showInflationStress, showPropertyStress, showCpfRateStress,
       showHealthcareStress, debouncedInputs, payoutAge65, accumulationByAge,
       propertyStressData, hcMonthlyCost, hcStartAge, hcEndAge]);
 
@@ -28136,10 +28135,14 @@ ${milestoneSnapshotHtml}
                     const activeCount = [showSorr, showInflationStress, showPropertyStress, showCpfRateStress, showHealthcareStress].filter(Boolean).length;
 
                     const applyWorstCase = () => {
-                      setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15);
+                      // Only activate stressors that have underlying data to stress-test
+                      const hasPriv = (Number(debouncedInputs.currentPrivateAssets)||0) > 0 || (Number(debouncedInputs.annualPrivateSaving)||0) > 0;
+                      const hasProp = (Number(debouncedInputs.propertyValue)||0) > 0;
+                      if (hasPriv) { setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15); }
                       setShowInflationStress(true); setInflationStressRate(5);
-                      setShowPropertyStress(true); setPropertyStressGrowthRate(-6); // Correction-level; user can escalate to Crash/Crisis
+                      if (hasProp) { setShowPropertyStress(true); setPropertyStressGrowthRate(-6); } // Correction-level; user can escalate to Crash/Crisis
                       setShowCpfRateStress(true);
+                      setShowPerfectStorm(true); // Surface Perfect Storm card in Strategy tab
                       setInputs(p => ({ ...p, cpfOARateOverride: 1.5, cpfSARateOverride: 3.0, cpfMARateOverride: 3.0 }));
                     };
                     const resetAllStresses = () => {
@@ -28401,14 +28404,14 @@ ${milestoneSnapshotHtml}
                           </p>
                           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                             {[
-                              { label: "SORR",          active: showSorr,             toggle: () => setShowSorr(v => !v),                   color: "#ef4444" },
+                              { label: "SORR",          active: showSorr,             toggle: () => setShowSorr(v => !v),                   color: "#ef4444", disabled: (Number(debouncedInputs.currentPrivateAssets)||0) === 0 && (Number(debouncedInputs.annualPrivateSaving)||0) === 0, disabledTitle: "Add private assets in the sidebar to enable SORR" },
                               { label: "Inflation",     active: showInflationStress,  toggle: () => setShowInflationStress(v => !v),         color: "var(--clr-amber)" },
                               { label: "Property",      active: showPropertyStress,   toggle: () => setShowPropertyStress(v => !v),          color: "var(--clr-red)", disabled: (Number(debouncedInputs.propertyValue)||0) === 0 },
                               { label: "CPF Rates",     active: showCpfRateStress,    toggle: () => setShowCpfRateStress(v => !v),           color: "var(--clr-purple)" },
                               { label: "Healthcare",    active: showHealthcareStress, toggle: () => setShowHealthcareStress(v => !v),        color: "#f97316" },
-                            ].map(({ label, active, toggle, color, disabled }) => (
+                            ].map(({ label, active, toggle, color, disabled, disabledTitle }) => (
                               <button key={label} onClick={!disabled ? toggle : undefined}
-                                title={disabled ? "Enter a property value in the sidebar to enable this test" : undefined}
+                                title={disabled ? (disabledTitle || "Enter a property value in the sidebar to enable this test") : undefined}
                                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? color : "var(--border-strong)"}`, background: active ? `${color}18` : "var(--bg-input)", color: active ? color : disabled ? "var(--text-subtle)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, transition: "all .15s" }}>
                                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: active ? color : "var(--border-strong)", flexShrink: 0 }} />
                                 {label} {active ? "ON" : "OFF"}
