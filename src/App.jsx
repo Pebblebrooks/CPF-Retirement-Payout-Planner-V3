@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
+const SEAL_B64 = "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";
 const ArrowDownToLine = Download;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -13817,12 +13818,12 @@ ${milestoneSnapshotHtml}
           font-weight: 800 !important;
         }
 
-        /* ── Calculator icon box: soft tinted bg in light mode ──
-           Dark icon (#020617) on solid emerald (#065f46) = 2.63:1 FAIL — fixed in JSX (white icon).
-           This rule keeps the bg tinted so the box reads as a light-mode element. ── */
+        /* ── Seal icon box: white bg + subtle red border in both themes ──
+           The Chinese seal is red-on-white; keep white bg so the seal reads clearly
+           against both the dark navy header and the light steel header. ── */
         .theme-light .cpf-calc-icon-box {
-          background: rgba(6,95,70,0.18) !important;
-          border: 1px solid rgba(6,95,70,0.35) !important;
+          background: #ffffff !important;
+          border: 1px solid rgba(220,38,38,0.25) !important;
         }
 
         /* ── All primary action buttons: white text on emerald bg ──
@@ -16301,8 +16302,8 @@ ${milestoneSnapshotHtml}
 
           {/* ── Logo ── */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <div className="cpf-calc-icon-box" style={{ background: "var(--clr-emerald)", padding: 8, borderRadius: 12 }}>
-              <Calculator style={{ color: "#ffffff", width: 18, height: 18 }} />
+            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 10, border: "1px solid rgba(220,38,38,0.25)", overflow: "hidden", flexShrink: 0 }}>
+              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Pebblebrooks seal" style={{ width: 36, height: 36, display: "block" }} />
             </div>
             <div>
               <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>Fusion 富生</div>
@@ -18808,7 +18809,7 @@ ${milestoneSnapshotHtml}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
 
-              <SidebarSectionHeader id="outflows" label="Housing, Insurance & Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
+              <SidebarSectionHeader id="outflows" label="Medical & Insurance Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
