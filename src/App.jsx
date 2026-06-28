@@ -1,4 +1,4 @@
-/**
+C:\Users\ClaraTan\Downloads\App_130.jsx/**
  * Fusion 富生
  * ------------------------------------------------------------------------
  * Copyright (c) 2026 Pebblebrooks. All rights reserved.
@@ -806,7 +806,7 @@ const DEFAULT_INPUTS = {
   // budgetTaxRate        — marginal Singapore income tax rate (%)
   budgetLivingExpenses: 3000, budgetExpenseInflation: 2, budgetTaxOverride: false,
   budgetTaxRate: 0,
-  // ── MAS Financial Health (Tier 2 advisory scores) ────────────────────────
+  // ── Financial Health (Tier 2 advisory scores) ────────────────────────
   // emergencyFundMonths  — months of liquid savings set aside for emergencies (MAS: 3–6 months)
   // hasWill              — has a valid Will been prepared?
   // hasCPFNomination     — CPF nomination (CSNB) completed?
@@ -5775,7 +5775,7 @@ function ReadinessTab({
         </summary>
         <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[
-            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Stress Resilience (Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Activate the Stress Centre (⚡ Worst Case) for the most meaningful Stress Resilience signal. Below the gauge: a MAS Financial Health advisory panel with 5 non-scoring tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness)."],
+            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Stress Resilience (Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Activate the Stress Centre (⚡ Worst Case) for the most meaningful Stress Resilience signal. Below the gauge: a Financial Health advisory panel with 5 non-scoring tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness)."],
             ["📊 KPI Tiles", "Five headline numbers: total CPF at payout age, monthly CPF LIFE payout, income coverage %, P10 downside (bad-luck scenario), and OA depletion age. Enable Monte Carlo in the Accumulation tab to unlock the downside tile."],
             ["📈 RA vs Retirement Sums", "A progress bar comparing your projected RA at payout age against BRS, FRS, and ERS. These targets grow at the retirement-sum growth rate you set in the sidebar (default 3%/yr)."],
             ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
