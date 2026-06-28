@@ -34,7 +34,6 @@ import {
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
-const SEAL_B64 = "iVBORw0KGgoAAAANSUhEUgAAAF4AAABeCAMAAACdDFNcAAABoVBMVEX////qTEzjERHjFBTlIyPmLi7nMjLoPj7pQUHqUFDsXl7tamrubW3ucnLwfHzwf3/xiIjxi4vzmpr0paX1qan2r6/4wcH4w8P62troPz/3wcH2ubnvfX31sLD3vb34xsbtbGz3v7/sX1/ylJT97u786ur50ND98PDsY2P1rq798/PoQ0PnNDTxiorkISH3u7v74uLkHh7taWnxjIzzmZn75OTveHjmMjLudHTzoaH85ub739/znZ3sYWHqVFTqUlLmKyv0pqbwh4foPDzsXV30o6Pyl5f1qqrylpb509PkGhrzm5v99fXve3voPT3ucHDrWFj1rKzzn5/kHBzrW1v2tbXpSUnkHx/wg4PqTk7oQUH++fn+9/f98fH2t7fubm7619fmLS3++/vmMDDxjo7+/f3pR0fxkJDwhYXnODjjGBj1srLtZ2f0qKj5zMznNjb629v87Oz73d3sZWXpS0vpRUX4yMj86Oj61dX5zs762dn4ysrrWlrrVlbjEhL2tLTwgYH50tLudnblJyf4xMT3w8PlJSX74eHykpLjFhblKSlNDD8EAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAHa0lEQVRogbWaiV8TORTHn+nQbWspdMrWdRVxV0AFEXFREOVQ2gorCAiCXUQuKyDiQllkoct9lr96c00mmaO0/cDv85EmmbxvMy/Jy1EB3OSnf6NGFvF/VgUCrgSJhYQpT4Ux3gOhkO4Lh0khQgGNPvIg8hFAtJA+IPZ+CPl8SCCUhiCmYBApRkgoSv9qflEZ4w15kQ805Gcl+LGm8QcWeg5hPG4bVVgq9iOjLZIE3nwX8s1RDy/1OX6D309hKCSVhT0ej2appwVFDbnxmv/8lyhIgQDKzzVFKpin54uVij/LXgbfSJ/Cifzo+OjwQM7v7+06IrKDsT/zwe8AbEuPtgD+k6tmYFPFMnWnAdpGeWZbqYHng8TPHz/cf3g35Tj562o/n1nxwCZl3vjZ57nCy90rpo0uNT9v/AaxSX100Ax5UjMsbIpxzijAzKtp5KjjyWqAAYVeaOvnARrwR7az7LRZ0p352BguHgR4LWx8RbQ+AvAAoW81drf3lWNANWQUvJHOF78I8BX97tyvpwjVwpRhEi5m3NN6ePAcfsfdOMT1G8DK4gTMdMkD2Ev4JLQViu8G6EW3AY6Mp/UAVaSgVJ1+pPn54TfgXxO/ChAhtPRTrh6CXwB4Ycf78nLOOvww6+0DJAheVhXqAriv4Emxsbrlxq+R9op6/QA9dvwZwI6Cx2tzOKzngf/nBGDVjp+Kce1a8T6OBx00F3x6g2tvBddb9tjxatfaWs/mrRteUfpvZMfX7XEtO+KJndfV9+tprs3vS9/EUlaA7/m0ChNP0dno5ntJ7njNOnIYX6ODB8eShXzxb2t7kwR/a4Grg+BRrGzWwAeE65FGuxlHwrl88TSB8ZVG4SzFE9mdE6D4L3iN+Dwr3H8Ofm2nxroeTmRuq/gow/uM7yWa4UrlxHfMgJPmFDwr8/EBPT1lqZwDjwfixOEiiZU4blaRz8pGHEVTLYpz6FpbYeS+Tn46mTDWzfFceBy8jvgwe2zWuwdQJuN1nY9MB+X0fTvAUD1TA8BNnqQLocDjE4XfT/FOm+Oc+FZHz2Pdso2cYlr/1A1/JOM1zZ2fE38VoHGV6R2ewDy5C/BewXuKxK+Z2w2pazsBPkt4/kKG3V9JWR8A5pWC5JiJ99RAauh2Bymd4/U6783dBRiVurbCJ+9zRt38aei9iUcufXtDDQoyfuQ8PF9rKyGF/97ss1dIDeHtZZWx5Bv+4cnhd0O5Nch92ExCCxpbPY3IT5eaW1tIefLNlokn88qDLkuEruuXxSeuwTuFy8RfEpqIXkGEz69XpPSoNK/OBr4g9LbMSf2TyWHZzlNSIhy6PVAq0tnZEsXRckAegnF+bnJS3xtxes0m6vAOJ8F3JtgDHSz1cOkjLn8mNUR2Pp2Nve6zSuzIIiwfZzkzNv1g5b+qeOA3KRSf7DH1GiDDUon4EV68YsymJAVPEj17kCpR8XgxoeWQtOCl1svCZ4RXIrMwDi9ZqhRgBJ8BU/wEKPDvaOIgBXcUvMsm0ILHvcKPZAkAcvJexjt8BY9904U/TvCKxRW1+d4dnzFC1RDbLFbxiC/wePNAer8WaovD/1Dq3YJFFf8EIEvriZMhO1q54fHGrl9kxiaMocLrNeLdsDOexXtN05SRKfBda8lOqrnICEt0tL/Cp5OtgvDI60d+m3OOX6y4jPsdVBiee0fBD7tdprTtegrDGztw41qTmu1D6lnrt3aLYp0tZos4/gZ8UvHrrFzC+0NgnKy4WRw20Dni+Ne8poH3jEMfsjjHa+3auOXGzB1fDjMHMh6fT/YseI3fjptmeHf3ZCf+wqLmPx53WfF435JpMfGjj+h9iMATn7A9IF5PdMOs6ZFL16aWhlU8nra4wzc20uT8W1uNMxNdEp6FGo43zc6WHDYwVI0W/IFlbahmodF+bFbNst2D7auqrs6TdeCKWg9tx+KZzXQbOf8u1y7u8z2ibQMeCqtmjloCHiELuU6ldPOls9vOwk/PxHKVP94r+YaYuWkGL1Rt0Fsg3svw/OyWA4+37WhTuUvLq/XcmA5SYvY87aypUQf81yYqfIpbZakmjwveMHuI3GXFx+yX1NVjF4dvcPBht4oP0W8ICrOINRpwJabt+LeHGapNgGWWylR6BN4n2h808a5qKKprWbznyaEc+IHi8ca4bwZ4MOusaQff54OXepYcUOuRu4rFk14gDmqqg/GjeKLHQactVnzX8grXBI7ERnp9xIbHZ1uemXT3fdyKd7lgj9vwQfM3zFjaDf8GoSlj9/US6hC67vzLzweye/uOZL7suIX20qcOaj1GaPX+PVanaYusgQ/qHXQdd4o2eOCKvzh5hXPkX3AvVgAiJlwWXjcyOV4hHC0af3kHZ75akeQluCjERysKnF+3eLr4aelCJc+2APvvBroeor6qkGtFUCjkN/sfUHm5iCPXIiQVIoOC/D8GCF/D9iXk1juszGZEQhtPB1meoMll2E90eOlRUuBHZM+L35t+MSq/SnK6rmkV3LD0Fw7Rf7bEi6DPLeLIrylnSsqkBjnrfwALayAW2DHlAAAAAElFTkSuQmCC";
 const ArrowDownToLine = Download;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -59,6 +58,99 @@ const ASSUMED_TARGET_GROWTH = 0.03; // Rev #5: kept as fallback; engine + UI now
 // SC/PR: $15,300/yr · Foreigner: $35,700/yr (higher because foreigners have no CPF entitlement).
 const SRS_CAP_SC_PR    = 15300;
 const SRS_CAP_FOREIGNER = 35700;
+
+// ── Feature flags ──────────────────────────────────────────────────────────
+// Flip to true when foreigner CPF modelling is ready for production.
+// All isForeigner-gated engine code stays intact and re-enables automatically.
+const FOREIGNER_MODE_ENABLED = false;
+
+// ── Schema versioning ──────────────────────────────────────────────────────
+// Increment on every breaking DEFAULT_INPUTS change.
+// App_128 baseline is already at v3 (lifeEvents + rent expense already present).
+const CURRENT_SCHEMA_VERSION = 4;
+
+const migrateProfile = (raw) => {
+  if (!raw || typeof raw !== 'object') return raw;
+  let p = { ...raw };
+  const v = p._schemaVersion || 3; // App_128 baseline starts at v3
+  if (v < 4) {
+    // v3→v4: sprint 4/5 fields. Rent expense uses App_128 names (already exist).
+    // Also forward-compat: if an old App_v3 share-link arrives with the v3 names,
+    // map them to the App_128 names so data is not lost.
+    p = { ...p, inputs: { ...p.inputs,
+      rentExpense:     p.inputs?.rentExpense     ?? p.inputs?.rentalExpenseMonthly   ?? 0,
+      rentExpStartAge: p.inputs?.rentExpStartAge ?? p.inputs?.rentalExpenseStartAge  ?? 0,
+      rentExpEndAge:   p.inputs?.rentExpEndAge   ?? p.inputs?.rentalExpenseStopAge   ?? 85,
+      hasAMD:                     p.inputs?.hasAMD                     ?? false,
+      hasACP:                     p.inputs?.hasACP                     ?? false,
+      cpfWithdrawalLock:          p.inputs?.cpfWithdrawalLock          ?? false,
+      cpfMoneyLock:               p.inputs?.cpfMoneyLock               ?? false,
+      cpfSafetySwitch:            p.inputs?.cpfSafetySwitch            ?? false,
+      cpfTrustContactSet:         p.inputs?.cpfTrustContactSet         ?? false,
+      otherLiabilities:           p.inputs?.otherLiabilities           ?? 0,
+      secondaryEmploymentEnabled: p.inputs?.secondaryEmploymentEnabled ?? false,
+      secondaryEmploymentType:    p.inputs?.secondaryEmploymentType    ?? 'employed',
+      secondarySalaryGross:       p.inputs?.secondarySalaryGross       ?? 0,
+      secondaryAnnualBonus:       p.inputs?.secondaryAnnualBonus       ?? 0,
+      secondaryCitizenStatus:     p.inputs?.secondaryCitizenStatus     ?? 'SC',
+      secondaryPrYear:            p.inputs?.secondaryPrYear            ?? 3,
+      secondaryContribStopAge:    p.inputs?.secondaryContribStopAge    ?? 65,
+      cpfHousingLoanPrincipal:    p.inputs?.cpfHousingLoanPrincipal    ?? 0,
+      showBalaCurve:              p.inputs?.showBalaCurve              ?? false,
+      showLifeStageBanner:        p.inputs?.showLifeStageBanner        ?? true,
+      shsEnabled:                 p.inputs?.shsEnabled                 ?? false,
+      shsFromFlat:                p.inputs?.shsFromFlat                ?? '5r',
+      shsToFlat:                  p.inputs?.shsToFlat                  ?? '3r',
+      shsAge:                     p.inputs?.shsAge                     ?? 65,
+    }};
+  }
+  p._schemaVersion = CURRENT_SCHEMA_VERSION;
+  return p;
+};
+
+// ── Singapore retirement benchmarks (CPF Board Annual Report 2024) ──────────
+const SG_RETIREMENT_BENCHMARKS = {
+  medianCPFAt55:            181000,
+  medianCPFHighEarner:      320000,
+  pctMeetingFRS:            0.59,
+  replacementRateBenchmark: 0.70,
+  dataYear:                 2024,
+};
+
+// ── BALA_CURVE: CPF Board cohort-average total CPF balance by age ───────────
+// DISTINCT from BALA_TABLE above (which is the HDB lease-decay property ratio).
+// Source: CPF Board Annual Report 2023/2024 — Active Members median total CPF.
+// Curve peaks ~55 (SA closure → RA top-up) then declines as members draw down.
+const BALA_CURVE = [
+  { age: 25, val: 12000  }, { age: 30, val: 42000  }, { age: 35, val: 88000  },
+  { age: 40, val: 148000 }, { age: 45, val: 215000 }, { age: 50, val: 268000 },
+  { age: 55, val: 295000 }, { age: 60, val: 248000 }, { age: 65, val: 185000 },
+];
+
+// ── Silver Housing Bonus lookup table ──────────────────────────────────────
+// Source: HDB SHB eligibility matrix. Validate against HDB website each January.
+// Key: '{fromRooms}r_to_{toRooms}r'
+const SHS_BONUS_RA = {
+  '5r_to_4r': 15000, '5r_to_3r': 20000, '5r_to_2r': 25000,
+  '4r_to_3r': 15000, '4r_to_2r': 20000,
+  '3r_to_2r': 15000,
+};
+
+// ── CPF Life-stage framework ───────────────────────────────────────────────
+const LIFE_STAGE_MAP = [
+  { maxAge: 29,  label: 'Early Career',   color: '#1D9E75',
+    tip: 'Build OA for housing, start SA for retirement, emergency fund.' },
+  { maxAge: 44,  label: 'Mid-Career',     color: '#185FA5',
+    tip: 'Maximise RSTU, reduce housing outflow, review investment strategy.' },
+  { maxAge: 54,  label: 'Pre-Retirement', color: '#7F77DD',
+    tip: 'Fill FRS, review CPF LIFE plan, SRS top-up for tax savings.' },
+  { maxAge: 64,  label: 'Transition',     color: '#BA7517',
+    tip: 'OA drawdown strategy, SRS depletion plan, property monetisation.' },
+  { maxAge: 999, label: 'Retirement',     color: '#D85A30',
+    tip: 'Income sustainability, estate planning, legacy documents.' },
+];
+const getLifeStage = (age) =>
+  LIFE_STAGE_MAP.find(s => age <= s.maxAge) || LIFE_STAGE_MAP[LIFE_STAGE_MAP.length - 1];
 
 // ── Option B: Shared style objects ────────────────────────────────────────────
 // Use these for props that cannot accept a CSS className (Recharts, conditional
@@ -815,6 +907,32 @@ const DEFAULT_INPUTS = {
   hasWill: false,
   hasCPFNomination: false,
   hasLPA: false,
+  // Sprint 5: legacy planning extras
+  hasAMD: false,              // Advance Medical Directive filed with MOH
+  hasACP: false,              // Advance Care Plan completed with a healthcare provider
+  cpfWithdrawalLock: false,   // CPF Withdrawal Lock — prevent OA/SA withdrawals before 65
+  cpfMoneyLock: false,        // CPF Money Lock — floor on OA/SA cash withdrawals
+  cpfSafetySwitch: false,     // CPF Safety Switch — temporary transaction freeze
+  cpfTrustContactSet: false,  // CPF Trust Contact — nominated trusted person for alerts
+  otherLiabilities: 0,        // Outstanding liabilities (car loan, personal loan, etc.)
+  // Sprint 4: dual / hybrid employment (second income stream)
+  secondaryEmploymentEnabled: false,
+  secondaryEmploymentType: 'employed',   // 'employed' | 'sep'
+  secondarySalaryGross: 0,               // monthly gross OW ($)
+  secondaryAnnualBonus: 0,               // annual bonus / AW ($)
+  secondaryCitizenStatus: 'SC',
+  secondaryPrYear: 3,
+  secondaryContribStopAge: 65,
+  // Sprint 4: CPF housing loan principal for loan ledger visualisation
+  cpfHousingLoanPrincipal: 0,
+  // Sprint 3: UI toggles for new chart overlays / banners
+  showBalaCurve: false,        // show CPF cohort-average overlay on Accumulation chart
+  showLifeStageBanner: true,   // show life-stage contextual banner on Dashboard/Readiness
+  // Sprint 4: Silver Housing Bonus
+  shsEnabled: false,
+  shsFromFlat: '5r',   // '5r' | '4r' | '3r'
+  shsToFlat: '3r',     // '3r' | '2r'
+  shsAge: 65,
   // ── Protection Coverage (Q3 — Insurance Wellness Tile) ──────────────────────────────────
   // Non-CPF insurance held outside the DPS/HPS that the engine already tracks.
   // Used for the Protection Adequacy tile in the MAS Wellness Score panel.
@@ -1548,6 +1666,12 @@ function runRSSEngine(inputs, {
   const baseOA_Emp = Number(inputs.empOaCont) || 0;
   const baseSA_Emp = Number(inputs.empSaCont) || 0;
   const baseMA_Emp = Number(inputs.empMaCont) || 0;
+  // Sprint 4: secondary employment contribution supplement (RSS engine)
+  const _secEnabledRSS = !!inputs.secondaryEmploymentEnabled;
+  const _secGrossRSS   = _secEnabledRSS ? (Number(inputs.secondarySalaryGross) || 0) : 0;
+  const _secOA_RSS     = Math.round(_secGrossRSS * 0.23 * 12);
+  const _secSA_RSS     = Math.round(_secGrossRSS * 0.06 * 12);
+  const _secMA_RSS     = Math.round(_secGrossRSS * 0.08 * 12);
   const vc3aCash   = Number(inputs.vc3aCash)  || 0;
   const vcVhrAmt   = Number(inputs.vcVhr)     || 0;
   const annualOaToSa      = Number(inputs.oaToSaTransfer) || 0;
@@ -2490,6 +2614,12 @@ function runProjectionEngine(inputs, {
   const baseOA_Emp = Number(inputs.empOaCont) || 0;
   const baseSA_Emp = Number(inputs.empSaCont) || 0;
   const baseMA_Emp = Number(inputs.empMaCont) || 0;
+  // Sprint 4: secondary employment contribution supplement (PE engine)
+  const _secEnabled = !!inputs.secondaryEmploymentEnabled;
+  const _secGross   = _secEnabled ? (Number(inputs.secondarySalaryGross) || 0) : 0;
+  const _secOA_base = Math.round(_secGross * 0.23 * 12);
+  const _secSA_base = Math.round(_secGross * 0.06 * 12);
+  const _secMA_base = Math.round(_secGross * 0.08 * 12);
   // VC3A: single cash lump-sum, auto-split by age-band rates (same as mandatory).
   // Replaces separate vcOaTopup/vcSaTopup/vcMaTopup — all go through age-band proportional split.
   const vc3aCash = Number(inputs.vc3aCash) || 0;
@@ -3267,8 +3397,16 @@ function runProjectionEngine(inputs, {
         const vc3aMA = Math.round(vc3aCashEff * (vc3aMaRatio / ratioSum_emp));
         const vc3aSA = vc3aCashEff - vc3aOA - vc3aMA;
         // Annual Limit: applies to mandatory + VC3A (WIS is govt, not counted in limit)
+        const totalMandatoryPrimary = mandatoryOA_i + mandatorySA_dyn + mandatoryMA_i;
+        // Sprint 4: add secondary employment contributions, capped at secondaryContribStopAge
+        const _secStop = Number(inputs.secondaryContribStopAge) || 65;
+        if (_secEnabled && age < _secStop) {
+          mandatoryOA_i  += Math.round(_secOA_base * gf);
+          mandatorySA_dyn += Math.round(_secSA_base * gf);
+          mandatoryMA_i  += Math.round(_secMA_base * gf);
+        }
         const totalMandatory = mandatoryOA_i + mandatorySA_dyn + mandatoryMA_i;
-        const vcRoomThisYear = Math.max(0, ANNUAL_LIMIT - totalMandatory);
+        const vcRoomThisYear = Math.max(0, ANNUAL_LIMIT - totalMandatoryPrimary); // VC room based on primary only
         // Scale VC3A if it exceeds the room (VHR + RSTU handled separately outside limit)
         const vc3aScale = vc3aCashEff > 0 && vc3aCashEff > vcRoomThisYear ? vcRoomThisYear / vc3aCashEff : 1;
         // VHR-FRS-FIX: VHR removed from cappedVcOA — applied separately with FRS routing below
@@ -3629,6 +3767,20 @@ function runProjectionEngine(inputs, {
     if (_rentExpMonthlyPE > 0 && _rentExpStartPE > 0 && age >= _rentExpStartPE && age <= _rentExpEndPE) {
       const rentExpAnnual = _rentExpMonthlyPE * 12;
       privateAssets -= rentExpAnnual; yearRentExpOut += rentExpAnnual; totalOutSpent += rentExpAnnual;
+    }
+    // Sprint 4: Silver Housing Bonus — one-time RA credit at shsAge
+    if (inputs.shsEnabled && !isForeigner && age === (Number(inputs.shsAge) || 65)) {
+      const _shsKey   = `${inputs.shsFromFlat || '5r'}_to_${inputs.shsToFlat || '3r'}`;
+      const _shsBonus = SHS_BONUS_RA[_shsKey] || 0;
+      if (_shsBonus > 0) {
+        const _projYear = baseYear + (age - startAge);
+        const _ersCap   = Math.round(RETIREMENT_SUMS_2026.ERS * Math.pow(1 + rsGrowth, Math.max(0, _projYear - 2026)));
+        const _shsRoom  = Math.max(0, _ersCap - ra);
+        const _shsCredit = Math.min(_shsBonus, _shsRoom);
+        ra += _shsCredit;
+        milestones.push({ age, label: 'SHB credited', type: 'gold',
+          detail: `Silver Housing Bonus ${formatCurrency(_shsCredit)} credited to RA (${_shsKey.replace('_to_',' → ')})` });
+      }
     }
 
     // B1: Property value — Bala Curve model (mirrors runRSSEngine). freeholdEquiv2 is
@@ -5175,17 +5327,11 @@ function ReadinessTab({
   inputs, displayAccumulation, accumulationByAge, nominalAccumulationByAge, lifePlans, milestones,
   highlightPlan, setHighlightPlan, payoutAge65, isDark, setActiveTab,
   setSidebarOpen, basicPremiumPct, isRealDollars, applyInflation,
-  // Phase 3: already-computed in App — zero additional engine cost
   monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
-  // Stress Resilience: Perfect Storm data from Strategy tab (null when not computed)
   perfectStormData,
-  // Q2: wizard completion flag — gates placeholder states on KPI tiles
   wizardCompleted,
-  // SRS CTA: opens + scrolls to Private Assets section in the sidebar
   onSrsCtaClick,
-  // Inflows CTA: opens + scrolls to Inflows (topups) section in the sidebar
   onInflowsCtaClick,
-  // B-01: household parallel readiness — null/false when household mode is off
   householdEnabled,
   spouseInputs,
   spouseAccumulationByAge,
@@ -5197,6 +5343,13 @@ function ReadinessTab({
   spouseEffectiveOaDrawMonthly,
   spouseEffectiveOaDrawStartAge,
   spouseMilestones,
+  // Sprint 3: analytical props
+  sgBenchmarks,
+  lifePlanRecommendation,
+  sensitivityPerThousand,
+  lifeStage,
+  raAtPayout,
+  projFRS,
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
   const [expandedRdTile,  setExpandedRdTile]  = useState(null); // Readiness sub-factor tile expansion
@@ -6049,6 +6202,11 @@ function ReadinessTab({
             <style>{`
               .mas-tiles-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
               .mas-tile-card:focus, .mas-tile-card:focus-visible, .mas-tile-card:active { outline: 0 !important; box-shadow: none !important; -webkit-tap-highlight-color: transparent; }
+              /* Sprint 1: remove mouse-click outline on all buttons; preserve keyboard ring */
+              button:focus { outline: none; }
+              button:focus-visible { outline: 2px solid var(--clr-blue); outline-offset: 2px; border-radius: 4px; }
+              .goal-sim-btn:focus { outline: none; }
+              .goal-sim-btn:focus-visible { outline: 2px solid var(--clr-blue); outline-offset: 2px; }
               .mas-tile-card { -webkit-tap-highlight-color: transparent; }
               .rd-mas-side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
               .mas-wellness-gauge { flex: 0 0 34%; max-width: 220px; min-width: 110px; }
@@ -6114,8 +6272,59 @@ function ReadinessTab({
                       <span style={{ fontSize: 10, color: subBarColor(pct), fontWeight: 700, width: 26, textAlign: "right" }}>{pct == null ? "—" : pct}</span>
                     </div>
                   ))}
+                  {/* Sprint 3: score rubric — collapsible dimension breakdown */}
+                  <details style={{ marginTop: 8 }}>
+                    <summary style={{ fontSize: 10, color: "var(--text-muted)", cursor: "pointer", userSelect: "none", fontWeight: 600 }}>▸ How is this score calculated?</summary>
+                    <div style={{ marginTop: 6, fontSize: 10, color: "var(--text-subtle)", lineHeight: 1.6 }}>
+                      {[
+                        { dim: "FRS Coverage",      max: 35, tip: "RA at payout vs projected FRS. 35pts → 10pts as you age (post-retirement FRS matters less)." },
+                        { dim: "Income Adequacy",   max: 25, tip: "CPF LIFE payout vs your Target Monthly Income. Set target in Retirement Drawdown." },
+                        { dim: "Stress Resilience", max: 20, tip: "Perfect Storm score (primary) or P10 Monte Carlo band. Enable Stress Centre for full signal." },
+                        { dim: "Longevity Cover",   max: 25, tip: "OA drawdown sustainability or real CPF LIFE at age 90 vs BRS floor." },
+                        { dim: "Healthcare Shield", max: 30, tip: "MA at payout vs projected BHS. Weight rises from 10% at 35 to 30% at 75+ (top post-retirement risk)." },
+                      ].map(({ dim, max, tip }) => (
+                        <div key={dim} style={{ display: "flex", gap: 6, marginBottom: 2 }}>
+                          <span style={{ minWidth: 110, fontWeight: 600, color: "var(--text-muted)", flexShrink: 0 }}>{dim}</span>
+                          <span>up to {max}pts — {tip}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 </div>
               </div>
+
+              {/* Sprint 3: Singapore retirement sufficiency benchmark strip */}
+              {sgBenchmarks && raAtPayout > 0 && (() => {
+                const medianCPF = sgBenchmarks.medianCPFAt55 || 181000;
+                const hiEarner  = sgBenchmarks.medianCPFHighEarner || 320000;
+                const logRatio  = Math.log(Math.max(1, raAtPayout) / medianCPF) / Math.log(hiEarner / medianCPF);
+                const estPctile = Math.min(99, Math.max(1, Math.round(50 + logRatio * 30)));
+                const pctColor  = estPctile >= 70 ? "var(--clr-emerald)" : estPctile >= 40 ? "var(--clr-amber)" : "var(--clr-red)";
+                return (
+                  <div style={{ background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: "10px 14px" }}>
+                    <p style={{ fontSize: 11, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 8px", display: "flex", alignItems: "center", gap: 6 }}>
+                      🇸🇬 vs Singapore average <span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 10 }}>— CPF Board Annual Report {sgBenchmarks.dataYear}</span>
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>
+                          <span>Your projected RA at payout</span>
+                          <span style={{ color: pctColor, fontWeight: 700 }}>~{estPctile}th percentile</span>
+                        </div>
+                        <div style={{ position: "relative", height: 6, borderRadius: 4, background: "var(--border-subtle)" }}>
+                          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100,(raAtPayout/medianCPF)*50)}%`, background: pctColor, borderRadius: 4, maxWidth: "100%" }} />
+                          <div style={{ position: "absolute", left: "50%", top: -2, width: 2, height: 10, background: "var(--text-muted)", borderRadius: 1 }} />
+                        </div>
+                        <p style={{ margin: "2px 0 0", fontSize: 9, color: "var(--text-subtle)" }}>SG median at 55: ${(medianCPF/1000).toFixed(0)}k · Percentile estimated from CPF Board aggregate data</p>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 12, fontSize: 10, color: "var(--text-muted)" }}>
+                      <span>FRS achievement rate (SG): <strong style={{ color: "var(--text-bright)" }}>{Math.round(sgBenchmarks.pctMeetingFRS * 100)}%</strong> of active members</span>
+                      <span>MAS income target: <strong style={{ color: "var(--text-bright)" }}>{Math.round(sgBenchmarks.replacementRateBenchmark * 100)}%</strong> replacement</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* RIGHT — Wellness Score gauge ── */}
               <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
@@ -6141,7 +6350,7 @@ function ReadinessTab({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>Wellness Score</p>
                   <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "0 0 6px", lineHeight: 1.4 }}>
-                    MAS-aligned advisory score — unweighted average of the 5 pillars below.
+                    Retirement Readiness advisory score — unweighted average of the dimensions below.
                     Not an official MAS metric.
                   </p>
                   {/* Mini sub-bar breakdown */}
@@ -6340,7 +6549,7 @@ function ReadinessTab({
                   <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                     <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-                      MAS Financial Health — 5 pillars
+                      Retirement Readiness Framework
                     </span>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                   </div>
@@ -7966,12 +8175,13 @@ function CPFPlannerApp() {
         if (fullState.appVersion && fullState.appVersion !== CURRENT_APP_VERSION) {
           showToast(`ℹ️ Share link was saved with ${fullState.appVersion} — loaded on ${CURRENT_APP_VERSION}. Some settings may have reset to defaults. Please review your profile.`);
         }
-        if (fullState.inputs) {
-          // BUG-1 fix: use module-level buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
-          const mergedInputs = buildSafeInputs(fullState.inputs);
+        // Sprint 2: run schema migration before loading inputs (handles v3→v4 field additions)
+        const migratedState  = migrateProfile(fullState) || fullState;
+        const loadedInputs   = migratedState.inputs || fullState.inputs;
+        if (loadedInputs) {
+          const mergedInputs = buildSafeInputs(loadedInputs);
           setInputs(mergedInputs);
           setDebouncedInputs(mergedInputs);
-          // BUG-4 fix: clear stale validation highlights when loading from share link
           setInputErrors({});
           lastSavedRef.current = JSON.stringify(mergedInputs);
         }
@@ -8289,7 +8499,7 @@ function CPFPlannerApp() {
   // Accessing an undeclared identifier in JSX throws ReferenceError, crashing the LIFE tab
   // for every user who navigates to it. reads live `inputs` (not debounced) — intentional,
   // as this gates UI display only, not projection computation.
-  const isForeigner  = (inputs.citizenStatus || 'SC').toLowerCase() === 'foreigner'; // Bug 2 fix: normalise case
+  const isForeigner  = FOREIGNER_MODE_ENABLED && (inputs.citizenStatus || 'SC').toLowerCase() === 'foreigner'; // Sprint 1: gated by FOREIGNER_MODE_ENABLED flag // Bug 2 fix: normalise case
   // BUG-NEW-2 fix: isSC must be declared at component scope so the Growth tab Gantt IIFE
   // (hasMRSS / hasMMSS checks at ~line 14878) resolves correctly. Without this declaration,
   // navigating to the Growth tab throws ReferenceError: isSC is not defined, crashing the
@@ -8761,17 +8971,43 @@ function CPFPlannerApp() {
     return { baseline, targetAmt, gap: targetAmt - baseline, stratA, stratB, stratC, sensitivityRSTU, sensitivityVC3A };
   };
 
+  // ── Sprint 6: unified income aggregator ─────────────────────────────────
+  // Single function used by both the retirement-age solver AND the monthly-gap
+  // KPI card — prevents divergence where the solver gives a different answer
+  // than the dashboard displays.
+  const computeMonthlyRetirementIncome = (projRows, atAge, inp) => {
+    const row     = projRows.find(r => r.age === atAge) || {};
+    const ra      = row.ra || 0;
+    const plan    = inp.highlightPlan || 'std';
+    const male    = inp.isMale !== false;
+    const pa      = Number(inp.payoutAge) || 65;
+    const cpfLife = interpolateCpfLife(ra, plan, male, pa);
+    const oaDraw  = Number(inp.oaDrawdownMonthly) || 0;
+    const oaStart = Number(inp.oaDrawdownStartAge) || pa;
+    const oaActive  = atAge >= oaStart && (row.oa || 0) > (Number(inp.oaDrawdownFloor) || 0);
+    const oaMonthly = oaActive ? oaDraw : 0;
+    const srsRow    = row.srsBalance || 0;
+    const srsStart  = Number(inp.srsDrawdownStartAge) || 63;
+    const srsYears  = Number(inp.srsDrawdownYears) || 10;
+    const srsMonthly = (atAge >= srsStart && atAge < srsStart + srsYears && srsRow > 0)
+      ? Math.round((srsRow / Math.max(1, srsStart + srsYears - atAge)) / 12) : 0;
+    const horizon     = Math.max(1, (Number(inp.maxProjectionAge) || 95) - atAge);
+    const priv        = row.privateAssets || 0;
+    const privMonthly = Math.round((priv / horizon) / 12);
+    return { cpfLife, oaMonthly, srsMonthly, privMonthly,
+      total: cpfLife + oaMonthly + srsMonthly + privMonthly };
+  };
+
   const solveEarliestRetirement = (baseInp, frsTarget, incomeTarget, pa) => {
-    const isMale_r = baseInp.isMale !== false;
-    const plan_r   = baseInp.highlightPlan || 'std';
-    const ca_r     = Number(baseInp.currentAge) || 35;
-    const hiAge    = Number(baseInp.contributionStopAge) || 65;
+    const ca_r  = Number(baseInp.currentAge) || 35;
+    const hiAge = Number(baseInp.contributionStopAge) || 65;
     const check = (stopAge) => {
       const rows   = runProjectionEngine({ ...baseInp, contributionStopAge: stopAge });
       const row    = rows.find(r => r.age === pa) || {};
       const ra     = row.ra || 0;
-      const payout = interpolateCpfLife(ra, plan_r, isMale_r, pa);
-      return { passes: (frsTarget <= 0 || ra >= frsTarget) && (incomeTarget <= 0 || payout >= incomeTarget), ra, payout };
+      const income = computeMonthlyRetirementIncome(rows, pa, baseInp);
+      const passes = (frsTarget <= 0 || ra >= frsTarget) && (incomeTarget <= 0 || income.total >= incomeTarget);
+      return { passes, ra, payout: income.cpfLife, totalIncome: income.total };
     };
     if (!check(hiAge).passes) return { feasible: false };
     let lo = ca_r + 1, hi = hiAge, best = hiAge;
@@ -8781,8 +9017,8 @@ function CPFPlannerApp() {
       if (check(mid).passes) { best = mid; hi = mid - 1; }
       else lo = mid + 1;
     }
-    const { ra, payout } = check(best);
-    return { feasible: true, earliestAge: best, raAtAge: ra, payoutAtAge: payout };
+    const { ra, payout, totalIncome } = check(best);
+    return { feasible: true, earliestAge: best, raAtAge: ra, payoutAtAge: payout, totalIncomeAtAge: totalIncome };
   };
 
 
@@ -9221,7 +9457,9 @@ function CPFPlannerApp() {
       pdfOrientation,
       // Meta
       savedAt: new Date().toISOString(),
-      appVersion: "V4-2026"
+      appVersion: "V4-2026",
+      _schemaVersion: CURRENT_SCHEMA_VERSION,
+      _exportedAt: new Date().toISOString(),
     };
     const json = JSON.stringify(fullState, null, 2);
     // Download directly — no modal
@@ -10519,6 +10757,80 @@ function CPFPlannerApp() {
     () => (spouseLifePlans?.basic?.start || 0) * (1 - spouseBasicPremiumPct / 100) / 0.90,
     [spouseLifePlans, spouseBasicPremiumPct]
   );
+
+  // ── Sprint 3: CPF LIFE plan recommendation engine ───────────────────────
+  const lifePlanRecommendation = useMemo(() => {
+    if (!lifePlans || debouncedInputs.cpfScheme === 'rss') return null;
+    const std = lifePlans.standard?.start   || 0;
+    const esc = lifePlans.escalating?.start || 0;
+    const bas = lifePlans.basic?.start      || 0;
+    if (!std || !esc) return null;
+    const pa         = Number(debouncedInputs.payoutAge) || 65;
+    const longevityAge = Math.min(95, Math.max(pa + 5, Number(debouncedInputs.maxProjectionAge) || 85));
+    let cumStd = 0, cumEsc = 0, breakeven = null;
+    for (let yr = 0; yr <= longevityAge - pa; yr++) {
+      cumStd += std;
+      cumEsc += esc * Math.pow(1.02, yr);
+      if (breakeven === null && cumEsc >= cumStd) breakeven = pa + yr;
+    }
+    const lifetimeEscGain = Math.max(0, Math.round(cumEsc - cumStd));
+    const bequestIntent   = !!(debouncedInputs.hasWill && debouncedInputs.hasCPFNomination);
+    const highLongevity   = longevityAge >= 85;
+    let plan = 'standard', reason = '', secondaryNote = '';
+    if (bequestIntent && bas > 0) {
+      plan = 'basic';
+      reason = 'You have a will and CPF nomination — Basic Plan preserves the highest bequest (refundable premium in Phase 1).';
+      secondaryNote = `Standard pays $${Math.round(std - bas)}/mo more, at the cost of the Phase 1 premium refund.`;
+    } else if (!breakeven || breakeven > longevityAge) {
+      plan = 'standard';
+      reason = `Escalating payout never overtakes Standard within your ${longevityAge}-year horizon. Standard maximises total lifetime income in your case.`;
+    } else if (highLongevity && lifetimeEscGain > 0) {
+      plan = 'escalating';
+      reason = `Escalating overtakes Standard at age ${breakeven}. Over your lifetime to ${longevityAge}, Escalating earns ~$${(lifetimeEscGain/1000).toFixed(0)}k more — a better inflation hedge.`;
+      secondaryNote = `You receive $${Math.round(std - esc)}/mo less initially but benefit from ~2%/yr growth.`;
+    } else {
+      plan = 'standard';
+      reason = 'Standard Plan maximises your guaranteed monthly floor and suits members who prefer predictability over inflation hedging.';
+    }
+    return { plan, reason, secondaryNote, breakeven, longevityAge, lifetimeEscGain, std, esc, bas };
+  }, [lifePlans, debouncedInputs.payoutAge, debouncedInputs.cpfScheme,
+      debouncedInputs.maxProjectionAge, debouncedInputs.hasWill, debouncedInputs.hasCPFNomination]);
+
+  // ── Sprint 3: Sensitivity badge — +$X/mo payout per $1,000 RA ───────────
+  const sensitivityPerThousand = useMemo(() => {
+    if (!raAtPayout || debouncedInputs.cpfScheme === 'rss') return null;
+    const pa   = Number(debouncedInputs.payoutAge) || 65;
+    const male = debouncedInputs.isMale !== false;
+    const plan = debouncedInputs.highlightPlan || 'std';
+    const base = interpolateCpfLife(raAtPayout,        plan, male, pa);
+    const bump = interpolateCpfLife(raAtPayout + 1000, plan, male, pa);
+    return Math.max(0, Math.round((bump - base) * 10) / 10);
+  }, [raAtPayout, debouncedInputs.payoutAge, debouncedInputs.isMale,
+      debouncedInputs.highlightPlan, debouncedInputs.cpfScheme]);
+
+  // ── Sprint 3: Life-stage contextual signal ───────────────────────────────
+  const lifeStage = useMemo(() => getLifeStage(Number(debouncedInputs.currentAge) || 35),
+    [debouncedInputs.currentAge]);
+
+  // ── Sprint 4: CPF housing loan ledger ────────────────────────────────────
+  const cpfLoanLedger = useMemo(() => {
+    const principal0 = Number(debouncedInputs.cpfHousingLoanPrincipal) || 0;
+    if (principal0 <= 0) return [];
+    const ca        = Number(debouncedInputs.currentAge) || 35;
+    const stopAge   = Number(debouncedInputs.housingStopAge) || 55;
+    const annualPay = Number(debouncedInputs.housingOutflow) || 0;
+    let principal = principal0, cumInterest = 0;
+    const rows = [];
+    for (let age = ca; age <= stopAge + 2; age++) {
+      const interest = Math.round(principal * 0.025);
+      cumInterest += interest;
+      principal = Math.max(0, principal + interest - annualPay);
+      rows.push({ age, principal: Math.round(principal), annualInterest: interest, cumInterest: Math.round(cumInterest) });
+      if (principal <= 0) break;
+    }
+    return rows;
+  }, [debouncedInputs.cpfHousingLoanPrincipal, debouncedInputs.currentAge,
+      debouncedInputs.housingStopAge, debouncedInputs.housingOutflow]);
 
   const payoutProjection = useMemo(() => {
     let data = [];
@@ -12036,6 +12348,7 @@ function CPFPlannerApp() {
   // ── Perfect Storm: single combined engine run across all active stressors ──
   // Gated by showPerfectStorm toggle; runs at most 1 extra engine call.
   const perfectStormData = useMemo(() => {
+    if (!showPerfectStorm) return null;
     const anyActive = showSorr || showInflationStress || showPropertyStress || showCpfRateStress || showHealthcareStress;
     if (!anyActive) return null;
     const pa = payoutAge65;
@@ -12071,7 +12384,7 @@ function CPFPlannerApp() {
     const deltaPct = baseNetWorth > 0 ? Math.round(delta / baseNetWorth * 100) : 0;
     const cpfDelta = Math.max(0, baseTotalCPF - psTotalCPF);
     return { pa, psTotalCPF, psPriv, stressProp, baseTotalCPF, basePriv, baseProp, psNetWorth, baseNetWorth, delta, deltaPct, cpfDelta, hcTotal, lifeExp };
-  }, [showSorr, showInflationStress, showPropertyStress, showCpfRateStress,
+  }, [showPerfectStorm, showSorr, showInflationStress, showPropertyStress, showCpfRateStress,
       showHealthcareStress, debouncedInputs, payoutAge65, accumulationByAge,
       propertyStressData, hcMonthlyCost, hcStartAge, hcEndAge]);
 
@@ -13817,12 +14130,12 @@ ${milestoneSnapshotHtml}
           font-weight: 800 !important;
         }
 
-        /* ── Seal icon box: white bg + subtle red border in both themes ──
-           The Chinese seal is red-on-white; keep white bg so the seal reads clearly
-           against both the dark navy header and the light steel header. ── */
+        /* ── Calculator icon box: soft tinted bg in light mode ──
+           Dark icon (#020617) on solid emerald (#065f46) = 2.63:1 FAIL — fixed in JSX (white icon).
+           This rule keeps the bg tinted so the box reads as a light-mode element. ── */
         .theme-light .cpf-calc-icon-box {
-          background: #ffffff !important;
-          border: 1px solid rgba(220,38,38,0.25) !important;
+          background: rgba(6,95,70,0.18) !important;
+          border: 1px solid rgba(6,95,70,0.35) !important;
         }
 
         /* ── All primary action buttons: white text on emerald bg ──
@@ -15119,6 +15432,25 @@ ${milestoneSnapshotHtml}
           .welcome-step3-grid  { grid-template-columns: 1fr !important; }
           .cpf-welcome-header h2 { font-size: 14px !important; }
           .cpf-welcome-header p  { font-size: 12px !important; }
+          /* Sprint 6: mobile KPI + what-if collapse */
+          .z1-cols             { grid-template-columns: 1fr !important; }
+          .stats-3col          { grid-template-columns: 1fr 1fr !important; }
+          .kpi-strip           { overflow-x: auto !important; flex-wrap: nowrap !important; }
+          .what-if-grid        { grid-template-columns: 1fr !important; }
+          .summary-impact-3col { grid-template-columns: 1fr !important; }
+        }
+        /* Sprint 6: tablet */
+        @media (max-width: 768px) and (min-width: 481px) {
+          .z2-z3-grid  { grid-template-columns: 1fr !important; }
+          .stats-3col  { grid-template-columns: 1fr 1fr !important; }
+        }
+        /* Sprint 6: laptop overflow guard */
+        @media (max-width: 1280px) and (min-width: 769px) {
+          .stats-3col  { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+        }
+        /* Sprint 6: FHD/ultrawide content cap */
+        @media (min-width: 1920px) {
+          .cpf-main-content-cap { max-width: 1400px !important; margin-left: auto !important; margin-right: auto !important; }
         }
 
         /* ─── EXECUTIVE DASHBOARD — FHD + sidebar collapsed + Summary tab ─────────────
@@ -16301,8 +16633,8 @@ ${milestoneSnapshotHtml}
 
           {/* ── Logo ── */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 10, border: "1px solid rgba(220,38,38,0.25)", overflow: "hidden", flexShrink: 0 }}>
-              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Pebblebrooks seal" style={{ width: 36, height: 36, display: "block" }} />
+            <div className="cpf-calc-icon-box" style={{ background: "var(--clr-emerald)", padding: 8, borderRadius: 12 }}>
+              <Calculator style={{ color: "#ffffff", width: 18, height: 18 }} />
             </div>
             <div>
               <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>Fusion 富生</div>
@@ -17004,7 +17336,8 @@ ${milestoneSnapshotHtml}
                         }}
                           style={{ padding: "4px 11px", borderRadius: 5, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer",
                             background: isForeigner ? "var(--clr-amber3)" : "transparent",
-                            color: isForeigner ? "var(--btn-on-accent)" : "var(--text-muted)" }}>Foreigner</button>
+                            color: isForeigner ? "var(--btn-on-accent)" : "var(--text-muted)",
+                            display: FOREIGNER_MODE_ENABLED ? undefined : "none" }}>Foreigner</button>
                       </div>
                     </div>
                     {/* Foreigner info banner */}
@@ -17117,6 +17450,8 @@ ${milestoneSnapshotHtml}
                       ["hasWill",          "Will",            "A legally valid will prepared with witnesses"],
                       ["hasCPFNomination", "CPF Nomination",  "CPF nomination (CSNB) filed — bypasses probate for CPF assets"],
                       ["hasLPA",           "LPA",             "Lasting Power of Attorney registered with OPG Singapore"],
+                      ["hasAMD",           "AMD",             "Advance Medical Directive filed with MOH — no extraordinary life-sustaining treatment if terminally ill"],
+                      ["hasACP",           "ACP",             "Advance Care Plan completed with a healthcare provider — documents your care preferences"],
                     ].map(([key, label, tip]) => (
                       <div key={key} title={tip}
                         onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
@@ -17127,6 +17462,39 @@ ${milestoneSnapshotHtml}
                         </div>
                       </div>
                     ))}
+
+                    {/* Sprint 5: CPF Safety Features */}
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "10px 0 4px", display: "flex", alignItems: "center", gap: 5 }}>
+                      🔒 CPF Safety Features
+                      <span style={{ fontSize: 10, color: "var(--text-subtle)", fontWeight: 400 }}>activate on CPF website</span>
+                    </p>
+                    {[
+                      ["cpfWithdrawalLock",  "Withdrawal Lock",   "Prevents OA/SA cash withdrawals before age 65. Activate via CPF digital services."],
+                      ["cpfMoneyLock",       "Money Lock",        "Sets a floor on OA/SA withdrawals — you cannot withdraw below the locked amount."],
+                      ["cpfSafetySwitch",    "Safety Switch",     "Temporarily freezes all CPF transactions. Use if you suspect fraud or unauthorised access."],
+                      ["cpfTrustContactSet", "Trust Contact",     "Nominated trusted person who is notified of large CPF transactions or anomalies."],
+                    ].map(([key, label, tip]) => (
+                      <div key={key} title={tip}
+                        onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 0", cursor: "pointer" }}>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
+                        <div style={{ width: 24, height: 14, borderRadius: 7, background: inputs[key] ? "#2563eb" : "var(--bg-panel)", border: `1px solid ${inputs[key] ? "#2563eb" : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                          <div style={{ position: "absolute", top: 2, left: inputs[key] ? 9 : 2, width: 8, height: 8, borderRadius: "50%", background: inputs[key] ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Sprint 5: Other liabilities */}
+                    <div style={{ marginTop: 8 }}>
+                      <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
+                        Other Liabilities ($) <span style={{ color: "var(--text-subtle)" }}>car loan, personal loan, etc.</span>
+                      </label>
+                      <input type="number" min="0" step="1000"
+                        value={inputs.otherLiabilities || ""}
+                        placeholder="0"
+                        onChange={e => setInputs(p => ({ ...p, otherLiabilities: Number(e.target.value) || 0 }))}
+                        style={{ width: "100%", padding: "6px 10px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 7, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                    </div>
 
                     {/* Protection Coverage inputs — feeds Tile 6: Protection Adequacy */}
                     <div style={{ marginTop: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 10 }}>
@@ -17696,13 +18064,50 @@ ${milestoneSnapshotHtml}
                   ? "SEP — MediSave contributions only · Salary reference for retirement sum projections"
                   : "OA · SA · MA employee & employer amounts · Auto-Calc from OW + AW · Salary growth · Phase 2 salary · Career break · PR tenure"} />
               {openSections.has("contribs") && <div style={{ padding: "0 16px 16px" }}>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
                   <button onClick={() => setInputs(p => ({ ...p, isSelfEmployed: !p.isSelfEmployed, empOaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empOaCont : 0, empSaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empSaCont : 0, empMaCont: p.isSelfEmployed ? DEFAULT_INPUTS.empMaCont : 0 }))} style={{ fontSize: 12, background: isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.15)" : "rgba(100,116,139,0.15)", color: isSelfEmployed ? "var(--clr-orange)" : "var(--text-subtle)", padding: "4px 10px", borderRadius: 6, fontWeight: 700, border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.4)" : "var(--border-strong)"}`, cursor: "pointer" }}>
                     {isSelfEmployed ? "SEP ✓" : "SEP?"}
                   </button>
+                  {/* Sprint 4: dual / hybrid employment toggle */}
+                  {!isSelfEmployed && (
+                    <button onClick={() => setInputs(p => ({ ...p, secondaryEmploymentEnabled: !p.secondaryEmploymentEnabled }))}
+                      style={{ fontSize: 12, background: inputs.secondaryEmploymentEnabled ? "rgba(99,102,241,0.15)" : "rgba(100,116,139,0.15)", color: inputs.secondaryEmploymentEnabled ? "#818cf8" : "var(--text-subtle)", padding: "4px 10px", borderRadius: 6, fontWeight: 700, border: `1px solid ${inputs.secondaryEmploymentEnabled ? "rgba(99,102,241,0.4)" : "var(--border-strong)"}`, cursor: "pointer" }}
+                      title="Add a second income stream (FT + FT or FT + SEP). Both jobs share the $37,740 Annual Limit.">
+                      {inputs.secondaryEmploymentEnabled ? "2nd Job ✓" : "+ 2nd Job"}
+                    </button>
+                  )}
                   {!isSelfEmployed && <button onClick={() => setInputs(p => ({ ...p, showSalaryCalc: !p.showSalaryCalc }))} style={{ fontSize: 12, background: "rgba(163,230,53,0.12)", color: "var(--clr-lime)", padding: "4px 10px", borderRadius: 6, fontWeight: 700, border: "none", cursor: "pointer" }}>
                     {inputs.showSalaryCalc ? "Hide" : "Auto-Calc"}
                   </button>}
+                </div>
+                {/* Sprint 4: secondary employment sub-form */}
+                {inputs.secondaryEmploymentEnabled && !isSelfEmployed && (
+                  <div style={{ padding: 10, borderRadius: 10, background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.25)", marginBottom: 12 }}>
+                    <p style={{ margin: "0 0 6px", fontSize: 11, color: "#818cf8", fontWeight: 700 }}>2nd Employment / Side Income</p>
+                    <p style={{ margin: "0 0 8px", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>Contributions from both jobs are pooled. Annual Limit ($37,740) applies across both. Uses a simplified age-35–45 OA/SA/MA split (23%/6%/8%) for the secondary job.</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Monthly OW ($)</label>
+                        <input type="number" min="0" step="100" placeholder="0"
+                          value={inputs.secondarySalaryGross || ""}
+                          onChange={e => setInputs(p => ({ ...p, secondarySalaryGross: Number(e.target.value) || 0 }))}
+                          style={{ width: "100%", padding: "6px 10px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 7, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Contribs Stop Age</label>
+                        <input type="number" min="35" max="70" step="1" placeholder="65"
+                          value={inputs.secondaryContribStopAge || 65}
+                          onChange={e => setInputs(p => ({ ...p, secondaryContribStopAge: Number(e.target.value) || 65 }))}
+                          style={{ width: "100%", padding: "6px 10px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 7, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                    </div>
+                    {(Number(inputs.secondarySalaryGross)||0) > 0 && (
+                      <p style={{ margin: "6px 0 0", fontSize: 11, color: "#818cf8" }}>
+                        Est. annual CPF from 2nd job: OA ${((Number(inputs.secondarySalaryGross)||0)*0.23*12).toLocaleString()} · SA ${((Number(inputs.secondarySalaryGross)||0)*0.06*12).toLocaleString()} · MA ${((Number(inputs.secondarySalaryGross)||0)*0.08*12).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                )}
                 </div>
                 {isSelfEmployed && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, padding: 10, borderRadius: 10, background: "var(--bg-muted)", border: "1px solid var(--border-strong)" }}>
@@ -18808,7 +19213,7 @@ ${milestoneSnapshotHtml}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
 
-              <SidebarSectionHeader id="outflows" label="Medical & Insurance Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
+              <SidebarSectionHeader id="outflows" label="Housing, Insurance & Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -20001,6 +20406,75 @@ ${milestoneSnapshotHtml}
                         </div>
                       </div>
                     )}
+
+                    {/* Sprint 4: Silver Housing Bonus (SHB) — dedicated sub-section */}
+                    {!isForeigner && (
+                      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border-subtle)" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-amber)", textTransform: "uppercase", margin: 0 }}>
+                            🏠 Silver Housing Bonus (SHB)
+                          </p>
+                          <div onClick={() => setInputs(p => ({ ...p, shsEnabled: !p.shsEnabled }))}
+                            style={{ width: 28, height: 16, borderRadius: 8, background: inputs.shsEnabled ? "var(--clr-amber)" : "var(--bg-panel)", border: `1px solid ${inputs.shsEnabled ? "var(--clr-amber)" : "var(--border-subtle)"}`, position: "relative", cursor: "pointer", transition: "background 0.2s", flexShrink: 0 }}>
+                            <div style={{ position: "absolute", top: 2, left: inputs.shsEnabled ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: inputs.shsEnabled ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
+                          </div>
+                        </div>
+                        {inputs.shsEnabled && (
+                          <>
+                            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 8px", lineHeight: 1.5 }}>
+                              Sell larger HDB flat, buy smaller — CPF Board tops up RA. Eligibility: SC, age ≥ 55, own ≤ 1 flat, RA below FRS, household income ≤ $14k/mo.
+                            </p>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                              <div>
+                                <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Current Flat</label>
+                                <select value={inputs.shsFromFlat || "5r"}
+                                  onChange={e => setInputs(p => ({ ...p, shsFromFlat: e.target.value }))}
+                                  style={{ width: "100%", padding: "6px 8px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none" }}>
+                                  {["5r","4r","3r"].map(v => <option key={v} value={v}>{v.replace("r","-room")}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Target Flat</label>
+                                <select value={inputs.shsToFlat || "3r"}
+                                  onChange={e => setInputs(p => ({ ...p, shsToFlat: e.target.value }))}
+                                  style={{ width: "100%", padding: "6px 8px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none" }}>
+                                  {["3r","2r"].map(v => <option key={v} value={v}>{v.replace("r","-room")}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>At Age</label>
+                                <input type="number" min="55" max="90" step="1"
+                                  value={inputs.shsAge || 65}
+                                  onChange={e => setInputs(p => ({ ...p, shsAge: Number(e.target.value) || 65 }))}
+                                  style={{ width: "100%", padding: "6px 8px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 7, color: "var(--text-bright)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+                              </div>
+                            </div>
+                            {(() => {
+                              const key = `${inputs.shsFromFlat || "5r"}_to_${inputs.shsToFlat || "3r"}`;
+                              const bonus = SHS_BONUS_RA[key];
+                              return bonus
+                                ? <p style={{ fontSize: 11, color: "var(--clr-amber)", margin: "4px 0 0" }}>RA bonus: ${bonus.toLocaleString()} credited at age {inputs.shsAge || 65}</p>
+                                : <p style={{ fontSize: 11, color: "var(--clr-red)", margin: "4px 0 0" }}>⚠ No SHB for this flat combination (must downgrade)</p>;
+                            })()}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Sprint 4: CPF Housing Loan Ledger — principal input */}
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border-subtle)" }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>
+                        CPF OA Loan Principal ($)
+                        <span style={{ fontSize: 10, fontWeight: 400, textTransform: "none", color: "var(--text-muted)", marginLeft: 6 }}>for loan ledger chart</span>
+                      </label>
+                      <input type="number" min="0" step="1000" placeholder="0"
+                        value={inputs.cpfHousingLoanPrincipal || ""}
+                        onChange={e => setInputs(p => ({ ...p, cpfHousingLoanPrincipal: Number(e.target.value) || 0 }))}
+                        style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "3px 0 0" }}>
+                        Outstanding CPF OA loan — enables principal + 2.5%/yr accrued interest ledger in the Property chart.
+                      </p>
+                    </div>
                   </div>}
 
                   {/* Foreigner note — shown only when citizenship = Foreigner, explains what is hidden */}
@@ -20690,7 +21164,7 @@ ${milestoneSnapshotHtml}
           <div ref={tabContentRef} className="cpf-tab-content" data-exec={execDashMode ? "true" : undefined} data-tab={activeTab}>
             {/* ── DASHBOARD TAB sub-view toggle (Score / Overview) ── */}
             {(activeTab === "readiness" || activeTab === "summary") && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px 0", background: "var(--bg-base)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px 0", background: "var(--bg-base)", flexWrap: "wrap" }}>
                 <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
                   <button onClick={() => setActiveTab("readiness")} style={{ padding: "5px 16px", borderRadius: 7, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: activeTab === "readiness" ? "var(--ctrl-active-bg)" : "transparent", color: activeTab === "readiness" ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
                     <Activity style={{ width: 12, height: 12, display: "inline", marginRight: 5, verticalAlign: "middle" }} />Readiness score
@@ -20699,6 +21173,15 @@ ${milestoneSnapshotHtml}
                     <PieChart style={{ width: 12, height: 12, display: "inline", marginRight: 5, verticalAlign: "middle" }} />CPF overview
                   </button>
                 </div>
+                {/* Sprint 3: life-stage contextual banner */}
+                {inputs.showLifeStageBanner !== false && lifeStage && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: `${lifeStage.color}18`, border: `1px solid ${lifeStage.color}40`, fontSize: 12, color: lifeStage.color, fontWeight: 600 }}>
+                    <span style={{ opacity: 0.8 }}>●</span>
+                    <span>{lifeStage.label} Phase</span>
+                    <span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 11 }}>— {lifeStage.tip}</span>
+                    <button onClick={() => setInputs(p => ({ ...p, showLifeStageBanner: false }))} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 0, lineHeight: 1, marginLeft: 2, fontSize: 13 }}>✕</button>
+                  </div>
+                )}
               </div>
             )}
             {/* ── READINESS TAB ── */}
@@ -20745,6 +21228,12 @@ ${milestoneSnapshotHtml}
                 spouseEffectiveOaDrawMonthly={spouseEffectiveOaDrawMonthly}
                 spouseEffectiveOaDrawStartAge={spouseEffectiveOaDrawStartAge}
                 spouseMilestones={spouseMilestones}
+                sgBenchmarks={SG_RETIREMENT_BENCHMARKS}
+                lifePlanRecommendation={lifePlanRecommendation}
+                sensitivityPerThousand={sensitivityPerThousand}
+                lifeStage={lifeStage}
+                raAtPayout={raAtPayout}
+                projFRS={Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + (Number(debouncedInputs.retirementSumGrowth)||3)/100, Math.max(0,(Number(debouncedInputs.payoutAge)||65)-(Number(debouncedInputs.currentAge)||35))))}
               />
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
@@ -22812,6 +23301,11 @@ ${milestoneSnapshotHtml}
                     <button onClick={() => setShowMonteCarlo(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showMonteCarlo ? "rgba(139,92,246,0.5)" : "var(--border-strong)"}`, background: showMonteCarlo ? "rgba(139,92,246,0.15)" : "var(--bg-input)", color: showMonteCarlo ? "var(--clr-violet)" : "var(--text-muted)", cursor: "pointer" }}>
                       <Activity style={{ width: 13, height: 13 }} />{showMonteCarlo ? "Hide" : "Show"} Monte Carlo (200 runs)
                     </button>
+                    {/* Sprint 3: Bala curve — SG cohort-average CPF balance overlay */}
+                    <button onClick={() => setInputs(p => ({ ...p, showBalaCurve: !p.showBalaCurve }))}
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${inputs.showBalaCurve ? "rgba(100,116,139,0.5)" : "var(--border-strong)"}`, background: inputs.showBalaCurve ? "rgba(100,116,139,0.12)" : "var(--bg-input)", color: inputs.showBalaCurve ? "#64748b" : "var(--text-muted)", cursor: "pointer" }}>
+                      <Users style={{ width: 13, height: 13 }} />{inputs.showBalaCurve ? "Hide" : "Show"} SG Average
+                    </button>
                     {(inputs.lifeEvents || []).filter(e => e.enabled !== false).length > 0 && (
                       <button onClick={() => setShowLifeEventMarkers(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showLifeEventMarkers ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showLifeEventMarkers ? "rgba(239,68,68,0.12)" : "var(--bg-input)", color: showLifeEventMarkers ? "#ef4444" : "var(--text-muted)", cursor: "pointer" }}>
                         <Bell style={{ width: 13, height: 13 }} />{showLifeEventMarkers ? "Hide" : "Show"} Events
@@ -22964,6 +23458,21 @@ ${milestoneSnapshotHtml}
                           <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" connectNulls={false} stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
                           {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="var(--clr-violet2)" strokeWidth={0.5} strokeDasharray="2 2" fill="var(--clr-purple2)" fillOpacity={0.18} name="MC Band (P10-P90)" legendType="square" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
                           {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
+                          {/* Sprint 3: SG cohort-average CPF balance overlay (BALA_CURVE) */}
+                          {inputs.showBalaCurve && (() => {
+                            const balaByAge = {};
+                            for (let i = 0; i < BALA_CURVE.length - 1; i++) {
+                              const { age: a1, val: v1 } = BALA_CURVE[i];
+                              const { age: a2, val: v2 } = BALA_CURVE[i + 1];
+                              for (let a = a1; a <= a2; a++) balaByAge[a] = Math.round(v1 + (v2 - v1) * ((a - a1) / (a2 - a1)));
+                            }
+                            return (
+                              <Line isAnimationActive={false} type="monotone"
+                                data={stackedAccumData.map(r => ({ age: r.age, balaAvg: balaByAge[r.age] ?? null }))}
+                                dataKey="balaAvg" stroke="#64748b" strokeWidth={1.5} strokeDasharray="8 4"
+                                dot={false} name="SG cohort avg" />
+                            );
+                          })()}
                         </AreaChart>
                       );
 
@@ -24296,6 +24805,31 @@ ${milestoneSnapshotHtml}
                     Previously the chart, breakeven cards, and sensitivity table were shown
                     with RA=0, producing misleading "Beyond Age 95" crossover cards and $0
                     sensitivity rows. Now fully suppressed and replaced. */}
+                {/* Sprint 3: CPF LIFE plan recommendation card */}
+                {!isSpouseLife && lifePlanRecommendation && !isForeigner && (() => {
+                  const rec = lifePlanRecommendation;
+                  const clrMap = { standard: "var(--clr-blue)", escalating: "var(--clr-emerald)", basic: "var(--clr-amber)" };
+                  const lblMap = { standard: "Standard Plan", escalating: "Escalating Plan", basic: "Basic Plan" };
+                  const clr = clrMap[rec.plan] || "var(--clr-blue)";
+                  return (
+                    <div style={{ background: `${clr}12`, border: `1px solid ${clr}40`, borderRadius: 14, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 15 }}>💡</span>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", flex: 1 }}>Plan Recommendation</span>
+                        <span style={{ padding: "3px 10px", borderRadius: 20, background: clr, color: "#fff", fontSize: 11, fontWeight: 700 }}>{lblMap[rec.plan]}</span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 13, color: "var(--text-main)", lineHeight: 1.6 }}>{rec.reason}</p>
+                      {rec.secondaryNote && <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>{rec.secondaryNote}</p>}
+                      {sensitivityPerThousand != null && (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", width: "fit-content" }}>
+                          <span>⚡</span>
+                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Every <strong>$1,000</strong> added to RA today → approx. <strong style={{ color: "var(--clr-emerald)" }}>+${sensitivityPerThousand}/mo</strong> at retirement ({lblMap[rec.plan]})</span>
+                        </div>
+                      )}
+                      <p style={{ margin: 0, fontSize: 10, color: "var(--text-subtle)" }}>Based on bequest flags, longevity horizon ({rec.longevityAge} yrs) and break-even age ({rec.breakeven ?? "beyond horizon"}). Change inputs to update.</p>
+                    </div>
+                  );
+                })()}
                 {isForeigner ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "28px 24px", borderRadius: 16, background: "rgba(var(--clr-amber-rgb),0.05)", border: "2px dashed rgba(var(--clr-amber-rgb),0.3)", textAlign: "center" }}>
                     <div style={{ fontSize: 32 }}>🔒</div>
@@ -26211,7 +26745,6 @@ ${milestoneSnapshotHtml}
                     }}
                     style={{ display: "none", width: "100%", padding: "8px 10px", borderRadius: 10, fontSize: 13, fontWeight: 600, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-main)", cursor: "pointer" }}>
                     <option value="" style={{ fontSize: 13 }}>↓ Jump to section…</option>
-                    <option value="#doc-whatsnew" style={{ fontSize: 13 }}>💡 What's New</option>
                     <option value="#doc-readiness" style={{ fontSize: 13 }}>📊 Readiness Dashboard</option>
                     <option value="#doc-guide" style={{ fontSize: 13 }}>🗂 User Guide</option>
                     <option value="#doc-engine" style={{ fontSize: 13 }}>📈 Projection Engine</option>
@@ -26241,7 +26774,6 @@ ${milestoneSnapshotHtml}
                   <div className="docs-nav-pills" style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingBottom: 10, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   {[
                     // [href, Icon, label, accentColour] — icon + colour must match the section <h4> header exactly
-                    ["#doc-whatsnew",    Lightbulb,        "What's New",           "#22d3ee"                ],
                     ["#doc-readiness",   Activity,         "Readiness Dashboard",  "var(--clr-emerald)"     ],
                     ["#doc-guide",       LayoutDashboard,  "User Guide",           "var(--clr-blue)"        ],
                     ["#doc-engine",      Activity,         "Projection Engine",    "var(--clr-green)"       ],
@@ -26307,7 +26839,9 @@ ${milestoneSnapshotHtml}
 
                   {/* User Guide */}
                   {/* ── What's New ─────────────────────────────────────────────────────── */}
-                  <section id="doc-whatsnew" style={{ marginBottom: 32 }}>
+                  {/* Sprint 1: What's New section removed — content moved to external release notes */}
+                  {false && <section id="doc-whatsnew" />}
+                  {/* removed: <section id="doc-whatsnew" style={{ marginBottom: 32 }}> */}
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#22d3ee", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
                       <Lightbulb style={{ width: 18, height: 18 }} />What's New — Latest Update
                     </h4>
@@ -28135,14 +28669,10 @@ ${milestoneSnapshotHtml}
                     const activeCount = [showSorr, showInflationStress, showPropertyStress, showCpfRateStress, showHealthcareStress].filter(Boolean).length;
 
                     const applyWorstCase = () => {
-                      // Only activate stressors that have underlying data to stress-test
-                      const hasPriv = (Number(debouncedInputs.currentPrivateAssets)||0) > 0 || (Number(debouncedInputs.annualPrivateSaving)||0) > 0;
-                      const hasProp = (Number(debouncedInputs.propertyValue)||0) > 0;
-                      if (hasPriv) { setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15); }
+                      setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15);
                       setShowInflationStress(true); setInflationStressRate(5);
-                      if (hasProp) { setShowPropertyStress(true); setPropertyStressGrowthRate(-6); } // Correction-level; user can escalate to Crash/Crisis
+                      setShowPropertyStress(true); setPropertyStressGrowthRate(-6); // Correction-level; user can escalate to Crash/Crisis
                       setShowCpfRateStress(true);
-                      setShowPerfectStorm(true); // Surface Perfect Storm card in Strategy tab
                       setInputs(p => ({ ...p, cpfOARateOverride: 1.5, cpfSARateOverride: 3.0, cpfMARateOverride: 3.0 }));
                     };
                     const resetAllStresses = () => {
@@ -28404,14 +28934,14 @@ ${milestoneSnapshotHtml}
                           </p>
                           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                             {[
-                              { label: "SORR",          active: showSorr,             toggle: () => setShowSorr(v => !v),                   color: "#ef4444", disabled: (Number(debouncedInputs.currentPrivateAssets)||0) === 0 && (Number(debouncedInputs.annualPrivateSaving)||0) === 0, disabledTitle: "Add private assets in the sidebar to enable SORR" },
+                              { label: "SORR",          active: showSorr,             toggle: () => setShowSorr(v => !v),                   color: "#ef4444" },
                               { label: "Inflation",     active: showInflationStress,  toggle: () => setShowInflationStress(v => !v),         color: "var(--clr-amber)" },
                               { label: "Property",      active: showPropertyStress,   toggle: () => setShowPropertyStress(v => !v),          color: "var(--clr-red)", disabled: (Number(debouncedInputs.propertyValue)||0) === 0 },
                               { label: "CPF Rates",     active: showCpfRateStress,    toggle: () => setShowCpfRateStress(v => !v),           color: "var(--clr-purple)" },
                               { label: "Healthcare",    active: showHealthcareStress, toggle: () => setShowHealthcareStress(v => !v),        color: "#f97316" },
-                            ].map(({ label, active, toggle, color, disabled, disabledTitle }) => (
+                            ].map(({ label, active, toggle, color, disabled }) => (
                               <button key={label} onClick={!disabled ? toggle : undefined}
-                                title={disabled ? (disabledTitle || "Enter a property value in the sidebar to enable this test") : undefined}
+                                title={disabled ? "Enter a property value in the sidebar to enable this test" : undefined}
                                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? color : "var(--border-strong)"}`, background: active ? `${color}18` : "var(--bg-input)", color: active ? color : disabled ? "var(--text-subtle)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, transition: "all .15s" }}>
                                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: active ? color : "var(--border-strong)", flexShrink: 0 }} />
                                 {label} {active ? "ON" : "OFF"}
@@ -29056,6 +29586,60 @@ ${milestoneSnapshotHtml}
                             })()}
                           </div>
                         )}
+
+                        {/* Sprint 3: Monte Carlo — unified stress card in Stress Centre ─────────
+                             Primary Monte Carlo toggle (200-run band) stays in Grow/Spend → Accumulation.
+                             This card is the Stress Centre's probabilistic hub: variance presets,
+                             P(Sufficiency) badge, and band summary — all without switching tabs.     */}
+                        <div style={{ background: "var(--bg-muted)", border: `1px solid ${showMonteCarlo ? "rgba(139,92,246,0.4)" : "var(--border-strong)"}`, borderRadius: 18, padding: 20 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showMonteCarlo ? 14 : 0 }}>
+                            <span style={{ fontSize: 15 }}>📊</span>
+                            <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", margin: 0, flex: 1 }}>Monte Carlo — Probabilistic Stress</h4>
+                            <button onClick={() => setShowMonteCarlo(v => !v)}
+                              style={{ padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: `1px solid ${showMonteCarlo ? "rgba(139,92,246,0.5)" : "var(--border-strong)"}`, background: showMonteCarlo ? "rgba(139,92,246,0.15)" : "var(--bg-input)", color: showMonteCarlo ? "var(--clr-violet)" : "var(--text-muted)", cursor: "pointer" }}>
+                              {showMonteCarlo ? "Hide" : "Run 200 Simulations"}
+                            </button>
+                          </div>
+                          {showMonteCarlo && monteCarloData && (() => {
+                            const pa = Number(debouncedInputs.payoutAge) || 65;
+                            const baseAtPA = accumulationByAge.get(pa)?.total || 0;
+                            const mcAtPA = monteCarloData.find(r => r.age === pa);
+                            const p10 = mcAtPA?.mcP10 || 0;
+                            const p90 = mcAtPA?.mcP90 || 0;
+                            const probS = baseAtPA > 0 ? Math.min(99, Math.max(1,
+                              Math.round(((p90 - Math.max(0, baseAtPA - p10)) / (p90 - p10 + 1)) * 100))) : 0;
+                            const sClr = probS >= 70 ? "var(--clr-emerald)" : probS >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
+                            return (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>200 simulations with randomised annual return variation. P10 = pessimistic, P90 = optimistic. Band overlay appears in Grow/Spend → Accumulation.</p>
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  {[["Mild","±0.5%",0.005],["Base","±1%",0.01],["Stress","±2%",0.02]].map(([lbl, pct, val]) => {
+                                    const act = Math.abs((mcVariancePct||0.01) - val) < 0.001;
+                                    return (
+                                      <button key={lbl} onClick={() => setMcVariancePct(val)}
+                                        style={{ flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, border: `1px solid ${act ? "rgba(139,92,246,0.5)" : "var(--border-strong)"}`, background: act ? "rgba(139,92,246,0.15)" : "var(--bg-input)", color: act ? "var(--clr-violet)" : "var(--text-muted)", cursor: "pointer" }}>
+                                        {lbl} <span style={{ fontSize: 10, opacity: 0.7 }}>{pct}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: `1px solid ${sClr}40` }}>
+                                  <div style={{ textAlign: "center", minWidth: 60 }}>
+                                    <p style={{ fontSize: 24, fontWeight: 900, color: sClr, margin: 0 }}>{probS}%</p>
+                                    <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0 }}>P(sufficient)</p>
+                                  </div>
+                                  <div>
+                                    <p style={{ fontSize: 12, color: "var(--text-main)", margin: "0 0 3px" }}>At age {pa}: P10 {formatCurrency(p10)} → P90 {formatCurrency(p90)}</p>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>Base: {formatCurrency(baseAtPA)} · {probS >= 70 ? "✅ Strong resilience" : probS >= 50 ? "⚠️ Moderate risk" : "🔴 High return sensitivity"}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          {showMonteCarlo && !monteCarloData && (
+                            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "8px 0 0" }}>Computing 200 simulations… inputs settling.</p>
+                          )}
+                        </div>
 
                       </div>
                     );
