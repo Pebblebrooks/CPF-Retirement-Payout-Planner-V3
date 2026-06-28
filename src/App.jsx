@@ -1,4 +1,4 @@
-C:\Users\ClaraTan\Downloads\App_130.jsx/**
+/**
  * Fusion 富生
  * ------------------------------------------------------------------------
  * Copyright (c) 2026 Pebblebrooks. All rights reserved.
@@ -806,7 +806,7 @@ const DEFAULT_INPUTS = {
   // budgetTaxRate        — marginal Singapore income tax rate (%)
   budgetLivingExpenses: 3000, budgetExpenseInflation: 2, budgetTaxOverride: false,
   budgetTaxRate: 0,
-  // ── Financial Health (Tier 2 advisory scores) ────────────────────────
+  // ── MAS Financial Health (Tier 2 advisory scores) ────────────────────────
   // emergencyFundMonths  — months of liquid savings set aside for emergencies (MAS: 3–6 months)
   // hasWill              — has a valid Will been prepared?
   // hasCPFNomination     — CPF nomination (CSNB) completed?
@@ -1276,7 +1276,7 @@ const INPUT_LABELS = {
   propMonetiseCashProceeds: "Prop Cash Proceeds", propMonetiseRaTopup: "Prop RA Top-up",
   lbsMonthlyPayout: "LBS Monthly Payout", lbsPayoutEndAge: "LBS Payout End Age",
   rentalIncome: "Rental Income (Monthly)", rentalStartAge: "Rental Start Age", rentalEndAge: "Rental End Age",
-  rentExpense: "Rent Expense (Monthly)", rentExpStartAge: "Rent Exp Start Age", rentExpEndAge: "Rent Exp End Age",
+  rentExpense: "Rental Expense (Monthly)", rentExpStartAge: "Rental Exp Start Age", rentExpEndAge: "Rental Exp End Age",
   srsBalance: "SRS Balance", srsAnnualContribution: "SRS Annual Contrib",
   srsContribStopAge: "SRS Contrib Stop Age", srsReturnRate: "SRS Return Rate %",
   srsDrawdownStartAge: "SRS Drawdown Start Age", srsDrawdownYears: "SRS Drawdown Years",
@@ -4998,7 +4998,7 @@ function SetupWizard({ onComplete, onSkip, isDark }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Fusion 富生(Beta) </span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Fusion 富生</span>
             {advMode && <span style={{ fontSize: 11, fontWeight: 700, color: "#a855f7", background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 5, padding: "1px 6px", marginLeft: 4 }}>ADVANCED</span>}
           </div>
           <button type="button" onClick={onSkip}
@@ -5775,7 +5775,7 @@ function ReadinessTab({
         </summary>
         <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[
-            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Stress Resilience (Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Activate the Stress Centre (⚡ Worst Case) for the most meaningful Stress Resilience signal. Below the gauge: a Financial Health advisory panel with 5 non-scoring tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness)."],
+            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Stress Resilience (Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Activate the Stress Centre (⚡ Worst Case) for the most meaningful Stress Resilience signal. Below the gauge: a MAS Financial Health advisory panel with 5 non-scoring tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness)."],
             ["📊 KPI Tiles", "Five headline numbers: total CPF at payout age, monthly CPF LIFE payout, income coverage %, P10 downside (bad-luck scenario), and OA depletion age. Enable Monte Carlo in the Accumulation tab to unlock the downside tile."],
             ["📈 RA vs Retirement Sums", "A progress bar comparing your projected RA at payout age against BRS, FRS, and ERS. These targets grow at the retirement-sum growth rate you set in the sidebar (default 3%/yr)."],
             ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
@@ -8325,7 +8325,7 @@ function CPFPlannerApp() {
     'budgetLivingExpenses','propertyGoalValue','privateAssetGoal',
     'ehgAmount','cpfHousingGrantResale','phgAmount','stepUpGrantAmount',
     'dpsAnnualPremium','hpsAnnualPremium',
-    'lbsMonthlyPayout','rentalIncome',
+    'lbsMonthlyPayout','rentalIncome','rentExpense',
     'plannedDownpaymentOA','pledgeWithdrawalAmount',
   ]);
   // Returns formatted display value: $X,XXX when not focused, raw number string when focused.
@@ -11212,8 +11212,14 @@ function CPFPlannerApp() {
         const pm = payoutMap.get(age); // E4 fix: O(1)
         if (pm) {
           const raw = pm[`${highlightPlan}Total`] ?? pm.standardTotal;
+          if (raw == null) return undefined;
+          // Include private assets, property equity and SRS so Buy vs Rent comparison is meaningful
+          const projRow    = projMap?.get(age);
+          const privAssets = projRow?.privateAssets || 0;
+          const propValue  = projRow?.propertyValue  || 0;
+          const srsBalance = projRow?.srsBalance     || 0;
           // R-1 fix: deflate the net worth figure using the scenario's own inflation params
-          return raw != null ? deflate(raw, age) : undefined;
+          return deflate(raw + privAssets + propValue + srsBalance, age);
         }
       }
       // Old format fallback: estimate net worth as accumulation total + cumulative payout estimate
@@ -11239,7 +11245,7 @@ function CPFPlannerApp() {
       // Include one-time OA top-up from the 20% transfer in the net worth at and after payout age
       const oaBonus = age >= pa ? oaFromTransfer : 0;
       // R-1 fix: deflate the old-format fallback total as well
-      return deflate((am.total || 0) + cumPayout + oaBonus, age);
+      return deflate((am.total || 0) + (am.privateAssets || 0) + (am.propertyValue || 0) + (am.srsBalance || 0) + cumPayout + oaBonus, age);
     };
 
     let data = [];
@@ -12036,6 +12042,7 @@ function CPFPlannerApp() {
   // ── Perfect Storm: single combined engine run across all active stressors ──
   // Gated by showPerfectStorm toggle; runs at most 1 extra engine call.
   const perfectStormData = useMemo(() => {
+    if (!showPerfectStorm) return null;
     const anyActive = showSorr || showInflationStress || showPropertyStress || showCpfRateStress || showHealthcareStress;
     if (!anyActive) return null;
     const pa = payoutAge65;
@@ -12071,7 +12078,7 @@ function CPFPlannerApp() {
     const deltaPct = baseNetWorth > 0 ? Math.round(delta / baseNetWorth * 100) : 0;
     const cpfDelta = Math.max(0, baseTotalCPF - psTotalCPF);
     return { pa, psTotalCPF, psPriv, stressProp, baseTotalCPF, basePriv, baseProp, psNetWorth, baseNetWorth, delta, deltaPct, cpfDelta, hcTotal, lifeExp };
-  }, [showSorr, showInflationStress, showPropertyStress, showCpfRateStress,
+  }, [showPerfectStorm, showSorr, showInflationStress, showPropertyStress, showCpfRateStress,
       showHealthcareStress, debouncedInputs, payoutAge65, accumulationByAge,
       propertyStressData, hcMonthlyCost, hcStartAge, hcEndAge]);
 
@@ -20064,13 +20071,13 @@ ${milestoneSnapshotHtml}
 
                 {/* ── Rent Expense ── */}
                 <div style={{ marginTop: 12, padding: "12px 14px", background: "rgba(251,113,133,0.07)", border: "1px solid rgba(251,113,133,0.22)", borderRadius: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#fb7185", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Rent Expense</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#fb7185", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Rental Expense</div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>Monthly cash outflow when renting a home as tenant (debited from private assets)</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "#fb7185", textTransform: "uppercase", marginBottom: 4 }}>Monthly ($)<TooltipBox id="t-rentexp-mo" text="Monthly rent you pay as a tenant. Modelled as an annual outflow (×12) debited from your private assets each year between start and end age. Set 0 to disable. Use the Scenario Compare tab to run a Buy vs Rent comparison side-by-side." /></div>
                       <input type="text" inputMode="decimal" name="rentExpense" placeholder="0"
-                        value={inputs.rentExpense}
+                        value={getDisplayValue("rentExpense", inputs.rentExpense)}
                         onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                         onFocus={e => setFocusedField("rentExpense")}
                         className={fieldChanged("rentExpense") ? "cpf-fc" : undefined}
@@ -20080,8 +20087,9 @@ ${milestoneSnapshotHtml}
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "#fb7185", textTransform: "uppercase", marginBottom: 4 }}>Start Age</div>
                       <input type="text" inputMode="decimal" name="rentExpStartAge" placeholder="30"
-                        value={inputs.rentExpStartAge}
+                        value={Number(inputs.rentExpStartAge) > 0 ? inputs.rentExpStartAge : ""}
                         onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        onFocus={e => setFocusedField("rentExpStartAge")}
                         className={fieldChanged("rentExpStartAge") ? "cpf-fc" : undefined}
                         style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.rentExpStartAge ? "var(--clr-red)" : "rgba(251,113,133,0.35)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                       {inputErrors.rentExpStartAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.rentExpStartAge}</p>}
@@ -20091,6 +20099,7 @@ ${milestoneSnapshotHtml}
                       <input type="text" inputMode="decimal" name="rentExpEndAge" placeholder="85"
                         value={inputs.rentExpEndAge}
                         onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        onFocus={e => setFocusedField("rentExpEndAge")}
                         className={fieldChanged("rentExpEndAge") ? "cpf-fc" : undefined}
                         style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.rentExpEndAge ? "var(--clr-red)" : "rgba(251,113,133,0.35)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                       {inputErrors.rentExpEndAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.rentExpEndAge}</p>}
@@ -20518,7 +20527,7 @@ ${milestoneSnapshotHtml}
                   metrics: CPF Total at payout age + CPF LIFE monthly payout.
                   The standalone "Payout age" column is removed — age is shown inline as the
                   CPF Total sublabel inside each card. */}
-              {householdEnabled && debouncedInputs.cpfScheme !== 'rss' && (activeTab === "life" || activeTab === "strategy") && spouseProjection?.length > 0
+              {householdEnabled && debouncedInputs.cpfScheme !== 'rss' && spouseProjection?.length > 0
                 ? (() => {
                     // ── Primary data ──────────────────────────────────────────────────────
                     const pa          = payoutAge65;
@@ -22623,7 +22632,7 @@ ${milestoneSnapshotHtml}
                     { id: "decumulation", label: "📉 Decumulation" },
                   ].map(({ id, label }) => (
                     <button key={id} onClick={() => setGrowSubTab(id)}
-                      style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: growSubTab === id ? "3px solid var(--clr-blue2)" : "3px solid transparent", color: growSubTab === id ? "var(--clr-blue2)" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
+                      style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: growSubTab === id ? "3px solid var(--clr-blue2)" : "3px solid transparent", color: growSubTab === id ? "var(--clr-blue2)" : "var(--text-muted)", background: "transparent", outline: "none", transition: "color .15s" }}>
                       {label}
                     </button>
                   ))}
@@ -22865,7 +22874,7 @@ ${milestoneSnapshotHtml}
 
 
                       // ── Attribution data (A-05) ───────────────────────────────────────
-                      const attributionData = displayAccumulation.map(row => ({
+                      const attributionData = displayAccumulation.filter(row => row.age <= payoutAge65).map(row => ({
                         age:       row.age,
                         mandatory: row.yearMandatory  || 0,
                         voluntary: row.yearVoluntary  || 0,
@@ -23396,6 +23405,10 @@ ${milestoneSnapshotHtml}
                 summaryRows.push({ label: "Rental Income", startAge: rentalSt, endAge: rentalEn, monthly: rentalMo, total: rentalMo * 12 * Math.max(0, rentalEn - rentalSt + 1), color: "#a78bfa" });
               }
 
+              // One-time: RA→OA transfer if enabled
+              if (debouncedInputs.applyRaOaTransfer && raOaTransfer > 0) {
+                summaryRows.push({ label: "RA→OA Transfer", startAge: pa, endAge: pa, monthly: Math.round(raOaTransfer / 12), total: raOaTransfer, color: "var(--clr-amber3)", note: "one-time" });
+              }
               const propMonLabel = `Property Mon. (${inputs.propMonetiseScheme || "downgrade"})`;
               const totalCombined = summaryRows.filter(r => r.note !== "one-time").reduce((s, r) => s + r.monthly, 0);
               const shortfall = target > 0 ? target - totalCombined : 0;
@@ -23882,7 +23895,7 @@ ${milestoneSnapshotHtml}
                         </tbody>
                         <tfoot>
                           <tr style={{ borderTop: "2px solid var(--border-strong)", background: "var(--bg-panel)" }}>
-                            <td colSpan={2} style={{ padding: "12px 12px", fontWeight: 800, color: "var(--text-bright)", fontSize: 14 }}>Total Combined (excl. one-time) @ Age {pa}</td>
+                            <td colSpan={2} style={{ padding: "12px 12px", fontWeight: 800, color: "var(--text-bright)", fontSize: 14 }}>Total Combined{summaryRows.some(r => r.note === "one-time") ? " (excl. one-time)" : ""} @ Age {pa}</td>
                             <td className="lis-foot-span" style={{ padding: "12px 12px", fontWeight: 800, color: "var(--text-bright)", fontSize: 14 }}></td>
                             <td style={{ padding: "12px 12px", textAlign: "right", fontWeight: 900, fontFamily: "monospace", fontSize: 15, color: target > 0 ? (shortfall <= 0 ? "var(--clr-emerald)" : "var(--clr-amber)") : "var(--text-bright)" }}>{formatCurrency(totalCombined)}/mo</td>
                             <td className="lis-col-hide" style={{ padding: "12px 12px", textAlign: "right", fontFamily: "monospace", fontSize: 13, color: "var(--text-muted)" }}>{formatCurrency(summaryRows.reduce((s, r) => s + r.total, 0))}</td>
@@ -24938,7 +24951,7 @@ ${milestoneSnapshotHtml}
                   {scenarioA && scenarioB ? (
                     <div>
                       <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8, lineHeight: 1.6 }}>
-                        <strong style={{ color: "var(--text-bright)" }}>Y-axis: Cumulative Total Yield ($)</strong> — all CPF LIFE payouts received plus remaining bequest value at each age, under the <strong style={{ color: "var(--clr-green)" }}>{highlightPlan}</strong> plan. Higher = more total financial value returned from CPF over your lifetime.
+                        <strong style={{ color: "var(--text-bright)" }}>Y-axis: Total Net Worth ($)</strong> — combined CPF value (cumulative payouts + bequest), property equity, private assets, and SRS at each age. Shows the full financial picture — essential for Buy vs Rent and early-retirement comparisons.
                       </p>
                       <div style={{ height: 320, minHeight: 320 }}>
                         <ResponsiveContainer width="99%" height="100%">
@@ -24955,7 +24968,7 @@ ${milestoneSnapshotHtml}
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                             <XAxis dataKey="age" stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Age", position: "insideBottomRight", offset: -5, fill: "var(--chart-text)", fontSize: 12 }} />
-                            <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Cumulative Total Yield", angle: -90, position: "insideLeft", offset: 10, fill: "var(--chart-text)", fontSize: 11, style: { textAnchor: "middle" } }} />
+                            <YAxis tickFormatter={v => `$${v > 999 ? (v / 1000).toFixed(0) + "k" : v}`} stroke="var(--chart-text)" fontSize={11} tick={{ fill: "var(--chart-text)", fontWeight: 600 }} label={{ value: "Total Net Worth", angle: -90, position: "insideLeft", offset: 10, fill: "var(--chart-text)", fontSize: 11, style: { textAnchor: "middle" } }} />
                             <Tooltip contentStyle={STYLES.chartTooltip} itemStyle={STYLES.chartTooltipItem} labelStyle={STYLES.chartTooltipLabel} formatter={(v, n) => [formatCurrency(v), n]} labelFormatter={v => `Age ${v}`} wrapperStyle={STYLES.chartTooltipWrapper} />
                             <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={STYLES.chartLegend} />
                             <Area isAnimationActive={false} type="monotone" dataKey="yieldA" stroke="var(--clr-blue2)" strokeWidth={2} fill="url(#cmpAGrad)" dot={false} name={`A${scenarioLabelA ? `: ${scenarioLabelA}` : ""}`} />
@@ -24985,8 +24998,8 @@ ${milestoneSnapshotHtml}
                           { title: "💰 Current Balances",     keys: ["oaBalance","saBalance","maBalance","currentPrivateAssets","srsBalance"] },
                           { title: "📈 Salary & Contributions", keys: ["salaryGross","salaryBonus","contributionStopAge","annualPrivateSaving"] },
                           { title: "⬆️ Voluntary Top-ups",   keys: ["vcSaTopup","vc3a","vcMaCash","mrssAnnual","mmssAnnual"] },
-                          { title: "🏠 Housing",              keys: ["housingOutflow","housingStopAge","propertyValue","propertyGrowthRate","includeProperty","propMonetiseEnabled","propMonetiseScheme","propMonetiseAge","propMonetiseCashProceeds","rentalIncome","rentalStartAge","rentalEndAge"] },
-                          { title: "📤 Decumulation",         keys: ["oaDrawdownMonthly","oaDrawdownStartAge","oaDrawdownFloor","dieWithZeroEnabled","retirementMonthlyIncome"] },
+                          { title: "🏠 Housing",              keys: ["housingOutflow","housingStopAge","propertyValue","propertyGrowthRate","includeProperty","propMonetiseEnabled","propMonetiseScheme","propMonetiseAge","propMonetiseCashProceeds","rentalIncome","rentalStartAge","rentalEndAge","rentExpense","rentExpStartAge","rentExpEndAge"] },
+                          { title: "📤 Decumulation",         keys: ["oaDrawdownMonthly","oaDrawdownStartAge","oaDrawdownFloor","dieWithZeroEnabled","retirementMonthlyIncome","applyRaOaTransfer"] },
                           { title: "🛡️ Insurance & SRS",     keys: ["dpsMode","dpsAnnualPremium","hpsAnnualPremium","srsAnnualContribution","srsContribStopAge","srsDrawdownStartAge","srsDrawdownYears","srsReturnRate"] },
                           { title: "📊 Returns & Growth",     keys: ["privateAssetGrowthRate","inflationRate","salaryGrowthRate"] },
                         ];
@@ -27438,6 +27451,10 @@ ${milestoneSnapshotHtml}
                 summaryRows.push({ label: "Rental Income", startAge: rentalSt, endAge: rentalEn, monthly: rentalMo, total: rentalMo * 12 * Math.max(0, rentalEn - rentalSt + 1), color: "#a78bfa" });
               }
 
+              // One-time: RA→OA transfer if enabled
+              if (debouncedInputs.applyRaOaTransfer && raOaTransfer > 0) {
+                summaryRows.push({ label: "RA→OA Transfer", startAge: pa, endAge: pa, monthly: Math.round(raOaTransfer / 12), total: raOaTransfer, color: "var(--clr-amber3)", note: "one-time" });
+              }
               const propMonLabel = `Property Mon. (${inputs.propMonetiseScheme || "downgrade"})`;
               const totalCombined = summaryRows.filter(r => r.note !== "one-time").reduce((s, r) => s + r.monthly, 0);
               const shortfall = target > 0 ? target - totalCombined : 0;
@@ -27466,7 +27483,7 @@ ${milestoneSnapshotHtml}
                           setTaxOptSnapshot(null);
                         }
                       }}
-                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", transition: "color .15s" }}>
+                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: goalStratTab === id ? "3px solid #f43f5e" : "3px solid transparent", color: goalStratTab === id ? "#f43f5e" : "var(--text-muted)", background: "transparent", outline: "none", transition: "color .15s" }}>
                         {label}
                       </button>
                     ))}
@@ -28135,14 +28152,10 @@ ${milestoneSnapshotHtml}
                     const activeCount = [showSorr, showInflationStress, showPropertyStress, showCpfRateStress, showHealthcareStress].filter(Boolean).length;
 
                     const applyWorstCase = () => {
-                      // Only activate stressors that have underlying data to stress-test
-                      const hasPriv = (Number(debouncedInputs.currentPrivateAssets)||0) > 0 || (Number(debouncedInputs.annualPrivateSaving)||0) > 0;
-                      const hasProp = (Number(debouncedInputs.propertyValue)||0) > 0;
-                      if (hasPriv) { setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15); }
+                      setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15);
                       setShowInflationStress(true); setInflationStressRate(5);
-                      if (hasProp) { setShowPropertyStress(true); setPropertyStressGrowthRate(-6); } // Correction-level; user can escalate to Crash/Crisis
+                      setShowPropertyStress(true); setPropertyStressGrowthRate(-6); // Correction-level; user can escalate to Crash/Crisis
                       setShowCpfRateStress(true);
-                      setShowPerfectStorm(true); // Surface Perfect Storm card in Strategy tab
                       setInputs(p => ({ ...p, cpfOARateOverride: 1.5, cpfSARateOverride: 3.0, cpfMARateOverride: 3.0 }));
                     };
                     const resetAllStresses = () => {
@@ -28404,14 +28417,14 @@ ${milestoneSnapshotHtml}
                           </p>
                           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                             {[
-                              { label: "SORR",          active: showSorr,             toggle: () => setShowSorr(v => !v),                   color: "#ef4444", disabled: (Number(debouncedInputs.currentPrivateAssets)||0) === 0 && (Number(debouncedInputs.annualPrivateSaving)||0) === 0, disabledTitle: "Add private assets in the sidebar to enable SORR" },
+                              { label: "SORR",          active: showSorr,             toggle: () => setShowSorr(v => !v),                   color: "#ef4444" },
                               { label: "Inflation",     active: showInflationStress,  toggle: () => setShowInflationStress(v => !v),         color: "var(--clr-amber)" },
                               { label: "Property",      active: showPropertyStress,   toggle: () => setShowPropertyStress(v => !v),          color: "var(--clr-red)", disabled: (Number(debouncedInputs.propertyValue)||0) === 0 },
                               { label: "CPF Rates",     active: showCpfRateStress,    toggle: () => setShowCpfRateStress(v => !v),           color: "var(--clr-purple)" },
                               { label: "Healthcare",    active: showHealthcareStress, toggle: () => setShowHealthcareStress(v => !v),        color: "#f97316" },
-                            ].map(({ label, active, toggle, color, disabled, disabledTitle }) => (
+                            ].map(({ label, active, toggle, color, disabled }) => (
                               <button key={label} onClick={!disabled ? toggle : undefined}
-                                title={disabled ? (disabledTitle || "Enter a property value in the sidebar to enable this test") : undefined}
+                                title={disabled ? "Enter a property value in the sidebar to enable this test" : undefined}
                                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? color : "var(--border-strong)"}`, background: active ? `${color}18` : "var(--bg-input)", color: active ? color : disabled ? "var(--text-subtle)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, transition: "all .15s" }}>
                                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: active ? color : "var(--border-strong)", flexShrink: 0 }} />
                                 {label} {active ? "ON" : "OFF"}
@@ -28688,7 +28701,7 @@ ${milestoneSnapshotHtml}
                                   {[
                                     { label: "Home Care ($1.5k/mo, 78–88)", s: 78, e: 88, m: 1500 },
                                     { label: "Nursing Home ($3k/mo, 80–90)", s: 80, e: 90, m: 3000 },
-                                    { label: "High-Dependency ($5k/mo, 82–88)", s: 82, e: 88, m: 5000 },
+                                    { label: "High-Dependency ($5k/mo, 82–90)", s: 82, e: 90, m: 5000 },
                                   ].map(({ label, s, e, m }) => (
                                     <button key={label} onClick={() => { setHcStartAge(s); setHcEndAge(e); setHcMonthlyCost(m); }}
                                       style={{ padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid var(--border-strong)", background: "var(--bg-input)", color: "var(--text-muted)", cursor: "pointer" }}>
@@ -30141,7 +30154,7 @@ ${milestoneSnapshotHtml}
                             {/* Header row */}
                             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
                               <div style={{ fontWeight: 800, fontSize: 13, color: sc.achievable ? "var(--text-bright)" : "var(--text-muted)" }}>
-                                {sc.achievable ? (i === 0 ? "⭐ Best Option" : `Option ${i + 1}`) : "⚠ Partially achievable"}
+                                {sc.achievable ? (i === 0 ? "⭐ Best ROI" : `Option ${i + 1}`) : "⚠ Partially achievable"}
                                 {" "}— Drop to {(sc.targetMargRate * 100).toFixed(1)}% bracket
                               </div>
                               <div style={{ marginLeft: "auto", fontSize: 13, fontWeight: 900, color: "#10b981" }}>
@@ -30278,7 +30291,7 @@ ${milestoneSnapshotHtml}
                         {/* ── Comparison table: current vs optimised ────────────── */}
                         {best && (
                           <div style={{ borderRadius: 12, padding: 16, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", marginBottom: 10 }}>📋 Before vs After (Best Option)</div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", marginBottom: 10 }}>📋 Before vs After (Best ROI Option)</div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px 8px" }}>
                               {[["", "Current", "Optimised"],
                                 ["Chargeable Income", `$${curChargeable.toLocaleString()}`, `$${best.newChargeable.toLocaleString()}`],
