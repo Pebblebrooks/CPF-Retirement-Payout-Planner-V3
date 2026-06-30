@@ -30,7 +30,7 @@
 // =============================================================================
 
 const COOKIE_NAME   = 'cpf_gate_v1';
-const BETA_MAX_AGE  = 7 * 24 * 60 * 60;     // 7 days — matches existing beta window
+const BETA_MAX_AGE  = 5 * 24 * 60 * 60;     // 5 days — matches existing beta window
 const ADMIN_MAX_AGE = 365 * 24 * 60 * 60;   // 1 year
 
 // ---------------------------------------------------------------------------
