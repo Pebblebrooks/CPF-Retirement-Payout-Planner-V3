@@ -13,7 +13,7 @@
 // REQUIRES (Worker → Settings → Variables and secrets, all type "Secret"):
 //   FUSION_GATE_SECRET          long random string, HMAC signing key
 //   FUSION_GATE_ADMIN_PASSWORD  admin passphrase (never expires)
-//   FUSION_GATE_BETA_PASSWORD   beta tester passphrase (7-day session)
+//   FUSION_GATE_BETA_PASSWORD   beta tester passphrase (5-day session)
 //   NOTE: these will be UNAVAILABLE to add until this script is deployed and
 //   wrangler.jsonc has a "main" field — Cloudflare hides Secrets entirely on
 //   Workers that are still in "static assets only" mode.
@@ -30,7 +30,7 @@
 // =============================================================================
 
 const COOKIE_NAME   = 'cpf_gate_v1';
-const BETA_MAX_AGE  = 5 * 24 * 60 * 60;     // 5 days — matches existing beta window
+const BETA_MAX_AGE  = 5 * 24 * 60 * 60;     // 5 days — beta access window
 const ADMIN_MAX_AGE = 365 * 24 * 60 * 60;   // 1 year
 
 // ---------------------------------------------------------------------------
@@ -198,13 +198,17 @@ export default {
           headers: {
             'Location': '/',
             'Set-Cookie': setCookieHeader(token, maxAge),
+            'Cache-Control': 'no-store',
           },
         });
       }
 
       return new Response(loginHtml({ error: 'Incorrect access code.' }), {
         status: 401,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+        },
       });
     }
 
@@ -212,7 +216,11 @@ export default {
     if (url.pathname === '/__gate/logout') {
       return new Response(null, {
         status: 302,
-        headers: { 'Location': '/', 'Set-Cookie': clearCookieHeader() },
+        headers: {
+          'Location': '/',
+          'Set-Cookie': clearCookieHeader(),
+          'Cache-Control': 'no-store',
+        },
       });
     }
 
@@ -234,6 +242,7 @@ export default {
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
             'Set-Cookie': clearCookieHeader(),
+            'Cache-Control': 'no-store',
           },
         });
       }
@@ -245,6 +254,7 @@ export default {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Set-Cookie': clearCookieHeader(),
+        'Cache-Control': 'no-store',
       },
     });
   },
