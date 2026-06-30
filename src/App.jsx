@@ -12906,7 +12906,7 @@ ${childrenHtml}
 
 <!-- ═══════════════════════════════ COVER ═══════════════════════════════ -->
 <div class="cover-banner">
-  <div class="cover-brand">CPF Retirement Planner Pro &middot; Retirement Engine V2026</div>
+  <div class="cover-brand">Fusion 富生 &middot; Retirement Engine V2026</div>
   <div class="cover-title">Retirement Projection Report</div>
   <div class="cover-sub"><strong>${inputs.name || 'Member'}</strong> &nbsp;&middot;&nbsp; ${memberType} &nbsp;&middot;&nbsp; ${genderLabel} &nbsp;&middot;&nbsp; Age ${ca} &nbsp;&middot;&nbsp; Payout Age ${pa} &nbsp;&middot;&nbsp; ${dollarMode}</div>
   <div class="cover-date">Generated ${dateStr}</div>
@@ -12918,7 +12918,7 @@ ${childrenHtml}
   <div class="kpi" style="border-top:3px solid #7c3aed"><div class="kpi-label">Net Worth @ Age ${pa}</div><div class="kpi-value" style="color:#7c3aed">${fc(nwPayout)}</div></div>
   <div class="kpi" style="border-top:3px solid #b45309"><div class="kpi-label">Net Worth @ Age 95</div><div class="kpi-value" style="color:#b45309">${fc(nwAt95)}</div></div>
 </div>
-<p style="font-size:7.5px;color:#94a3b8;text-align:center;margin:4px 0 10px">For informational purposes only — not financial advice &nbsp;&middot;&nbsp; CPF Retirement Planner Pro is not affiliated with CPF Board</p>
+<p style="font-size:7.5px;color:#94a3b8;text-align:center;margin:4px 0 10px">For informational purposes only — not financial advice &nbsp;&middot;&nbsp; Fusion 富生 is not affiliated with CPF Board</p>
 
 <div class="toc">
   <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:#334155;margin-bottom:6px">Report Contents</div>
@@ -30382,159 +30382,6 @@ ${milestoneSnapshotHtml}
   );
 }
 
-
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SOFT ACCESS GATE — secondary friction layer in front of CPFPlannerApp.
-//
-// This is NOT a security boundary: the bundle (including this code) is
-// downloaded to the browser regardless, and the passphrases below are
-// plain strings visible via DevTools. The actual access control is
-// Cloudflare Access + KV-based expiry enforced at the edge
-// (functions/_middleware.js). This gate exists purely to deter casual use
-// of a leaked link (e.g. a Pages preview-deployment URL not covered by
-// Access) and to mirror the admin / beta-tester expiry split at the edge.
-//
-// Storage key 'cpf_access_gate' -> JSON { role: 'admin' | 'beta', unlockedAt }
-//   - role 'admin' : never re-locks once entered
-//   - role 'beta'  : re-locks 7 days after unlockedAt
-// ═══════════════════════════════════════════════════════════════════════════
-
-const ACCESS_GATE_KEY = 'cpf_access_gate';
-const ACCESS_GATE_BETA_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const ACCESS_GATE_PASSPHRASES = { admin: 'admin$$1188$$', beta: 'beta2026' };
-
-function readAccessGate() {
-  try {
-    const raw = localStorage.getItem(ACCESS_GATE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.role || !parsed.unlockedAt) return null;
-    if (parsed.role === 'beta' && (Date.now() - parsed.unlockedAt) > ACCESS_GATE_BETA_WINDOW_MS) {
-      return { expired: true };
-    }
-    if (parsed.role === 'admin' || parsed.role === 'beta') return { role: parsed.role };
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function writeAccessGate(role) {
-  try {
-    localStorage.setItem(ACCESS_GATE_KEY, JSON.stringify({ role, unlockedAt: Date.now() }));
-  } catch {}
-}
-
-function LockScreen({ initiallyExpired, onUnlock }) {
-  const [value, setValue] = useState('');
-  const [error, setError] = useState(false);
-  const [expired, setExpired] = useState(!!initiallyExpired);
-
-  const submit = () => {
-    const v = value.trim();
-    if (v === ACCESS_GATE_PASSPHRASES.admin) {
-      writeAccessGate('admin');
-      onUnlock();
-    } else if (v === ACCESS_GATE_PASSPHRASES.beta) {
-      writeAccessGate('beta');
-      onUnlock();
-    } else {
-      setError(true);
-      setExpired(false);
-      setValue('');
-    }
-  };
-
-  return (
-    <div style={{
-      minHeight: '100vh', width: '100%',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #0d1424 0%, #131c33 100%)',
-      fontFamily: 'system-ui, -apple-system, sans-serif', padding: 16,
-      boxSizing: 'border-box',
-    }}>
-      <style>{`
-        .cpf-gate-input:focus { outline: none; border-color: #4f8cff !important; }
-        .cpf-gate-btn:hover { background: #3d6fd6 !important; }
-      `}</style>
-      <div style={{
-        background: '#161f38', border: '1px solid #28324f', borderRadius: 12,
-        padding: '32px 28px', maxWidth: 360, width: '100%', textAlign: 'center',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 14 }}>
-          <div style={{ background: '#10b981', padding: 8, borderRadius: 12, display: 'flex' }}>
-            <Calculator style={{ color: '#ffffff', width: 18, height: 18 }} />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 900, fontSize: 16, background: 'linear-gradient(90deg,#10b981,#3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', whiteSpace: 'nowrap' }}>
-              Fusion 富生
-            </div>
-            <div style={{ fontSize: 11, color: '#10b981', fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-              Retirement Engine v2026
-            </div>
-          </div>
-        </div>
-        <div style={{ fontSize: 22, marginBottom: 8 }}>{'\u{1F512}'}</div>
-        <p style={{ fontSize: 13, color: '#9aa4b8', margin: '0 0 20px', lineHeight: 1.5 }}>
-          {expired
-            ? 'Your beta access window has ended. Enter a valid access code to continue.'
-            : 'This app is in private beta. Enter your access code to continue.'}
-        </p>
-        <input
-          className="cpf-gate-input"
-          type="password"
-          value={value}
-          placeholder="Access code"
-          onChange={(e) => { setValue(e.target.value); setError(false); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-          style={{
-            width: '100%', boxSizing: 'border-box', padding: '10px 12px',
-            borderRadius: 8, border: `1px solid ${error ? '#e05252' : '#3a4566'}`,
-            background: '#0d1424', color: '#e6e9ef', fontSize: 14, marginBottom: 12,
-          }}
-          autoFocus
-        />
-        {error && (
-          <div style={{ color: '#e05252', fontSize: 12, marginBottom: 12, marginTop: -4 }}>
-            Incorrect access code.
-          </div>
-        )}
-        <button
-          className="cpf-gate-btn"
-          onClick={submit}
-          style={{
-            width: '100%', padding: '10px 12px', borderRadius: 8, border: 'none',
-            background: '#4f8cff', color: '#fff', fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', transition: 'background 0.15s',
-          }}
-        >
-          Unlock
-        </button>
-        <p style={{ fontSize: 11, color: '#a0b4cc', margin: '20px 0 0' }}>
-          {'\u00A9'} 2026 Pebblebrooks. All rights reserved.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
-  const [gate, setGate] = useState(() => {
-    const g = readAccessGate();
-    if (!g) return { status: 'locked' };
-    if (g.expired) return { status: 'expired' };
-    return { status: 'unlocked' };
-  });
-
-  if (gate.status === 'unlocked') return <CPFPlannerApp />;
-
-  return (
-    <LockScreen
-      initiallyExpired={gate.status === 'expired'}
-      onUnlock={() => setGate({ status: 'unlocked' })}
-    />
-  );
+  return <CPFPlannerApp />;
 }
