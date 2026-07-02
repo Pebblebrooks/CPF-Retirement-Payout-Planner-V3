@@ -5672,15 +5672,15 @@ function ReadinessTab({
       ? rawPayout * (1 - basicPremiumPct / 100) / 0.90
       : rawPayout;
     // Portfolio withdrawal adds to monthly retirement income for the adequacy calculation
-    const portWithdrawMoRS = Number(debouncedInputs.portfolioWithdrawalMonthly) || 0;
-    const portWithdrawStartRS = Number(debouncedInputs.portfolioWithdrawalStartAge) || payoutAge65;
+    const portWithdrawMoRS = Number(inputs.portfolioWithdrawalMonthly) || 0;
+    const portWithdrawStartRS = Number(inputs.portfolioWithdrawalStartAge) || payoutAge65;
     const portActiveAtPA = portWithdrawMoRS > 0 && portWithdrawStartRS <= payoutAge65;
-    const totalRetireIncome = stdMonthly + (portActiveAtPA ? portWithdrawMoRS : 0) + (Number(debouncedInputs.oaDrawdownMonthly) || 0);
+    const totalRetireIncome = stdMonthly + (portActiveAtPA ? portWithdrawMoRS : 0) + (Number(inputs.oaDrawdownMonthly) || 0);
     // Target: use retirement expense estimate from new spending model if living expenses are set
-    const baseExp = Number(debouncedInputs.budgetLivingExpenses) || 0;
+    const baseExp = Number(inputs.budgetLivingExpenses) || 0;
     const retireExpTarget = baseExp > 0
-      ? Math.round(baseExp * (Number(debouncedInputs.retirementExpenseRatio) || 75) / 100
-          + (Number(debouncedInputs.retirementHealthcareMonthly) || 500))
+      ? Math.round(baseExp * (Number(inputs.retirementExpenseRatio) || 75) / 100
+          + (Number(inputs.retirementHealthcareMonthly) || 500))
       : target; // fall back to targetMonthlyIncome if no living expenses set
     // incomeRatio kept for sub-bar display; incomeSubScore is null when no target
     const incomeRatio    = retireExpTarget > 0 ? Math.min(1, totalRetireIncome / retireExpTarget) : (target > 0 ? Math.min(1, stdMonthly / target) : null);
@@ -5773,6 +5773,9 @@ function ReadinessTab({
     lifePlans, highlightPlan, isMale, basicPremiumPct, target,
     monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
     milestones, inputs.inflationRate, ca, perfectStormData,
+    inputs.portfolioWithdrawalMonthly, inputs.portfolioWithdrawalStartAge,
+    inputs.oaDrawdownMonthly, inputs.budgetLivingExpenses,
+    inputs.retirementExpenseRatio, inputs.retirementHealthcareMonthly,
   ]);
 
   // ── Derived metrics ──────────────────────────────────────────────────────
