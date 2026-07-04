@@ -1,10 +1,10 @@
 /**
  * Fusion 富生
  * ------------------------------------------------------------------------
- * Copyright (c) 2026 Pebblebrooks. All rights reserved.
+ * Copyright (c) 2026 Fusion 富生. All rights reserved.
  *
  * This source code and the software it forms part of are the proprietary
- * and confidential property of Pebblebrooks (owner & developer). No part
+ * and confidential property of Fusion 富生 (owner & developer). No part
  * of this file may be copied, reproduced, distributed, or used to create
  * derivative works, in whole or in part, without prior written permission
  * from the owner.
@@ -988,6 +988,10 @@ const PRESET_PROFILES = [
       propMonetiseEnabled: false, propMonetiseCashProceeds: 0, propMonetiseRaTopup: 0,
       // ── Die with Zero ─────────────────────────────────────────────────────
       dieWithZeroEnabled: false, dieWithZeroAge: 85,
+      // Fields added after blank preset was created — explicit zeros override
+      // DEFAULT_INPUTS non-zero defaults so Clear All produces a true blank slate.
+      budgetLivingExpenses: 0,        // DEFAULT: 3000
+      retirementHealthcareMonthly: 0, // DEFAULT: 500
     }
   },
   {
@@ -1218,7 +1222,7 @@ const PRESET_PROFILES = [
       vcMaCash: 79000, vcMaFreq: 'one-time', vcMaDur: 0,
 
       // ── VC3A: maximum annual contribution until handover at 21 ────────────
-      vc3aCash: 37740, vc3aFreq: 'annual', vc3aDur: 0,
+      vc3aCash: 37740, vc3aFreq: 'annual', vc3aDur: 21,  // 21 yrs from age 0 = stop at age 21
 
       // ── Other voluntary / grants ──────────────────────────────────────────
       vcVhr: 0, vcVhrFreq: 'annual', vcVhrDur: 0,
@@ -1302,7 +1306,7 @@ const PRESET_PROFILES = [
       vcMaCash: 0, vcMaFreq: 'annual', vcMaDur: 0,
 
       // ── VC3A: maximum annual contribution until handover at 21 ────────────
-      vc3aCash: 37740, vc3aFreq: 'annual', vc3aDur: 0,
+      vc3aCash: 37740, vc3aFreq: 'annual', vc3aDur: 21,  // 21 yrs from age 0 = stop at age 21
 
       // ── Other voluntary / grants ──────────────────────────────────────────
       vcVhr: 0, vcVhrFreq: 'annual', vcVhrDur: 0,
@@ -4480,7 +4484,7 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
 //
 // DEFAULT_INPUTS must be defined before this block (it is — see line ~330).
 
-const lzCompress = (str) => {
+const encodePlanState = (str) => {
   try {
     const state = JSON.parse(str);
     // Delta-encode main inputs: only store fields that differ from DEFAULT_INPUTS
@@ -4514,7 +4518,7 @@ const lzCompress = (str) => {
   } catch (e) { return encodeURIComponent(str); }
 };
 
-const lzDecompress = (encoded) => {
+const decodePlanState = (encoded) => {
   try {
     if (encoded.startsWith('~')) {
       // New delta format: base64url of compact delta-encoded JSON
@@ -5610,6 +5614,8 @@ function ReadinessTab({
   onSrsCtaClick,
   // Inflows CTA: opens + scrolls to Inflows (topups) section in the sidebar
   onInflowsCtaClick,
+  // Portfolio CTA: opens + scrolls to Investment Portfolio section in the sidebar
+  onPortfolioCtaClick,
   // B-01: household parallel readiness — null/false when household mode is off
   householdEnabled,
   spouseInputs,
@@ -6459,7 +6465,11 @@ function ReadinessTab({
         const propAtPA      = paRow.propertyValue || 0;
         const totalWealthPA = liquidAtPA + illiquidCPF + propAtPA;  // true total wealth denominator
         const liquidPct     = totalWealthPA > 0 ? Math.round(liquidAtPA / totalWealthPA * 100) : 0;
-        const liqScore      = liquidPct >= 50 ? 100 : liquidPct >= 25 ? 65 : 30;
+        // Return null (not floor 30) when totalWealthPA === 0 — label already shows
+        // "No data" and null is excluded from wellness average, consistent with
+        // savingsRate=null (no salary) and p10SubScore=null (no stress data) patterns.
+        const liqScore      = totalWealthPA === 0 ? null
+          : liquidPct >= 50 ? 100 : liquidPct >= 25 ? 65 : 30;
         const liqStatus     = liqScore >= 80 ? "green" : liqScore >= 55 ? "amber" : "red";
         const liqLabel      = totalWealthPA > 0 ? `${liquidPct}% freely liquid` : "No data";
         const liqTip        = `At payout age ${pa}: freely liquid assets (OA + SRS + private) = ${formatCurrency(liquidAtPA)} of total wealth ${formatCurrency(totalWealthPA)}. RA is locked in CPF LIFE (annuity) and MA is restricted to medical use. Locked CPF: ${formatCurrency(illiquidCPF)}. Score: ≥50% liquid = green; 25–49% = amber; <25% = red.`;
@@ -7318,6 +7328,8 @@ function ReadinessTab({
                       onSrsCtaClick();
                     } else if (a.id === "frs" && onInflowsCtaClick) {
                       onInflowsCtaClick();
+                    } else if (a.id === "portfolio" && onPortfolioCtaClick) {
+                      onPortfolioCtaClick();
                     } else {
                       setActiveTab(a.tab);
                       if (a.openSidebar) setSidebarOpen(true);
@@ -7359,10 +7371,30 @@ function findScrollContainer(el) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Plan Tier ───────────────────────────────────────────────────────────────────
+// Drives the navbar badge. 'BETA' = identical to previous hardcoded pill.
+// Future CF Worker injection: const PLAN_TIER = window.__PLAN_TIER || 'BETA';
+const PLAN_TIER = 'BETA'; // 'LITE' | 'PLUS' | 'PRO'
+const TIER_CONFIG = {
+  BETA: { label: 'BETA', bg: 'linear-gradient(90deg, var(--clr-purple2), var(--clr-purple))',
+          border: 'rgba(var(--clr-purple-rgb),0.6)', anim: 'betaGlow 2.6s ease-in-out infinite',
+          title: 'Fusion 富生 is in active beta — features and figures are still being refined' },
+  LITE: { label: 'LITE', bg: 'linear-gradient(90deg, #475569, #64748b)',
+          border: 'rgba(100,116,139,0.5)', anim: 'none',
+          title: 'Fusion 富生 Lite — core CPF projection and retirement readiness tools' },
+  PLUS: { label: 'PLUS', bg: 'linear-gradient(90deg, #1d4ed8, #3b82f6)',
+          border: 'rgba(59,130,246,0.5)', anim: 'none',
+          title: 'Fusion 富生 Plus — full feature set including Monte Carlo, Stress Centre, and Goal Simulator' },
+  PRO:  { label: 'PRO',  bg: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
+          border: 'rgba(139,92,246,0.6)', anim: 'betaGlow 2.6s ease-in-out infinite',
+          title: 'Fusion 富生 Pro — complete access including admin tools, scenario exports, and household planning' },
+};
+
 function CPFPlannerApp() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
-  const privateAssetsRef = useRef(null); // scroll target for "SRS panel ↗" Readiness action CTA
+  const privateAssetsRef   = useRef(null); // scroll target for "SRS panel ↗" Readiness action CTA
+  const portfolioSectionRef = useRef(null); // scroll target for "Portfolio ↗" Readiness action CTA
   const topupsSectionRef       = useRef(null); // scroll target for "Inflows ↗" (APQ) & "Add voluntary top-ups" (plan-ready CTA)
   const lifeEventsSectionRef   = useRef(null); // scroll target for "Add a life event →" (plan-ready CTA)
   const decumulationSectionRef = useRef(null); // scroll target for "Set drawdown goals →" (plan-ready CTA)
@@ -8443,8 +8475,8 @@ function CPFPlannerApp() {
       const sParam = params.get('s');      // Legacy compressed format
       const stateParam = params.get('state'); // Legacy plain format
       if (pParam) {
-        // New format: full state encoded via lzCompress (LZ77 or legacy base64url)
-        const fullState = JSON.parse(lzDecompress(pParam));
+        // New format: full state delta-encoded + base64url via encodePlanState (handles legacy base64url too)
+        const fullState = JSON.parse(decodePlanState(pParam));
         // N-BUG-3 fix: warn the user if the share link was generated by a different
         // app version. Fields added in newer versions will have been delta-dropped from
         // older links (they matched DEFAULT_INPUTS at encode time but may now differ);
@@ -8542,8 +8574,8 @@ function CPFPlannerApp() {
         // Clean URL without reloading
         window.history.replaceState({}, '', window.location.pathname);
       } else if (sParam) {
-        // Legacy compressed base64url format — lzDecompress handles both old and new encoding
-        const decoded = JSON.parse(lzDecompress(sParam));
+        // Legacy base64url format — decodePlanState handles both formats (old base64url + new delta-encoded)
+        const decoded = JSON.parse(decodePlanState(sParam));
         // BUG-1 fix: buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
         const mergedLegacy = buildSafeInputs(decoded);
         setInputs(mergedLegacy); setDebouncedInputs(mergedLegacy);
@@ -9505,6 +9537,13 @@ function CPFPlannerApp() {
         setSpouseGoalApplied(null);
         setSpousePreApplySnapshot(null);
         setTurboSnapshot(null);
+        // Clear stress states — they are UI state, not in inputs, so must be
+        // explicitly reset. Otherwise stale stresses survive a full reset.
+        setShowSorr(false); setShowInflationStress(false); setShowPropertyStress(false);
+        setShowCpfRateStress(false); setShowHealthcareStress(false); setShowPerfectStorm(false);
+        // Clear stale retire-solver result — it is not derived from inputs and
+        // persists after reset, showing a stale profile's result against fresh defaults.
+        setRetireSolveResult(null); setRetireSolving(false);
         showToast("All inputs, scenarios, and What-If data reset to defaults.");
       }
     });
@@ -9576,6 +9615,11 @@ function CPFPlannerApp() {
         setShowMonteCarlo(false);
         setShowBaseline(false);
         setActiveTab("readiness");
+        // Clear stress UI states — they live outside inputs and survive Clear otherwise.
+        setShowSorr(false); setShowInflationStress(false); setShowPropertyStress(false);
+        setShowCpfRateStress(false); setShowHealthcareStress(false); setShowPerfectStorm(false);
+        // Clear stale retire-solver result — not derived from inputs, must be explicit.
+        setRetireSolveResult(null); setRetireSolving(false);
         showToast("✓ All inputs cleared to blank slate.");
       }
     });
@@ -10023,7 +10067,8 @@ function CPFPlannerApp() {
     reader.readAsText(file);
   };
 
-  // lzCompress / lzDecompress are module-level (see top of file) — accessible here via closure.
+  // encodePlanState / decodePlanState are module-level constants (see top of file, ~line 4487) —
+  // delta-encode against DEFAULT_INPUTS then base64url-encode for compact share links.
 
   const handleShareLinkInit = () => {
     try {
@@ -10053,7 +10098,7 @@ function CPFPlannerApp() {
         spouseInputs: householdEnabled ? spouseInputs : null,
         appVersion: "V4-2026"
       };
-      const compressed = lzCompress(JSON.stringify(fullState));
+      const compressed = encodePlanState(JSON.stringify(fullState));
       const base = (window.location.origin + window.location.pathname).replace(/\/$/, '');
       const shareURL = `${base}?p=${compressed}`;
       if (navigator?.clipboard?.writeText && window.isSecureContext) {
@@ -16307,8 +16352,8 @@ ${milestoneSnapshotHtml}
             padding-top: var(--kpi-header-h, 48px) !important;
           }
           /* Mobile brand lockup — restored to match desktop (was hidden entirely; user
-             feedback: mobile should show the same "Fusion 富生 / Retirement Engine v2026 /
-             © Pebblebrooks" lockup as desktop for brand consistency).
+             feedback: mobile should show the same "Fusion 富生 / Retirement Engine v2026"
+             lockup as desktop for brand consistency. Copyright row removed from nav for space.).
              Safety valve: cpf-logo-block + cpf-logo-textstack are made shrinkable
              (min-width:0 overrides the flex default of min-width:auto) and the sub/copy
              lines get overflow:hidden + ellipsis. The header row is flex-wrap:nowrap and
@@ -16324,11 +16369,6 @@ ${milestoneSnapshotHtml}
             display: block !important;
             font-size: 9px !important;
             letter-spacing: 0.07em !important;
-            overflow: hidden !important; text-overflow: ellipsis !important; max-width: 100%;
-          }
-          .cpf-logo-copy {
-            display: block !important;
-            font-size: 8px !important;
             overflow: hidden !important; text-overflow: ellipsis !important; max-width: 100%;
           }
           /* Full-width tab strip: fixed below fixed header (top:48px).
@@ -16481,7 +16521,7 @@ ${milestoneSnapshotHtml}
                         if (pParam) codeToLoad = pParam;
                       } catch (_) { /* not a valid URL — try raw as-is */ }
                     }
-                    const decoded = lzDecompress(codeToLoad);
+                    const decoded = decodePlanState(codeToLoad);
                     const parsed = JSON.parse(decoded);
                     const rawInp = parsed.inputs || parsed;
                     // BUG-1 fix: use module-level buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
@@ -16910,7 +16950,7 @@ ${milestoneSnapshotHtml}
                   </div>
                   <div style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "10px" }}>
                     <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER} By using this tool, you acknowledge and accept that you are using the information provided at your own risk.</p>
-                    <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Pebblebrooks. All rights reserved.</p>
+                    <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Fusion 富生. All rights reserved.</p>
                   </div>
                 </div>
               )}
@@ -17023,15 +17063,21 @@ ${milestoneSnapshotHtml}
               badge off-screen on narrow phones. */}
           <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
             <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 10, border: "1px solid rgba(220,38,38,0.25)", overflow: "hidden", flexShrink: 0 }}>
-              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Pebblebrooks seal" style={{ width: 36, height: 36, display: "block" }} />
+              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 36, height: 36, display: "block" }} />
             </div>
             <div className="cpf-logo-textstack">
               <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>Fusion 富生</div>
-                <span className="cpf-beta-pill" title="Fusion 富生 is in active beta — features and figures are still being refined" style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "#ffffff", background: "linear-gradient(90deg, var(--clr-purple2), var(--clr-purple))", border: "1px solid rgba(var(--clr-purple-rgb),0.6)", animation: "betaGlow 2.6s ease-in-out infinite", whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>BETA</span>
+                {(() => { const tc = TIER_CONFIG[PLAN_TIER]; return (
+                <span className="cpf-beta-pill" title={tc.title}
+                  style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px",
+                    borderRadius: 999, fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                    color: "#ffffff", background: tc.bg, border: `1px solid ${tc.border}`,
+                    animation: tc.anim, whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
+                  {tc.label}
+                </span>); })()}
               </div>
               <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
-              <div className="cpf-logo-copy" style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.04em", whiteSpace: "nowrap", marginTop: 1 }}>© 2026 Pebblebrooks. All rights reserved.</div>
             </div>
           </div>
 
@@ -18434,7 +18480,7 @@ ${milestoneSnapshotHtml}
                     <strong style={{ color: "var(--clr-orange)" }}>Self-Employed Member (SEP):</strong> No mandatory OA/SA contributions. Use the Inflows panel below to enter your VC3A (up to $37,740/yr). Funds are <strong style={{ color: "#fdba74" }}>proportionally allocated</strong> across OA/SA/MA using your age-based CPF rates. MA excess above BHS spills to SA/RA (capped at FRS); further excess flows to OA. MA contributions required if net trade income &gt; $6,000.
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 4 }}>Net Trade Income ($/yr)<TooltipBox id="t-nti" text="Net trade income declared to IRAS — self-employment income after deducting allowable business expenses. MediSave contributions are mandatory for SEPs earning NTI > $6,000/yr (scaled by age band). No mandatory OA/SA contributions for SEPs; use VC3A to build OA/SA voluntarily." /></label>
+                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 4 }}>Net Trade Income ($/yr)<TooltipBox id="t-nti" text="Net trade income declared to IRAS — self-employment income after deducting allowable business expenses. MediSave contributions are mandatory for SEPs earning NTI > $6,000/yr (scaled by age band). No mandatory OA/SA contributions for SEPs; use VC3A to build OA/SA voluntarily." /></div>
                     <input type="text" inputMode="decimal" name="netTradeIncome" value={getDisplayValue("netTradeIncome", inputs.netTradeIncome)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Net Trade Income" onFocus={() => setFocusedField("netTradeIncome")} className={fieldChanged("netTradeIncome") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                   </div>
                   </div>
@@ -18445,7 +18491,7 @@ ${milestoneSnapshotHtml}
                     <div style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 2 }}>Salary Inputs</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       {[["salaryGross","OW / Monthly Gross ($)","t-ow","Ordinary Wage (OW) — regular monthly gross pay. CPF contributions apply up to the OW Ceiling of $8,000/mo. Enter your full monthly gross; the engine caps it automatically. Used by Auto-Calc to compute mandatory contributions."],["salaryBonus","AW / Annual Bonus ($)","t-aw","Additional Wage (AW) — bonuses, commissions, irregular pay. AW Ceiling = max($102,000 − OW×12, 0). Enter the full annual amount; the engine applies the ceiling automatically."]].map(([n, l, tipId, tipText]) => (
-                        <div key={n}><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>{l}<TooltipBox id={tipId} text={tipText} /></label>
+                        <div key={n}><div style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>{l}<TooltipBox id={tipId} text={tipText} /></div>
                           <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border-strong)", borderRadius: 6, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} /></div>
                       ))}
                     </div>
@@ -19029,7 +19075,7 @@ ${milestoneSnapshotHtml}
             </div>
 
             {/* ── Investment Portfolio ──────────────────────────────────────────── */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
+            <div ref={portfolioSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader
                 id="portfolio" label="Investment Portfolio"
                 icon={<TrendingUp style={{ width: 14, height: 14, color: "#2dd4bf" }} />}
@@ -20710,9 +20756,9 @@ ${milestoneSnapshotHtml}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {[["contributionStopAge","Contrib Stop Age","t-contrib-stop","Age at which mandatory CPF contributions (employer + employee) stop being modelled. Typically 65 or earlier if you plan to exit the workforce sooner. Existing balances continue earning interest after this age."],["housingStopAge","Housing Stop Age","t-housing-stop","Age at which your housing loan OA deductions stop — when your mortgage is fully repaid. After this age the engine stops deducting housingOutflow from OA, which accelerates OA accumulation."]].map(([n, l, tipId, tipText]) => (
                       <div key={n}>
-                        <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
+                        <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                           {l}<TooltipBox id={tipId} text={tipText} />{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 11, color: "var(--clr-red)" }}>⚠</span>}
-                        </label>
+                        </div>
                         <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} aria-invalid={!!inputErrors[n]} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                       </div>
                     ))}
@@ -21185,16 +21231,16 @@ ${milestoneSnapshotHtml}
                   
                   {/* Private Assets */}
                   <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Current Private Assets ($)<TooltipBox id="t-priv-cur" text="Current market value of all non-CPF, non-property liquid assets — savings, equities, unit trusts, cash. This is the starting balance for your private assets projection. Exclude your primary residence (enter it in Property) and SRS (separate panel)." /></label>
+                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Current Private Assets ($)<TooltipBox id="t-priv-cur" text="Current market value of all non-CPF, non-property liquid assets — savings, equities, unit trusts, cash. This is the starting balance for your private assets projection. Exclude your primary residence (enter it in Property) and SRS (separate panel)." /></div>
                     <input type="text" inputMode="decimal" name="currentPrivateAssets" aria-label="Current private assets balance" value={getDisplayValue("currentPrivateAssets", inputs.currentPrivateAssets)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("currentPrivateAssets"); e.target.select(); }} className={fieldChanged("currentPrivateAssets") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <div>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Annual Saving<TooltipBox id="t-priv-saving" text="Annual cash added to your private investment portfolio from take-home pay (after tax and CPF). This is modelled as an end-of-year addition compounding at your Private Asset Growth Rate." /></label>
+                      <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Annual Saving<TooltipBox id="t-priv-saving" text="Annual cash added to your private investment portfolio from take-home pay (after tax and CPF). This is modelled as an end-of-year addition compounding at your Private Asset Growth Rate." /></div>
                       <input type="text" inputMode="decimal" name="annualPrivateSaving" value={getDisplayValue("annualPrivateSaving", inputs.annualPrivateSaving)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("annualPrivateSaving"); e.target.select(); }} className={fieldChanged("annualPrivateSaving") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Growth (%)<TooltipBox id="t-priv-growth" text="Annual nominal return on your private portfolio. A balanced (60/40) portfolio has historically returned ~6–7%/yr before fees. Use a lower figure (4–5%) for a conservative, fee-adjusted estimate. Set 0% to model cash savings only." /></label>
+                      <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-violet2)", textTransform: "uppercase", marginBottom: 4 }}>Growth (%)<TooltipBox id="t-priv-growth" text="Annual nominal return on your private portfolio. A balanced (60/40) portfolio has historically returned ~6–7%/yr before fees. Use a lower figure (4–5%) for a conservative, fee-adjusted estimate. Set 0% to model cash savings only." /></div>
                       <input type="text" inputMode="decimal" name="privateAssetGrowthRate" value={inputs.privateAssetGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("privateAssetGrowthRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                   </div>
@@ -21286,7 +21332,7 @@ ${milestoneSnapshotHtml}
                           {inputErrors.srsContribStopAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsContribStopAge}</p>}
                         </div>
                         <div>
-                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Return Rate (%)<TooltipBox id="t-srs-return" text="Annual return on SRS funds. Uninvested SRS cash earns ~0.05%/yr (bank deposit rate). To grow the balance meaningfully, SRS funds must be invested — ETFs, unit trusts, SGX-listed securities. A typical invested SRS portfolio earns 4–6%/yr. Set 0% to model cash-like uninvested SRS." /></label>
+                          <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#0ea5e9", textTransform: "uppercase", marginBottom: 4 }}>Return Rate (%)<TooltipBox id="t-srs-return" text="Annual return on SRS funds. Uninvested SRS cash earns ~0.05%/yr (bank deposit rate). To grow the balance meaningfully, SRS funds must be invested — ETFs, unit trusts, SGX-listed securities. A typical invested SRS portfolio earns 4–6%/yr. Set 0% to model cash-like uninvested SRS." /></div>
                           <input type="text" inputMode="decimal" name="srsReturnRate" value={inputs.srsReturnRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => e.target.select()} className={fieldChanged("srsReturnRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.srsReturnRate ? "var(--clr-red)" : "rgba(14,165,233,0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.srsReturnRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsReturnRate}</p>}
                         </div>
@@ -21850,6 +21896,11 @@ ${milestoneSnapshotHtml}
                   setOpenSections(prev => new Set([...prev, "topups"]));
                   setTimeout(() => topupsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
                 }}
+                onPortfolioCtaClick={() => {
+                  setSidebarOpen(true);
+                  setOpenSections(prev => new Set([...prev, "portfolio"]));
+                  setTimeout(() => portfolioSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+                }}
                 wizardCompleted={(() => { try { return !!localStorage.getItem('cpf_planner_setup_done'); } catch { return true; } })()}
                 householdEnabled={householdEnabled}
                 spouseInputs={spouseInputs}
@@ -22014,7 +22065,7 @@ ${milestoneSnapshotHtml}
                       </div>
                       <div id="qs-disclaimer" style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "12px" }}>
                         <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER}</p>
-                        <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Pebblebrooks. All rights reserved.</p>
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Fusion 富生. All rights reserved.</p>
                       </div>
                     </div>
                   </div>
@@ -27497,6 +27548,12 @@ ${milestoneSnapshotHtml}
                     </h4>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
+                        [Target, "Goal Simulator: \"When Can I Stop Contributing?\" (was \"When Can I Retire?\")", "var(--clr-amber)",
+                          "The retirement solver has been renamed and clarified. It finds the earliest age you can stop all CPF contributions (mandatory + voluntary) while still projecting RA \u2265 FRS at payout age — using only CPF interest compounding from that point. The result is now labelled \"Earliest stop-contributing age\" to clearly distinguish it from actual retirement readiness. A new amber warning block appears when the result is before your payout age and no bridge income sources (private assets, portfolio, SRS, rental) are configured, reminding you that CPF LIFE does not start until payout age and OA cannot be drawn before 55 without FRS set aside."],
+                        [ShieldCheck, "Reliability — Clear All, stress states, and stale solver results", "var(--clr-emerald)",
+                          "Clear All now correctly zeroes Monthly Living Expenses and Retirement Healthcare Budget (previously these persisted after clearing due to gaps in the blank preset). Stress Centre states (SORR, Inflation, Property, CPF Rates, Perfect Storm toggles) are now explicitly reset on both Clear All and Reset — previously they survived a reset and silently inflated or deflated readiness scores against a fresh blank profile. The Goal Simulator retirement solve result is also cleared on reset so a stale \"age 47\" result from a prior profile no longer appears against blank inputs. The SORR stress test is now correctly gated when no private assets or portfolio are configured — applying Worst Case no longer activates a no-op SORR shock, and the SORR toggle button is disabled with an explanatory tooltip."],
+                        [TrendingUp, "Portfolio CTA, Baby VC3A label, and Liquidity score fix", "var(--clr-blue2)",
+                          "Three targeted fixes: (1) The \"Portfolio \u2197\" action button in the Readiness tab now correctly opens the sidebar and scrolls to the Investment Portfolio section instead of landing at CPF Overview. (2) Both Baby Millionaire sample profiles now show \"21 yrs\" as the VC3A top-up duration instead of \"Annually (to 65)\" — the engine was always correct; only the badge label was wrong. (3) The MAS Wellness Liquidity Ratio score is now null (excluded from the average) when total projected wealth at payout is zero, matching the \"No data\" label that was already displayed — previously a misleading floor score of 30 was included in the average even with no wealth data."],
                         [Activity, "Life Events — stress-test your projection", "#ef4444",
                           "A configurable Life Events & Stress Tests panel lets you overlay retrenchment, career breaks, medical crises, windfalls, hyperinflation, and black-swan shocks on any age range. Each event type has tailored parameters — retrenchment pauses mandatory contributions and optionally injects a redundancy payout; medical crisis draws from OA then private assets; windfall routes to OA, private assets, or SRS. Events appear as coloured bands on the Grow chart and as milestone markers in the PDF. Add events from the Life Events section in the sidebar."],
                         [ArrowRightLeft, "RA→OA Transfer at payout / migration age", "var(--clr-blue2)",
@@ -29101,10 +29158,25 @@ ${milestoneSnapshotHtml}
                           const frs_r       = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth_r, yFromNow_r));
                           const inc_r  = Number(inputs.targetMonthlyIncome) || 0;
                           const canRun = pa_r > ca_r + 1;
+                          // Bridge income check — computed here (outer scope) so JSX can
+                          // reference it directly without an IIFE inside a ternary.
+                          const hasBridgeIncome_r =
+                            (Number(inputs.currentPrivateAssets)||0) > 0 ||
+                            (Number(inputs.annualPrivateSaving)||0) > 0  ||
+                            (Number(inputs.portfolioBalance)||0) > 0     ||
+                            (Number(inputs.srsBalance)||0) > 0           ||
+                            (Number(inputs.srsAnnualContribution)||0) > 0 ||
+                            (Number(inputs.rentalIncome)||0) > 0;
+                          const bridgeGapYears    = retireSolveResult ? pa_r - retireSolveResult.earliestAge : 0;
+                          const hasBridgeGapWarning = retireSolveResult?.feasible &&
+                            bridgeGapYears > 0 && !hasBridgeIncome_r;
                           return (
                             <div style={{ background: "var(--bg-input)", border: "1px solid var(--border-strong)", borderRadius: 12, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <span style={{ fontWeight: 700, fontSize: 13, color: "var(--text-bright)" }}>⏱ When Can I Retire?</span>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: "var(--text-bright)", display: "flex", alignItems: "center", gap: 6 }}>
+                                  ⏱ When Can I Stop Contributing?
+                                  <TooltipBox id="t-retireSolver" text="Finds the earliest age you can stop all CPF contributions (mandatory + voluntary) while the engine still projects RA ≥ FRS at payout age — using only CPF interest compounding from that age onward. This is NOT a retirement readiness check. CPF LIFE payouts only begin at payout age, and OA cannot be drawn before age 55 without first setting aside FRS. If the result is before your payout age, you need bridge income (private savings, portfolio, SRS, rental) for the gap years." />
+                                </span>
                                 <button
                                   disabled={!canRun || retireSolving}
                                   onClick={() => {
@@ -29131,20 +29203,39 @@ ${milestoneSnapshotHtml}
                                 </button>
                               </div>
                               <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: 0, lineHeight: 1.5 }}>
-                                Finds the earliest age you can stop contributing while still meeting FRS (${Math.round(frs_r).toLocaleString()}) at payout age {pa_r}
-                                {inc_r > 0 ? ` and a ${formatCurrency(inc_r)}/mo CPF LIFE income target` : ""}.
+                                Earliest age to stop all CPF contributions while projecting RA ≥ FRS
+                                (${Math.round(frs_r).toLocaleString()}) at payout age {pa_r}.
+                                {inc_r > 0 ? ` Also checks ${formatCurrency(inc_r)}/mo CPF LIFE income target.` : ""}
+                                {" "}<strong>CPF LIFE and OA drawdown do not start until age {pa_r}</strong> —
+                                ensure bridge income if the result is before your payout age.
                               </p>
                               {retireSolveResult && (
                                 retireSolveResult.feasible ? (
                                   <div style={{ background: "color-mix(in srgb, var(--clr-green) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--clr-green) 30%, transparent)", borderRadius: 8, padding: "10px 14px" }}>
                                     <div style={{ fontWeight: 800, fontSize: 15, color: "var(--clr-green)", marginBottom: 4 }}>
-                                      Earliest retirement: age {retireSolveResult.earliestAge}
+                                      Earliest stop-contributing age: {retireSolveResult.earliestAge}
                                     </div>
                                     <div style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                                       <span>RA at age {pa_r}: <strong>{formatCurrency(Math.round(retireSolveResult.raAtAge))}</strong></span>
                                       <span>CPF LIFE payout: <strong>{formatCurrency(Math.round(retireSolveResult.payoutAtAge))}/mo</strong></span>
                                       {retireSolveResult.earliestAge === (Number(inputs.contributionStopAge)||65) && (
                                         <span style={{ color: "var(--clr-amber)", marginTop: 2 }}>Already at your current stop age — you're on track.</span>
+                                      )}
+                                      {hasBridgeGapWarning && (
+                                        <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 6,
+                                          background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.30)",
+                                          color: "var(--clr-amber)", fontSize: 11, lineHeight: 1.5 }}>
+                                          ⚠ No bridge income configured for the {bridgeGapYears}-year gap
+                                          (age {retireSolveResult.earliestAge}–{pa_r}). CPF LIFE has not started yet
+                                          and no private assets, SRS, portfolio, or rental income are modelled.
+                                          {retireSolveResult.earliestAge < 55 && " OA also cannot be drawn before age 55."}
+                                          {" "}Configure income sources in the sidebar to model this period.
+                                        </div>
+                                      )}
+                                      {!hasBridgeGapWarning && retireSolveResult.earliestAge < 55 && (
+                                        <span style={{ color: "var(--clr-amber)", marginTop: 2, fontSize: 11 }}>
+                                          Note: OA withdrawals are locked until age 55 — rely on other bridge income before then.
+                                        </span>
                                       )}
                                     </div>
                                   </div>
@@ -29371,8 +29462,18 @@ ${milestoneSnapshotHtml}
                     const anyStressActive = showSorr || showInflationStress || showPropertyStress || showCpfRateStress || showHealthcareStress;
                     const activeCount = [showSorr, showInflationStress, showPropertyStress, showCpfRateStress, showHealthcareStress].filter(Boolean).length;
 
+                    // SORR stress-tests market-dependent (private/portfolio) assets.
+                    // CPF accounts earn guaranteed rates, so SORR has no effect when
+                    // no private or portfolio assets are configured.
+                    const hasMktAssets =
+                      (Number(debouncedInputs.currentPrivateAssets)    || 0) > 0 ||
+                      (Number(debouncedInputs.annualPrivateSaving)      || 0) > 0 ||
+                      (Number(debouncedInputs.portfolioBalance)          || 0) > 0 ||
+                      (Number(debouncedInputs.portfolioAnnualContribution) || 0) > 0;
+
                     const applyWorstCase = () => {
-                      setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15);
+                      // Only activate SORR when market-dependent assets are present.
+                      if (hasMktAssets) { setShowSorr(true); setSorrCrashYears(5); setSorrCrashReturn(-15); }
                       setShowInflationStress(true); setInflationStressRate(5);
                       setShowPropertyStress(true); setPropertyStressGrowthRate(-6); // Correction-level; user can escalate to Crash/Crisis
                       setShowCpfRateStress(true);
@@ -29643,14 +29744,18 @@ ${milestoneSnapshotHtml}
                           </p>
                           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                             {[
-                              { label: "SORR",          active: showSorr,             toggle: () => setShowSorr(v => !v),                   color: "#ef4444" },
+                              { label: "SORR",          active: showSorr,             toggle: () => setShowSorr(v => !v),                   color: "#ef4444", disabled: !hasMktAssets },
                               { label: "Inflation",     active: showInflationStress,  toggle: () => setShowInflationStress(v => !v),         color: "var(--clr-amber)" },
                               { label: "Property",      active: showPropertyStress,   toggle: () => setShowPropertyStress(v => !v),          color: "var(--clr-red)", disabled: (Number(debouncedInputs.propertyValue)||0) === 0 },
                               { label: "CPF Rates",     active: showCpfRateStress,    toggle: () => setShowCpfRateStress(v => !v),           color: "var(--clr-purple)" },
                               { label: "Healthcare",    active: showHealthcareStress, toggle: () => setShowHealthcareStress(v => !v),        color: "#f97316" },
                             ].map(({ label, active, toggle, color, disabled }) => (
                               <button key={label} onClick={!disabled ? toggle : undefined}
-                                title={disabled ? "Enter a property value in the sidebar to enable this test" : undefined}
+                                title={disabled
+                                  ? label === "SORR"
+                                    ? "No private assets or portfolio configured — SORR only affects market-dependent assets. Add Private Assets or an Investment Portfolio to enable."
+                                    : "Enter a property value in the sidebar to enable this test"
+                                  : undefined}
                                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? color : "var(--border-strong)"}`, background: active ? `${color}18` : "var(--bg-input)", color: active ? color : disabled ? "var(--text-subtle)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, transition: "all .15s" }}>
                                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: active ? color : "var(--border-strong)", flexShrink: 0 }} />
                                 {label} {active ? "ON" : "OFF"}
@@ -31589,7 +31694,7 @@ ${milestoneSnapshotHtml}
         </div>
       </div>
 
-      {/* Copyright notice moved to navbar logo block (cpf-logo-copy div). Footer removed. */}
+      {/* Copyright notice appears in Welcome modal. Footer and navbar copyright row both removed for clean layout. */}
 
       </div>{/* /rootRef */}
 
