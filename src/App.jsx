@@ -7374,7 +7374,7 @@ function findScrollContainer(el) {
 // ── Plan Tier ───────────────────────────────────────────────────────────────────
 // Drives the navbar badge. 'BETA' = identical to previous hardcoded pill.
 // Future CF Worker injection: const PLAN_TIER = window.__PLAN_TIER || 'BETA';
-const PLAN_TIER = 'BETA'; // 'LITE' | 'PLUS' | 'PRO'
+const PLAN_TIER = 'PRO';  // 'LITE' | 'PLUS' | 'BETA'
 const TIER_CONFIG = {
   BETA: { label: 'BETA', bg: 'linear-gradient(90deg, var(--clr-purple2), var(--clr-purple))',
           border: 'rgba(var(--clr-purple-rgb),0.6)', anim: 'betaGlow 2.6s ease-in-out infinite',
@@ -15474,14 +15474,12 @@ ${milestoneSnapshotHtml}
           pointer-events: none;
           z-index: 2;
         }
-        /* On mobile the kpi-strip switches to a 2-column grid that fills the full width —
-           no horizontal overflow, so the right-edge fade overlay is not needed and would
-           visually clip the rightmost KPI card content. Hide it on mobile.
-           On tablet (769-1024px) the strip can still overflow (3+ items with 1fr 1fr CSS),
-           so the fade hint is kept but narrowed from 36px to 20px so it no longer obscures
-           the rightmost card's value. */
+        /* On mobile the kpi-strip scrolls horizontally (minmax(110px,1fr) per tile).
+           Restore the right-edge fade hint so users can see the strip is scrollable.
+           Width matches the tablet fade (20px) — enough to signal without obscuring.
+           On tablet (769-1024px) the same 20px fade applies. */
         @media (max-width: 768px) {
-          .kpi-strip-wrap::after { display: none; }
+          .kpi-strip-wrap::after { display: block; width: 20px; }
         }
         @media (min-width: 769px) and (max-width: 1024px) {
           .kpi-strip-wrap::after { width: 20px; }
@@ -16223,8 +16221,9 @@ ${milestoneSnapshotHtml}
              flex-start so tabs begin at left edge and scroll rightward (fix 3b). */
           .cpf-tabs { overscroll-behavior-x: contain !important; justify-content: flex-start !important; }
           .cpf-modal-inner { max-width: 100% !important; border-radius: 12px !important; }
-          .kpi-strip { grid-template-columns: 1fr 1fr !important; }
-          .kpi-strip > div { min-width: 0 !important; padding: 4px 6px !important; }
+          /* kpi-strip: no grid-template-columns override — horizontal scroll via
+             minmax(110px,1fr) gridAutoColumns in inline style handles mobile layout. */
+          .kpi-strip > div { padding: 4px 6px !important; }
           .cpf-kpi-value { font-size: 14px !important; }
           .cpf-kpi-label { font-size: 10px !important; }
           /* overflow-x: clip (not hidden) — clips horizontal bleed WITHOUT creating a scroll
@@ -21725,7 +21724,13 @@ ${milestoneSnapshotHtml}
                       </div>
                     );
                     return (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box" }}>
+                      <div style={{ display: "grid",
+                        gridAutoFlow: "column", gridAutoColumns: "minmax(145px, 1fr)",
+                        gap: 5, padding: "5px 6px", background: "var(--bg-muted)",
+                        borderBottom: "1px solid var(--border-subtle)",
+                        width: "100%", boxSizing: "border-box",
+                        overflowX: "auto", scrollbarWidth: "none",
+                        WebkitOverflowScrolling: "touch" }}>
                         <MemberCard header="👤 PRIMARY" accent="var(--clr-blue)" bgRgba="rgba(var(--clr-blue-rgb),0.07)"
                           cpfTotal={pTotal} ageLabel={pa} monthly={pMonthly} planShort={pPlanShort}
                           cpfTip={`Primary total CPF (OA+SA/RA+MA) at payout age ${pa}`}
@@ -21743,7 +21748,7 @@ ${milestoneSnapshotHtml}
                   })()
                 /* ── Standard flat KPI strip — solo mode or non-Life/Strategy tabs ── */
                 : (
-                  <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "1fr", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+                  <div className="kpi-strip" style={{ display: "grid", gridAutoColumns: "minmax(110px, 1fr)", gridAutoFlow: "column", gap: 4, padding: "5px 6px", background: "var(--bg-muted)", borderBottom: "1px solid var(--border-subtle)", width: "100%", boxSizing: "border-box", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
                     {(() => {
                       const pa = payoutAge65; // CQ-2 fix: use debounced value to match displayProjection/displayAccumulation
                       // Use displayProjection (already inflation-adjusted when isRealDollars=true)
