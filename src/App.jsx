@@ -14524,8 +14524,10 @@ ${milestoneSnapshotHtml}
            ══════════════════════════════════════════════════════════════ */
 
         /* ── Logo: override inline gradient in light mode — mint+blue (#10b981/#3b82f6)
-           both fail on light header. Replace with dark teal→navy: both ≥4.5:1 ── */
-        .theme-light .cpf-logo-text {
+           both fail on light header. Replace with dark teal→navy: both ≥4.5:1.
+           Scoped to .cpf-logo-fusiontext (the "Fusion " span only) so that the
+           sibling 富生 span (inline WebkitTextFillColor: #dc2626) is not affected ── */
+        .theme-light .cpf-logo-fusiontext {
           background: linear-gradient(90deg, #065f46, #1e3a8f) !important;
           -webkit-background-clip: text !important;
           -webkit-text-fill-color: transparent !important;
@@ -16812,8 +16814,12 @@ ${milestoneSnapshotHtml}
             {/* Header */}
             <div className="cpf-welcome-header" style={{ padding: "12px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                <div style={{ background: "#10b98122", padding: 10, borderRadius: 12 }}>
-                  {welcomeStep === 0 && <Calculator style={{ width: 24, height: 24, color: "var(--clr-emerald)" }} />}
+                <div style={{
+                  background: welcomeStep === 0 ? "#ffffff" : "#10b98122",
+                  padding: welcomeStep === 0 ? 4 : 10,
+                  borderRadius: 12, overflow: "hidden" }}>
+                  {welcomeStep === 0 && <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生"
+                    style={{ width: 32, height: 32, display: "block", borderRadius: 4 }} />}
                   {welcomeStep === 1 && <User style={{ width: 24, height: 24, color: "var(--clr-blue2)" }} />}
                   {welcomeStep === 2 && <LayoutDashboard style={{ width: 24, height: 24, color: "var(--clr-purple)" }} />}
                   {welcomeStep === 3 && <Lightbulb style={{ width: 24, height: 24, color: "var(--clr-amber)" }} />}
@@ -17066,12 +17072,15 @@ ${milestoneSnapshotHtml}
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
           <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
-            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 0, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
+            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 2, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
               <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 36, height: 36, display: "block" }} />
             </div>
             <div className="cpf-logo-textstack">
               <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", whiteSpace: "nowrap" }}>Fusion 富生</div>
+                <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, whiteSpace: "nowrap" }}>
+                  <span className="cpf-logo-fusiontext" style={{ background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>Fusion </span>
+                  <span style={{ color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
+                </div>
                 {(() => { const tc = TIER_CONFIG[PLAN_TIER]; return (
                 <span className="cpf-beta-pill" title={tc.title}
                   style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px",
