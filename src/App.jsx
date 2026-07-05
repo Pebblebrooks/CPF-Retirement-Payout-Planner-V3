@@ -7375,6 +7375,9 @@ function findScrollContainer(el) {
 // Drives the navbar badge. 'BETA' = identical to previous hardcoded pill.
 // Future CF Worker injection: const PLAN_TIER = window.__PLAN_TIER || 'BETA';
 const PLAN_TIER = 'PRO';  // 'LITE' | 'PLUS' | 'BETA'
+// IS_BETA: true while the product is in active beta testing, regardless of tier.
+// Set to false for stable releases — renders no stage badge.
+const IS_BETA = true;
 const TIER_CONFIG = {
   BETA: { label: 'BETA', bg: 'linear-gradient(90deg, var(--clr-purple2), var(--clr-purple))',
           border: 'rgba(var(--clr-purple-rgb),0.6)', anim: 'betaGlow 2.6s ease-in-out infinite',
@@ -14540,11 +14543,11 @@ ${milestoneSnapshotHtml}
         }
 
         /* ── Seal icon box: white bg + subtle red border in both themes ──
-           The Chinese seal is red-on-white; keep white bg so the seal reads clearly
-           against both the dark navy header and the light steel header. ── */
+           The Chinese seal PNG has a white background; keep white bg as a sub-pixel
+           corner fill under the rounded clip. Padding and border removed — user-facing
+           white frame eliminated. ── */
         .theme-light .cpf-calc-icon-box {
           background: #ffffff !important;
-          border: 1px solid rgba(220,38,38,0.25) !important;
         }
 
         /* ── All primary action buttons: white text on emerald bg ──
@@ -16363,7 +16366,8 @@ ${milestoneSnapshotHtml}
           .cpf-logo-textstack { min-width: 0 !important; overflow: hidden !important; }
           .cpf-logo-titlerow  { min-width: 0; }
           .cpf-logo-text { font-size: 13px !important; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-          .cpf-beta-pill { flex-shrink: 0 !important; font-size: 9px !important; padding: 2px 7px !important; }
+          .cpf-beta-pill  { flex-shrink: 0 !important; font-size: 9px !important; padding: 2px 7px !important; }
+          .cpf-stage-pill { flex-shrink: 0 !important; font-size: 8px !important; padding: 1px 6px !important; }
           .cpf-logo-sub  {
             display: block !important;
             font-size: 9px !important;
@@ -16403,7 +16407,8 @@ ${milestoneSnapshotHtml}
         @media (max-width: 480px) {
           .cpf-logo-text { font-size: 12px !important; }
           .cpf-logo-sub  { font-size: 8px !important; letter-spacing: 0.04em !important; }
-          .cpf-beta-pill { font-size: 8px !important; padding: 1px 6px !important; letter-spacing: 0.05em !important; }
+          .cpf-beta-pill  { font-size: 8px !important; padding: 1px 6px !important; letter-spacing: 0.05em !important; }
+          .cpf-stage-pill { font-size: 7px !important; padding: 1px 5px !important; letter-spacing: 0.04em !important; }
           .cpf-logo-titlerow { flex-wrap: wrap; row-gap: 2px; }
         }
         @media (min-width: 641px) {
@@ -17061,7 +17066,7 @@ ${milestoneSnapshotHtml}
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
           <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
-            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 10, border: "1px solid rgba(220,38,38,0.25)", overflow: "hidden", flexShrink: 0 }}>
+            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 0, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
               <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 36, height: 36, display: "block" }} />
             </div>
             <div className="cpf-logo-textstack">
@@ -17075,6 +17080,18 @@ ${milestoneSnapshotHtml}
                     animation: tc.anim, whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
                   {tc.label}
                 </span>); })()}
+                {IS_BETA && (
+                  <span className="cpf-stage-pill"
+                    title="Active beta — features and data are still being refined"
+                    style={{ display: "inline-flex", alignItems: "center",
+                      padding: "2px 7px", borderRadius: 999, fontSize: 9,
+                      fontWeight: 700, letterSpacing: "0.07em",
+                      color: "var(--clr-amber)", background: "rgba(245,158,11,0.10)",
+                      border: "1px solid rgba(245,158,11,0.35)",
+                      whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
+                    BETA
+                  </span>
+                )}
               </div>
               <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
             </div>
@@ -21709,16 +21726,17 @@ ${milestoneSnapshotHtml}
                     const MemberCard = ({ header, accent, bgRgba, cpfTotal, ageLabel, monthly, planShort, cpfTip, payTip }) => (
                       <div style={{ padding: "7px 10px", borderRadius: 10, border: `1px solid ${accent}55`, background: bgRgba, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
                         <div style={{ fontSize: 10, fontWeight: 900, color: accent, letterSpacing: "0.08em", textAlign: "center", borderBottom: `1px solid ${accent}33`, paddingBottom: 4, marginBottom: 1 }}>{header}</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                           <div title={cpfTip} style={{ textAlign: "center", cursor: "help" }}>
                             <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>CPF Total</div>
                             <div style={{ fontSize: 10, fontWeight: 500, color: "var(--text-subtle)", whiteSpace: "nowrap" }}>at age {ageLabel}</div>
-                            <div style={{ fontSize: 14, fontWeight: 900, color: accent, fontFamily: "monospace", marginTop: 1 }}>{formatCurrency(cpfTotal)}</div>
+                            <div style={{ fontSize: 14, fontWeight: 900, color: accent, fontFamily: "monospace", marginTop: 2 }}>{formatCurrency(cpfTotal)}</div>
                           </div>
+                          <div style={{ borderTop: `1px solid ${accent}22` }} />
                           <div title={payTip} style={{ textAlign: "center", cursor: "help" }}>
                             <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{planShort} /mo</div>
                             <div style={{ fontSize: 10, fontWeight: 500, color: "var(--text-subtle)", whiteSpace: "nowrap" }}>CPF LIFE payout</div>
-                            <div style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-emerald)", fontFamily: "monospace", marginTop: 1 }}>{monthly ? formatCurrency(monthly) : "—"}</div>
+                            <div style={{ fontSize: 14, fontWeight: 900, color: "var(--clr-emerald)", fontFamily: "monospace", marginTop: 2 }}>{monthly ? formatCurrency(monthly) : "—"}</div>
                           </div>
                         </div>
                       </div>
