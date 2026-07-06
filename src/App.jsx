@@ -14546,10 +14546,11 @@ ${milestoneSnapshotHtml}
 
         /* ── Seal icon box: white bg + subtle red border in both themes ──
            The Chinese seal PNG has a white background; keep white bg as a sub-pixel
-           corner fill under the rounded clip. Padding and border removed — user-facing
-           white frame eliminated. ── */
+           Padding retained as a 2px buffer so the rounded corner clip does not
+           touch the ideogram artwork. Background is transparent in both modes so
+           the header colour shows through the buffer zone instead of white. ── */
         .theme-light .cpf-calc-icon-box {
-          background: #ffffff !important;
+          background: transparent !important;
         }
 
         /* ── All primary action buttons: white text on emerald bg ──
@@ -17072,7 +17073,7 @@ ${milestoneSnapshotHtml}
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
           <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
-            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 2, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
+            <div className="cpf-calc-icon-box" style={{ background: "transparent", padding: 2, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
               <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 36, height: 36, display: "block" }} />
             </div>
             <div className="cpf-logo-textstack">
