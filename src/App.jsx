@@ -31,12 +31,22 @@ import {
   Eraser, UserCheck, Building2, Baby,
   TrendingDown, Pause, HeartPulse, DollarSign, Sunset, Star, Smartphone, Zap,
   Circle,
-  Heart, CreditCard, GraduationCap, PiggyBank, Landmark, TableProperties
+  Heart, CreditCard, GraduationCap, PiggyBank, Landmark, TableProperties,
+  Lock, Eye, EyeOff
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
 const SEAL_B64 = "iVBORw0KGgoAAAANSUhEUgAAAF4AAABeCAMAAACdDFNcAAABoVBMVEX////qTEzjERHjFBTlIyPmLi7nMjLoPj7pQUHqUFDsXl7tamrubW3ucnLwfHzwf3/xiIjxi4vzmpr0paX1qan2r6/4wcH4w8P62troPz/3wcH2ubnvfX31sLD3vb34xsbtbGz3v7/sX1/ylJT97u786ur50ND98PDsY2P1rq798/PoQ0PnNDTxiorkISH3u7v74uLkHh7taWnxjIzzmZn75OTveHjmMjLudHTzoaH85ub739/znZ3sYWHqVFTqUlLmKyv0pqbwh4foPDzsXV30o6Pyl5f1qqrylpb509PkGhrzm5v99fXve3voPT3ucHDrWFj1rKzzn5/kHBzrW1v2tbXpSUnkHx/wg4PqTk7oQUH++fn+9/f98fH2t7fubm7619fmLS3++/vmMDDxjo7+/f3pR0fxkJDwhYXnODjjGBj1srLtZ2f0qKj5zMznNjb629v87Oz73d3sZWXpS0vpRUX4yMj86Oj61dX5zs762dn4ysrrWlrrVlbjEhL2tLTwgYH50tLudnblJyf4xMT3w8PlJSX74eHykpLjFhblKSlNDD8EAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAHa0lEQVRogbWaiV8TORTHn+nQbWspdMrWdRVxV0AFEXFREOVQ2gorCAiCXUQuKyDiQllkoct9lr96c00mmaO0/cDv85EmmbxvMy/Jy1EB3OSnf6NGFvF/VgUCrgSJhYQpT4Ux3gOhkO4Lh0khQgGNPvIg8hFAtJA+IPZ+CPl8SCCUhiCmYBApRkgoSv9qflEZ4w15kQ805Gcl+LGm8QcWeg5hPG4bVVgq9iOjLZIE3nwX8s1RDy/1OX6D309hKCSVhT0ej2appwVFDbnxmv/8lyhIgQDKzzVFKpin54uVij/LXgbfSJ/Cifzo+OjwQM7v7+06IrKDsT/zwe8AbEuPtgD+k6tmYFPFMnWnAdpGeWZbqYHng8TPHz/cf3g35Tj562o/n1nxwCZl3vjZ57nCy90rpo0uNT9v/AaxSX100Ax5UjMsbIpxzijAzKtp5KjjyWqAAYVeaOvnARrwR7az7LRZ0p352BguHgR4LWx8RbQ+AvAAoW81drf3lWNANWQUvJHOF78I8BX97tyvpwjVwpRhEi5m3NN6ePAcfsfdOMT1G8DK4gTMdMkD2Ev4JLQViu8G6EW3AY6Mp/UAVaSgVJ1+pPn54TfgXxO/ChAhtPRTrh6CXwB4Ycf78nLOOvww6+0DJAheVhXqAriv4Emxsbrlxq+R9op6/QA9dvwZwI6Cx2tzOKzngf/nBGDVjp+Kce1a8T6OBx00F3x6g2tvBddb9tjxatfaWs/mrRteUfpvZMfX7XEtO+KJndfV9+tprs3vS9/EUlaA7/m0ChNP0dno5ntJ7njNOnIYX6ODB8eShXzxb2t7kwR/a4Grg+BRrGzWwAeE65FGuxlHwrl88TSB8ZVG4SzFE9mdE6D4L3iN+Dwr3H8Ofm2nxroeTmRuq/gow/uM7yWa4UrlxHfMgJPmFDwr8/EBPT1lqZwDjwfixOEiiZU4blaRz8pGHEVTLYpz6FpbYeS+Tn46mTDWzfFceBy8jvgwe2zWuwdQJuN1nY9MB+X0fTvAUD1TA8BNnqQLocDjE4XfT/FOm+Oc+FZHz2Pdso2cYlr/1A1/JOM1zZ2fE38VoHGV6R2ewDy5C/BewXuKxK+Z2w2pazsBPkt4/kKG3V9JWR8A5pWC5JiJ99RAauh2Bymd4/U6783dBRiVurbCJ+9zRt38aei9iUcufXtDDQoyfuQ8PF9rKyGF/97ss1dIDeHtZZWx5Bv+4cnhd0O5Nch92ExCCxpbPY3IT5eaW1tIefLNlokn88qDLkuEruuXxSeuwTuFy8RfEpqIXkGEz69XpPSoNK/OBr4g9LbMSf2TyWHZzlNSIhy6PVAq0tnZEsXRckAegnF+bnJS3xtxes0m6vAOJ8F3JtgDHSz1cOkjLn8mNUR2Pp2Nve6zSuzIIiwfZzkzNv1g5b+qeOA3KRSf7DH1GiDDUon4EV68YsymJAVPEj17kCpR8XgxoeWQtOCl1svCZ4RXIrMwDi9ZqhRgBJ8BU/wEKPDvaOIgBXcUvMsm0ILHvcKPZAkAcvJexjt8BY9904U/TvCKxRW1+d4dnzFC1RDbLFbxiC/wePNAer8WaovD/1Dq3YJFFf8EIEvriZMhO1q54fHGrl9kxiaMocLrNeLdsDOexXtN05SRKfBda8lOqrnICEt0tL/Cp5OtgvDI60d+m3OOX6y4jPsdVBiee0fBD7tdprTtegrDGztw41qTmu1D6lnrt3aLYp0tZos4/gZ8UvHrrFzC+0NgnKy4WRw20Dni+Ne8poH3jEMfsjjHa+3auOXGzB1fDjMHMh6fT/YseI3fjptmeHf3ZCf+wqLmPx53WfF435JpMfGjj+h9iMATn7A9IF5PdMOs6ZFL16aWhlU8nra4wzc20uT8W1uNMxNdEp6FGo43zc6WHDYwVI0W/IFlbahmodF+bFbNst2D7auqrs6TdeCKWg9tx+KZzXQbOf8u1y7u8z2ibQMeCqtmjloCHiELuU6ldPOls9vOwk/PxHKVP94r+YaYuWkGL1Rt0Fsg3svw/OyWA4+37WhTuUvLq/XcmA5SYvY87aypUQf81yYqfIpbZakmjwveMHuI3GXFx+yX1NVjF4dvcPBht4oP0W8ICrOINRpwJabt+LeHGapNgGWWylR6BN4n2h808a5qKKprWbznyaEc+IHi8ca4bwZ4MOusaQff54OXepYcUOuRu4rFk14gDmqqg/GjeKLHQactVnzX8grXBI7ERnp9xIbHZ1uemXT3fdyKd7lgj9vwQfM3zFjaDf8GoSlj9/US6hC67vzLzweye/uOZL7suIX20qcOaj1GaPX+PVanaYusgQ/qHXQdd4o2eOCKvzh5hXPkX3AvVgAiJlwWXjcyOV4hHC0af3kHZ75akeQluCjERysKnF+3eLr4aelCJc+2APvvBroeor6qkGtFUCjkN/sfUHm5iCPXIiQVIoOC/D8GCF/D9iXk1juszGZEQhtPB1meoMll2E90eOlRUuBHZM+L35t+MSq/SnK6rmkV3LD0Fw7Rf7bEi6DPLeLIrylnSsqkBjnrfwALayAW2DHlAAAAAElFTkSuQmCC";
 const ArrowDownToLine = Download;
+
+// ── Silver Housing Bonus lookup table ─────────────────────────────────────────
+// Source: HDB SHB eligibility matrix. Validate against HDB website each January.
+// Key: '{fromRooms}r_to_{toRooms}r'
+const SHS_BONUS_RA = {
+  '5r_to_4r': 15000, '5r_to_3r': 20000, '5r_to_2r': 25000,
+  '4r_to_3r': 15000, '4r_to_2r': 20000,
+  '3r_to_2r': 15000,
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CPF POLICY CONSTANTS — UPDATE EACH JANUARY WHEN CPF BOARD PUBLISHES NEW VALUES
@@ -128,6 +138,20 @@ const STYLES = {
 // Engine uses these constants at the simYear gate (search MMSS_PILOT_START_YEAR to find it).
 const MMSS_PILOT_START_YEAR = 2026;
 const MMSS_PILOT_END_YEAR   = 2030;
+
+// ── Reserved-for-future-use: citizenship feature flag & CPF Board median benchmarks ──
+// FOREIGNER_MODE_ENABLED: flip to true to surface the foreigner citizenship path
+// in the UI (all isForeigner engine-gating is already in place).
+const FOREIGNER_MODE_ENABLED = false;
+// SG_RETIREMENT_BENCHMARKS: CPF Board median data (2024 cohort).
+// Future use: benchmark overlay on Strategy tab, percentile context in score.
+const SG_RETIREMENT_BENCHMARKS = {
+  medianCPFAt55:            181000,
+  medianCPFHighEarner:      320000,
+  pctMeetingFRS:            0.59,
+  replacementRateBenchmark: 0.70,
+  dataYear:                 2024,
+};
 
 // ── UX-5: TAB_CONFIG — single source of truth for all tab arrays ──────────────
 // Previously the tab list was hardcoded in 4 separate places (desktop strip,
@@ -654,6 +678,50 @@ const computeSensitivityRow = (pAge, raAtPayout, isMale, maxAge = 95) => {
 
 const LEGAL_DISCLAIMER = "DISCLAIMER: This application is a prototype simulation tool intended strictly for informational, educational, and testing purposes only. This app and its underlying mathematical models are completely independent and are neither supported, approved, nor sanctioned by the Central Provident Fund (CPF) Board or any government agency. All projections, calculations, and inferences generated by this tool are entirely hypothetical and should not be construed or relied upon as professional financial advice. The author(s) and creator(s) of this application shall not be held liable for any direct, indirect, incidental, consequential damages, losses, or legal repercussions arising from the use or misuse of this tool. Please consult a certified financial advisor before making any financial decisions.";
 
+// ── Schema versioning ────────────────────────────────────────────────────────────────────
+// Increment CURRENT_SCHEMA_VERSION on every breaking DEFAULT_INPUTS field rename.
+// migrateProfile() applies forward migrations on JSON import so old profiles load correctly.
+const CURRENT_SCHEMA_VERSION = 4;
+
+const migrateProfile = (raw) => {
+  if (!raw || typeof raw !== 'object') return raw;
+  let p = { ...raw };
+  const v = p._schemaVersion || 3;
+  if (v < 4) {
+    p = { ...p, inputs: { ...p.inputs,
+      // Field renames: old name ?? new name ?? fallback
+      rentExpense:     p.inputs?.rentExpense     ?? p.inputs?.rentalExpenseMonthly  ?? 0,
+      rentExpStartAge: p.inputs?.rentExpStartAge ?? p.inputs?.rentalExpenseStartAge ?? 0,
+      rentExpEndAge:   p.inputs?.rentExpEndAge   ?? p.inputs?.rentalExpenseStopAge  ?? 85,
+      // Defaults for fields added in v4 (Phase 2 fields — silently dropped by buildSafeInputs
+      // if they are not yet in DEFAULT_INPUTS; they become active once Phase 2 adds them)
+      hasAMD:                     p.inputs?.hasAMD                     ?? false,
+      hasACP:                     p.inputs?.hasACP                     ?? false,
+      cpfWithdrawalLock:          p.inputs?.cpfWithdrawalLock          ?? false,
+      cpfMoneyLock:               p.inputs?.cpfMoneyLock               ?? false,
+      cpfSafetySwitch:            p.inputs?.cpfSafetySwitch            ?? false,
+      cpfTrustContactSet:         p.inputs?.cpfTrustContactSet         ?? false,
+      otherLiabilities:           p.inputs?.otherLiabilities           ?? 0,
+      secondaryEmploymentEnabled: p.inputs?.secondaryEmploymentEnabled ?? false,
+      secondaryEmploymentType:    p.inputs?.secondaryEmploymentType    ?? 'employed',
+      secondarySalaryGross:       p.inputs?.secondarySalaryGross       ?? 0,
+      secondaryAnnualBonus:       p.inputs?.secondaryAnnualBonus       ?? 0,
+      secondaryCitizenStatus:     p.inputs?.secondaryCitizenStatus     ?? 'SC',
+      secondaryPrYear:            p.inputs?.secondaryPrYear            ?? 3,
+      secondaryContribStopAge:    p.inputs?.secondaryContribStopAge    ?? 65,
+      cpfHousingLoanPrincipal:    p.inputs?.cpfHousingLoanPrincipal    ?? 0,
+      showBalaCurve:              p.inputs?.showBalaCurve              ?? false,
+      showLifeStageBanner:        p.inputs?.showLifeStageBanner        ?? true,
+      shsEnabled:                 p.inputs?.shsEnabled                 ?? false,
+      shsFromFlat:                p.inputs?.shsFromFlat                ?? '5r',
+      shsToFlat:                  p.inputs?.shsToFlat                  ?? '3r',
+      shsAge:                     p.inputs?.shsAge                     ?? 65,
+    }};
+  }
+  p._schemaVersion = CURRENT_SCHEMA_VERSION;
+  return p;
+};
+
 const DEFAULT_INPUTS = {
   name: "", currentAge: 35, currentYear: 2026, payoutAge: 65,
   contributionStopAge: 65, housingStopAge: 55,
@@ -688,6 +756,9 @@ const DEFAULT_INPUTS = {
   cpfisSaAmount: 0,    // Annual CPFIS investment from SA (SA must be > $40,000, pre-55 only)
   // Outflows
   housingOutflow: 12000, oaEduLoan: 0, oaEduLoanFreq: 'one-time',
+  mortgagePaymentSource: 'cpf',   // 'cpf' | 'cash' — gates engine debit: OA vs private assets
+  propertyType: 'hdb',            // 'hdb' | 'private' | 'none' — informational; gates label/grant eligibility UI
+  loanType: 'hdb',               // 'hdb' | 'bank' | 'none' — informational; gates loan-type label
   medicalUsage: 500, medishieldIP: 900, medishieldMode: 'manual', elderCareShield: 500,
   medicalInflationRate: 5,
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
@@ -742,6 +813,9 @@ const DEFAULT_INPUTS = {
   // Die with Zero — fully deplete liquid assets by a target age
   dieWithZeroEnabled: false,
   dieWithZeroAge: 85,
+  // ── Display toggles (no engine impact — not in engineKey) ─────────
+  showBalaCurve:       false, // CPF Board cohort-avg overlay on Accumulation chart
+  showLifeStageBanner: true,  // dismissible life-stage banner in Dashboard header
   // Cash top-up to MA (direct, annual, any age, capped at BHS)
   vcMaCash: 0,
   // OA→MA transfer destination: false = self (internal move), true = loved one (OA outflow only)
@@ -837,6 +911,14 @@ const DEFAULT_INPUTS = {
   hasWill: false,
   hasCPFNomination: false,
   hasLPA: false,
+  hasAMD: false,             // Advance Medical Directive filed with MOH
+  hasACP: false,             // Advance Care Plan completed with a healthcare provider
+  // ── CPF Safety Features (activate on CPF website — no engine impact) ──────
+  cpfWithdrawalLock:  false, // Prevents OA/SA cash withdrawals before age 65
+  cpfMoneyLock:       false, // Floor on OA/SA withdrawals
+  cpfSafetySwitch:    false, // Temporary transaction freeze
+  cpfTrustContactSet: false, // Nominated trusted person for large-transaction alerts
+  otherLiabilities:   0,     // Outstanding liabilities (car loan, personal loan, etc.)
   // ── Protection Coverage (Q3 — Insurance Wellness Tile) ──────────────────────────────────
   // Non-CPF insurance held outside the DPS/HPS that the engine already tracks.
   // Used for the Protection Adequacy tile in the MAS Wellness Score panel.
@@ -897,6 +979,26 @@ const DEFAULT_INPUTS = {
   // Set marriageAge = 0 to disable; housingGrantAmount = total grant received.
   marriageAge:            0,
   housingGrantAmount:     0,
+
+  // ── Secondary employment (dual / hybrid income) ───────────────────────────
+  // Second income stream — stacked on top of primary by both RSS and PE engines.
+  // Set secondaryEmploymentEnabled to true to activate; CPF calcs auto-stack.
+  secondaryEmploymentEnabled: false,
+  secondaryEmploymentType: 'employed',   // 'employed' | 'sep'
+  secondarySalaryGross: 0,               // monthly gross OW ($)
+  secondaryAnnualBonus: 0,               // annual bonus / AW ($)
+  secondaryCitizenStatus: 'SC',
+  secondaryPrYear: 3,
+  secondaryContribStopAge: 65,
+
+  // ── CPF housing loan ledger ────────────────────────────────────────────────
+  cpfHousingLoanPrincipal: 0,
+
+  // ── Silver Housing Bonus (SHB) ─────────────────────────────────────────────
+  shsEnabled: false,
+  shsFromFlat: '5r',   // '5r' | '4r' | '3r'
+  shsToFlat: '3r',     // '3r' | '2r'
+  shsAge: 65,
 
   // ── Children & Education ──────────────────────────────────────────────────
   // Up to 3 children modelled as discrete annual education outflow events.
@@ -1506,6 +1608,7 @@ const INPUT_LABELS = {
   oaToMaTransfer: "OA→MA Transfer", oaWithdrawalAt55: "OA Withdrawal at 55",
   usePropertyPledge: "Property Pledge", cpfisOaAmount: "CPFIS OA Invested", cpfisSaAmount: "CPFIS SA Invested",
   housingOutflow: "Housing Outflow", oaEduLoan: "OA Education Loan", oaEduLoanFreq: "OA Edu Loan Freq",
+  mortgagePaymentSource: "Mortgage Payment Source", propertyType: "Property Type", loanType: "Loan Type",
   medicalUsage: "Medical Usage",
   medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
@@ -1546,7 +1649,7 @@ const INPUT_LABELS = {
   applyRaOaTransfer: "Apply RA→OA Transfer at Payout/Migration Age",
   milestoneAge: "Milestone Age 1", milestoneAge2: "Milestone Age 2", milestoneAge3: "Milestone Age 3", milestoneAge4: "Milestone Age 4", milestoneAge5: "Milestone Age 5",
   budgetLivingExpenses: "Monthly Living Expenses", budgetExpenseInflation: "Expense Inflation (% p.a.)", budgetTaxRate: "Marginal Tax Rate (%)", budgetTaxOverride: "Override Auto Tax",
-  emergencyFundMonths: "Emergency Fund (months)", hasWill: "Has Will", hasCPFNomination: "Has CPF Nomination", hasLPA: "Has LPA",
+  emergencyFundMonths: "Emergency Fund (months)", hasWill: "Has Will", hasCPFNomination: "Has CPF Nomination", hasLPA: "Has LPA", hasAMD: "Has AMD", hasACP: "Has ACP", cpfWithdrawalLock: "CPF Withdrawal Lock", cpfMoneyLock: "CPF Money Lock", cpfSafetySwitch: "CPF Safety Switch", cpfTrustContactSet: "CPF Trust Contact", otherLiabilities: "Other Liabilities",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
@@ -1695,6 +1798,33 @@ function makeComputeGF(startAge, salaryGrowth, salaryPhaseAge, salaryGrowthRate2
   };
 }
 
+// ─── B0: CPF cohort-average overlay ────────────────────────────────────────
+// BALA_CURVE: CPF Board cohort-average TOTAL CPF balance by age (2026 cohort).
+// IMPORTANT — DISTINCT from BALA_TABLE below (which is the SLA HDB leasehold
+// decay curve for property valuation). The shared 'Bala' name is coincidental.
+const BALA_CURVE = [
+  { age: 25, val:  12000 }, { age: 30, val:  42000 }, { age: 35, val:  88000 },
+  { age: 40, val: 148000 }, { age: 45, val: 215000 }, { age: 50, val: 268000 },
+  { age: 55, val: 295000 }, { age: 60, val: 248000 }, { age: 65, val: 185000 },
+];
+
+// ─── Life-stage framework ────────────────────────────────────────────────────
+// Drives the dismissible banner shown in the Dashboard tab header.
+const LIFE_STAGE_MAP = [
+  { maxAge:  29, label: 'Early Career',   color: '#1D9E75',
+    tip: 'Build OA for housing, start SA for retirement, emergency fund.' },
+  { maxAge:  44, label: 'Mid-Career',     color: '#185FA5',
+    tip: 'Maximise RSTU, reduce housing outflow, review investment strategy.' },
+  { maxAge:  54, label: 'Pre-Retirement', color: '#7F77DD',
+    tip: 'Fill FRS, review CPF LIFE plan, SRS top-up for tax savings.' },
+  { maxAge:  64, label: 'Transition',     color: '#BA7517',
+    tip: 'OA drawdown strategy, SRS depletion plan, property monetisation.' },
+  { maxAge: 999, label: 'Retirement',     color: '#D85A30',
+    tip: 'Income sustainability, estate planning, legacy documents.' },
+];
+const getLifeStage = (age) =>
+  LIFE_STAGE_MAP.find(s => age <= s.maxAge) || LIFE_STAGE_MAP[LIFE_STAGE_MAP.length - 1];
+
 // ─── B1: Bala's Curve / SLA Leasehold Value Table ────────────────────────────
 // Leasehold property value as a % of equivalent freehold value, indexed by
 // remaining lease years.  Official SLA anchor points (Singapore Land Authority):
@@ -1816,6 +1946,13 @@ function runRSSEngine(inputs, {
   const baseOA_Emp = Number(inputs.empOaCont) || 0;
   const baseSA_Emp = Number(inputs.empSaCont) || 0;
   const baseMA_Emp = Number(inputs.empMaCont) || 0;
+  // ── Secondary employment — stacked on top of primary salary (RSS engine) ──
+  const _secEnabledRSS = !!inputs.secondaryEmploymentEnabled;
+  const _secGrossRSS   = _secEnabledRSS ? (Number(inputs.secondarySalaryGross) || 0) : 0;
+  const _secOA_RSS     = Math.round(_secGrossRSS * 0.23 * 12);
+  const _secSA_RSS     = Math.round(_secGrossRSS * 0.06 * 12);
+  const _secMA_RSS     = Math.round(_secGrossRSS * 0.08 * 12);
+  const _secStopRSS    = Number(inputs.secondaryContribStopAge) || 65;
   const vc3aCash   = Number(inputs.vc3aCash)  || 0;
   const vcVhrAmt   = Number(inputs.vcVhr)     || 0;
   const annualOaToSa      = Number(inputs.oaToSaTransfer) || 0;
@@ -2268,6 +2405,12 @@ function runRSSEngine(inputs, {
           const totalC = mandatoryOA_i + mandatorySA_dyn + mandatoryMA_i;
           if (totalC > ANNUAL_LIMIT) { const scaleC = ANNUAL_LIMIT / totalC; mandatoryOA_i = Math.round(mandatoryOA_i * scaleC); mandatorySA_dyn = Math.round(mandatorySA_dyn * scaleC); mandatoryMA_i = ANNUAL_LIMIT - mandatoryOA_i - mandatorySA_dyn; }
         }
+        // ── Secondary employment: stack contributions from second income ──────
+        if (_secEnabledRSS && age < _secStopRSS) {
+          mandatoryOA_i   += Math.round(_secOA_RSS * gf);
+          mandatorySA_dyn += Math.round(_secSA_RSS * gf);
+          mandatoryMA_i   += Math.round(_secMA_RSS * gf);
+        }
         let vc3aOaRatio, vc3aSaRatio, vc3aMaRatio;
         if      (age <= 35) { vc3aOaRatio=0.23; vc3aSaRatio=0.06;  vc3aMaRatio=0.08;  }
         else if (age <= 45) { vc3aOaRatio=0.21; vc3aSaRatio=0.07;  vc3aMaRatio=0.09;  }
@@ -2462,11 +2605,22 @@ function runRSSEngine(inputs, {
       ra = lifePlanKey === 'bas' ? Math.max(0, migRaRem) : 0;
     }
 
-    // Outflows: housing
+    // Outflows: housing — CPF mortgage debits OA (tracked for CPF refund on sale);
+    //                    Cash mortgage debits private assets only (no OA, no refund obligation).
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
-    if (activeHousing > 0) { cumHousingOA += activeHousing; yearHousingOut = activeHousing; }
-    cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
-    oa = Math.max(0, oa - activeHousing);
+    if (activeHousing > 0) {
+      yearHousingOut = activeHousing;
+      if (inputs.mortgagePaymentSource === 'cash') {
+        privateAssets = Math.max(0, privateAssets - activeHousing);
+      } else {
+        cumHousingOA += activeHousing;
+        cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
+        oa = Math.max(0, oa - activeHousing);
+      }
+    } else if (inputs.mortgagePaymentSource !== 'cash') {
+      // No housing withdrawal this year — compound prior cumHousingFV at 2.5%/yr
+      cumHousingFV = cumHousingFV * 1.025;
+    }
 
     // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
     // auto: use getDpsPremiumForAge(age) so premium steps up correctly as member ages each year
@@ -2857,6 +3011,12 @@ function runProjectionEngine(inputs, {
   const baseOA_Emp = Number(inputs.empOaCont) || 0;
   const baseSA_Emp = Number(inputs.empSaCont) || 0;
   const baseMA_Emp = Number(inputs.empMaCont) || 0;
+  // ── Secondary employment — stacked on top of primary salary (PE engine) ───
+  const _secEnabled = !!inputs.secondaryEmploymentEnabled;
+  const _secGross   = _secEnabled ? (Number(inputs.secondarySalaryGross) || 0) : 0;
+  const _secOA_base = Math.round(_secGross * 0.23 * 12);
+  const _secSA_base = Math.round(_secGross * 0.06 * 12);
+  const _secMA_base = Math.round(_secGross * 0.08 * 12);
   // VC3A: single cash lump-sum, auto-split by age-band rates (same as mandatory).
   // Replaces separate vcOaTopup/vcSaTopup/vcMaTopup — all go through age-band proportional split.
   const vc3aCash = Number(inputs.vc3aCash) || 0;
@@ -3614,6 +3774,13 @@ function runProjectionEngine(inputs, {
             mandatoryMA_i   = ANNUAL_LIMIT - mandatoryOA_i - mandatorySA_dyn; // remainder prevents rounding gap
           }
         }
+        // ── Secondary employment: stack contributions from second income (PE engine) ──
+        const _secStop = Number(inputs.secondaryContribStopAge) || 65;
+        if (_secEnabled && age < _secStop) {
+          mandatoryOA_i   += Math.round(_secOA_base * gf);
+          mandatorySA_dyn += Math.round(_secSA_base * gf);
+          mandatoryMA_i   += Math.round(_secMA_base * gf);
+        }
         // VC3A: single lump-sum auto-split by age-band rates + VHR to OA
         // WIS employees: 60% goes to CPF via age-band rates
         let vc3aOaRatio, vc3aSaRatio, vc3aMaRatio;
@@ -3872,12 +4039,21 @@ function runProjectionEngine(inputs, {
     if (age < 55) { sa += b1ToSA * yearFraction; ma += b1ToMA * yearFraction; }
     else           { ra += (b1ToRA + b2ToRA) * yearFraction; ma += (b1ToMA + b2ToMA) * yearFraction; }
 
-    // Outflows
+    // Outflows — housing: CPF mortgage debits OA; Cash mortgage debits private assets
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
-    if (activeHousing > 0) { cumHousingOA += activeHousing; yearHousingOut = activeHousing; }
-    // Compound existing accrued interest and add this year's withdrawal's first year of interest
-    cumHousingFV = (cumHousingFV + activeHousing) * 1.025;   // (prev + this year's withdrawal) × 1.025 — each withdrawal compounds from its own year
-    oa = Math.max(0, oa - activeHousing);
+    if (activeHousing > 0) {
+      yearHousingOut = activeHousing;
+      if (inputs.mortgagePaymentSource === 'cash') {
+        privateAssets = Math.max(0, privateAssets - activeHousing);
+      } else {
+        cumHousingOA += activeHousing;
+        cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
+        oa = Math.max(0, oa - activeHousing);
+      }
+    } else if (inputs.mortgagePaymentSource !== 'cash') {
+      // No housing withdrawal — compound prior cumHousingFV at 2.5%/yr
+      cumHousingFV = cumHousingFV * 1.025;
+    }
 
     // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
     // auto: use getDpsPremiumForAge(age) so premium steps up correctly as member ages each year
@@ -4481,8 +4657,85 @@ const FreqToggle = ({ freqKey, durKey, type, inputs, setInputs }) => {
 //   '.'  Old LZ77 format (retired — produced URLs LARGER than plain base64url).
 //        Kept in the decoder for backward compatibility with existing share links.
 //   no prefix  Legacy: plain base64url of raw UTF-8 bytes. Pre-LZ77 era links.
+// ── Legacy URL compression (lzCompress / lzDecompress) ────────────────────────
+// Kept for backward-compatibility: any share-links generated by pre-encodePlanState
+// builds (App_138 era) use the '~' delta-base64url or '.' LZ77 prefix formats.
+// lzDecompress is called during URL ?p= / ?s= / share-code hydration to decode
+// those older links. lzCompress is no longer used for new shares (encodePlanState
+// handles that), but is kept so older bookmarks / QR codes round-trip cleanly.
+// DO NOT DELETE — removing breaks backward-compat URL decoding.
 //
 // DEFAULT_INPUTS must be defined before this block (it is — see line ~330).
+
+const lzCompress = (str) => {
+  try {
+    const state = JSON.parse(str);
+    // Delta-encode main inputs: only store fields that differ from DEFAULT_INPUTS
+    if (state.inputs && typeof state.inputs === 'object') {
+      const delta = {};
+      for (const k of Object.keys(DEFAULT_INPUTS)) {
+        if (state.inputs[k] !== undefined &&
+            JSON.stringify(state.inputs[k]) !== JSON.stringify(DEFAULT_INPUTS[k])) {
+          delta[k] = state.inputs[k];
+        }
+      }
+      state.inputs = delta;
+    }
+    // Delta-encode scenario inputs too
+    for (const slot of ['scenarioAInputs', 'scenarioBInputs']) {
+      if (state[slot] && typeof state[slot] === 'object') {
+        const delta = {};
+        for (const k of Object.keys(DEFAULT_INPUTS)) {
+          if (state[slot][k] !== undefined &&
+              JSON.stringify(state[slot][k]) !== JSON.stringify(DEFAULT_INPUTS[k])) {
+            delta[k] = state[slot][k];
+          }
+        }
+        state[slot] = delta;
+      }
+    }
+    const compact = JSON.stringify(state);
+    // Plain base64url — no LZ overhead, delta alone gives 60–75% URL reduction
+    return '~' + btoa(unescape(encodeURIComponent(compact)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  } catch (e) { return encodeURIComponent(str); }
+};
+
+const lzDecompress = (encoded) => {
+  try {
+    if (encoded.startsWith('~')) {
+      // New delta format: base64url of compact delta-encoded JSON
+      const b64 = encoded.slice(1).replace(/-/g, '+').replace(/_/g, '/');
+      const pad = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : '';
+      return decodeURIComponent(escape(atob(b64 + pad)));
+    }
+    if (encoded.startsWith('.')) {
+      // Old LZ77 format: strip '.' prefix, decode compressed byte stream
+      const b64  = encoded.slice(1).replace(/-/g, '+').replace(/_/g, '/');
+      const pad  = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : '';
+      const binary = atob(b64 + pad);
+      const src  = Array.from(binary, c => c.charCodeAt(0));
+      const out  = [];
+      let i = 0;
+      while (i < src.length) {
+        const flag = src[i++];
+        if (flag === 0) {
+          const off = src[i++], len = src[i++];
+          const base = out.length - off;
+          for (let k = 0; k < len; k++) out.push(out[base + k]);
+        } else {
+          out.push(src[i++]);
+        }
+      }
+      return new TextDecoder().decode(new Uint8Array(out));
+    }
+    // Legacy format: plain base64url of raw UTF-8 bytes (pre-LZ77 era)
+    const b64    = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const pad    = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : '';
+    const binary = atob(b64 + pad);
+    return new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0)));
+  } catch (e) { return decodeURIComponent(encoded); }
+};
 
 const encodePlanState = (str) => {
   try {
@@ -4899,9 +5152,13 @@ function TagPill({ color, bg, border, size = 10, bold = true, uppercase = false,
 //                   e.g. "VC3A · RSTU · VCMA · MRSS". Helps users scan what's
 //                   inside each section without expanding it. Safe to omit for
 //                   sections that are always open (profile, balances, contribs).
-function SidebarSectionHeader({ id, label, icon, color, activeBg, badge, isOpen, onToggle, collapsedHint }) {
+function SidebarSectionHeader({ id, label, icon, color, activeBg, badge, isOpen, onToggle, collapsedHint, planBadge }) {
+  const isLocked = planBadge?.locked;
+  const tierLabel = planBadge?.tier?.toUpperCase();
+  const tierBg    = tierLabel === 'PRO' ? '#b45309' : '#0284c7';
+  const tierColor = tierLabel === 'PRO' ? '#fef3c7' : '#fff';
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", flexDirection: "column", opacity: isLocked ? 0.65 : 1 }}>
       <div
         onClick={onToggle}
         tabIndex={0}
@@ -4928,13 +5185,27 @@ function SidebarSectionHeader({ id, label, icon, color, activeBg, badge, isOpen,
             {label}
           </span>
           {badge}
+          {planBadge && (
+            <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 999,
+              background: tierBg, color: tierColor, letterSpacing: "0.06em", flexShrink: 0 }}>
+              {tierLabel}
+            </span>
+          )}
         </div>
-        <ChevronDown className={`sidebar-chevron${isOpen ? " open" : ""}`} style={{ width: 15, height: 15 }} />
+        {isLocked
+          ? <Lock style={{ width: 13, height: 13, color: "var(--text-subtle)", flexShrink: 0 }} />
+          : <ChevronDown className={`sidebar-chevron${isOpen ? " open" : ""}`} style={{ width: 15, height: 15 }} />}
       </div>
-      {/* UX-P1: Collapsed hint — one-line summary of section contents shown only when closed.
-          Lets users quickly find a field without expanding every section. Rendered inside the
-          same outer div as the header row so no wrapper structure changes. */}
-      {!isOpen && collapsedHint && (
+      {isLocked && (
+        <div style={{ padding: "2px 16px 8px 42px", fontSize: 11, color: "var(--text-subtle)", fontStyle: "italic" }}>
+          Unlock with Fusion {planBadge?.tier === 'pro' ? 'Pro' : 'Plus'} →{' '}
+          <span style={{ color: tierBg, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
+            onClick={e => { e.stopPropagation(); onToggle(); }}>
+            Sign in
+          </span>
+        </div>
+      )}
+      {!isLocked && !isOpen && collapsedHint && (
         <div style={{ padding: "2px 16px 10px 42px", fontSize: 13, color: "var(--text-subtle)", fontStyle: "italic", lineHeight: 1.4 }}>
           {collapsedHint}
         </div>
@@ -5616,6 +5887,10 @@ function ReadinessTab({
   onInflowsCtaClick,
   // Portfolio CTA: opens + scrolls to Investment Portfolio section in the sidebar
   onPortfolioCtaClick,
+  // Plan tier — gates APQ CTAs that navigate to Pro/Plus tabs
+  plan,
+  // Opens the upgrade modal when an APQ CTA targets a locked tab
+  onShowUpgrade,
   // B-01: household parallel readiness — null/false when household mode is off
   householdEnabled,
   spouseInputs,
@@ -6479,7 +6754,7 @@ function ReadinessTab({
         const legacyScore  = Math.round((legacyChecks / 3) * 100);
         const legacyStatus = legacyChecks === 3 ? "green" : legacyChecks >= 1 ? "amber" : "red";
         const legacyLabel  = legacyChecks === 3 ? "All 3 ✓" : `${legacyChecks}/3 done`;
-        const legacyTip    = `Will: ${inputs.hasWill ? "✓" : "✗"}  ·  CPF Nomination: ${inputs.hasCPFNomination ? "✓" : "✗"}  ·  LPA: ${inputs.hasLPA ? "✓" : "✗"}. Set in Profile sidebar. MAS recommends all three for complete estate readiness.`;
+        const legacyTip    = `Will: ${inputs.hasWill ? "✓" : "✗"}  ·  CPF Nomination: ${inputs.hasCPFNomination ? "✓" : "✗"}  ·  LPA: ${inputs.hasLPA ? "✓" : "✗"}. Set in Profile sidebar. MAS recommends all three (Will, Nomination, LPA) for complete estate readiness. AMD and ACP are additional advisory documents.`;
 
         // ── Tile 6: Protection Adequacy (Q3 — Insurance wellness) ───────────
         // Framework: MAS/MoneySense guidelines for Singapore residents.
@@ -7330,6 +7605,8 @@ function ReadinessTab({
                       onInflowsCtaClick();
                     } else if (a.id === "portfolio" && onPortfolioCtaClick) {
                       onPortfolioCtaClick();
+                    } else if (a.tab && tabIsLocked(a.tab, plan ?? 'lite')) {
+                      onShowUpgrade?.();
                     } else {
                       setActiveTab(a.tab);
                       if (a.openSidebar) setSidebarOpen(true);
@@ -7371,27 +7648,177 @@ function findScrollContainer(el) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Plan Tier ───────────────────────────────────────────────────────────────────
-// Drives the navbar badge. 'BETA' = identical to previous hardcoded pill.
-// Future CF Worker injection: const PLAN_TIER = window.__PLAN_TIER || 'BETA';
-const PLAN_TIER = 'PRO';  // 'LITE' | 'PLUS' | 'BETA'
-// IS_BETA: true while the product is in active beta testing, regardless of tier.
-// Set to false for stable releases — renders no stage badge.
+// ── Plan Tier ────────────────────────────────────────────────────────────────────
+// IS_BETA: renders the amber "BETA" stage pill in the navbar.
+// Set to false for stable launch — pill disappears automatically.
 const IS_BETA = true;
+// TIER_CONFIG drives the plan pill colour, label, and tooltip.
+// Keyed by plan.toUpperCase() — synced with the plan React state in CPFPlannerApp.
 const TIER_CONFIG = {
-  BETA: { label: 'BETA', bg: 'linear-gradient(90deg, var(--clr-purple2), var(--clr-purple))',
-          border: 'rgba(var(--clr-purple-rgb),0.6)', anim: 'betaGlow 2.6s ease-in-out infinite',
-          title: 'Fusion 富生 is in active beta — features and figures are still being refined' },
-  LITE: { label: 'LITE', bg: 'linear-gradient(90deg, #475569, #64748b)',
-          border: 'rgba(100,116,139,0.5)', anim: 'none',
-          title: 'Fusion 富生 Lite — core CPF projection and retirement readiness tools' },
-  PLUS: { label: 'PLUS', bg: 'linear-gradient(90deg, #1d4ed8, #3b82f6)',
-          border: 'rgba(59,130,246,0.5)', anim: 'none',
-          title: 'Fusion 富生 Plus — full feature set including Monte Carlo, Stress Centre, and Goal Simulator' },
-  PRO:  { label: 'PRO',  bg: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
-          border: 'rgba(139,92,246,0.6)', anim: 'betaGlow 2.6s ease-in-out infinite',
-          title: 'Fusion 富生 Pro — complete access including admin tools, scenario exports, and household planning' },
+  LITE: { label: 'LITE', bg: '#0284c7', color: '#ffffff',
+          border: 'rgba(2,132,199,0.5)',  anim: 'none',
+          title: 'Fusion 富生 Lite — core CPF projection and retirement readiness tools. Upgrade for full access.' },
+  PLUS: { label: 'PLUS', bg: '#d97706', color: '#ffffff',
+          border: 'rgba(217,119,6,0.5)', anim: 'none',
+          title: 'Fusion 富生 Plus — enhanced planning including CPF LIFE comparison, Data Table, and Decumulation.' },
+  PRO:  { label: 'PRO',  bg: '#b45309', color: '#fef3c7',
+          border: 'rgba(180,83,9,0.5)',  anim: 'none',
+          title: 'Fusion 富生 Pro — complete access: Strategy, Monte Carlo, Household co-planning, and more.' },
 };
+
+// ── Plan gate helpers ────────────────────────────────────────────────────────────
+// Tiers: 'lite' (free) → 'plus' (paid entry) → 'pro' (paid full)
+const PLAN_REQUIRED_TABS = {
+  strategy: 'pro',   // Strategy A/B/C/D + Tax Optimizer
+  life:     'plus',  // Payout Plans — CPF LIFE comparison
+  compare:  'pro',   // Scenario side-by-side compare
+  table:    'plus',  // Year-by-year Data Table
+  // 'rss' and 'household' remain gated by cpfScheme/householdEnabled, not plan
+};
+const PLAN_RANK = { lite: 0, plus: 1, pro: 2 };
+const tabIsLocked = (tabId, plan) => {
+  const req = PLAN_REQUIRED_TABS[tabId];
+  if (!req) return false;
+  return (PLAN_RANK[plan] ?? 0) < (PLAN_RANK[req] ?? 99);
+};
+// Sidebar sections locked per plan tier
+const SECTION_PLAN = {
+  cashBudget:      'plus', familyEvents: 'plus', topups:    'plus',
+  transfers:       'plus', outflows:     'plus', decumulation: 'plus',
+  portfolio:       'pro',  investments:  'pro',  property:  'pro',
+  privateAssets:   'pro',  lifeevents:   'pro',  retirementSpend: 'pro',
+};
+const sectionIsLocked = (sectionId, plan) => {
+  const req = SECTION_PLAN[sectionId];
+  if (!req) return false;
+  return (PLAN_RANK[plan] ?? 0) < (PLAN_RANK[req] ?? 99);
+};
+// Preset IDs accessible on Lite (free tier)
+const LITE_PRESET_IDS = new Set(["blank", "typical35"]);
+
+// ── Beta password gate ───────────────────────────────────────────────────────────
+// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro.
+// Replace with server-side auth before public launch.
+const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$' };
+
+// ── UpgradeModal ──────────────────────────────────────────────────────────────
+function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
+  const [password, setPassword]         = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError]               = useState('');
+  const [submitting, setSubmitting]     = useState(false);
+  const inputRef = useRef(null);
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
+
+  const typedTier = password === TIER_PASSWORDS.pro  ? 'pro'
+                  : password === TIER_PASSWORDS.plus ? 'plus' : null;
+
+  const tryUnlock = () => {
+    if (!password) { setError('Please enter your access password.'); return; }
+    setSubmitting(true);
+    setTimeout(() => {
+      if (password === TIER_PASSWORDS.pro) {
+        if (currentPlan === 'pro') { setError('You\'re already on Fusion Pro.'); setSubmitting(false); return; }
+        onUpgrade('pro'); return;
+      }
+      if (password === TIER_PASSWORDS.plus) {
+        if (currentPlan === 'pro')  { setError('You\'re on Fusion Pro — a higher tier. Use the downgrade link if needed.'); setSubmitting(false); return; }
+        if (currentPlan === 'plus') { setError('You\'re already on Fusion Plus.'); setSubmitting(false); return; }
+        onUpgrade('plus'); return;
+      }
+      setError('Incorrect password. Please check your access code and try again.');
+      setSubmitting(false);
+    }, 320);
+  };
+
+  const tierCards = [
+    { key: 'plus', label: 'Fusion Plus', pillBg: TIER_CONFIG.PLUS.bg, pillColor: TIER_CONFIG.PLUS.color, note: 'Entry tier',
+      features: ['Voluntary top-ups — RSTU, VC3A, VCMA','Govt grants — MRSS, MMSS, WIS','CPF Transfers — OA→SA, OA→MA','Family inputs, Cash Budget','Payout Plans tab — CPF LIFE curves','Data Table — year-by-year rows','Decumulation planner','All preset profiles · Export CSV'] },
+    { key: 'pro',  label: 'Fusion Pro',  pillBg: TIER_CONFIG.PRO.bg,  pillColor: TIER_CONFIG.PRO.color, note: 'Full access',
+      features: ['Everything in Plus, plus:','Strategy tabs A/B/C/D + Tax Optimizer','Monte Carlo simulation (200 runs)','Life Events & Stress Tests','Property Monetisation — LBS, SHB','SRS, CPFIS, Investment Portfolio','Compare — scenario A vs B diff','Household — couple co-planning','PDF Report · Share Link'] },
+  ];
+  const highlighted = typedTier ?? (currentPlan === 'plus' ? 'pro' : 'pro');
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(2,6,23,0.93)",backdropFilter:"blur(8px)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background:"var(--bg-panel)",borderRadius:22,border:"1px solid var(--border-strong)",width:"100%",maxWidth:600,maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 32px 80px rgba(0,0,0,0.6)" }}>
+        {/* Header */}
+        <div style={{ padding:"22px 26px 16px",borderBottom:"1px solid var(--border-subtle)",display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0 }}>
+          <div>
+            <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:5 }}>
+              <span style={{ fontWeight:900,fontSize:18,background:"linear-gradient(90deg,#10b981,#3b82f6)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent" }}>Fusion&nbsp;</span>
+              <span style={{ fontWeight:900,fontSize:18,color:"#dc2626",WebkitTextFillColor:"#dc2626" }}>富生</span>
+              <span style={{ fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:999,background:"#6d28d9",color:"#fff",letterSpacing:"0.07em" }}>BETA</span>
+            </div>
+            <p style={{ fontSize:13,color:"var(--text-muted)",margin:0 }}>
+              {currentPlan==='lite' ? 'Sign in with your access password to unlock Plus or Pro features.'
+               : currentPlan==='plus' ? 'Sign in with your Pro access password to upgrade, or downgrade below.'
+               : 'You\'re on Fusion Pro. Manage your access below.'}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:"var(--text-subtle)",cursor:"pointer",padding:4,flexShrink:0,marginLeft:16 }}><X style={{ width:20,height:20 }} /></button>
+        </div>
+        <div style={{ padding:"18px 26px 20px",overflowY:"auto",display:"flex",flexDirection:"column",gap:14 }}>
+          {/* Tier cards */}
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+            {tierCards.map(t => {
+              const isActive = currentPlan === t.key;
+              const isMatch  = typedTier === t.key;
+              return (
+                <div key={t.key} style={{ border:`1.5px solid ${isMatch?(t.key==='pro'?"#b45309":"#d97706"):"var(--border-subtle)"}`,borderRadius:14,padding:"14px 15px",background:isMatch?(t.key==='pro'?"rgba(180,83,9,0.07)":"rgba(217,119,6,0.06)"):"var(--bg-muted)",transition:"all 0.18s",opacity:isActive&&!isMatch?0.55:1 }}>
+                  <div style={{ display:"flex",alignItems:"center",gap:7,marginBottom:8 }}>
+                    <span style={{ fontSize:13,fontWeight:800,color:"var(--text-bright)" }}>{t.label}</span>
+                    <span style={{ fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:999,background:t.pillBg,color:t.pillColor,letterSpacing:"0.07em" }}>{t.key.toUpperCase()}</span>
+                    <span style={{ fontSize:10,color:"var(--text-muted)",marginLeft:"auto" }}>{isActive?"Current":t.note}</span>
+                  </div>
+                  <ul style={{ margin:0,padding:"0 0 0 14px",display:"flex",flexDirection:"column",gap:3 }}>
+                    {t.features.map(f => <li key={f} style={{ fontSize:11,color:"var(--text-secondary)",lineHeight:1.45 }}>{f}</li>)}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+          {/* Password input */}
+          <div style={{ background:"var(--bg-muted)",borderRadius:12,padding:"16px 18px",border:`1px solid ${error?"rgba(239,68,68,0.45)":"var(--border-subtle)"}` }}>
+            <label htmlFor="fusion-pw" style={{ fontSize:12,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.07em",display:"block",marginBottom:10 }}>Access Password</label>
+            <div style={{ display:"flex",gap:8,alignItems:"stretch" }}>
+              <div style={{ flex:1,position:"relative",display:"flex",alignItems:"center" }}>
+                <input ref={inputRef} id="fusion-pw"
+                  type={showPassword?"text":"password"} value={password} autoComplete="current-password"
+                  onChange={e => { setPassword(e.target.value); setError(''); }}
+                  onKeyDown={e => e.key==='Enter' && tryUnlock()}
+                  placeholder="Enter your access password…"
+                  style={{ width:"100%",padding:"10px 42px 10px 13px",borderRadius:9,border:`1px solid ${error?"rgba(239,68,68,0.5)":"var(--border-strong)"}`,background:"var(--bg-input)",color:"var(--text-main)",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:showPassword?"monospace":"inherit",letterSpacing:showPassword?"0.04em":"inherit" }}
+                />
+                <button type="button" onClick={() => setShowPassword(v=>!v)} tabIndex={-1}
+                  style={{ position:"absolute",right:10,background:"none",border:"none",color:"var(--text-muted)",cursor:"pointer",padding:2,display:"flex",alignItems:"center" }}
+                  title={showPassword?"Hide password":"Show password"}>
+                  {showPassword ? <EyeOff style={{ width:16,height:16 }} /> : <Eye style={{ width:16,height:16 }} />}
+                </button>
+              </div>
+              <button onClick={tryUnlock} disabled={submitting}
+                style={{ padding:"10px 22px",borderRadius:9,fontWeight:800,fontSize:14,border:"none",cursor:submitting?"wait":"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"all 0.15s",
+                  background:typedTier==='plus'?TIER_CONFIG.PLUS.bg:typedTier==='pro'?TIER_CONFIG.PRO.bg:"var(--border-strong)",
+                  color:typedTier?(typedTier==='pro'?TIER_CONFIG.PRO.color:"#fff"):"var(--text-muted)",opacity:submitting?0.6:1 }}>
+                {submitting?"Verifying…":typedTier==='plus'?"Unlock Plus":typedTier==='pro'?"Unlock Pro":"Unlock Access"}
+              </button>
+            </div>
+            {error && <div style={{ display:"flex",alignItems:"center",gap:6,marginTop:8,fontSize:12,color:"#ef4444" }}><AlertTriangle style={{ width:13,height:13,flexShrink:0 }} />{error}</div>}
+            {!error && typedTier && <div style={{ display:"flex",alignItems:"center",gap:6,marginTop:8,fontSize:12,color:typedTier==='pro'?"#d97706":"#22c55e" }}><CheckCircle2 style={{ width:13,height:13,flexShrink:0 }} />{typedTier==='pro'?'Fusion Pro access code recognised — press Unlock Pro to continue.':'Fusion Plus access code recognised — press Unlock Plus to continue.'}</div>}
+          </div>
+          {/* Downgrade */}
+          {currentPlan !== 'lite' && (
+            <button onClick={() => { onDowngrade('lite'); onClose(); }}
+              style={{ background:"none",border:"none",color:"var(--text-subtle)",fontSize:12,cursor:"pointer",textDecoration:"underline",textAlign:"center",padding:"2px 0" }}>
+              Downgrade to Fusion Lite (free)
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CPFPlannerApp() {
   const rootRef = useRef(null); // used for sandbox-safe downloads
@@ -7530,6 +7957,18 @@ function CPFPlannerApp() {
   useEffect(() => { if (!householdEnabled) setLifeTabMember("primary"); }, [householdEnabled]);
   const [pdfOrientation, setPdfOrientation] = useState("portrait");
 
+  // ── PORT 4 — CPF LIFE Plan Recommender ───────────────────────────────────
+  const [lifeOpen,  setLifeOpen]  = useState(true);
+  const [lifeGoal,  setLifeGoal]  = useState(null); // 'income'|'inflation'|'estate'|'unsure'
+  const [lifeQ1, setLifeQ1] = useState(null); // 'yes'|'no' — prioritise bequest
+  const [lifeQ2, setLifeQ2] = useState(null); // 'yes'|'no' — expects to outlive lifeExpectancy+2
+  const [lifeQ3, setLifeQ3] = useState(null); // 'yes'|'no' — has other inflation-linked income
+  // ── PORT 5 — Spouse / Parent RSTU interactive calc ───────────────────────
+  const [spouseRstuName,   setSpouseRstuName]   = useState('');
+  const [spouseRstuAmount, setSpouseRstuAmount] = useState(0); // capped at $8,000
+  // ── PORT 6 — CPF Nomination & Estate tracker ─────────────────────────────
+  const [nomineeCount, setNomineeCount] = useState(1);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // P3-T11: First-run detection — show wizard once, then never again.
   // localStorage key 'cpf_planner_setup_done' is set on wizard complete OR skip.
@@ -7553,6 +7992,24 @@ function CPFPlannerApp() {
   // Completely separate from showWelcome — persists even after the modal closes.
   const [showDecisionCard, setShowDecisionCard] = useState(false);
   const [showWizard, setShowWizard] = useState(false); // only fires from decision card
+  // ── Plan tier state ──────────────────────────────────────────────────────────
+  // Defaults to 'lite'; persisted to localStorage so plan survives refresh.
+  // Upgrade via UpgradeModal (password-gated). Downgrade clears to 'lite'.
+  const [plan, setPlan] = useState(() => {
+    try { return localStorage.getItem('fusion_plan') ?? 'lite'; } catch { return 'lite'; }
+  });
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const upgradePlan = (newPlan) => {
+    setPlan(newPlan);
+    try { localStorage.setItem('fusion_plan', newPlan); } catch { /* noop */ }
+  };
+  const downgradePlan = (newPlan) => {
+    setPlan(newPlan);
+    try {
+      if (newPlan === 'lite') localStorage.removeItem('fusion_plan');
+      else localStorage.setItem('fusion_plan', newPlan);
+    } catch { /* noop */ }
+  };
   const [postWizardTipDismissed, setPostWizardTipDismissed] = useState(() => {
     try { return !!localStorage.getItem('cpf_planner_wizard_tip_done'); }
     catch { return true; }
@@ -8761,12 +9218,16 @@ function CPFPlannerApp() {
         handleResetRef.current?.();
       } else if (e.ctrlKey && e.key === ']') {
         e.preventDefault();
-        const tabs = getVisibleTabs(cpfSchemeRef.current, isForeignerRef.current, householdEnabledRef.current).map(([id]) => id);
+        const planRef = localStorage.getItem('fusion_plan') ?? 'lite';
+        const tabs = getVisibleTabs(cpfSchemeRef.current, isForeignerRef.current, householdEnabledRef.current)
+          .map(([id]) => id).filter(id => !tabIsLocked(id, planRef));
         const idx = tabs.indexOf(activeTabRef.current);
         setActiveTab(tabs[(idx + 1) % tabs.length]);
       } else if (e.ctrlKey && e.key === '[') {
         e.preventDefault();
-        const tabs = getVisibleTabs(cpfSchemeRef.current, isForeignerRef.current, householdEnabledRef.current).map(([id]) => id);
+        const planRef = localStorage.getItem('fusion_plan') ?? 'lite';
+        const tabs = getVisibleTabs(cpfSchemeRef.current, isForeignerRef.current, householdEnabledRef.current)
+          .map(([id]) => id).filter(id => !tabIsLocked(id, planRef));
         const idx = tabs.indexOf(activeTabRef.current);
         setActiveTab(tabs[(idx - 1 + tabs.length) % tabs.length]);
       }
@@ -9792,7 +10253,7 @@ function CPFPlannerApp() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const p = JSON.parse(ev.target.result);
+        const p = migrateProfile(JSON.parse(ev.target.result));
         // Whitelist helper — only copies known DEFAULT_INPUTS keys, fills gaps with
         // defaults so a profile from any older/newer version never injects unknown
         // keys or leaves required fields undefined (which causes NaN in the engine).
@@ -10508,7 +10969,7 @@ function CPFPlannerApp() {
       annualGovGrant, govGrantMa, wisAmount, // R-5: mrssGrant, mmssGrant removed — permanently 0, engine computes dynamically
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
-      cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
+      cpfisOaAmount, cpfisSaAmount, housingOutflow, mortgagePaymentSource, oaEduLoan, oaEduLoanFreq,
       medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
@@ -10538,6 +10999,7 @@ function CPFPlannerApp() {
       cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer, // RSS fields + transfer toggle
       maxProjectionAge, // F1: planning horizon — changes here trigger full re-projection
       cpfOARateOverride, cpfSARateOverride, cpfMARateOverride, // Stress Centre CPF rate overrides — must be here so engine recomputes when stress rates change
+      secondaryEmploymentEnabled, secondarySalaryGross, secondaryContribStopAge, // Secondary employment — stacked CPF contributions
     } = debouncedInputs;
     // N-BUG-5 fix: lifeEvents objects carry a UUID `id` field generated at creation time.
     // Including raw lifeEvents in JSON.stringify means deleting+re-adding the same event
@@ -10558,7 +11020,7 @@ function CPFPlannerApp() {
       annualGovGrant, govGrantMa, wisAmount,
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
-      cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
+      cpfisOaAmount, cpfisSaAmount, housingOutflow, mortgagePaymentSource, oaEduLoan, oaEduLoanFreq,
       medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
@@ -10588,6 +11050,7 @@ function CPFPlannerApp() {
       cpfScheme, rssPayoutStartAge, rssMonthlyPayout, lifeMigrationAge, lifePlanAtMigration, applyRaOaTransfer,
       maxProjectionAge,
       cpfOARateOverride, cpfSARateOverride, cpfMARateOverride,
+      secondaryEmploymentEnabled, secondarySalaryGross, secondaryContribStopAge,
     });
   }, [debouncedInputs]); // eslint-disable-line react-hooks/exhaustive-deps
   const projection = useMemo(() => {
@@ -10990,6 +11453,8 @@ function CPFPlannerApp() {
 
   const effectiveOaDrawMonthly  = debouncedInputs.dieWithZeroEnabled ? (projection._dwzOaMonthly || 0) : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
   const effectiveOaDrawStartAge = debouncedInputs.dieWithZeroEnabled ? (projection._dwzStartAge || Number(debouncedInputs.payoutAge) || 65) : (Number(debouncedInputs.oaDrawdownStartAge) || 0);
+  // Life-stage: drives the dismissible banner in Dashboard header
+  const lifeStage = getLifeStage(Number(debouncedInputs.currentAge) || 35);
   const effectiveOaDrawFloor    = debouncedInputs.dieWithZeroEnabled ? 0 : (Number(debouncedInputs.oaDrawdownFloor) || 0);
 
   // B-01: spouse OA draw — mirrors primary pattern; spouse doesn't have DWZ engine so falls back cleanly
@@ -11108,6 +11573,35 @@ function CPFPlannerApp() {
     () => (spouseLifePlans?.basic?.start || 0) * (1 - spouseBasicPremiumPct / 100) / 0.90,
     [spouseLifePlans, spouseBasicPremiumPct]
   );
+
+  // ── OA housing loan amortisation ledger ──────────────────────────────────
+  const cpfLoanLedger = useMemo(() => {
+    const principal0 = Number(debouncedInputs.cpfHousingLoanPrincipal) || 0;
+    if (principal0 <= 0) return [];
+    const ca        = Number(debouncedInputs.currentAge) || 35;
+    const stopAge   = Number(debouncedInputs.housingStopAge) || 55;
+    const annualPay = Number(debouncedInputs.housingOutflow) || 0;
+    let principal = principal0, cumInterest = 0;
+    const rows = [];
+    for (let age = ca; age <= stopAge + 2; age++) {
+      const interest = Math.round(principal * 0.025);
+      cumInterest += interest;
+      principal = Math.max(0, principal + interest - annualPay);
+      rows.push({
+        age,
+        principal:      Math.round(principal),
+        annualInterest: interest,
+        cumInterest:    Math.round(cumInterest),
+      });
+      if (principal <= 0) break;
+    }
+    return rows;
+  }, [
+    debouncedInputs.cpfHousingLoanPrincipal,
+    debouncedInputs.currentAge,
+    debouncedInputs.housingStopAge,
+    debouncedInputs.housingOutflow,
+  ]);
 
   const payoutProjection = useMemo(() => {
     let data = [];
@@ -14524,14 +15018,21 @@ ${milestoneSnapshotHtml}
            ══════════════════════════════════════════════════════════════ */
 
         /* ── Logo: override inline gradient in light mode — mint+blue (#10b981/#3b82f6)
-           both fail on light header. Replace with dark teal→navy: both ≥4.5:1.
-           Scoped to .cpf-logo-fusiontext (the "Fusion " span only) so that the
-           sibling 富生 span (inline WebkitTextFillColor: #dc2626) is not affected ── */
-        .theme-light .cpf-logo-fusiontext {
+           both fail on light header. Replace with dark teal→navy: both ≥4.5:1 ── */
+        /* ── Logo light-theme: target each span individually since .cpf-logo-text
+           is now a flex container.
+           span:first-child = "Fusion " — darker gradient for light-bg contrast.
+           span:last-child  = "富生"   — always Chinese red; explicit fill prevents
+                                          inheriting transparent from any ancestor rule. ── */
+        .theme-light .cpf-logo-text > span:first-child {
           background: linear-gradient(90deg, #065f46, #1e3a8f) !important;
           -webkit-background-clip: text !important;
           -webkit-text-fill-color: transparent !important;
           background-clip: text !important;
+        }
+        .theme-light .cpf-logo-text > span:last-child {
+          color: #dc2626 !important;
+          -webkit-text-fill-color: #dc2626 !important;
         }
         /* ── Logo sub-tagline: ensure readable on new darker header ── */
         .theme-light .cpf-logo-sub {
@@ -14546,11 +15047,10 @@ ${milestoneSnapshotHtml}
 
         /* ── Seal icon box: white bg + subtle red border in both themes ──
            The Chinese seal PNG has a white background; keep white bg as a sub-pixel
-           Padding retained as a 2px buffer so the rounded corner clip does not
-           touch the ideogram artwork. Background is transparent in both modes so
-           the header colour shows through the buffer zone instead of white. ── */
+           corner fill under the rounded clip. Padding and border removed — user-facing
+           white frame eliminated. ── */
         .theme-light .cpf-calc-icon-box {
-          background: transparent !important;
+          background: #ffffff !important;
         }
 
         /* ── All primary action buttons: white text on emerald bg ──
@@ -16739,9 +17239,11 @@ ${milestoneSnapshotHtml}
             </div>
             <div style={{ padding: "16px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
               {PRESET_PROFILES.map(p => {
+                const isPresetLocked = plan === 'lite' && !LITE_PRESET_IDS.has(p.id);
                 const ProfileIcon = p.icon;
                 return (
                 <button key={p.id} onClick={() => {
+                  if (isPresetLocked) { setShowPresets(false); setShowUpgradeModal(true); return; }
                   const merged = { ...DEFAULT_INPUTS, ...p.inputs };
                   setInputs(merged);
                   // BUG-12 fix: stamp lastSavedRef so the beforeunload "unsaved changes"
@@ -16787,18 +17289,21 @@ ${milestoneSnapshotHtml}
                   setActiveTab(merged.cpfScheme === 'rss' ? 'rss' : 'readiness');
                   setShowPresets(false);
                   showToast(`✓ Loaded: ${p.label}`);
-                }} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%", transition: "border-color 0.15s" }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = "var(--clr-amber)"}
+                }} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--bg-muted)", border: `1px solid ${isPresetLocked ? "var(--border-subtle)" : "var(--border-subtle)"}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%", transition: "border-color 0.15s", opacity: isPresetLocked ? 0.6 : 1 }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = isPresetLocked ? "rgba(2,132,199,0.5)" : "var(--clr-amber)"}
                   onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border-subtle)"}
                 >
                   <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--bg-input)", border: "1px solid var(--border-strong)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <ProfileIcon style={{ width: 18, height: 18, color: "var(--clr-amber)" }} />
+                    <ProfileIcon style={{ width: 18, height: 18, color: isPresetLocked ? "var(--text-muted)" : "var(--clr-amber)" }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", marginBottom: 3 }}>{p.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-bright)", marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                      {p.label}
+                      {isPresetLocked && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: "#0284c7", color: "#fff" }}>PLUS</span>}
+                    </div>
                     <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.4 }}>{p.desc}</div>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--clr-amber)", fontWeight: 700, flexShrink: 0 }}>Load →</div>
+                  <div style={{ fontSize: 12, color: isPresetLocked ? "#0284c7" : "var(--clr-amber)", fontWeight: 700, flexShrink: 0 }}>{isPresetLocked ? "Unlock →" : "Load →"}</div>
                 </button>
                 );
               })}
@@ -16815,12 +17320,8 @@ ${milestoneSnapshotHtml}
             {/* Header */}
             <div className="cpf-welcome-header" style={{ padding: "12px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                <div style={{
-                  background: welcomeStep === 0 ? "#ffffff" : "#10b98122",
-                  padding: welcomeStep === 0 ? 4 : 10,
-                  borderRadius: 12, overflow: "hidden" }}>
-                  {welcomeStep === 0 && <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生"
-                    style={{ width: 32, height: 32, display: "block", borderRadius: 4 }} />}
+                <div style={{ background: "#10b98122", padding: 10, borderRadius: 12 }}>
+                  {welcomeStep === 0 && <Calculator style={{ width: 24, height: 24, color: "var(--clr-emerald)" }} />}
                   {welcomeStep === 1 && <User style={{ width: 24, height: 24, color: "var(--clr-blue2)" }} />}
                   {welcomeStep === 2 && <LayoutDashboard style={{ width: 24, height: 24, color: "var(--clr-purple)" }} />}
                   {welcomeStep === 3 && <Lightbulb style={{ width: 24, height: 24, color: "var(--clr-amber)" }} />}
@@ -16902,13 +17403,13 @@ ${milestoneSnapshotHtml}
               {welcomeStep === 2 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {[
-                    ["Dashboard", Activity, "var(--clr-emerald)", "Your retirement command centre — two sub-views toggled by pills at the top. Readiness Score: a 5-dimension arc gauge (FRS Coverage, Income Adequacy, Downside Resilience, Longevity Cover, Healthcare Shield) plus an Action Priority Queue, FRS/BRS/ERS progress bars, CPF LIFE payout card, and Milestone Summary chart. CPF Overview: total CPF at payout age, Tier Shock notice, RA-to-OA transfer notice, net worth breakdown, milestone alerts, and the What-If Explorer sliders. Hidden for RSS members and Foreigners."],
-                    ["Strategy", Target, "#f43f5e", "Three optimization tools in one tab. (1) Goal Simulator — enter a CPF balance target at payout age and click ⚡ Calculate Strategies for three solver-generated plans: Strategy A (RSTU only), Strategy B (VC3A only), Strategy C (blended). Each card shows feasibility, required annual cash, monthly equivalent, and an Apply to Profile button that instantly writes the values to the sidebar. Clear Simulator always reverts to your original baseline even after applying multiple strategies. (2) Stress Centre — Perfect Storm, Sequence-of-Returns, Inflation, and Property Correction stress tests. (3) Turbo — scans every CPF lever for unused headroom with one-click Apply All."],
-                    ["Grow/Spend", BarChart3, "var(--clr-blue2)", "Two sub-tabs: Accumulation — stacked area chart of OA/SA/MA/RA year-by-year, with Monte Carlo P10–P90 confidence bands (Mild ±0.5% / Base ±1% / Stress ±2%). Decumulation — set a Target Monthly Income, use ⚡ Fill Gap to auto-calculate the exact OA Drawdown needed to close the shortfall. Gantt timeline and income table show CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets side by side."],
-                    ["Payout Plans", ShieldCheck, "var(--clr-purple)", "Side-by-side CPF LIFE payout curves for Standard, Escalating, and Basic plans. Basic payout = PMT formula; bequest in Phase 1 includes full premium refund. Vertical lines mark exact break-even ages between plans."],
-                    ["Compare", Split, "var(--clr-orange)", "Two tools in one tab. (1) What-If Explorer — drag sliders to instantly simulate how payout age, SA/RA top-up, housing, salary, OA drawdown, SRS, or private growth affect your balance without modifying saved inputs. (2) Scenario A vs B diff — save your profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded diff of every metric that changes."],
-                    ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E), and IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, and interest component. Download either view as CSV."],
-                    ["Household", Users, "#8b5cf6", "Enable Household Mode in the sidebar to add a spouse or partner. Shows combined CPF accumulation, side-by-side payout cards (with gender, citizenship, FRS headroom), Income Coverage vs your target, OA Depletion Risk, Key Ages table (5-year intervals from current age through 95), and a Children & Dependants milestone guide. Each member runs a fully independent projection engine."],
+                    ["Dashboard", Activity, "var(--clr-emerald)", "Your retirement command centre — free on all plans. Two sub-views: Readiness Score (5-dimension arc gauge + Action Priority Queue + FRS/BRS/ERS bars + CPF LIFE payout card + Milestone Summary chart) and CPF Overview (Total CPF at payout age, net worth doughnut, What-If Explorer sliders, Tier Shock notice, RA-to-OA transfer notice, milestone alerts)."],
+                    ["Strategy", Target, "#f43f5e", "🔒 Fusion Pro — Three optimization tools. (1) Goal Simulator — enter a CPF balance target, click ⚡ Calculate Strategies for three solver plans (A: RSTU only, B: VC3A only, C: blended). Each card shows feasibility, required cash, and Apply to Profile. Clear Simulator reverts to baseline. (2) Stress Centre — Perfect Storm, Sequence-of-Returns, Inflation, Property Correction. (3) Turbo — scans every CPF lever for unused headroom with one-click Apply All."],
+                    ["Grow/Spend", BarChart3, "var(--clr-blue2)", "Accumulation chart free on all plans. 📈 Accumulation — stacked area chart OA/SA/MA/RA year-by-year. Baseline comparison requires Plus; Monte Carlo P10–P90 band requires Pro. 📉 Decumulation (🔒 Plus) — set a Target Monthly Income, use ⚡ Fill Gap to auto-set OA Drawdown. Gantt + income table shows CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets."],
+                    ["Payout Plans", ShieldCheck, "var(--clr-purple)", "🔒 Fusion Plus — Side-by-side CPF LIFE payout curves for Standard, Escalating, and Basic plans. Break-even age lines, toggle between Bequest and Cumulative Payout views. Basic payout = PMT formula; bequest includes full premium refund during Phase 1."],
+                    ["Compare", Split, "var(--clr-orange)", "🔒 Fusion Pro — Scenario A vs B diff. Save your current profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded side-by-side diff of every metric. The What-If Explorer sliders are available free in Dashboard → CPF Overview."],
+                    ["Data Table", TableIcon, "var(--clr-amber)", "🔒 Fusion Plus — Full year-by-year projection table with sticky Age column, Yield (B/S/E), and IRR %. Switch to the Cashflow Ledger for a complete annual breakdown of every inflow, outflow, interest, and transfer component. Download either view as CSV."],
+                    ["Household", Users, "#8b5cf6", "🔒 Fusion Pro — Enable Household Mode in the sidebar to add a spouse or partner. Combined CPF accumulation, side-by-side payout cards, Income Coverage vs joint target, OA Depletion Risk, Key Ages table (5-year intervals), and a Children & Dependants milestone guide. Each member runs an independent projection engine."],
                   ].map(([title, Icon, color, desc]) => (
                     <div key={title}>
                       <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}15`, border: `1px solid ${color}33`, padding: "4px 10px", borderRadius: 8, marginBottom: 8 }}>
@@ -16924,31 +17425,31 @@ ${milestoneSnapshotHtml}
                 <div>
                   <div className="welcome-step3-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
                     {[
-                      ["Share Link", Link, "Generates a URL with your full profile encoded. Anyone opening the link sees your exact inputs and projection — no file needed."],
-                      ["PDF Report", Download, "Comprehensive multi-section PDF: cover, input parameters & optional features, charts, FRS tracker, year-by-year projection, Cashflow Ledger, sensitivity analysis, and conditional SRS / Scenario Comparison sections."],
-                      ["SEP Mode", Briefcase, "Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr proportionally allocated. BHS, ERS, and AW ceiling enforced."],
-                      ["Monte Carlo", Activity, "200 simulations with user-selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in the Accumulation tab. Shows probability of meeting FRS at payout age and a live P10–P90 confidence band on the chart."],
-                      ["Retirement Sum Growth", TrendingUp, "Control the annual rate at which FRS, BRS, ERS, and BHS targets rise (default 3%, CPF Board historical average). Lower it for a conservative FRS target; raise it for a pessimistic view. Preset buttons: 2% / 3% / 4%. Found in the Salary section."],
-                      ["Phased Salary & Career Break", Briefcase, "Model two-phase salary growth (e.g. 4%/yr to age 45, then 1%/yr after) using the Phase 2 Salary section in Mandatory Contributions. To pause contributions entirely (sabbatical, NS, parental leave), add a Career Break event in the Life Events section — it's fully visible on the chart with start/end age bands, can be toggled on/off, and supports multiple overlapping breaks."],
-                      ["Life Events & Stress Tests", Activity, "Overlay stress-test events: Retrenchment, Career Break (contributions pause), Medical Crisis (draws from OA/private), Windfall (one-off inflow), Early Retirement, or Hyperinflation. Visible as coloured bands on the Grow chart and a row in the Strategy Gantt. Found in the Life Events & Stress Tests panel."],
-                      ["Goal Simulator", Target, "Set a CPF balance target at payout age, then click ⚡ Calculate Strategies for three solver plans: Strategy A (RSTU only), Strategy B (VC3A only), Strategy C (blended). Each card shows feasibility, required annual cash, monthly equivalent, and an Apply to Profile button. Clear Simulator reverts all changes back to your original baseline even after applying multiple strategies. Found in Strategy tab → Goal Simulator."],
-                      ["SRS", BookOpen, "Supplementary Retirement Scheme — tax-deductible contributions up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63. Must deplete within 10 years of first withdrawal. Modelled in the SRS panel."],
-                      ["Property Monetisation", Home, "Model a one-time monetisation event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds go to private assets; RA top-up credited to RA. Now in the Property & Timelines panel."],
-                      ["Die with Zero Mode", Clock, "Toggle in Retirement Drawdown. Uses the PMT annuity formula to compute the optimal monthly draw from OA, SRS, and Private Assets so all reach $0 at your target age. RA/CPF LIFE cannot be depleted."],
-                      ["Sample Profiles", Users, "14 pre-built scenarios (Blank Slate, Typical Employee, Late Starter, SEP, High Earner, Near Retirement, Post-55 RA Builder, RSS Member, Household — Tan Family, Baby Millionaire A & B, Family Builder, FIRE, Sandwich Generation). Load from the Samples button in the header — a great way to explore the tool quickly."],
-                      ["OA→SA / OA→RA Transfer", ArrowRightLeft, "Pre-55: transfer OA to SA (capped at FRS). Age 55+: SA closes — transfer OA to RA instead (capped at ERS, $440,800). Both earn 4% vs 2.5%. Irreversible. No tax relief. CPF Transfers panel."],
-                      ["OA Drawdown & ⚡ Fill Gap", Download, "Draw monthly cash from OA post-retirement to supplement CPF LIFE. Set a Target Monthly Income, then click ⚡ Fill Gap to auto-calculate the exact OA draw needed. Shows OA exhaustion age and sustainability warning."],
-                      ["Property Pledge", Target, "Only BRS needed in RA at 55 (not FRS). Reduces locked-in RA but also reduces monthly CPF LIFE payouts. Toggle in Advanced panel."],
-                      ["MRSS Grant", Gift, "Matched Retirement Savings Scheme — govt matches RSTU cash top-ups up to $2,000/yr (lifetime cap $20,000) for Singapore Citizens aged 55+ with RA below BRS."],
-                      ["What-If Explorer", SlidersHorizontal, "Drag sliders to instantly see how changing payout age, SA top-ups, or housing affects your outcome. Hover any point on the What-If chart for a full per-account breakdown tooltip."],
-                      ["Gender Toggle", Users, "Male/Female selection (Profile section). Affects CPF LIFE payout — female payouts are ~7% lower (0.93× male) due to longer statistical life expectancy. Estimates based on 2026 CPF Board Estimator data."],
-                      ["MMSS Grant", Gift, "Matched MediSave Savings Scheme — govt tops up MA dollar-for-dollar up to $1,000/yr for Singapore Citizens aged 55–70 with MA below half of the Basic Healthcare Sum (~$39,500). SC only. Auto-assessed."],
-                      ["Education Loan from OA", BookOpen, "Model CPF Education Scheme withdrawals. Engine enforces the 40% OA ceiling (based on accumulated OA savings) and the age 55+ FRS-first rule. Modelled as a pure OA outflow in the Outflows panel."],
-                      ["VCMA — Cash Top-up to MA", Gift, "Voluntary Cash MediSave Top-up — direct annual cash deposit to your MA. Found in the Inflows panel directly after RSTU. Capped at BHS ($79,000). Not subject to the $37,740 Annual Limit. If MMSS-eligible, the government automatically matches your VCMA dollar-for-dollar up to $1,000/yr."],
-                      ["PwD MRSS Bypass", ShieldCheck, "Enable the Person with Disabilities (PwD) flag in Profile to unlock MRSS eligibility below age 55. PwD members are exempt from the age-55 requirement for the Matched Retirement Savings Scheme. SC only."],
-                      ["PR G/G & F/G Rates", Users, "PR members in Year 1 or 2 can select G/G (graduated employer, default) or F/G (full employer 17% — requires joint CPF application). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates year-by-year in the projection."],
-                      ["Recurring / One-Time Toggles", ArrowRightLeft, "Every inflow and outflow field has a frequency toggle. 'Recurring' applies the amount every projection year. 'One-Time' applies it only in the first projection year — ideal for lump-sum top-ups or one-off withdrawals."],
-                      ["Household Mode", Users, "Enable via the Household toggle in the sidebar. Add a spouse/partner with independent CPF inputs. The Household tab shows: combined KPI dashboard (Income Coverage %, OA Depletion Risk), side-by-side member cards (age, gender, citizenship, FRS headroom), combined accumulation chart, 5-year Key Ages milestone table, and a Children & Dependants education milestone guide. Housing costs are split via a configurable % slider. Each member runs a fully independent engine."],
+                      ["Share Link 🔒 Plus", Link, "Fusion Plus — Generates a URL with your full profile encoded. Anyone opening the link sees your exact inputs and projection — no file needed."],
+                      ["PDF Report 🔒 Plus", Download, "Fusion Plus — Comprehensive multi-section PDF: cover, input parameters & optional features, charts, FRS tracker, year-by-year projection, Cashflow Ledger, sensitivity analysis, and conditional SRS / Scenario Comparison sections."],
+                      ["SEP Mode", Briefcase, "Free on all plans — Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr proportionally allocated. BHS, ERS, and AW ceiling enforced."],
+                      ["Monte Carlo 🔒 Pro", Activity, "Fusion Pro — 200 simulations with user-selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in the Accumulation tab. Shows probability of meeting FRS at payout age and a live P10–P90 confidence band on the chart."],
+                      ["Retirement Sum Growth", TrendingUp, "Free on all plans — Control the annual rate at which FRS, BRS, ERS, and BHS targets rise (default 3%). Preset buttons: 2% / 3% / 4%. Found in the Salary section."],
+                      ["Phased Salary & Career Break", Briefcase, "Free on all plans — Model two-phase salary growth using Phase 2 Salary in Mandatory Contributions. Career Break events (Life Events panel 🔒 Pro) pause contributions entirely with start/end age bands visible on the chart."],
+                      ["Life Events & Stress Tests 🔒 Pro", Activity, "Fusion Pro — Overlay 13 stress-test events: Retrenchment, Career Break, Medical Crisis, Windfall, Early Retirement, Hyperinflation, Salary Cut, Marriage, Child Birth, Loan Repayment, Parent Support, Education Expense, Charitable Giving. Visible as coloured bands on the Grow chart."],
+                      ["Goal Simulator 🔒 Pro", Target, "Fusion Pro — Set a CPF balance target, click ⚡ Calculate Strategies for three solver plans (A: RSTU only, B: VC3A only, C: blended). Each card shows feasibility, required cash, and Apply to Profile. Found in Strategy tab → Goal Simulator."],
+                      ["SRS 🔒 Pro", BookOpen, "Fusion Pro — Supplementary Retirement Scheme: tax-deductible contributions up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63. Must deplete within 10 years of first withdrawal. Modelled in the SRS & Private Wealth panel."],
+                      ["Property Monetisation 🔒 Pro", Home, "Fusion Pro — Model a one-time monetisation event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds go to private assets; RA top-up credited to RA. Found in the Property & Monetisation panel."],
+                      ["Die with Zero Mode 🔒 Plus", Clock, "Fusion Plus — Toggle in Retirement Drawdown. Uses the PMT annuity formula to compute the optimal monthly draw from OA, SRS, and Private Assets so all reach $0 at your target age. RA/CPF LIFE cannot be depleted."],
+                      ["Sample Profiles", Users, "Lite: 2 free profiles (Blank Slate, Typical Employee 35). Plus/Pro: all 14 scenarios (Late Starter, SEP, High Earner, Near Retirement, Post-55 RA Builder, RSS Member, Household — Tan Family, Baby Millionaire A & B, Family Builder, FIRE, Sandwich Generation). Load from the Samples button in the header."],
+                      ["OA→SA / OA→RA Transfer 🔒 Plus", ArrowRightLeft, "Fusion Plus — Pre-55: transfer OA to SA (capped at FRS). Age 55+: transfer OA to RA (capped at ERS). Both earn 4% vs 2.5%. Irreversible. No tax relief. Found in CPF Transfers panel."],
+                      ["OA Drawdown & ⚡ Fill Gap 🔒 Plus", Download, "Fusion Plus — Draw monthly cash from OA post-retirement to supplement CPF LIFE. Set a Target Monthly Income, click ⚡ Fill Gap to auto-set the exact draw. Shows OA exhaustion age. Found in Retirement Drawdown panel."],
+                      ["Property Pledge", Target, "Free on all plans — Only BRS needed in RA at 55 (not FRS). Reduces locked-in RA but also reduces monthly CPF LIFE payouts. Toggle in Advanced panel."],
+                      ["MRSS Grant 🔒 Plus", Gift, "Fusion Plus — Matched Retirement Savings Scheme: govt matches RSTU cash top-ups up to $2,000/yr (lifetime cap $20,000) for SC aged 55+ with RA below BRS. Found in Boost My CPF panel."],
+                      ["What-If Explorer", SlidersHorizontal, "Free on all plans — Drag sliders to instantly simulate how payout age, SA top-ups, housing, salary, OA drawdown, SRS, or private growth affect your balance. Found in Dashboard → CPF Overview."],
+                      ["Gender Toggle", Users, "Free on all plans — Male/Female selection (Profile section). Female payouts ~7% lower (0.93× male). Estimates based on 2026 CPF Board data."],
+                      ["MMSS Grant 🔒 Plus", Gift, "Fusion Plus — Matched MediSave Savings Scheme: govt tops up MA dollar-for-dollar up to $1,000/yr for SC aged 55–70 with MA below half BHS. SC only. Auto-assessed."],
+                      ["Education Loan from OA", BookOpen, "Free on all plans — Model CPF Education Scheme withdrawals. Enforces 40% OA ceiling and age 55+ FRS-first rule. Modelled as a pure OA outflow."],
+                      ["VCMA — Cash Top-up to MA 🔒 Plus", Gift, "Fusion Plus — Voluntary Cash MediSave Top-up: annual cash deposit to MA, capped at BHS ($79,000). Not subject to the $37,740 Annual Limit. MMSS-eligible members get auto-matched up to $1,000/yr."],
+                      ["PwD MRSS Bypass", ShieldCheck, "Free on all plans — Enable the Person with Disabilities (PwD) flag in Profile to unlock MRSS eligibility below age 55."],
+                      ["PR G/G & F/G Rates", Users, "Free on all plans — PR members in Year 1 or 2 can select G/G (graduated employer, default) or F/G (full employer 17%). Engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates year-by-year."],
+                      ["Recurring / One-Time Toggles", ArrowRightLeft, "Free on all plans — Every inflow/outflow field has a frequency toggle. 'Recurring' applies every projection year; 'One-Time' applies only in the first year — ideal for lump sums."],
+                      ["Household Mode 🔒 Pro", Users, "Fusion Pro — Enable via the Household toggle in the sidebar. Add a spouse/partner with independent CPF inputs. Shows combined accumulation, side-by-side payout cards, Income Coverage, OA Depletion Risk, 5-year Key Ages table, and a Children & Dependants education milestone guide."],
                     ].map(([title, Icon, desc]) => (
                       <div key={title} style={{ background: "var(--bg-muted)", padding: "12px", borderRadius: 10, border: "1px solid var(--border-subtle)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -17073,23 +17574,27 @@ ${milestoneSnapshotHtml}
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
           <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
-            <div className="cpf-calc-icon-box" style={{ background: "transparent", padding: 2, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
+            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 0, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
               <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 36, height: 36, display: "block" }} />
             </div>
             <div className="cpf-logo-textstack">
               <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <div className="cpf-logo-text" style={{ fontWeight: 900, fontSize: 16, whiteSpace: "nowrap" }}>
-                  <span className="cpf-logo-fusiontext" style={{ background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>Fusion </span>
-                  <span style={{ color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
+                {/* Logo: "Fusion " in green-blue gradient, "富生" in Chinese red — split spans so light-theme
+                    CSS can target each independently without the transparent fill bleeding into 富生. */}
+                <div className="cpf-logo-text" style={{ display: "flex", alignItems: "baseline", whiteSpace: "nowrap" }}>
+                  <span style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
+                  <span style={{ fontWeight: 900, fontSize: 16, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
                 </div>
-                {(() => { const tc = TIER_CONFIG[PLAN_TIER]; return (
+                {/* Plan tier pill — driven by plan state → TIER_CONFIG */}
+                {(() => { const tc = TIER_CONFIG[plan.toUpperCase()]; return tc ? (
                 <span className="cpf-beta-pill" title={tc.title}
                   style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px",
                     borderRadius: 999, fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
-                    color: "#ffffff", background: tc.bg, border: `1px solid ${tc.border}`,
-                    animation: tc.anim, whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
+                    color: tc.color, background: tc.bg, border: `1px solid ${tc.border}`,
+                    animation: tc.anim ?? 'none', whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
                   {tc.label}
-                </span>); })()}
+                </span>) : null; })()}
+                {/* Beta stage pill — shown whenever IS_BETA is true, regardless of tier */}
                 {IS_BETA && (
                   <span className="cpf-stage-pill"
                     title="Active beta — features and data are still being refined"
@@ -17133,6 +17638,15 @@ ${milestoneSnapshotHtml}
               <Users style={{ width: 13, height: 13 }} />Samples
             </button>
 
+            {/* 3b. Upgrade to Pro — desktop only; hidden when already on Pro */}
+            {plan !== 'pro' && (
+              <button className="cpf-nav-d-only" onClick={() => setShowUpgradeModal(true)}
+                style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(180,83,9,0.10)", color: "#92400e", padding: "6px 13px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px solid rgba(180,83,9,0.28)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                title={plan === 'lite' ? "Upgrade to Fusion Plus or Pro" : "Upgrade to Fusion Pro"}>
+                <Zap style={{ width: 13, height: 13 }} />{plan === 'lite' ? 'Upgrade' : 'Upgrade to Pro'}
+              </button>
+            )}
+
             {/* 4. Share dropdown — desktop + tablet */}
             <div className="cpf-nav-dt-only cpf-nav-ddwrap" style={{ position: "relative", flexShrink: 0 }}>
               <button
@@ -17150,8 +17664,9 @@ ${milestoneSnapshotHtml}
                   <button className="cpf-nav-dd-item" style={{ color: "var(--clr-blue)" }} onClick={() => { handleExportProfile(); setShowShareMenu(false); }}>
                     <Upload style={{ width: 13, height: 13 }} />Export Profile
                   </button>
-                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-blue)" }} onClick={() => { handleShareLinkInit(); setShowShareMenu(false); }}>
-                    <Link style={{ width: 13, height: 13 }} />Share Link
+                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-blue)" }}
+                    onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowShareMenu(false); return; } handleShareLinkInit(); setShowShareMenu(false); }}>
+                    <Link style={{ width: 13, height: 13 }} />Share Link{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                   </button>
                 </div>
               )}
@@ -17167,12 +17682,14 @@ ${milestoneSnapshotHtml}
               {showReportMenu && (
                 <div className="cpf-nav-dropdown">
                   <div className="cpf-nav-dd-hdr">Export &amp; Reports</div>
-                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }} onClick={() => { if (!isGeneratingPdf) { generatePDF(); setShowReportMenu(false); } }}>
+                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
+                    onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowReportMenu(false); return; } if (!isGeneratingPdf) { generatePDF(); setShowReportMenu(false); } }}>
                     {isGeneratingPdf ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <Printer style={{ width: 13, height: 13 }} />}
-                    {isGeneratingPdf ? "Generating…" : "PDF Report"}
+                    {isGeneratingPdf ? "Generating…" : "PDF Report"}{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                   </button>
-                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }} onClick={() => { handleExportCSV(); setShowReportMenu(false); }}>
-                    <Download style={{ width: 13, height: 13 }} />CSV – Data
+                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
+                    onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowReportMenu(false); return; } handleExportCSV(); setShowReportMenu(false); }}>
+                    <Download style={{ width: 13, height: 13 }} />CSV – Data{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                   </button>
                 </div>
               )}
@@ -17258,20 +17775,31 @@ ${milestoneSnapshotHtml}
                     </label>
                     {[
                       { icon: <Upload style={{ width: 13, height: 13 }} />, label: "Export Profile", color: "var(--clr-blue)", action: () => { handleExportProfile(); setShowSettingsMenu(false); } },
-                      { icon: <Link style={{ width: 13, height: 13 }} />, label: "Share Link", color: "var(--clr-blue)", action: () => { handleShareLinkInit(); setShowSettingsMenu(false); } },
+                      { icon: <Link style={{ width: 13, height: 13 }} />,   label: "Share Link",    color: "var(--clr-blue)", action: () => { if (plan === 'lite') { setShowUpgradeModal(true); setShowSettingsMenu(false); return; } handleShareLinkInit(); setShowSettingsMenu(false); } },
                     ].map(({ icon, label, color, action }) => (
-                      <button key={label} className="cpf-nav-dd-item" style={{ color }} onClick={action}>{icon}{label}</button>
+                      <button key={label} className="cpf-nav-dd-item" style={{ color }} onClick={action}>{icon}{label}{label==='Share Link'&&plan==='lite'&&<span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}</button>
                     ))}
                     <div className="cpf-nav-dd-hdr">Reports</div>
-                    <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }} onClick={() => { if (!isGeneratingPdf) { generatePDF(); setShowSettingsMenu(false); } }}>
+                    <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
+                      onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowSettingsMenu(false); return; } if (!isGeneratingPdf) { generatePDF(); setShowSettingsMenu(false); } }}>
                       {isGeneratingPdf ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <Printer style={{ width: 13, height: 13 }} />}
-                      {isGeneratingPdf ? "Generating…" : "PDF Report"}
+                      {isGeneratingPdf ? "Generating…" : "PDF Report"}{plan==='lite'&&<span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                     </button>
-                    <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }} onClick={() => { handleExportCSV(); setShowSettingsMenu(false); }}>
-                      <Download style={{ width: 13, height: 13 }} />CSV – Data
+                    <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
+                      onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowSettingsMenu(false); return; } handleExportCSV(); setShowSettingsMenu(false); }}>
+                      <Download style={{ width: 13, height: 13 }} />CSV – Data{plan==='lite'&&<span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                     </button>
                     <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
                   </div>
+                  {/* Upgrade — all viewports, hidden on Pro */}
+                  {plan !== 'pro' && (<>
+                    <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 2px" }} />
+                    <button className="cpf-nav-dd-item"
+                      style={{ color: "#92400e", background: "rgba(180,83,9,0.08)", borderRadius: 8, fontWeight: 700 }}
+                      onClick={() => { setShowUpgradeModal(true); setShowSettingsMenu(false); }}>
+                      <Zap style={{ width: 13, height: 13 }} />{plan === 'lite' ? 'Upgrade to Plus or Pro' : 'Upgrade to Pro'}
+                    </button>
+                  </>)}
                   {/* Actions — all viewports in gear */}
                   <div className="cpf-nav-dd-hdr">Actions</div>
                   {[
@@ -17326,13 +17854,18 @@ ${milestoneSnapshotHtml}
           {/* Scrollable tab buttons */}
           <div ref={tabsStripRef} className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", flex: "1 1 auto", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
             {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
-              const isLifeLocked = id === "life" && isForeigner;
+              const isLifeLocked  = id === "life" && isForeigner;
+              const isPlanLocked  = !isLifeLocked && tabIsLocked(id, plan);
+              const isLocked      = isLifeLocked || isPlanLocked;
+              const reqTier       = PLAN_REQUIRED_TABS[id];
               return (
                 <button key={id} role="tab" aria-selected={activeTab === id || (id === "readiness" && activeTab === "summary")} aria-controls={`panel-${id}`}
-                  onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
-                  title={isLifeLocked ? "CPF LIFE — not available to foreigners" : undefined}
-                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLifeLocked ? "not-allowed" : "pointer", background: "transparent", color: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : isLifeLocked ? "rgba(var(--clr-purple-rgb),0.3)" : "var(--text-muted)", borderBottom: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLifeLocked ? 0.45 : 1 }}>
-                  <Icon style={{ width: 14, height: 14 }} />{label}{isLifeLocked && <span style={{ fontSize: 11, marginLeft: 2 }}>🔒</span>}
+                  onClick={() => { if (isLifeLocked) return; if (isPlanLocked) { setShowUpgradeModal(true); return; } setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
+                  title={isLifeLocked ? "CPF LIFE — not available to foreigners" : isPlanLocked ? `Requires Fusion ${reqTier === 'pro' ? 'Pro' : 'Plus'}` : undefined}
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLocked ? (isLifeLocked ? "not-allowed" : "pointer") : "pointer", background: "transparent", color: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : isLocked ? "var(--text-subtle)" : "var(--text-muted)", borderBottom: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLocked ? 0.55 : 1 }}>
+                  <Icon style={{ width: 14, height: 14 }} />{label}
+                  {isLifeLocked && <span style={{ fontSize: 11, marginLeft: 2 }}>🔒</span>}
+                  {isPlanLocked && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: reqTier === 'pro' ? "#b45309" : "#0284c7", color: reqTier === 'pro' ? "#fef3c7" : "#fff", marginLeft: 4 }}>{reqTier === 'pro' ? 'PRO' : 'PLUS'}</span>}
                 </button>
               );
             })}
@@ -17363,10 +17896,14 @@ ${milestoneSnapshotHtml}
               <div data-tasmenu="1" style={{ position: "fixed", top: tabsMenuPos.top, right: tabsMenuPos.right, background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 12, boxShadow: "var(--shadow-panel)", zIndex: 500, minWidth: 180, padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
                 {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
                   const isLifeLocked = id === "life" && isForeigner;
+                  const isPlanLocked = !isLifeLocked && tabIsLocked(id, plan);
+                  const reqTier      = PLAN_REQUIRED_TABS[id];
                   return (
-                    <button key={id} onClick={() => { if (isLifeLocked) return; setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? 800 : 600, border: "none", background: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `${accent}18` : "transparent", color: isLifeLocked ? "rgba(160,160,160,0.4)" : (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: isLifeLocked ? 0.5 : 1 }}>
-                      <Icon style={{ width: 13, height: 13 }} />{label}{isLifeLocked && " 🔒"}
+                    <button key={id} onClick={() => { if (isLifeLocked) return; if (isPlanLocked) { setShowUpgradeModal(true); setShowTabsMenu(false); return; } setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? 800 : 600, border: "none", background: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `${accent}18` : "transparent", color: (isPlanLocked||isLifeLocked) ? "var(--text-subtle)" : (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: (isPlanLocked||isLifeLocked) ? 0.55 : 1 }}>
+                      <Icon style={{ width: 13, height: 13 }} />{label}
+                      {isLifeLocked && " 🔒"}
+                      {isPlanLocked && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: reqTier === 'pro' ? "#b45309" : "#0284c7", color: reqTier === 'pro' ? "#fef3c7" : "#fff", marginLeft: 4 }}>{reqTier === 'pro' ? 'PRO' : 'PLUS'}</span>}
                     </button>
                   );
                 })}
@@ -17707,20 +18244,30 @@ ${milestoneSnapshotHtml}
                         { name: "milestoneAge3", label: "#3", err: inputErrors.milestoneAge3 },
                         { name: "milestoneAge4", label: "#4", err: inputErrors.milestoneAge4 },
                         { name: "milestoneAge5", label: "#5", err: inputErrors.milestoneAge5 },
-                      ].map(({ name, label, err }) => (
-                        <div key={name} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+                      ].map(({ name, label, err }, idx) => {
+                        const isSlotLocked = idx > 0 && plan === 'lite';
+                        return (
+                        <div key={name} style={{ display: "flex", flexDirection: "column", gap: 3, opacity: isSlotLocked ? 0.45 : 1 }}>
+                          <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 3 }}>
+                            {label}
+                            {isSlotLocked && <span style={{ fontSize: 8, fontWeight: 800, padding: "0px 4px", borderRadius: 4, background: "#0284c7", color: "#fff" }}>+</span>}
+                          </span>
                           <input
                             type="text" inputMode="decimal" name={name}
                             value={inputs[name] ?? 0}
-                            onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                            onFocus={(e) => e.target.select()}
+                            readOnly={isSlotLocked}
+                            onClick={isSlotLocked ? () => setShowUpgradeModal(true) : undefined}
+                            onChange={isSlotLocked ? undefined : handleInputChange}
+                            onBlur={isSlotLocked ? undefined : handleBlur}
+                            onKeyDown={isSlotLocked ? undefined : handleKeyDown}
+                            onFocus={isSlotLocked ? (e) => { e.target.blur(); setShowUpgradeModal(true); } : (e) => e.target.select()}
                             aria-label={`Milestone age ${label}`}
                             className={fieldChanged(name) ? "cpf-fc" : undefined}
-                            style={{ width: "100%", padding: "6px 8px", background: "var(--bg-input)", border: `1px solid ${err ? "var(--clr-red)" : "rgba(34,211,238,0.4)"}`, borderRadius: 7, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", textAlign: "right", boxSizing: "border-box" }}
+                            style={{ width: "100%", padding: "6px 8px", background: "var(--bg-input)", border: `1px solid ${err ? "var(--clr-red)" : "rgba(34,211,238,0.4)"}`, borderRadius: 7, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", textAlign: "right", boxSizing: "border-box", cursor: isSlotLocked ? "pointer" : "text" }}
                           />
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     {(inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3 || inputErrors.milestoneAge4 || inputErrors.milestoneAge5) && (
                       <p className="cpf-err" style={{ marginTop: 4 }}>⚠ {inputErrors.milestoneAge || inputErrors.milestoneAge2 || inputErrors.milestoneAge3 || inputErrors.milestoneAge4 || inputErrors.milestoneAge5}</p>
@@ -17913,6 +18460,8 @@ ${milestoneSnapshotHtml}
                       ["hasWill",          "Will",            "A legally valid will prepared with witnesses"],
                       ["hasCPFNomination", "CPF Nomination",  "CPF nomination (CSNB) filed — bypasses probate for CPF assets"],
                       ["hasLPA",           "LPA",             "Lasting Power of Attorney registered with OPG Singapore"],
+                      ["hasAMD",           "AMD",             "Advance Medical Directive filed with MOH — instructs doctors not to apply extraordinary life-sustaining measures when death is imminent"],
+                      ["hasACP",           "ACP",             "Advance Care Plan completed with a healthcare provider — documents your care preferences and values for future medical decisions"],
                     ].map(([key, label, tip]) => (
                       <div key={key} title={tip}
                         onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
@@ -17923,6 +18472,40 @@ ${milestoneSnapshotHtml}
                         </div>
                       </div>
                     ))}
+
+                    {/* CPF Safety Features — informational toggles (no engine impact) */}
+                    <div style={{ marginTop: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 10 }}>
+                      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 5px", display: "flex", alignItems: "center", gap: 6 }}>
+                        🔒 CPF Safety Features
+                        <TooltipBox id="t-cpf-safety" text="Activate these at cpf.gov.sg — no simulation effect, but helps you track your CPF security posture." />
+                      </p>
+                      {[
+                        ["cpfWithdrawalLock",  "Withdrawal Lock",  "Prevents cash withdrawals from OA/SA before age 65"],
+                        ["cpfMoneyLock",       "Money Lock",       "Sets a floor on OA/SA withdrawals; surplus stays in CPF"],
+                        ["cpfSafetySwitch",    "Safety Switch",    "Temporary transaction freeze — useful if you suspect unauthorised access"],
+                        ["cpfTrustContactSet", "Trust Contact",    "Nominated trusted person who receives an alert for large CPF transactions"],
+                      ].map(([key, label, tip]) => (
+                        <div key={key} title={tip}
+                          onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", cursor: "pointer" }}>
+                          <span style={{ fontSize: 12, color: "var(--text-main)" }}>{label}</span>
+                          <div style={{ width: 28, height: 16, borderRadius: 8, background: inputs[key] ? "var(--clr-blue)" : "var(--bg-panel)", border: `1px solid ${inputs[key] ? "var(--clr-blue)" : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                            <div style={{ position: "absolute", top: 2, left: inputs[key] ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: inputs[key] ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ marginTop: 8 }}>
+                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
+                          Other Liabilities ($)
+                          <TooltipBox id="t-other-liab" text="Outstanding liabilities not captured above (car loan, personal loan, credit card balance). Stored for reference — not currently deducted from net worth in the simulation." />
+                        </label>
+                        <input type="number" min={0} step={1000}
+                          value={inputs.otherLiabilities || ""}
+                          placeholder="0"
+                          onChange={e => setInputs(p => ({ ...p, otherLiabilities: Number(e.target.value) || 0 }))}
+                          style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }} />
+                      </div>
+                    </div>
 
                     {/* Protection Coverage inputs — feeds Tile 6: Protection Adequacy */}
                     <div style={{ marginTop: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 10 }}>
@@ -18182,9 +18765,16 @@ ${milestoneSnapshotHtml}
                     <span style={{ fontSize: 13, fontWeight: 700, color: householdEnabled ? "#8b5cf6" : "var(--text-muted)" }}>Household Mode</span>
                     {householdEnabled && <span style={{ fontSize: 11, padding: "1px 5px", borderRadius: 4, background: "rgba(139,92,246,0.15)", color: "#8b5cf6", fontWeight: 700, border: "1px solid rgba(139,92,246,0.3)" }}>ON</span>}
                   </div>
-                  <button onClick={() => { const next = !householdEnabled; setHouseholdEnabled(next); if (next) { if (window.innerWidth <= 1024) setSidebarOpen(false); setActiveTab("household"); } }}
+                  <button
+                    onClick={() => {
+                      if (plan !== 'pro') { setShowUpgradeModal(true); return; }
+                      const next = !householdEnabled;
+                      setHouseholdEnabled(next);
+                      if (next) { if (window.innerWidth <= 1024) setSidebarOpen(false); setActiveTab("household"); }
+                    }}
+                    title={plan !== 'pro' ? "Household Mode requires Fusion Pro" : undefined}
                     style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", background: householdEnabled ? "rgba(139,92,246,0.15)" : "rgba(100,116,139,0.12)", color: householdEnabled ? "#8b5cf6" : "var(--text-muted)", border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
-                    {householdEnabled ? "Disable" : "Enable"}
+                    {plan !== 'pro' ? <Lock style={{ width: 11, height: 11 }} /> : householdEnabled ? "Disable" : "Enable"}
                   </button>
                 </div>
                 {/* ── Household Mode: Spouse inputs panel — inside Profile section when Household Mode is enabled ── */}
@@ -18602,6 +19192,48 @@ ${milestoneSnapshotHtml}
                       );
                     })()}
                     <button onClick={handleAutoCalc} className="auto-calc-btn" style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, background: "var(--clr-lime)", color: "#14532d", fontWeight: 700, padding: "7px", borderRadius: 8, fontSize: 13, border: "none", cursor: "pointer" }}><Zap style={{ width: 12, height: 12, flexShrink: 0 }} />Auto-Calc CPF Contributions</button>
+
+                    {/* ── Secondary Employment (dual income CPF stacking) ────────────── */}
+                    <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border-subtle)", background: "var(--bg-panel)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, fontWeight: 700, color: "var(--text-bright)" }}>
+                          <input type="checkbox"
+                            checked={!!inputs.secondaryEmploymentEnabled}
+                            onChange={e => setInputs(p => ({ ...p, secondaryEmploymentEnabled: e.target.checked }))}
+                            style={{ accentColor: "var(--clr-emerald)", width: 14, height: 14 }} />
+                          🗂 Secondary Employment / Dual Income
+                        </label>
+                        <TooltipBox id="t-sec-emp" text="Stack a second employment income on top of your primary salary. CPF contributions from both incomes are summed in both projection engines. Useful for gig workers, part-time professionals, or couples sharing one profile." />
+                      </div>
+                      {!!inputs.secondaryEmploymentEnabled && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                            <div>
+                              <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 3 }}>Monthly Gross ($)</label>
+                              <input type="number" min="0" step="100"
+                                value={inputs.secondarySalaryGross || ""}
+                                placeholder="0"
+                                onChange={e => setInputs(p => ({ ...p, secondarySalaryGross: Number(e.target.value) || 0 }))}
+                                style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid var(--border-strong)", background: "var(--bg-muted)", color: "var(--text-bright)", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 3 }}>Stop Age</label>
+                              <input type="number" min="20" max="75"
+                                value={inputs.secondaryContribStopAge || 65}
+                                onChange={e => setInputs(p => ({ ...p, secondaryContribStopAge: Number(e.target.value) || 65 }))}
+                                style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid var(--border-strong)", background: "var(--bg-muted)", color: "var(--text-bright)", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
+                            </div>
+                          </div>
+                          {(inputs.secondarySalaryGross > 0) && (
+                            <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: 0, lineHeight: 1.5 }}>
+                              Extra OA: ~${Math.round(inputs.secondarySalaryGross * 0.23 * 12).toLocaleString()}/yr ·
+                              SA: ~${Math.round(inputs.secondarySalaryGross * 0.06 * 12).toLocaleString()}/yr ·
+                              MA: ~${Math.round(inputs.secondarySalaryGross * 0.08 * 12).toLocaleString()}/yr
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
                 {inputs.showSalaryCalc && !isSelfEmployed && (() => {
@@ -18960,10 +19592,10 @@ ${milestoneSnapshotHtml}
             {/* Take-home · Living expenses · Tax estimate · Available surplus  */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader
-                id="cashBudget" label="Cash Budget"
+                planBadge={sectionIsLocked("cashBudget", plan) ? { tier: "plus", locked: true } : null} id="cashBudget" label="Cash Budget"
                 icon={<DollarSign style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />}
                 color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)"
-                isOpen={openSections.has("cashBudget")} onToggle={() => toggleSection("cashBudget")}
+                isOpen={openSections.has("cashBudget")} onToggle={() => sectionIsLocked("cashBudget", plan) ? setShowUpgradeModal(true) : toggleSection("cashBudget")}
                 badge={budgetTakeHome.surplus > 0 ? (
                   <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
                     background: "rgba(56,189,248,0.15)", color: "var(--clr-sky)", whiteSpace: "nowrap" }}>
@@ -19103,10 +19735,10 @@ ${milestoneSnapshotHtml}
             {/* ── Investment Portfolio ──────────────────────────────────────────── */}
             <div ref={portfolioSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader
-                id="portfolio" label="Investment Portfolio"
+                planBadge={sectionIsLocked("portfolio", plan) ? { tier: "pro", locked: true } : null} id="portfolio" label="Investment Portfolio"
                 icon={<TrendingUp style={{ width: 14, height: 14, color: "#2dd4bf" }} />}
                 color="#2dd4bf" activeBg="rgba(45,212,191,0.08)"
-                isOpen={openSections.has("portfolio")} onToggle={() => toggleSection("portfolio")}
+                isOpen={openSections.has("portfolio")} onToggle={() => sectionIsLocked("portfolio", plan) ? setShowUpgradeModal(true) : toggleSection("portfolio")}
                 badge={Number(inputs.portfolioBalance) > 0
                   ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "rgba(45,212,191,0.15)", color: "#2dd4bf", whiteSpace: "nowrap" }}>
                       {formatCurrency(Number(inputs.portfolioBalance))} balance
@@ -19165,10 +19797,10 @@ ${milestoneSnapshotHtml}
             {/* ── Family & Life Events — marriage, children, loans, parent support ── */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader
-                id="familyEvents" label="Family & Life Events"
+                planBadge={sectionIsLocked("familyEvents", plan) ? { tier: "plus", locked: true } : null} id="familyEvents" label="Family & Life Events"
                 icon={<Heart style={{ width: 14, height: 14, color: "#ec4899" }} />}
                 color="#ec4899" activeBg="rgba(236,72,153,0.07)"
-                isOpen={openSections.has("familyEvents")} onToggle={() => toggleSection("familyEvents")}
+                isOpen={openSections.has("familyEvents")} onToggle={() => sectionIsLocked("familyEvents", plan) ? setShowUpgradeModal(true) : toggleSection("familyEvents")}
                 badge={(() => {
                   const hasFamily = (Number(inputs.marriageAge) > 0) || (Number(inputs.loanMonthlyRepayment) > 0) || (Number(inputs.parentSupportMonthly) > 0) || (inputs.childrenData || []).length > 0;
                   return hasFamily ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "rgba(236,72,153,0.15)", color: "#ec4899" }}>configured</span> : null;
@@ -19322,10 +19954,10 @@ ${milestoneSnapshotHtml}
             {/* ── Retirement Spending Model ──────────────────────────────────────── */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader
-                id="retirementSpend" label="Retirement Spending"
+                planBadge={sectionIsLocked("retirementSpend", plan) ? { tier: "pro", locked: true } : null} id="retirementSpend" label="Retirement Spending"
                 icon={<PiggyBank style={{ width: 14, height: 14, color: "#fb923c" }} />}
                 color="#fb923c" activeBg="rgba(251,146,60,0.07)"
-                isOpen={openSections.has("retirementSpend")} onToggle={() => toggleSection("retirementSpend")}
+                isOpen={openSections.has("retirementSpend")} onToggle={() => sectionIsLocked("retirementSpend", plan) ? setShowUpgradeModal(true) : toggleSection("retirementSpend")}
                 collapsedHint="Post-retirement expense ratio · Healthcare escalator · Income gap"
               />
               {openSections.has("retirementSpend") && (
@@ -19466,7 +20098,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit && openSections.has("topups") ? "#f97316" : isVcOverLimit ? "rgba(249,115,22,0.3)" : isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="topups" label="Boost My CPF" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => toggleSection("topups")} collapsedHint="VC3A · RSTU · VCMA cash top-up to MA · MRSS · MMSS · Gov Grants · WIS" badge={(() => {
+              <SidebarSectionHeader planBadge={sectionIsLocked("topups", plan) ? { tier: "plus", locked: true } : null} id="topups" label="Boost My CPF" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => sectionIsLocked("topups", plan) ? setShowUpgradeModal(true) : toggleSection("topups")} collapsedHint="VC3A · RSTU · VCMA cash top-up to MA · MRSS · MMSS · Gov Grants · WIS" badge={(() => {
                 // Fix 3: badge now reflects VC3A + RSTU combined so it updates when either field changes.
                 // Policy: only VC3A counts toward the $37,740 Annual Limit; RSTU is exempt.
                 // usedPct uses totalVC (vc3aOnly + rstuOnly) for display; isVcOverLimit checks vc3aOnly only.
@@ -19946,7 +20578,7 @@ ${milestoneSnapshotHtml}
             </div>{/* /topups inner */}
             </div>{/* /topups gate wrapper */}
 
-              <SidebarSectionHeader id="outflows" label="Medical & Insurance Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
+              <SidebarSectionHeader planBadge={sectionIsLocked("outflows", plan) ? { tier: "plus", locked: true } : null} id="outflows" label="Medical & Insurance Outflows" icon={<MinusCircle style={{ width: 14, height: 14, color: "#f472b6" }} />} color="#f472b6" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("outflows")} onToggle={() => sectionIsLocked("outflows", plan) ? setShowUpgradeModal(true) : toggleSection("outflows")} badge={null} collapsedHint="Medical MA · MediShield Life · ElderShield/CareShield · Medical Inflation" />
               {openSections.has("outflows") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -20009,7 +20641,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="transfers" label="CPF Transfers & OA Moves" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One · RA → OA at payout age" />
+              <SidebarSectionHeader planBadge={sectionIsLocked("transfers", plan) ? { tier: "plus", locked: true } : null} id="transfers" label="CPF Transfers & OA Moves" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => sectionIsLocked("transfers", plan) ? setShowUpgradeModal(true) : toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One · RA → OA at payout age" />
               {openSections.has("transfers") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* OA → MA */}
@@ -20303,7 +20935,7 @@ ${milestoneSnapshotHtml}
 
             {/* Retirement Drawdown — income targets, OA drawdown, Die with Zero */}
             <div ref={decumulationSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader id="decumulation" label="Retirement Drawdown" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
+              <SidebarSectionHeader planBadge={sectionIsLocked("decumulation", plan) ? { tier: "plus", locked: true } : null} id="decumulation" label="Retirement Drawdown" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => sectionIsLocked("decumulation", plan) ? setShowUpgradeModal(true) : toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
               {openSections.has("decumulation") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Monthly Goal */}
@@ -20607,7 +21239,7 @@ ${milestoneSnapshotHtml}
                 </div>
               )}
               <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-                <SidebarSectionHeader id="investments" label="CPFIS Investments" icon={<TrendingUp style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />} color="var(--clr-orange)" activeBg="rgba(var(--clr-orange-rgb),0.06)" isOpen={openSections.has("investments")} onToggle={() => toggleSection("investments")} badge={null} collapsedHint="CPFIS OA (>$20k floor) · CPFIS SA (>$40k floor) · OA Education Loan · OA Lump Sum Withdrawal (55+)" />
+                <SidebarSectionHeader planBadge={sectionIsLocked("investments", plan) ? { tier: "pro", locked: true } : null} id="investments" label="CPFIS Investments" icon={<TrendingUp style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />} color="var(--clr-orange)" activeBg="rgba(var(--clr-orange-rgb),0.06)" isOpen={openSections.has("investments")} onToggle={() => sectionIsLocked("investments", plan) ? setShowUpgradeModal(true) : toggleSection("investments")} badge={null} collapsedHint="CPFIS OA (>$20k floor) · CPFIS SA (>$40k floor) · OA Education Loan · OA Lump Sum Withdrawal (55+)" />
                 {openSections.has("investments") && <div style={{ padding: "0 16px 16px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -20774,7 +21406,7 @@ ${milestoneSnapshotHtml}
             <>
             {/* Property — consolidated section (3rd section of col2) */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="property" label="Property & Monetisation" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => toggleSection("property")} badge={null} collapsedHint="Housing loan timelines · OA used for housing · Property sale & CPF refund · LBS · Monetisation" />
+              <SidebarSectionHeader planBadge={sectionIsLocked("property", plan) ? { tier: "pro", locked: true } : null} id="property" label="Property & Monetisation" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => sectionIsLocked("property", plan) ? setShowUpgradeModal(true) : toggleSection("property")} badge={null} collapsedHint="Housing loan timelines · OA used for housing · Property sale & CPF refund · LBS · Monetisation" />
               {openSections.has("property") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
@@ -20847,13 +21479,91 @@ ${milestoneSnapshotHtml}
 
                   {/* Housing loan — locked for foreigners (no OA account) */}
                   {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                    {/* Payment Source: CPF vs Cash */}
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>
+                        Payment Source
+                        <TooltipBox id="t-mortgage-source" text="CPF: monthly mortgage instalments debit your OA. Tracked — on property sale CPF requires refund of principal + 2.5%/yr interest. Cash: instalments debit your private assets. No OA is touched, so there is no CPF refund obligation when you sell." />
+                      </div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {[["cpf", "CPF (OA)"], ["cash", "Cash"]].map(([val, lbl]) => {
+                          const active = (inputs.mortgagePaymentSource || "cpf") === val;
+                          return (
+                            <button key={val} onClick={() => setInputs(p => ({ ...p, mortgagePaymentSource: val }))}
+                              style={{ flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 12, fontWeight: 700, border: active ? "none" : "1px solid var(--border-strong)", cursor: "pointer", background: active ? "var(--clr-blue)" : "var(--bg-muted)", color: active ? "#fff" : "var(--text-muted)", transition: "background 0.15s" }}>
+                              {lbl}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {(inputs.mortgagePaymentSource || "cpf") === "cash" && (
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>Cash mortgage debits private assets. CPF Loan Ledger and VHR are not applicable.</p>
+                      )}
+                    </div>
+
+                    {/* Loan Type */}
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>Loan Type</div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {[["hdb", "HDB (2.6%)"], ["bank", "Bank"], ["none", "None"]].map(([val, lbl]) => {
+                          const active = (inputs.loanType || "hdb") === val;
+                          return (
+                            <button key={val} onClick={() => setInputs(p => ({ ...p, loanType: val }))}
+                              style={{ flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 12, fontWeight: 700, border: active ? "none" : "1px solid var(--border-strong)", cursor: "pointer", background: active ? "var(--clr-blue)" : "var(--bg-muted)", color: active ? "#fff" : "var(--text-muted)", transition: "background 0.15s" }}>
+                              {lbl}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>Housing Loan — OA Outflow ($/yr) <FreqToggle freqKey="housingFreq" durKey="housingDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-housing-prop" text="Annual OA deduction for mortgage repayment. Stops at Housing Stop Age. Tracked for CPF refund on property sale." /></span>
+                      <span>Housing Loan — OA / Cash Outflow ($/yr) <FreqToggle freqKey="housingFreq" durKey="housingDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-housing-prop" text="Annual OA (CPF mortgage) or cash (cash mortgage) deduction for mortgage repayment. Stops at Housing Stop Age. CPF mode: tracked for CPF refund on property sale." /></span>
                       <FieldResetBtn name="housingOutflow" inputs={inputs} setInputs={setInputs} />
                     </div>
                     <input type="text" inputMode="decimal" name="housingOutflow" value={getDisplayValue("housingOutflow", inputs.housingOutflow)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual housing loan outflow" onFocus={() => setFocusedField("housingOutflow")} className={fieldChanged("housingOutflow") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.housingOutflow ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     {inputErrors.housingOutflow && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.housingOutflow}</p>}
+
+                    {(inputs.mortgagePaymentSource || "cpf") === "cpf" && <>{/* ── OA Loan Ledger ── CPF mortgage only: cpfHousingLoanPrincipal + amortisation chart */}
+                    <div style={{ marginTop: 10 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>
+                        CPF Loan Outstanding Principal ($)
+                        <TooltipBox id="t-loan-ledger" text="Enter the current outstanding principal of your CPF OA housing loan. FusionPlus will display a live amortisation chart showing when the loan clears and how much interest accrues." />
+                      </label>
+                      <input type="text" inputMode="decimal" name="cpfHousingLoanPrincipal"
+                        value={getDisplayValue("cpfHousingLoanPrincipal", inputs.cpfHousingLoanPrincipal)}
+                        onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        placeholder="0"
+                        style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                    </div>
+                    {cpfLoanLedger.length > 0 && (() => {
+                      const lastRow = cpfLoanLedger[cpfLoanLedger.length - 1];
+                      return (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>OA housing loan amortisation</div>
+                          <ResponsiveContainer width="100%" height={90}>
+                            <ComposedChart data={cpfLoanLedger} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                              <XAxis dataKey="age" tick={{ fontSize: 10 }} />
+                              <YAxis hide />
+                              <Tooltip
+                                contentStyle={STYLES.chartTooltip}
+                                itemStyle={STYLES.chartTooltipItem}
+                                labelStyle={STYLES.chartTooltipLabel}
+                                formatter={v => `$${v.toLocaleString()}`}
+                              />
+                              <Bar dataKey="principal" fill="var(--clr-blue)" opacity={0.6} name="Remaining" />
+                              <Line type="monotone" dataKey="cumInterest" stroke="var(--clr-orange)"
+                                    dot={false} strokeWidth={1.5} name="Cum. interest" />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                          <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "4px 0 0" }}>
+                            At payoff: ~${lastRow.cumInterest.toLocaleString()} total interest accrued. Use VHR to cut this.
+                          </p>
+                        </div>
+                      );
+                    })()}</>
+                  }
                   </div>}
 
                   {/* OA Downpayment — locked for foreigners (no OA account) */}
@@ -21100,6 +21810,36 @@ ${milestoneSnapshotHtml}
                           </div>
                           <input type="text" inputMode="decimal" name="propMonetiseRaTopup" aria-label="Property monetisation RA top-up amount" value={getDisplayValue("propMonetiseRaTopup", inputs.propMonetiseRaTopup)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("propMonetiseRaTopup"); e.target.select(); }} className={fieldChanged("propMonetiseRaTopup") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseRaTopup ? "var(--clr-red)" : "rgba(var(--clr-blue-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.propMonetiseRaTopup && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.propMonetiseRaTopup}</p>}
+                          {/* SHB auto-fill from SHS_BONUS_RA lookup table */}
+                          {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && (() => {
+                            const fromFlat = inputs.shsFromFlat || "5r";
+                            const toFlat   = inputs.shsToFlat   || "3r";
+                            const key = `${fromFlat}_to_${toFlat}`;
+                            const bonus = SHS_BONUS_RA[key] || null;
+                            return (
+                              <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                                  {[["From flat", "shsFromFlat", ["5r","4r","3r"]], ["To flat", "shsToFlat", ["4r","3r","2r"]]].map(([label, field, opts]) => (
+                                    <div key={field}>
+                                      <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 3 }}>{label}</label>
+                                      <select value={inputs[field] || opts[0]}
+                                        onChange={e => setInputs(p => ({ ...p, [field]: e.target.value }))}
+                                        style={{ width: "100%", padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-strong)", background: "var(--bg-muted)", color: "var(--text-bright)", fontSize: 13 }}>
+                                        {opts.map(o => <option key={o} value={o}>{o.replace("r", "-room")}</option>)}
+                                      </select>
+                                    </div>
+                                  ))}
+                                </div>
+                                {bonus !== null && (
+                                  <button onClick={() => setInputs(p => ({ ...p, propMonetiseRaTopup: bonus }))}
+                                    style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: "var(--clr-emerald)", color: "#fff" }}>
+                                    ⚡ Auto-fill RA Bonus: ${bonus.toLocaleString()}
+                                  </button>
+                                )}
+                                {bonus === null && <p style={{ fontSize: 11, color: "var(--clr-amber)", margin: 0 }}>⚠ No SHB bonus for this flat combination — check CPF Board for eligibility.</p>}
+                              </div>
+                            );
+                          })()}
                           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
                             {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Credited to RA at event age · boosts CPF LIFE payout · reduces property value in projection"}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "HDB annuity premium → RA · boosts CPF LIFE payout · capped at ERS ($440,800)"}
@@ -21251,7 +21991,7 @@ ${milestoneSnapshotHtml}
             <>
             {/* Private Assets — accumulation inputs: cash, savings, growth, SRS */}
             <div ref={privateAssetsRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader id="privateAssets" label="Savings, SRS & Private Wealth" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & contributions" />
+              <SidebarSectionHeader planBadge={sectionIsLocked("privateAssets", plan) ? { tier: "pro", locked: true } : null} id="privateAssets" label="Savings, SRS & Private Wealth" icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-purple)" }} />} color="var(--clr-purple)" activeBg="rgba(var(--clr-purple-rgb),0.06)" isOpen={openSections.has("privateAssets")} onToggle={() => sectionIsLocked("privateAssets", plan) ? setShowUpgradeModal(true) : toggleSection("privateAssets")} badge={null} collapsedHint="Current savings · Annual contribution · Growth rate · Goal · SRS balance & contributions" />
               {openSections.has("privateAssets") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   
@@ -21462,7 +22202,7 @@ ${milestoneSnapshotHtml}
               return (
                 <div ref={lifeEventsSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
                   {/* Header */}
-                  <SidebarSectionHeader id="lifeevents" label="Life Events & Stress Tests" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Stress-test retrenchment, windfall, career break, medical crisis…"} />
+                  <SidebarSectionHeader planBadge={sectionIsLocked("lifeevents", plan) ? { tier: "pro", locked: true } : null} id="lifeevents" label="Life Events & Stress Tests" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => sectionIsLocked("lifeevents", plan) ? setShowUpgradeModal(true) : toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Stress-test retrenchment, windfall, career break, medical crisis…"} />
 
                   {openSections.has("lifeevents") && (
                     <div style={{ padding: "0 16px 16px" }}>
@@ -21895,6 +22635,34 @@ ${milestoneSnapshotHtml}
                     <PieChart style={{ width: 12, height: 12, display: "inline", marginRight: 5, verticalAlign: "middle" }} />CPF overview
                   </button>
                 </div>
+                {/* Life Stage Banner — dismissible, keyed to current age bracket */}
+                {debouncedInputs.showLifeStageBanner !== false && lifeStage && (
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 8, marginTop: 8, padding: "7px 12px", borderRadius: 8,
+                    background: `${lifeStage.color}1a`,
+                    border: `1px solid ${lifeStage.color}55`,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em",
+                        textTransform: "uppercase", color: lifeStage.color, whiteSpace: "nowrap" }}>
+                        {lifeStage.label}
+                      </span>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)", overflow: "hidden",
+                        textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {lifeStage.tip}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setInputs(p => ({ ...p, showLifeStageBanner: false }))}
+                      style={{ background: "none", border: "none", cursor: "pointer",
+                        color: "var(--text-muted)", padding: 0, lineHeight: 1,
+                        marginLeft: 2, fontSize: 13, outline: "none", flexShrink: 0 }}
+                      title="Dismiss life-stage banner">
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             {/* ── READINESS TAB ── */}
@@ -21935,6 +22703,8 @@ ${milestoneSnapshotHtml}
                   setTimeout(() => portfolioSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
                 }}
                 wizardCompleted={(() => { try { return !!localStorage.getItem('cpf_planner_setup_done'); } catch { return true; } })()}
+                plan={plan}
+                onShowUpgrade={() => setShowUpgradeModal(true)}
                 householdEnabled={householdEnabled}
                 spouseInputs={spouseInputs}
                 spouseAccumulationByAge={spouseAccumulationByAge}
@@ -22155,12 +22925,13 @@ ${milestoneSnapshotHtml}
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {gapAlert.annualTopUp > 0 && (
                         <button type="button"
-                          onClick={() => { setActiveTab("strategy"); setGoalStratTab("goal"); }}
+                          onClick={() => { if (plan !== 'pro') { setShowUpgradeModal(true); return; } setActiveTab("strategy"); setGoalStratTab("goal"); }}
                           style={{ padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
                             border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
                             background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)",
                             color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <Target style={{ width: 11, height: 11, flexShrink: 0 }} />Fix in Strategy →
+                          <Target style={{ width: 11, height: 11, flexShrink: 0 }} />
+                          {plan !== 'pro' ? <><Lock style={{ width: 9, height: 9 }} /> Strategy →</> : "Fix in Strategy →"}
                         </button>
                       )}
                       <button type="button" onClick={() => setGapAlertDismissed(true)}
@@ -23872,12 +24643,18 @@ ${milestoneSnapshotHtml}
                   {[
                     { id: "accumulation", label: "📈 Accumulation" },
                     { id: "decumulation", label: "📉 Decumulation" },
-                  ].map(({ id, label }) => (
-                    <button key={id} onClick={() => setGrowSubTab(id)}
-                      style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: growSubTab === id ? "3px solid var(--clr-blue2)" : "3px solid transparent", color: growSubTab === id ? "var(--clr-blue2)" : "var(--text-muted)", background: "transparent", outline: "none", transition: "color .15s" }}>
-                      {label}
-                    </button>
-                  ))}
+                  ].map(({ id, label }) => {
+                    const isDecumLocked = id === "decumulation" && plan === 'lite';
+                    return (
+                      <button key={id}
+                        onClick={() => isDecumLocked ? setShowUpgradeModal(true) : setGrowSubTab(id)}
+                        title={isDecumLocked ? "Decumulation planner requires Fusion Plus" : undefined}
+                        style={{ flex: 1, padding: "13px 0", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", borderBottom: growSubTab === id ? "3px solid var(--clr-blue2)" : "3px solid transparent", color: growSubTab === id ? "var(--clr-blue2)" : isDecumLocked ? "var(--text-subtle)" : "var(--text-muted)", background: "transparent", outline: "none", transition: "color .15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                        {label}
+                        {isDecumLocked && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 5, background: "#0284c7", color: "#fff" }}>PLUS</span>}
+                      </button>
+                    );
+                  })}
                 </div>
                 {growSubTab === "accumulation" && (
                   <div style={{ padding: 24 }}>
@@ -24057,11 +24834,26 @@ ${milestoneSnapshotHtml}
                       <button onClick={() => setAccumChartMode('lines')}   style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'lines'   ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'lines'   ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Lines — independent account curves, eliminates MA stacking artifact">∿ Lines</button>
                       <button onClick={() => setAccumChartMode('attribution')} style={{ padding: "5px 11px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: accumChartMode === 'attribution' ? "var(--clr-blue2)" : "transparent", color: accumChartMode === 'attribution' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }} title="Attribution — annual growth by source: mandatory, voluntary, grants, interest">∑ Attribution</button>
                     </div>
-                    <button onClick={() => setShowBaseline(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showBaseline ? "rgba(148,163,184,0.5)" : "var(--border-strong)"}`, background: showBaseline ? "rgba(148,163,184,0.12)" : "var(--bg-input)", color: showBaseline ? "var(--clr-slate)" : "var(--text-muted)", cursor: "pointer" }}>
+                    <button
+                      onClick={() => plan === 'lite' ? setShowUpgradeModal(true) : setShowBaseline(v => !v)}
+                      title={plan === 'lite' ? "Baseline comparison requires Fusion Plus" : undefined}
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${plan === 'lite' ? "var(--border-strong)" : showBaseline ? "rgba(148,163,184,0.5)" : "var(--border-strong)"}`, background: plan === 'lite' ? "var(--bg-input)" : showBaseline ? "rgba(148,163,184,0.12)" : "var(--bg-input)", color: plan === 'lite' ? "var(--text-subtle)" : showBaseline ? "var(--clr-slate)" : "var(--text-muted)", cursor: "pointer", opacity: plan === 'lite' ? 0.55 : 1 }}>
                       <MinusCircle style={{ width: 13, height: 13 }} />{showBaseline ? "Hide" : "Show"} Baseline
+                      {plan === 'lite' && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 5, background: "#0284c7", color: "#fff", marginLeft: 4 }}>PLUS</span>}
                     </button>
-                    <button onClick={() => setShowMonteCarlo(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showMonteCarlo ? "rgba(139,92,246,0.5)" : "var(--border-strong)"}`, background: showMonteCarlo ? "rgba(139,92,246,0.15)" : "var(--bg-input)", color: showMonteCarlo ? "var(--clr-violet)" : "var(--text-muted)", cursor: "pointer" }}>
+                    <button
+                      onClick={() => (plan === 'lite' || plan === 'plus') ? setShowUpgradeModal(true) : setShowMonteCarlo(v => !v)}
+                      title={(plan === 'lite' || plan === 'plus') ? "Monte Carlo requires Fusion Pro" : undefined}
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${(plan==='lite'||plan==='plus') ? "var(--border-strong)" : showMonteCarlo ? "rgba(139,92,246,0.5)" : "var(--border-strong)"}`, background: (plan==='lite'||plan==='plus') ? "var(--bg-input)" : showMonteCarlo ? "rgba(139,92,246,0.15)" : "var(--bg-input)", color: (plan==='lite'||plan==='plus') ? "var(--text-subtle)" : showMonteCarlo ? "var(--clr-violet)" : "var(--text-muted)", cursor: "pointer", opacity: (plan==='lite'||plan==='plus') ? 0.55 : 1 }}>
                       <Activity style={{ width: 13, height: 13 }} />{showMonteCarlo ? "Hide" : "Show"} Monte Carlo (200 runs)
+                      {(plan==='lite'||plan==='plus') && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 5, background: "#b45309", color: "#fef3c7", marginLeft: 4 }}>PRO</span>}
+                    </button>
+                    {/* BALA_CURVE cohort-average overlay toggle */}
+                    <button
+                      onClick={() => setInputs(p => ({ ...p, showBalaCurve: !p.showBalaCurve }))}
+                      title="Show CPF Board cohort-average balance trajectory"
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${inputs.showBalaCurve ? "rgba(251,191,36,0.5)" : "var(--border-strong)"}`, background: inputs.showBalaCurve ? "rgba(251,191,36,0.12)" : "var(--bg-input)", color: inputs.showBalaCurve ? "var(--clr-amber)" : "var(--text-muted)", cursor: "pointer" }}>
+                      <TrendingUp style={{ width: 13, height: 13 }} /> {inputs.showBalaCurve ? "Hide" : "Show"} Cohort Avg
                     </button>
                     {(inputs.lifeEvents || []).filter(e => e.enabled !== false).length > 0 && (
                       <button onClick={() => setShowLifeEventMarkers(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showLifeEventMarkers ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showLifeEventMarkers ? "rgba(239,68,68,0.12)" : "var(--bg-input)", color: showLifeEventMarkers ? "#ef4444" : "var(--text-muted)", cursor: "pointer" }}>
@@ -24114,6 +24906,19 @@ ${milestoneSnapshotHtml}
                         linesData = linesData.map(row => { const bl = blByAge.get(row.age); return bl ? { ...row, baselineTotal: bl.baselineTotal } : row; });
                       }
 
+                      // ── BALA_CURVE cohort-average overlay ───────────────────────
+                      if (inputs.showBalaCurve) {
+                        const balaInterp = (age) => {
+                          const pts = BALA_CURVE;
+                          if (age <= pts[0].age) return pts[0].val;
+                          if (age >= pts[pts.length-1].age) return pts[pts.length-1].val;
+                          const i = pts.findIndex(p => p.age >= age);
+                          const lo = pts[i-1], hi = pts[i];
+                          return Math.round(lo.val + (age-lo.age)/(hi.age-lo.age)*(hi.val-lo.val));
+                        };
+                        stackedData = stackedData.map(r => ({ ...r, balaCurve: balaInterp(r.age) }));
+                        linesData   = linesData.map(r  => ({ ...r, balaCurve: balaInterp(r.age) }));
+                      }
 
                       // ── Attribution data (A-05) ───────────────────────────────────────
                       const attributionData = displayAccumulation.filter(row => row.age <= payoutAge65).map(row => ({
@@ -24215,6 +25020,7 @@ ${milestoneSnapshotHtml}
                           <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" connectNulls={false} stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
                           {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="var(--clr-violet2)" strokeWidth={0.5} strokeDasharray="2 2" fill="var(--clr-purple2)" fillOpacity={0.18} name="MC Band (P10-P90)" legendType="square" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
                           {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
+                          {inputs.showBalaCurve && <Line isAnimationActive={false} type="monotone" dataKey="balaCurve" stroke="var(--clr-amber)" strokeWidth={1.5} strokeDasharray="3 3" dot={false} name="CPF Board cohort avg" />}
                         </AreaChart>
                       );
 
@@ -24247,6 +25053,7 @@ ${milestoneSnapshotHtml}
                           <Line isAnimationActive={false} type="monotone" dataKey="total" stroke="var(--clr-slate)"  strokeWidth={1.5} dot={false} connectNulls={false} name="Total CPF" strokeDasharray="6 3" />
                           {showMonteCarlo && monteCarloData && <Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" />}
                           {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
+                          {inputs.showBalaCurve && <Line isAnimationActive={false} type="monotone" dataKey="balaCurve" stroke="var(--clr-amber)" strokeWidth={1.5} strokeDasharray="3 3" dot={false} name="CPF Board cohort avg" />}
                         </LineChart>
                       );
                     })()}
@@ -26079,6 +26886,125 @@ ${milestoneSnapshotHtml}
                     </div>
                   );
                 })()}
+
+                  {/* ── PORT 4 — CPF LIFE Plan Recommender ──────────────────────────
+                       lifeOpen: controlled independently — panel never collapses mid-survey.
+                       lifeGoal preamble routes "Maximise income" directly to Standard,
+                       skipping all 3 questions. Other goals use 1–3 targeted follow-ups.
+                       Profile-aware: uses raAtPayout, lifeExpectancy, SRS/rental/private data.
+                  ────────────────────────────────────────────────────────────── */}
+                  {(() => {
+                    const projRA        = Math.round(raAtPayout || 0);
+                    const leThreshold   = Math.max(87, lifeExpectancy + 2);
+                    const hasSrsIncome  = (Number(inputs.srsAnnualContribution) || 0) > 0;
+                    const hasRental     = (Number(inputs.rentalIncome) || 0) > 0;
+                    const hasPrivate    = (Number(inputs.currentPrivateAssets) || 0) > 0 || (Number(inputs.annualPrivateSaving) || 0) > 0;
+                    const hasOtherSrc   = hasSrsIncome || hasRental || hasPrivate;
+                    const otherSrcLabel = [hasSrsIncome && "SRS drawdown", hasRental && "rental income", hasPrivate && "private savings"].filter(Boolean).join(", ");
+                    const lifeRecommendation = (() => {
+                      if (lifeGoal === "income")
+                        return { plan: "standard", planLabel: "Standard Plan", clr: "#10b981",
+                          reason: `Standard Plan maximises cumulative lifetime income. Escalating starts at 80% of Standard's monthly payout and only overtakes it at ~age ${leThreshold} — by which point Standard's higher early payouts have already compounded to a larger total.` };
+                      if (lifeGoal === "inflation") {
+                        if (lifeQ3 === null) return null;
+                        return lifeQ3 === "yes"
+                          ? { plan: "escalating", planLabel: "Escalating Plan", clr: "#f59e0b",
+                              reason: `Escalating Plan's 2% annual step-up keeps your CPF LIFE in line with inflation. With ${otherSrcLabel || "other income"} covering early-retirement living costs, you can absorb the lower starting payout.` }
+                          : { plan: "standard", planLabel: "Standard Plan", clr: "#10b981",
+                              reason: "Without other income to cushion early years, the lower Escalating starting payout creates a meaningful income gap. Standard's higher fixed payout gives better income certainty." };
+                      }
+                      if (lifeGoal === "estate") {
+                        if (lifeQ2 === null) return null;
+                        return lifeQ2 === "no"
+                          ? { plan: "basic", planLabel: "Basic Plan", clr: "#8b5cf6",
+                              reason: "Basic Plan preserves the most RA for bequest — Phase 1 pays OA-rate interest on the retained RA balance. If longevity is not a concern, Basic maximises the estate." }
+                          : { plan: "standard", planLabel: "Standard Plan", clr: "#10b981",
+                              reason: "If you expect to live well past average, Standard's lifetime income advantage outweighs Basic's bequest preservation — and Standard still pays out the full RA as a death benefit if you pass early." };
+                      }
+                      if (lifeGoal === "unsure") {
+                        if (lifeQ1 === null) return null;
+                        if (lifeQ1 === "yes") {
+                          if (lifeQ2 === null) return null;
+                          return lifeQ2 === "no"
+                            ? { plan: "basic", planLabel: "Basic Plan", clr: "#8b5cf6",
+                                reason: "You prioritise leaving something behind and don't expect to live past average. Basic Plan is the best fit — it retains the largest RA balance for your estate." }
+                            : { plan: "standard", planLabel: "Standard Plan", clr: "#10b981",
+                                reason: "You care about bequest but expect to live long — Standard's lifetime income advantage is compelling at longer horizons, and it still returns the full RA as a death benefit if you pass before payout." };
+                        }
+                        return hasOtherSrc
+                          ? { plan: "escalating", planLabel: "Escalating Plan", clr: "#f59e0b",
+                              reason: `With ${otherSrcLabel} supplementing early retirement, you can absorb Escalating's lower starting payout. The 2% annual step-up is a natural hedge against lifestyle inflation.` }
+                          : { plan: "standard", planLabel: "Standard Plan", clr: "#10b981",
+                              reason: "No strong preference detected and no supplementary income sources — Standard Plan's higher, stable payout is the safest default for predictable retirement income." };
+                      }
+                      return null;
+                    })();
+                    const Q = ({ text, state, onYes, onNo }) => (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <p style={{ margin: 0, fontSize: 13, color: "var(--text-bright)", lineHeight: 1.5 }}>{text}</p>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {[["Yes", "yes", onYes], ["No", "no", onNo]].map(([label, val, fn]) => (
+                            <button key={val} onClick={() => fn(val)}
+                              style={{ padding: "6px 18px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "1.5px solid",
+                                background: state === val ? "var(--clr-emerald)" : "var(--bg-muted)",
+                                color:      state === val ? "#fff" : "var(--text-muted)",
+                                borderColor: state === val ? "var(--clr-emerald)" : "var(--border-subtle)" }}>
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                    return (
+                      <details open={lifeOpen} onToggle={e => setLifeOpen(e.target.open)}
+                        style={{ border: "1px solid var(--border-subtle)", borderRadius: 14, overflow: "hidden", marginTop: 4 }}>
+                        <summary style={{ padding: "12px 18px", cursor: "pointer", fontWeight: 700, fontSize: 14, background: "var(--bg-panel-muted)", display: "flex", alignItems: "center", gap: 8, userSelect: "none" }}>
+                          🎯 CPF LIFE Plan Recommender
+                          {lifeRecommendation && (
+                            <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 800, color: lifeRecommendation.clr, background: `${lifeRecommendation.clr}18`, borderRadius: 6, padding: "2px 8px" }}>
+                              → {lifeRecommendation.planLabel}
+                            </span>
+                          )}
+                        </summary>
+                        <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 14 }}>
+                          <p style={{ margin: 0, fontSize: 12, color: "var(--text-subtle)", lineHeight: 1.6 }}>
+                            Answer 1–3 questions to get a data-driven plan recommendation.
+                            Your projected RA at payout age: <strong style={{ color: "var(--clr-emerald)" }}>${projRA.toLocaleString()}</strong>.
+                          </p>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text-muted)" }}>What matters most to you in retirement?</p>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                              {[
+                                ["💰 Maximise income", "income"],
+                                ["📈 Beat inflation", "inflation"],
+                                ["🏦 Leave an estate", "estate"],
+                                ["🤷 Not sure", "unsure"],
+                              ].map(([label, val]) => (
+                                <button key={val} onClick={() => { setLifeGoal(val); setLifeQ1(null); setLifeQ2(null); setLifeQ3(null); }}
+                                  style={{ padding: "7px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "1.5px solid",
+                                    background: lifeGoal === val ? "var(--clr-violet)" : "var(--bg-muted)",
+                                    color:      lifeGoal === val ? "#fff" : "var(--text-muted)",
+                                    borderColor: lifeGoal === val ? "var(--clr-violet)" : "var(--border-subtle)" }}>
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {lifeGoal === "inflation" && <Q text="Do you have another inflation-linked income source (SRS drawdown, rental, significant private savings)?" state={lifeQ3} onYes={setLifeQ3} onNo={setLifeQ3} />}
+                          {lifeGoal === "estate"    && <Q text="Do you expect to live significantly past your life expectancy?" state={lifeQ2} onYes={setLifeQ2} onNo={setLifeQ2} />}
+                          {lifeGoal === "unsure"    && <Q text="Is leaving money to your dependants a priority?" state={lifeQ1} onYes={setLifeQ1} onNo={setLifeQ1} />}
+                          {lifeGoal === "unsure" && lifeQ1 === "yes" && <Q text="Do you expect to live significantly past average life expectancy?" state={lifeQ2} onYes={setLifeQ2} onNo={setLifeQ2} />}
+                          {lifeRecommendation && (
+                            <div style={{ padding: "14px 16px", borderRadius: 12, background: `${lifeRecommendation.clr}12`, border: `1.5px solid ${lifeRecommendation.clr}44` }}>
+                              <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 800, color: lifeRecommendation.clr }}>✓ Recommended: {lifeRecommendation.planLabel}</p>
+                              <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>{lifeRecommendation.reason}</p>
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    );
+                  })()}
+
               </div>
             );
             })()}
@@ -31027,22 +31953,54 @@ ${milestoneSnapshotHtml}
                                don't know exists. Points them to the sidebar Docs tab.
                           ────────────────────────────────────────────────────────────── */}
                           {estimatedTaxRate > 0 && (
-                            <div className="turbo-lever-card" style={{ borderStyle: "dashed", opacity: 0.85 }}>
+                            <div className="turbo-lever-card" style={{ borderStyle: "dashed", gridColumn: "1 / -1" }}>
                               <div className="turbo-lever-title">
                                 <span>👪</span>
-                                <span>Spouse / Parent RSTU</span>
-                                <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "1px 6px" }}>INFO</span>
+                                <span>Spouse / Parent RSTU Coordination</span>
+                                <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "1px 6px" }}>INFO + CALC</span>
                               </div>
                               <div className="turbo-lever-note">
-                                Topping up a <strong>spouse's or parent's RA</strong> gives a <em>separate</em> $8,000/yr income tax relief on top of your own $8,000 RSTU cap — combined: up to $16,000/yr deduction.
-                                {estimatedTaxRate > 0 && (
-                                  <span style={{ display: "block", marginTop: 4, color: "var(--clr-purple, #a855f7)", fontWeight: 700 }}>
-                                    📋 At your ~{Math.round(estimatedTaxRate * 100)}% marginal rate, topping up $8,000 for a spouse/parent saves ~{formatCurrency(Math.round(8000 * estimatedTaxRate))}/yr in tax.
-                                  </span>
-                                )}
+                                Topping up a <strong>spouse's or parent's RA</strong> gives a <em>separate</em> $8,000/yr income tax relief on top of your own RSTU cap — combined household deduction: up to $16,000/yr.
                               </div>
-                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
-                                This can't be applied here (it's a top-up to another person's CPF account). Action it directly at <a href="https://www.cpf.gov.sg" target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>cpf.gov.sg</a> before 31 December for the current YA's tax relief.
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)" }}>Recipient name (optional)</label>
+                                  <input type="text" value={spouseRstuName} placeholder="e.g. Spouse, Mum…"
+                                    onChange={e => setSpouseRstuName(e.target.value)}
+                                    style={{ padding: "5px 9px", borderRadius: 7, fontSize: 13, border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-primary)" }} />
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)" }}>Annual top-up amount (max $8,000)</label>
+                                  <input type="number" min="0" max="8000" step="100"
+                                    value={spouseRstuAmount || ""}
+                                    placeholder="0"
+                                    onChange={e => setSpouseRstuAmount(Math.min(8000, Math.max(0, Number(e.target.value) || 0)))}
+                                    style={{ padding: "5px 9px", borderRadius: 7, fontSize: 13, textAlign: "right", border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-primary)" }} />
+                                </div>
+                              </div>
+                              {spouseRstuAmount > 0 && (() => {
+                                const capped      = Math.min(8000, spouseRstuAmount);
+                                const taxSaving   = Math.round(capped * estimatedTaxRate);
+                                const selfRelief  = Math.min(8000, Number(inputs.vcSaTopup) || 0);
+                                const totalRelief = selfRelief + capped;
+                                return (
+                                  <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                                    {[
+                                      { label: `${spouseRstuName || "Spouse/Parent"} relief`, val: `$${capped.toLocaleString()}/yr`, clr: "#a78bfa" },
+                                      { label: "Your extra tax saving",    val: `~${formatCurrency(taxSaving)}/yr`, clr: "#10b981" },
+                                      { label: "Total combined relief",    val: `$${totalRelief.toLocaleString()}/yr`, clr: totalRelief >= 16000 ? "#f59e0b" : "var(--text-primary)" },
+                                    ].map(({ label, val, clr }) => (
+                                      <div key={label} style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", textAlign: "center" }}>
+                                        <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 3 }}>{label}</div>
+                                        <div style={{ fontSize: 14, fontWeight: 800, color: clr }}>{val}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.5 }}>
+                                Action this at <a href="https://www.cpf.gov.sg" target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>cpf.gov.sg</a> before 31 December for the current YA's tax relief.
+                                {spouseRstuAmount >= 8000 && <span style={{ color: "#f59e0b", fontWeight: 700 }}> ✓ At the $8,000 spouse/parent relief cap.</span>}
                               </div>
                             </div>
                           )}
@@ -31061,6 +32019,76 @@ ${milestoneSnapshotHtml}
                                  already earning OA's rate regardless of transfer timing).
                                This is a standalone estimate, not wired into the engine — see the explicit
                                disclaimer in the card copy below. */}
+                          {/* ── PORT 6 — CPF Nomination & Estate Planning Dashboard ────────
+                               Uses existing hasCPFNomination + hasWill boolean inputs.
+                               Shows nomination status, intestacy warning, per-nominee share.
+                          ────────────────────────────────────────────────────────────── */}
+                          {(() => {
+                            const hasNom    = !!inputs.hasCPFNomination;
+                            const hasWill   = !!inputs.hasWill;
+                            const nomCount  = nomineeCount || 1;
+                            const paRow     = accumulationByAge.get(payoutAge65);
+                            const oaEst     = paRow ? (paRow.oa || 0) : 0;
+                            const maEst     = paRow ? (paRow.ma || 0) : 0;
+                            const raEst     = paRow ? (paRow.ra || 0) : 0;
+                            const cpfEstate = oaEst + maEst + raEst;
+                            return (
+                              <div className="turbo-lever-card" style={{ gridColumn: "1 / -1",
+                                borderColor: hasNom ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)" }}>
+                                <div className="turbo-lever-title">
+                                  <span>📋</span>
+                                  <span>CPF Nomination & Estate Planning</span>
+                                  <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 6, border: "1px solid",
+                                    color: hasNom ? "#10b981" : "#f87171", borderColor: hasNom ? "rgba(16,185,129,0.4)" : "rgba(239,68,68,0.35)" }}>
+                                    {hasNom ? "✓ Nomination on file" : "⚠ No nomination"}
+                                  </span>
+                                </div>
+                                {!hasNom && (
+                                  <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 7,
+                                    background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)",
+                                    fontSize: 12, color: "#f87171", lineHeight: 1.6 }}>
+                                    ⚠ Without a CPF nomination your assets follow intestacy rules — <strong>not your Will</strong>, causing delays and legal fees.
+                                    File a nomination at <a href="https://www.cpf.gov.sg/member/account-services/nominations" target="_blank" rel="noopener noreferrer" style={{ color: "#f87171", fontWeight: 700 }}>cpf.gov.sg</a>.
+                                  </div>
+                                )}
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                    <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)" }}>Number of nominees</label>
+                                    <input type="number" min="1" max="10" step="1" value={nomCount}
+                                      onChange={e => setNomineeCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
+                                      style={{ padding: "5px 9px", borderRadius: 7, fontSize: 13, textAlign: "right", border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-primary)", width: 80 }} />
+                                  </div>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                    <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)" }}>Per-nominee share (equal split)</label>
+                                    <div style={{ padding: "5px 9px", fontSize: 13, fontWeight: 800, color: "var(--text-primary)", borderRadius: 7, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
+                                      {cpfEstate > 0 ? formatCurrency(Math.round(cpfEstate / nomCount)) : "—"}
+                                    </div>
+                                  </div>
+                                </div>
+                                {cpfEstate > 0 && (
+                                  <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                                    {[
+                                      { label: `OA at age ${payoutAge65}`, val: oaEst, note: "→ Nominees (bypasses Will)" },
+                                      { label: `RA at age ${payoutAge65}`, val: raEst, note: "→ Nominees (bypasses Will)" },
+                                      { label: `MA at age ${payoutAge65}`, val: maEst, note: "→ Eligible dependants" },
+                                    ].map(({ label, val, note }) => (
+                                      <div key={label} style={{ padding: "7px 9px", borderRadius: 8, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)" }}>
+                                        <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{label}</div>
+                                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)", margin: "2px 0" }}>{val > 0 ? formatCurrency(val) : "—"}</div>
+                                        <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{note}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.55 }}>
+                                  Toggle <strong>CPF Nomination</strong> and <strong>Will</strong> in the Profile → Legacy Planning section.
+                                  CPF nominations bypass your Will — nominees receive directly from CPF Board, avoiding probate.
+                                  {!hasWill && <span style={{ color: "#f59e0b", fontWeight: 700 }}> ⚠ No Will on file — non-CPF assets also follow intestacy rules.</span>}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           {/* ── BHS/FRS Scissors Chart (2.6) ───────────────────────────────
                                Shows projected RA/SA balance vs projected FRS by year.
                                When the two lines cross, RA/SA reaches FRS — mission accomplished.
@@ -31741,6 +32769,15 @@ ${milestoneSnapshotHtml}
         />
       )}
 
+      {showUpgradeModal && (
+        <UpgradeModal
+          currentPlan={plan}
+          onUpgrade={(newPlan) => { upgradePlan(newPlan); setShowUpgradeModal(false); }}
+          onDowngrade={(newPlan) => { downgradePlan(newPlan); setShowUpgradeModal(false); }}
+          onClose={() => setShowUpgradeModal(false)}
+        />
+      )}
+
       </ErrorBoundary>
     </TooltipContext.Provider>
   );
@@ -31749,6 +32786,157 @@ ${milestoneSnapshotHtml}
 
 
 
-export default function App() {
-  return <CPFPlannerApp />;
+// ═══════════════════════════════════════════════════════════════════════════
+// SOFT ACCESS GATE — secondary friction layer in front of CPFPlannerApp.
+//
+// This is NOT a security boundary: the bundle (including this code) is
+// downloaded to the browser regardless, and the passphrases below are
+// plain strings visible via DevTools. The actual access control is
+// Cloudflare Access + KV-based expiry enforced at the edge
+// (functions/_middleware.js). This gate exists purely to deter casual use
+// of a leaked link (e.g. a Pages preview-deployment URL not covered by
+// Access) and to mirror the admin / beta-tester expiry split at the edge.
+//
+// Storage key 'cpf_access_gate' -> JSON { role: 'admin' | 'beta', unlockedAt }
+//   - role 'admin' : never re-locks once entered
+//   - role 'beta'  : re-locks 7 days after unlockedAt
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ACCESS_GATE_KEY = 'cpf_access_gate';
+const ACCESS_GATE_BETA_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const ACCESS_GATE_PASSPHRASES = { admin: 'admin$$1188$$', beta: 'beta2026' };
+
+function readAccessGate() {
+  try {
+    const raw = localStorage.getItem(ACCESS_GATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.role || !parsed.unlockedAt) return null;
+    if (parsed.role === 'beta' && (Date.now() - parsed.unlockedAt) > ACCESS_GATE_BETA_WINDOW_MS) {
+      return { expired: true };
+    }
+    if (parsed.role === 'admin' || parsed.role === 'beta') return { role: parsed.role };
+    return null;
+  } catch {
+    return null;
+  }
 }
+
+function writeAccessGate(role) {
+  try {
+    localStorage.setItem(ACCESS_GATE_KEY, JSON.stringify({ role, unlockedAt: Date.now() }));
+  } catch {}
+}
+
+function LockScreen({ initiallyExpired, onUnlock }) {
+  const [value, setValue] = useState('');
+  const [error, setError] = useState(false);
+  const [expired, setExpired] = useState(!!initiallyExpired);
+
+  const submit = () => {
+    const v = value.trim();
+    if (v === ACCESS_GATE_PASSPHRASES.admin) {
+      writeAccessGate('admin');
+      onUnlock();
+    } else if (v === ACCESS_GATE_PASSPHRASES.beta) {
+      writeAccessGate('beta');
+      onUnlock();
+    } else {
+      setError(true);
+      setExpired(false);
+      setValue('');
+    }
+  };
+
+  return (
+    <div style={{
+      minHeight: '100vh', width: '100%',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'linear-gradient(135deg, #0d1424 0%, #131c33 100%)',
+      fontFamily: 'system-ui, -apple-system, sans-serif', padding: 16,
+      boxSizing: 'border-box',
+    }}>
+      <style>{`
+        .cpf-gate-input:focus { outline: none; border-color: #4f8cff !important; }
+        .cpf-gate-btn:hover { background: #3d6fd6 !important; }
+      `}</style>
+      <div style={{
+        background: '#161f38', border: '1px solid #28324f', borderRadius: 12,
+        padding: '32px 28px', maxWidth: 360, width: '100%', textAlign: 'center',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ background: '#10b981', padding: 8, borderRadius: 12, display: 'flex' }}>
+            <Calculator style={{ color: '#ffffff', width: 18, height: 18 }} />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 900, fontSize: 16, background: 'linear-gradient(90deg,#10b981,#3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', whiteSpace: 'nowrap' }}>
+              Fusion 富生
+            </div>
+            <div style={{ fontSize: 11, color: '#10b981', fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              Retirement Engine v2026
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: 22, marginBottom: 8 }}>{'\u{1F512}'}</div>
+        <p style={{ fontSize: 13, color: '#9aa4b8', margin: '0 0 20px', lineHeight: 1.5 }}>
+          {expired
+            ? 'Your beta access window has ended. Enter a valid access code to continue.'
+            : 'This app is in private beta. Enter your access code to continue.'}
+        </p>
+        <input
+          className="cpf-gate-input"
+          type="password"
+          value={value}
+          placeholder="Access code"
+          onChange={(e) => { setValue(e.target.value); setError(false); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          style={{
+            width: '100%', boxSizing: 'border-box', padding: '10px 12px',
+            borderRadius: 8, border: `1px solid ${error ? '#e05252' : '#3a4566'}`,
+            background: '#0d1424', color: '#e6e9ef', fontSize: 14, marginBottom: 12,
+          }}
+          autoFocus
+        />
+        {error && (
+          <div style={{ color: '#e05252', fontSize: 12, marginBottom: 12, marginTop: -4 }}>
+            Incorrect access code.
+          </div>
+        )}
+        <button
+          className="cpf-gate-btn"
+          onClick={submit}
+          style={{
+            width: '100%', padding: '10px 12px', borderRadius: 8, border: 'none',
+            background: '#4f8cff', color: '#fff', fontSize: 14, fontWeight: 600,
+            cursor: 'pointer', transition: 'background 0.15s',
+          }}
+        >
+          Unlock
+        </button>
+        <p style={{ fontSize: 11, color: '#a0b4cc', margin: '20px 0 0' }}>
+          {'\u00A9'} 2026 Fusion 富生. All rights reserved.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [gate, setGate] = useState(() => {
+    const g = readAccessGate();
+    if (!g) return { status: 'locked' };
+    if (g.expired) return { status: 'expired' };
+    return { status: 'unlocked' };
+  });
+
+  if (gate.status === 'unlocked') return <CPFPlannerApp />;
+
+  return (
+    <LockScreen
+      initiallyExpired={gate.status === 'expired'}
+      onUnlock={() => setGate({ status: 'unlocked' })}
+    />
+  );
+}
+
