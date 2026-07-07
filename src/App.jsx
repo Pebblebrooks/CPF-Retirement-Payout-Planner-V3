@@ -48,6 +48,72 @@ const SHS_BONUS_RA = {
   '3r_to_2r': 15000,
 };
 
+// ── Schema versioning ───────────────────────────────────────────────────
+// M2 (merge from App_138): restored after being dropped from this branch.
+// Increment on every breaking DEFAULT_INPUTS change.
+const CURRENT_SCHEMA_VERSION = 4;
+
+const migrateProfile = (raw) => {
+  if (!raw || typeof raw !== 'object') return raw;
+  let p = { ...raw };
+  const v = p._schemaVersion || 3;
+  if (v < 4) {
+    p = { ...p, inputs: { ...p.inputs,
+      rentExpense:     p.inputs?.rentExpense     ?? p.inputs?.rentalExpenseMonthly   ?? 0,
+      rentExpStartAge: p.inputs?.rentExpStartAge ?? p.inputs?.rentalExpenseStartAge  ?? 0,
+      rentExpEndAge:   p.inputs?.rentExpEndAge   ?? p.inputs?.rentalExpenseStopAge   ?? 85,
+      hasAMD:                     p.inputs?.hasAMD                     ?? false,
+      hasACP:                     p.inputs?.hasACP                     ?? false,
+      cpfWithdrawalLock:          p.inputs?.cpfWithdrawalLock          ?? false,
+      cpfMoneyLock:               p.inputs?.cpfMoneyLock               ?? false,
+      cpfSafetySwitch:            p.inputs?.cpfSafetySwitch            ?? false,
+      cpfTrustContactSet:         p.inputs?.cpfTrustContactSet         ?? false,
+      otherLiabilities:           p.inputs?.otherLiabilities           ?? 0,
+      secondaryEmploymentEnabled: p.inputs?.secondaryEmploymentEnabled ?? false,
+      secondaryEmploymentType:    p.inputs?.secondaryEmploymentType    ?? 'employed',
+      secondarySalaryGross:       p.inputs?.secondarySalaryGross       ?? 0,
+      secondaryAnnualBonus:       p.inputs?.secondaryAnnualBonus       ?? 0,
+      secondaryCitizenStatus:     p.inputs?.secondaryCitizenStatus     ?? 'SC',
+      secondaryPrYear:            p.inputs?.secondaryPrYear            ?? 3,
+      secondaryContribStopAge:    p.inputs?.secondaryContribStopAge    ?? 65,
+      cpfHousingLoanPrincipal:    p.inputs?.cpfHousingLoanPrincipal    ?? 0,
+      showBalaCurve:              p.inputs?.showBalaCurve              ?? false,
+      showLifeStageBanner:        p.inputs?.showLifeStageBanner        ?? true,
+      shsEnabled:                 p.inputs?.shsEnabled                 ?? false,
+      shsFromFlat:                p.inputs?.shsFromFlat                ?? '5r',
+      shsToFlat:                  p.inputs?.shsToFlat                  ?? '3r',
+      shsAge:                     p.inputs?.shsAge                     ?? 65,
+      propertyType:               p.inputs?.propertyType               ?? 'hdb',
+      loanType:                   p.inputs?.loanType                   ?? 'hdb',
+      mortgagePaymentSource:      p.inputs?.mortgagePaymentSource      ?? 'cpf',
+    }};
+  }
+  p._schemaVersion = CURRENT_SCHEMA_VERSION;
+  return p;
+};
+
+// ── CPF cohort-average curve + life-stage framework (merged from App_138) ──────
+const BALA_CURVE = [
+  { age: 25, val: 12000  }, { age: 30, val: 42000  }, { age: 35, val: 88000  },
+  { age: 40, val: 148000 }, { age: 45, val: 215000 }, { age: 50, val: 268000 },
+  { age: 55, val: 295000 }, { age: 60, val: 248000 }, { age: 65, val: 185000 },
+];
+
+const LIFE_STAGE_MAP = [
+  { maxAge: 29,  label: 'Early Career',   color: '#1D9E75',
+    tip: 'Build OA for housing, start SA for retirement, emergency fund.' },
+  { maxAge: 44,  label: 'Mid-Career',     color: '#185FA5',
+    tip: 'Maximise RSTU, reduce housing outflow, review investment strategy.' },
+  { maxAge: 54,  label: 'Pre-Retirement', color: '#7F77DD',
+    tip: 'Fill FRS, review CPF LIFE plan, SRS top-up for tax savings.' },
+  { maxAge: 64,  label: 'Transition',     color: '#BA7517',
+    tip: 'OA drawdown strategy, SRS depletion plan, property monetisation.' },
+  { maxAge: 999, label: 'Retirement',     color: '#D85A30',
+    tip: 'Income sustainability, estate planning, legacy documents.' },
+];
+const getLifeStage = (age) =>
+  LIFE_STAGE_MAP.find(s => age <= s.maxAge) || LIFE_STAGE_MAP[LIFE_STAGE_MAP.length - 1];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CPF POLICY CONSTANTS — UPDATE EACH JANUARY WHEN CPF BOARD PUBLISHES NEW VALUES
 // ───────────────────────────────────────────────────────────────────────────────
@@ -138,20 +204,6 @@ const STYLES = {
 // Engine uses these constants at the simYear gate (search MMSS_PILOT_START_YEAR to find it).
 const MMSS_PILOT_START_YEAR = 2026;
 const MMSS_PILOT_END_YEAR   = 2030;
-
-// ── Reserved-for-future-use: citizenship feature flag & CPF Board median benchmarks ──
-// FOREIGNER_MODE_ENABLED: flip to true to surface the foreigner citizenship path
-// in the UI (all isForeigner engine-gating is already in place).
-const FOREIGNER_MODE_ENABLED = false;
-// SG_RETIREMENT_BENCHMARKS: CPF Board median data (2024 cohort).
-// Future use: benchmark overlay on Strategy tab, percentile context in score.
-const SG_RETIREMENT_BENCHMARKS = {
-  medianCPFAt55:            181000,
-  medianCPFHighEarner:      320000,
-  pctMeetingFRS:            0.59,
-  replacementRateBenchmark: 0.70,
-  dataYear:                 2024,
-};
 
 // ── UX-5: TAB_CONFIG — single source of truth for all tab arrays ──────────────
 // Previously the tab list was hardcoded in 4 separate places (desktop strip,
@@ -678,50 +730,6 @@ const computeSensitivityRow = (pAge, raAtPayout, isMale, maxAge = 95) => {
 
 const LEGAL_DISCLAIMER = "DISCLAIMER: This application is a prototype simulation tool intended strictly for informational, educational, and testing purposes only. This app and its underlying mathematical models are completely independent and are neither supported, approved, nor sanctioned by the Central Provident Fund (CPF) Board or any government agency. All projections, calculations, and inferences generated by this tool are entirely hypothetical and should not be construed or relied upon as professional financial advice. The author(s) and creator(s) of this application shall not be held liable for any direct, indirect, incidental, consequential damages, losses, or legal repercussions arising from the use or misuse of this tool. Please consult a certified financial advisor before making any financial decisions.";
 
-// ── Schema versioning ────────────────────────────────────────────────────────────────────
-// Increment CURRENT_SCHEMA_VERSION on every breaking DEFAULT_INPUTS field rename.
-// migrateProfile() applies forward migrations on JSON import so old profiles load correctly.
-const CURRENT_SCHEMA_VERSION = 4;
-
-const migrateProfile = (raw) => {
-  if (!raw || typeof raw !== 'object') return raw;
-  let p = { ...raw };
-  const v = p._schemaVersion || 3;
-  if (v < 4) {
-    p = { ...p, inputs: { ...p.inputs,
-      // Field renames: old name ?? new name ?? fallback
-      rentExpense:     p.inputs?.rentExpense     ?? p.inputs?.rentalExpenseMonthly  ?? 0,
-      rentExpStartAge: p.inputs?.rentExpStartAge ?? p.inputs?.rentalExpenseStartAge ?? 0,
-      rentExpEndAge:   p.inputs?.rentExpEndAge   ?? p.inputs?.rentalExpenseStopAge  ?? 85,
-      // Defaults for fields added in v4 (Phase 2 fields — silently dropped by buildSafeInputs
-      // if they are not yet in DEFAULT_INPUTS; they become active once Phase 2 adds them)
-      hasAMD:                     p.inputs?.hasAMD                     ?? false,
-      hasACP:                     p.inputs?.hasACP                     ?? false,
-      cpfWithdrawalLock:          p.inputs?.cpfWithdrawalLock          ?? false,
-      cpfMoneyLock:               p.inputs?.cpfMoneyLock               ?? false,
-      cpfSafetySwitch:            p.inputs?.cpfSafetySwitch            ?? false,
-      cpfTrustContactSet:         p.inputs?.cpfTrustContactSet         ?? false,
-      otherLiabilities:           p.inputs?.otherLiabilities           ?? 0,
-      secondaryEmploymentEnabled: p.inputs?.secondaryEmploymentEnabled ?? false,
-      secondaryEmploymentType:    p.inputs?.secondaryEmploymentType    ?? 'employed',
-      secondarySalaryGross:       p.inputs?.secondarySalaryGross       ?? 0,
-      secondaryAnnualBonus:       p.inputs?.secondaryAnnualBonus       ?? 0,
-      secondaryCitizenStatus:     p.inputs?.secondaryCitizenStatus     ?? 'SC',
-      secondaryPrYear:            p.inputs?.secondaryPrYear            ?? 3,
-      secondaryContribStopAge:    p.inputs?.secondaryContribStopAge    ?? 65,
-      cpfHousingLoanPrincipal:    p.inputs?.cpfHousingLoanPrincipal    ?? 0,
-      showBalaCurve:              p.inputs?.showBalaCurve              ?? false,
-      showLifeStageBanner:        p.inputs?.showLifeStageBanner        ?? true,
-      shsEnabled:                 p.inputs?.shsEnabled                 ?? false,
-      shsFromFlat:                p.inputs?.shsFromFlat                ?? '5r',
-      shsToFlat:                  p.inputs?.shsToFlat                  ?? '3r',
-      shsAge:                     p.inputs?.shsAge                     ?? 65,
-    }};
-  }
-  p._schemaVersion = CURRENT_SCHEMA_VERSION;
-  return p;
-};
-
 const DEFAULT_INPUTS = {
   name: "", currentAge: 35, currentYear: 2026, payoutAge: 65,
   contributionStopAge: 65, housingStopAge: 55,
@@ -756,9 +764,6 @@ const DEFAULT_INPUTS = {
   cpfisSaAmount: 0,    // Annual CPFIS investment from SA (SA must be > $40,000, pre-55 only)
   // Outflows
   housingOutflow: 12000, oaEduLoan: 0, oaEduLoanFreq: 'one-time',
-  mortgagePaymentSource: 'cpf',   // 'cpf' | 'cash' — gates engine debit: OA vs private assets
-  propertyType: 'hdb',            // 'hdb' | 'private' | 'none' — informational; gates label/grant eligibility UI
-  loanType: 'hdb',               // 'hdb' | 'bank' | 'none' — informational; gates loan-type label
   medicalUsage: 500, medishieldIP: 900, medishieldMode: 'manual', elderCareShield: 500,
   medicalInflationRate: 5,
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
@@ -813,9 +818,6 @@ const DEFAULT_INPUTS = {
   // Die with Zero — fully deplete liquid assets by a target age
   dieWithZeroEnabled: false,
   dieWithZeroAge: 85,
-  // ── Display toggles (no engine impact — not in engineKey) ─────────
-  showBalaCurve:       false, // CPF Board cohort-avg overlay on Accumulation chart
-  showLifeStageBanner: true,  // dismissible life-stage banner in Dashboard header
   // Cash top-up to MA (direct, annual, any age, capped at BHS)
   vcMaCash: 0,
   // OA→MA transfer destination: false = self (internal move), true = loved one (OA outflow only)
@@ -911,14 +913,6 @@ const DEFAULT_INPUTS = {
   hasWill: false,
   hasCPFNomination: false,
   hasLPA: false,
-  hasAMD: false,             // Advance Medical Directive filed with MOH
-  hasACP: false,             // Advance Care Plan completed with a healthcare provider
-  // ── CPF Safety Features (activate on CPF website — no engine impact) ──────
-  cpfWithdrawalLock:  false, // Prevents OA/SA cash withdrawals before age 65
-  cpfMoneyLock:       false, // Floor on OA/SA withdrawals
-  cpfSafetySwitch:    false, // Temporary transaction freeze
-  cpfTrustContactSet: false, // Nominated trusted person for large-transaction alerts
-  otherLiabilities:   0,     // Outstanding liabilities (car loan, personal loan, etc.)
   // ── Protection Coverage (Q3 — Insurance Wellness Tile) ──────────────────────────────────
   // Non-CPF insurance held outside the DPS/HPS that the engine already tracks.
   // Used for the Protection Adequacy tile in the MAS Wellness Score panel.
@@ -1006,6 +1000,24 @@ const DEFAULT_INPUTS = {
   // Engine reads this array and deducts annualCost from privateAssets for ages [startAge, endAge].
   // Baby Bonus + CDA grants are modelled as a Life Event of type 'child_birth' (see LIFE_EVENT_TYPES).
   childrenData: [],
+
+  // ── Property redesign (merged from App_138, B4/B5/B6) ──────────────────────
+  propertyType: 'hdb',           // 'hdb' | 'private' | 'none' — gates grants/schemes
+  loanType: 'hdb',               // 'hdb' | 'bank' | 'none' — informational, gates ledger rate label
+  mortgagePaymentSource: 'cpf',  // 'cpf' | 'cash' — real engine branch
+
+  // ── Legacy planning extras (merged from App_138) ────────────────────────────
+  hasAMD: false,              // Advance Medical Directive filed with MOH
+  hasACP: false,              // Advance Care Plan completed with a healthcare provider
+  cpfWithdrawalLock: false,   // CPF Withdrawal Lock — prevent OA/SA withdrawals before 65
+  cpfMoneyLock: false,        // CPF Money Lock — floor on OA/SA cash withdrawals
+  cpfSafetySwitch: false,     // CPF Safety Switch — temporary transaction freeze
+  cpfTrustContactSet: false,  // CPF Trust Contact — nominated trusted person for alerts
+  otherLiabilities: 0,        // Outstanding liabilities (car loan, personal loan, etc.)
+
+  // ── Life-stage UI toggles (merged from App_138) ─────────────────────────────
+  showBalaCurve: false,        // show CPF cohort-average overlay on Accumulation chart
+  showLifeStageBanner: true,   // show life-stage contextual banner on Dashboard/Readiness
 };
 
 // ── Household: spouse/partner default inputs ──────────────────────────────────
@@ -1608,7 +1620,6 @@ const INPUT_LABELS = {
   oaToMaTransfer: "OA→MA Transfer", oaWithdrawalAt55: "OA Withdrawal at 55",
   usePropertyPledge: "Property Pledge", cpfisOaAmount: "CPFIS OA Invested", cpfisSaAmount: "CPFIS SA Invested",
   housingOutflow: "Housing Outflow", oaEduLoan: "OA Education Loan", oaEduLoanFreq: "OA Edu Loan Freq",
-  mortgagePaymentSource: "Mortgage Payment Source", propertyType: "Property Type", loanType: "Loan Type",
   medicalUsage: "Medical Usage",
   medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
@@ -1649,7 +1660,7 @@ const INPUT_LABELS = {
   applyRaOaTransfer: "Apply RA→OA Transfer at Payout/Migration Age",
   milestoneAge: "Milestone Age 1", milestoneAge2: "Milestone Age 2", milestoneAge3: "Milestone Age 3", milestoneAge4: "Milestone Age 4", milestoneAge5: "Milestone Age 5",
   budgetLivingExpenses: "Monthly Living Expenses", budgetExpenseInflation: "Expense Inflation (% p.a.)", budgetTaxRate: "Marginal Tax Rate (%)", budgetTaxOverride: "Override Auto Tax",
-  emergencyFundMonths: "Emergency Fund (months)", hasWill: "Has Will", hasCPFNomination: "Has CPF Nomination", hasLPA: "Has LPA", hasAMD: "Has AMD", hasACP: "Has ACP", cpfWithdrawalLock: "CPF Withdrawal Lock", cpfMoneyLock: "CPF Money Lock", cpfSafetySwitch: "CPF Safety Switch", cpfTrustContactSet: "CPF Trust Contact", otherLiabilities: "Other Liabilities",
+  emergencyFundMonths: "Emergency Fund (months)", hasWill: "Has Will", hasCPFNomination: "Has CPF Nomination", hasLPA: "Has LPA",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
@@ -1797,33 +1808,6 @@ function makeComputeGF(startAge, salaryGrowth, salaryPhaseAge, salaryGrowthRate2
     return gfVal * (1 + bump);
   };
 }
-
-// ─── B0: CPF cohort-average overlay ────────────────────────────────────────
-// BALA_CURVE: CPF Board cohort-average TOTAL CPF balance by age (2026 cohort).
-// IMPORTANT — DISTINCT from BALA_TABLE below (which is the SLA HDB leasehold
-// decay curve for property valuation). The shared 'Bala' name is coincidental.
-const BALA_CURVE = [
-  { age: 25, val:  12000 }, { age: 30, val:  42000 }, { age: 35, val:  88000 },
-  { age: 40, val: 148000 }, { age: 45, val: 215000 }, { age: 50, val: 268000 },
-  { age: 55, val: 295000 }, { age: 60, val: 248000 }, { age: 65, val: 185000 },
-];
-
-// ─── Life-stage framework ────────────────────────────────────────────────────
-// Drives the dismissible banner shown in the Dashboard tab header.
-const LIFE_STAGE_MAP = [
-  { maxAge:  29, label: 'Early Career',   color: '#1D9E75',
-    tip: 'Build OA for housing, start SA for retirement, emergency fund.' },
-  { maxAge:  44, label: 'Mid-Career',     color: '#185FA5',
-    tip: 'Maximise RSTU, reduce housing outflow, review investment strategy.' },
-  { maxAge:  54, label: 'Pre-Retirement', color: '#7F77DD',
-    tip: 'Fill FRS, review CPF LIFE plan, SRS top-up for tax savings.' },
-  { maxAge:  64, label: 'Transition',     color: '#BA7517',
-    tip: 'OA drawdown strategy, SRS depletion plan, property monetisation.' },
-  { maxAge: 999, label: 'Retirement',     color: '#D85A30',
-    tip: 'Income sustainability, estate planning, legacy documents.' },
-];
-const getLifeStage = (age) =>
-  LIFE_STAGE_MAP.find(s => age <= s.maxAge) || LIFE_STAGE_MAP[LIFE_STAGE_MAP.length - 1];
 
 // ─── B1: Bala's Curve / SLA Leasehold Value Table ────────────────────────────
 // Leasehold property value as a % of equivalent freehold value, indexed by
@@ -2605,21 +2589,16 @@ function runRSSEngine(inputs, {
       ra = lifePlanKey === 'bas' ? Math.max(0, migRaRem) : 0;
     }
 
-    // Outflows: housing — CPF mortgage debits OA (tracked for CPF refund on sale);
-    //                    Cash mortgage debits private assets only (no OA, no refund obligation).
+    // Outflows: housing
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
-    if (activeHousing > 0) {
-      yearHousingOut = activeHousing;
-      if (inputs.mortgagePaymentSource === 'cash') {
-        privateAssets = Math.max(0, privateAssets - activeHousing);
-      } else {
-        cumHousingOA += activeHousing;
-        cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
-        oa = Math.max(0, oa - activeHousing);
-      }
-    } else if (inputs.mortgagePaymentSource !== 'cash') {
-      // No housing withdrawal this year — compound prior cumHousingFV at 2.5%/yr
-      cumHousingFV = cumHousingFV * 1.025;
+    if (activeHousing > 0) { yearHousingOut = activeHousing; }
+    if (inputs.mortgagePaymentSource === 'cash') {
+      // M5 (merged from App_138): cash mortgage — deduct from private assets only; no CPF refund obligation on sale
+      privateAssets = Math.max(0, privateAssets - activeHousing);
+    } else {
+      cumHousingOA += activeHousing;
+      cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
+      oa = Math.max(0, oa - activeHousing);
     }
 
     // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
@@ -4039,20 +4018,17 @@ function runProjectionEngine(inputs, {
     if (age < 55) { sa += b1ToSA * yearFraction; ma += b1ToMA * yearFraction; }
     else           { ra += (b1ToRA + b2ToRA) * yearFraction; ma += (b1ToMA + b2ToMA) * yearFraction; }
 
-    // Outflows — housing: CPF mortgage debits OA; Cash mortgage debits private assets
+    // Outflows
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
-    if (activeHousing > 0) {
-      yearHousingOut = activeHousing;
-      if (inputs.mortgagePaymentSource === 'cash') {
-        privateAssets = Math.max(0, privateAssets - activeHousing);
-      } else {
-        cumHousingOA += activeHousing;
-        cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
-        oa = Math.max(0, oa - activeHousing);
-      }
-    } else if (inputs.mortgagePaymentSource !== 'cash') {
-      // No housing withdrawal — compound prior cumHousingFV at 2.5%/yr
-      cumHousingFV = cumHousingFV * 1.025;
+    if (activeHousing > 0) { yearHousingOut = activeHousing; }
+    if (inputs.mortgagePaymentSource === 'cash') {
+      // M5 (merged from App_138): cash mortgage — deduct from private assets only; no CPF refund obligation on sale
+      privateAssets = Math.max(0, privateAssets - activeHousing);
+    } else {
+      cumHousingOA += activeHousing;
+      // Compound existing accrued interest and add this year's withdrawal's first year of interest
+      cumHousingFV = (cumHousingFV + activeHousing) * 1.025;   // (prev + this year's withdrawal) × 1.025 — each withdrawal compounds from its own year
+      oa = Math.max(0, oa - activeHousing);
     }
 
     // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
@@ -6754,7 +6730,7 @@ function ReadinessTab({
         const legacyScore  = Math.round((legacyChecks / 3) * 100);
         const legacyStatus = legacyChecks === 3 ? "green" : legacyChecks >= 1 ? "amber" : "red";
         const legacyLabel  = legacyChecks === 3 ? "All 3 ✓" : `${legacyChecks}/3 done`;
-        const legacyTip    = `Will: ${inputs.hasWill ? "✓" : "✗"}  ·  CPF Nomination: ${inputs.hasCPFNomination ? "✓" : "✗"}  ·  LPA: ${inputs.hasLPA ? "✓" : "✗"}. Set in Profile sidebar. MAS recommends all three (Will, Nomination, LPA) for complete estate readiness. AMD and ACP are additional advisory documents.`;
+        const legacyTip    = `Will: ${inputs.hasWill ? "✓" : "✗"}  ·  CPF Nomination: ${inputs.hasCPFNomination ? "✓" : "✗"}  ·  LPA: ${inputs.hasLPA ? "✓" : "✗"}. Set in Profile sidebar. MAS recommends all three for complete estate readiness.`;
 
         // ── Tile 6: Protection Adequacy (Q3 — Insurance wellness) ───────────
         // Framework: MAS/MoneySense guidelines for Singapore residents.
@@ -10969,7 +10945,7 @@ function CPFPlannerApp() {
       annualGovGrant, govGrantMa, wisAmount, // R-5: mrssGrant, mmssGrant removed — permanently 0, engine computes dynamically
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
-      cpfisOaAmount, cpfisSaAmount, housingOutflow, mortgagePaymentSource, oaEduLoan, oaEduLoanFreq,
+      cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
       medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
@@ -11000,6 +10976,9 @@ function CPFPlannerApp() {
       maxProjectionAge, // F1: planning horizon — changes here trigger full re-projection
       cpfOARateOverride, cpfSARateOverride, cpfMARateOverride, // Stress Centre CPF rate overrides — must be here so engine recomputes when stress rates change
       secondaryEmploymentEnabled, secondarySalaryGross, secondaryContribStopAge, // Secondary employment — stacked CPF contributions
+      loanMonthlyRepayment, loanEndAge, parentSupportMonthly, parentSupportEndAge,
+      marriageAge, housingGrantAmount, childrenData, // M1 fix: read inside runProjectionEngine but were missing from engineKey
+      mortgagePaymentSource, propertyType, loanType, // M5: property-classification engine branch (merged from App_138)
     } = debouncedInputs;
     // N-BUG-5 fix: lifeEvents objects carry a UUID `id` field generated at creation time.
     // Including raw lifeEvents in JSON.stringify means deleting+re-adding the same event
@@ -11020,7 +10999,7 @@ function CPFPlannerApp() {
       annualGovGrant, govGrantMa, wisAmount,
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
-      cpfisOaAmount, cpfisSaAmount, housingOutflow, mortgagePaymentSource, oaEduLoan, oaEduLoanFreq,
+      cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
       medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
@@ -11051,6 +11030,9 @@ function CPFPlannerApp() {
       maxProjectionAge,
       cpfOARateOverride, cpfSARateOverride, cpfMARateOverride,
       secondaryEmploymentEnabled, secondarySalaryGross, secondaryContribStopAge,
+      loanMonthlyRepayment, loanEndAge, parentSupportMonthly, parentSupportEndAge,
+      marriageAge, housingGrantAmount, childrenData,
+      mortgagePaymentSource, propertyType, loanType,
     });
   }, [debouncedInputs]); // eslint-disable-line react-hooks/exhaustive-deps
   const projection = useMemo(() => {
@@ -11226,6 +11208,8 @@ function CPFPlannerApp() {
   // variable it closes over must already be initialised at the point useMemo() is called.
   // NX10 fix: payoutAge65 reads debouncedInputs so it matches the debounced projection.
   const payoutAge65 = Number(debouncedInputs.payoutAge) || 65;
+  // Life-stage contextual label (merged from App_138) — reads from getLifeStage in module scope
+  const lifeStage   = getLifeStage(Number(debouncedInputs.currentAge) || 35);
 
   // CQ-2 perf: use projectionByAge Map (O(1)) instead of projection.find() (O(n))
   const raAtPayout = projectionByAge.get(payoutAge65)?.ra || 0;
@@ -11453,8 +11437,6 @@ function CPFPlannerApp() {
 
   const effectiveOaDrawMonthly  = debouncedInputs.dieWithZeroEnabled ? (projection._dwzOaMonthly || 0) : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
   const effectiveOaDrawStartAge = debouncedInputs.dieWithZeroEnabled ? (projection._dwzStartAge || Number(debouncedInputs.payoutAge) || 65) : (Number(debouncedInputs.oaDrawdownStartAge) || 0);
-  // Life-stage: drives the dismissible banner in Dashboard header
-  const lifeStage = getLifeStage(Number(debouncedInputs.currentAge) || 35);
   const effectiveOaDrawFloor    = debouncedInputs.dieWithZeroEnabled ? 0 : (Number(debouncedInputs.oaDrawdownFloor) || 0);
 
   // B-01: spouse OA draw — mirrors primary pattern; spouse doesn't have DWZ engine so falls back cleanly
@@ -18460,8 +18442,8 @@ ${milestoneSnapshotHtml}
                       ["hasWill",          "Will",            "A legally valid will prepared with witnesses"],
                       ["hasCPFNomination", "CPF Nomination",  "CPF nomination (CSNB) filed — bypasses probate for CPF assets"],
                       ["hasLPA",           "LPA",             "Lasting Power of Attorney registered with OPG Singapore"],
-                      ["hasAMD",           "AMD",             "Advance Medical Directive filed with MOH — instructs doctors not to apply extraordinary life-sustaining measures when death is imminent"],
-                      ["hasACP",           "ACP",             "Advance Care Plan completed with a healthcare provider — documents your care preferences and values for future medical decisions"],
+                      ["hasAMD",           "AMD",             "Advance Medical Directive filed with MOH — no extraordinary life-sustaining treatment if terminally ill"],
+                      ["hasACP",           "ACP",             "Advance Care Plan completed with a healthcare provider — documents your care preferences"],
                     ].map(([key, label, tip]) => (
                       <div key={key} title={tip}
                         onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
@@ -18473,38 +18455,40 @@ ${milestoneSnapshotHtml}
                       </div>
                     ))}
 
-                    {/* CPF Safety Features — informational toggles (no engine impact) */}
-                    <div style={{ marginTop: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 10 }}>
-                      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 5px", display: "flex", alignItems: "center", gap: 6 }}>
+                    {/* CPF Safety Features — merged from App_138 */}
+                    <div style={{ marginTop: 10, borderTop: "1px solid var(--border-subtle)", paddingTop: 8 }}>
+                      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 6 }}>
                         🔒 CPF Safety Features
-                        <TooltipBox id="t-cpf-safety" text="Activate these at cpf.gov.sg — no simulation effect, but helps you track your CPF security posture." />
                       </p>
                       {[
-                        ["cpfWithdrawalLock",  "Withdrawal Lock",  "Prevents cash withdrawals from OA/SA before age 65"],
-                        ["cpfMoneyLock",       "Money Lock",       "Sets a floor on OA/SA withdrawals; surplus stays in CPF"],
-                        ["cpfSafetySwitch",    "Safety Switch",    "Temporary transaction freeze — useful if you suspect unauthorised access"],
-                        ["cpfTrustContactSet", "Trust Contact",    "Nominated trusted person who receives an alert for large CPF transactions"],
+                        ["cpfWithdrawalLock",  "Withdrawal Lock",  "Prevents OA/SA cash withdrawals before age 65. Activate via CPF digital services."],
+                        ["cpfMoneyLock",       "Money Lock",       "Sets a floor on OA/SA balances that cannot be withdrawn in cash, even after 65."],
+                        ["cpfSafetySwitch",    "Safety Switch",    "Temporary freeze on CPF transactions if you suspect fraud or unauthorised access."],
+                        ["cpfTrustContactSet", "Trusted Contact",  "A nominated trusted person is alerted to unusual CPF account activity."],
                       ].map(([key, label, tip]) => (
                         <div key={key} title={tip}
                           onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
                           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", cursor: "pointer" }}>
                           <span style={{ fontSize: 12, color: "var(--text-main)" }}>{label}</span>
-                          <div style={{ width: 28, height: 16, borderRadius: 8, background: inputs[key] ? "var(--clr-blue)" : "var(--bg-panel)", border: `1px solid ${inputs[key] ? "var(--clr-blue)" : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                          <div style={{ width: 28, height: 16, borderRadius: 8, background: inputs[key] ? "var(--clr-green)" : "var(--bg-panel)", border: `1px solid ${inputs[key] ? "var(--clr-green)" : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
                             <div style={{ position: "absolute", top: 2, left: inputs[key] ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: inputs[key] ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
                           </div>
                         </div>
                       ))}
-                      <div style={{ marginTop: 8 }}>
-                        <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
-                          Other Liabilities ($)
-                          <TooltipBox id="t-other-liab" text="Outstanding liabilities not captured above (car loan, personal loan, credit card balance). Stored for reference — not currently deducted from net worth in the simulation." />
-                        </label>
-                        <input type="number" min={0} step={1000}
-                          value={inputs.otherLiabilities || ""}
-                          placeholder="0"
-                          onChange={e => setInputs(p => ({ ...p, otherLiabilities: Number(e.target.value) || 0 }))}
-                          style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }} />
-                      </div>
+                    </div>
+
+                    {/* Other Liabilities — merged from App_138 */}
+                    <div style={{ marginTop: 10 }}>
+                      <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
+                        Other Liabilities ($) <span style={{ color: "var(--text-subtle)" }}>car/personal loans, etc.</span>
+                      </label>
+                      <input
+                        type="number" min={0} step={1000}
+                        value={inputs.otherLiabilities || ""}
+                        placeholder="e.g. 15000"
+                        onChange={e => setInputs(p => ({ ...p, otherLiabilities: Number(e.target.value) || 0 }))}
+                        style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }}
+                      />
                     </div>
 
                     {/* Protection Coverage inputs — feeds Tile 6: Protection Adequacy */}
@@ -21410,6 +21394,30 @@ ${milestoneSnapshotHtml}
               {openSections.has("property") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
+                  {/* Property Type — merged from App_138 (B4/B5/B6 classification layer) */}
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>Type</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {[["hdb", "🏠 HDB"], ["private", "🏢 Private"], ["none", "None"]].map(([val, lbl]) => {
+                        const active = (inputs.propertyType || "hdb") === val;
+                        return (
+                          <button key={val} onClick={() => {
+                            const updates = { propertyType: val };
+                            if (val === "private") {
+                              updates.ehgAmount = 0; updates.cpfHousingGrantResale = 0; updates.phgAmount = 0; updates.stepUpGrantAmount = 0;
+                              if (inputs.loanType === "hdb") updates.loanType = "bank";
+                            }
+                            if (val === "none") { updates.includeProperty = false; }
+                            setInputs(p => ({ ...p, ...updates }));
+                          }}
+                            style={{ flex: 1, padding: "5px 4px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: active ? "none" : "1px solid var(--border-strong)", cursor: "pointer", background: active ? "var(--clr-blue)" : "var(--bg-muted)", color: active ? "#fff" : "var(--text-muted)", transition: "background 0.15s" }}>
+                            {lbl}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Timelines */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {[["contributionStopAge","Contrib Stop Age","t-contrib-stop","Age at which mandatory CPF contributions (employer + employee) stop being modelled. Typically 65 or earlier if you plan to exit the workforce sooner. Existing balances continue earning interest after this age."],["housingStopAge","Housing Stop Age","t-housing-stop","Age at which your housing loan OA deductions stop — when your mortgage is fully repaid. After this age the engine stops deducting housingOutflow from OA, which accelerates OA accumulation."]].map(([n, l, tipId, tipText]) => (
@@ -21479,11 +21487,12 @@ ${milestoneSnapshotHtml}
 
                   {/* Housing loan — locked for foreigners (no OA account) */}
                   {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
-                    {/* Payment Source: CPF vs Cash */}
+
+                    {/* Payment Source + Loan Type — merged from App_138 (A3/B4/B5) */}
                     <div style={{ marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>
                         Payment Source
-                        <TooltipBox id="t-mortgage-source" text="CPF: monthly mortgage instalments debit your OA. Tracked — on property sale CPF requires refund of principal + 2.5%/yr interest. Cash: instalments debit your private assets. No OA is touched, so there is no CPF refund obligation when you sell." />
+                        <TooltipBox id="t-mortgage-source" text="CPF: monthly mortgage instalments debit your OA. The OA amount is tracked — on property sale, CPF requires refund of principal + 2.5%/yr interest. Cash: instalments debit your private assets. No OA is touched, so there is no CPF refund obligation when you sell." />
                       </div>
                       <div style={{ display: "flex", gap: 4 }}>
                         {[["cpf", "CPF (OA)"], ["cash", "Cash"]].map(([val, lbl]) => {
@@ -21497,36 +21506,39 @@ ${milestoneSnapshotHtml}
                         })}
                       </div>
                       {(inputs.mortgagePaymentSource || "cpf") === "cash" && (
-                        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>Cash mortgage debits private assets. CPF Loan Ledger and VHR are not applicable.</p>
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Cash mortgage debits private assets. CPF Loan Ledger is not applicable.</p>
                       )}
                     </div>
-
-                    {/* Loan Type */}
                     <div style={{ marginBottom: 8 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>Loan Type</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>Loan Type</div>
                       <div style={{ display: "flex", gap: 4 }}>
-                        {[["hdb", "HDB (2.6%)"], ["bank", "Bank"], ["none", "None"]].map(([val, lbl]) => {
-                          const active = (inputs.loanType || "hdb") === val;
-                          return (
-                            <button key={val} onClick={() => setInputs(p => ({ ...p, loanType: val }))}
-                              style={{ flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 12, fontWeight: 700, border: active ? "none" : "1px solid var(--border-strong)", cursor: "pointer", background: active ? "var(--clr-blue)" : "var(--bg-muted)", color: active ? "#fff" : "var(--text-muted)", transition: "background 0.15s" }}>
-                              {lbl}
-                            </button>
-                          );
-                        })}
+                        {(() => {
+                          const loanOpts = (inputs.propertyType || "hdb") === "hdb"
+                            ? [["hdb", "HDB (2.6%)"], ["bank", "Bank"], ["none", "None"]]
+                            : [["bank", "Bank"], ["none", "None"]];
+                          return loanOpts.map(([val, lbl]) => {
+                            const active = (inputs.loanType || "hdb") === val;
+                            return (
+                              <button key={val} onClick={() => setInputs(p => ({ ...p, loanType: val }))}
+                                style={{ flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 12, fontWeight: 700, border: active ? "none" : "1px solid var(--border-strong)", cursor: "pointer", background: active ? "var(--clr-blue)" : "var(--bg-muted)", color: active ? "#fff" : "var(--text-muted)", transition: "background 0.15s" }}>
+                                {lbl}
+                              </button>
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
 
                     <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>Housing Loan — OA / Cash Outflow ($/yr) <FreqToggle freqKey="housingFreq" durKey="housingDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-housing-prop" text="Annual OA (CPF mortgage) or cash (cash mortgage) deduction for mortgage repayment. Stops at Housing Stop Age. CPF mode: tracked for CPF refund on property sale." /></span>
+                      <span>Housing Loan — OA/Cash Outflow ($/yr) <FreqToggle freqKey="housingFreq" durKey="housingDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-housing-prop" text="Annual OA or cash deduction for mortgage repayment (see Payment Source above). Stops at Housing Stop Age. Tracked for CPF refund on property sale — CPF mode only." /></span>
                       <FieldResetBtn name="housingOutflow" inputs={inputs} setInputs={setInputs} />
                     </div>
                     <input type="text" inputMode="decimal" name="housingOutflow" value={getDisplayValue("housingOutflow", inputs.housingOutflow)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual housing loan outflow" onFocus={() => setFocusedField("housingOutflow")} className={fieldChanged("housingOutflow") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.housingOutflow ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     {inputErrors.housingOutflow && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.housingOutflow}</p>}
 
-                    {(inputs.mortgagePaymentSource || "cpf") === "cpf" && <>{/* ── OA Loan Ledger ── CPF mortgage only: cpfHousingLoanPrincipal + amortisation chart */}
-                    <div style={{ marginTop: 10 }}>
+                    {/* ── OA Loan Ledger — CPF mode only (M5: not applicable when paying by cash) ── cpfHousingLoanPrincipal input + amortisation chart */}
+                    {(inputs.mortgagePaymentSource || "cpf") === "cpf" && <div style={{ marginTop: 10 }}>
                       <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>
                         CPF Loan Outstanding Principal ($)
                         <TooltipBox id="t-loan-ledger" text="Enter the current outstanding principal of your CPF OA housing loan. FusionPlus will display a live amortisation chart showing when the loan clears and how much interest accrues." />
@@ -21536,8 +21548,8 @@ ${milestoneSnapshotHtml}
                         onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                         placeholder="0"
                         style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                    </div>
-                    {cpfLoanLedger.length > 0 && (() => {
+                    </div>}
+                    {(inputs.mortgagePaymentSource || "cpf") === "cpf" && cpfLoanLedger.length > 0 && (() => {
                       const lastRow = cpfLoanLedger[cpfLoanLedger.length - 1];
                       return (
                         <div style={{ marginTop: 10 }}>
@@ -21562,8 +21574,7 @@ ${milestoneSnapshotHtml}
                           </p>
                         </div>
                       );
-                    })()}</>
-                  }
+                    })()}
                   </div>}
 
                   {/* OA Downpayment — locked for foreigners (no OA account) */}
@@ -22635,32 +22646,13 @@ ${milestoneSnapshotHtml}
                     <PieChart style={{ width: 12, height: 12, display: "inline", marginRight: 5, verticalAlign: "middle" }} />CPF overview
                   </button>
                 </div>
-                {/* Life Stage Banner — dismissible, keyed to current age bracket */}
+                {/* Life-stage contextual banner — dismissible (merged from App_138) */}
                 {debouncedInputs.showLifeStageBanner !== false && lifeStage && (
-                  <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    gap: 8, marginTop: 8, padding: "7px 12px", borderRadius: 8,
-                    background: `${lifeStage.color}1a`,
-                    border: `1px solid ${lifeStage.color}55`,
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em",
-                        textTransform: "uppercase", color: lifeStage.color, whiteSpace: "nowrap" }}>
-                        {lifeStage.label}
-                      </span>
-                      <span style={{ fontSize: 12, color: "var(--text-muted)", overflow: "hidden",
-                        textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {lifeStage.tip}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setInputs(p => ({ ...p, showLifeStageBanner: false }))}
-                      style={{ background: "none", border: "none", cursor: "pointer",
-                        color: "var(--text-muted)", padding: 0, lineHeight: 1,
-                        marginLeft: 2, fontSize: 13, outline: "none", flexShrink: 0 }}
-                      title="Dismiss life-stage banner">
-                      ✕
-                    </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: `${lifeStage.color}18`, border: `1px solid ${lifeStage.color}40`, fontSize: 12, color: lifeStage.color, fontWeight: 600, flexShrink: 0 }}>
+                    <span style={{ opacity: 0.8 }}>●</span>
+                    <span>{lifeStage.label} Phase</span>
+                    <span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 11 }}> — {lifeStage.tip}</span>
+                    <button onClick={() => setInputs(p => ({ ...p, showLifeStageBanner: false }))} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 0, lineHeight: 1, marginLeft: 2, fontSize: 13, outline: "none" }}>✕</button>
                   </div>
                 )}
               </div>
@@ -24848,12 +24840,10 @@ ${milestoneSnapshotHtml}
                       <Activity style={{ width: 13, height: 13 }} />{showMonteCarlo ? "Hide" : "Show"} Monte Carlo (200 runs)
                       {(plan==='lite'||plan==='plus') && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 5, background: "#b45309", color: "#fef3c7", marginLeft: 4 }}>PRO</span>}
                     </button>
-                    {/* BALA_CURVE cohort-average overlay toggle */}
-                    <button
-                      onClick={() => setInputs(p => ({ ...p, showBalaCurve: !p.showBalaCurve }))}
-                      title="Show CPF Board cohort-average balance trajectory"
-                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${inputs.showBalaCurve ? "rgba(251,191,36,0.5)" : "var(--border-strong)"}`, background: inputs.showBalaCurve ? "rgba(251,191,36,0.12)" : "var(--bg-input)", color: inputs.showBalaCurve ? "var(--clr-amber)" : "var(--text-muted)", cursor: "pointer" }}>
-                      <TrendingUp style={{ width: 13, height: 13 }} /> {inputs.showBalaCurve ? "Hide" : "Show"} Cohort Avg
+                    {/* Cohort-average overlay toggle — merged from App_138 */}
+                    <button onClick={() => setInputs(p => ({ ...p, showBalaCurve: !p.showBalaCurve }))} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${inputs.showBalaCurve ? "rgba(251,191,36,0.5)" : "var(--border-strong)"}`, background: inputs.showBalaCurve ? "rgba(251,191,36,0.12)" : "var(--bg-input)", color: inputs.showBalaCurve ? "var(--clr-amber)" : "var(--text-muted)", cursor: "pointer" }}
+                      title="Show CPF Board cohort-average balance trajectory alongside your projection">
+                      <TrendingUp style={{ width: 13, height: 13 }} />{inputs.showBalaCurve ? "Hide" : "Show"} Cohort Avg
                     </button>
                     {(inputs.lifeEvents || []).filter(e => e.enabled !== false).length > 0 && (
                       <button onClick={() => setShowLifeEventMarkers(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showLifeEventMarkers ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showLifeEventMarkers ? "rgba(239,68,68,0.12)" : "var(--bg-input)", color: showLifeEventMarkers ? "#ef4444" : "var(--text-muted)", cursor: "pointer" }}>
@@ -24906,7 +24896,7 @@ ${milestoneSnapshotHtml}
                         linesData = linesData.map(row => { const bl = blByAge.get(row.age); return bl ? { ...row, baselineTotal: bl.baselineTotal } : row; });
                       }
 
-                      // ── BALA_CURVE cohort-average overlay ───────────────────────
+                      // Cohort-average overlay — merged from App_138
                       if (inputs.showBalaCurve) {
                         const balaInterp = (age) => {
                           const pts = BALA_CURVE;
@@ -24914,7 +24904,8 @@ ${milestoneSnapshotHtml}
                           if (age >= pts[pts.length-1].age) return pts[pts.length-1].val;
                           const i = pts.findIndex(p => p.age >= age);
                           const lo = pts[i-1], hi = pts[i];
-                          return Math.round(lo.val + (age-lo.age)/(hi.age-lo.age)*(hi.val-lo.val));
+                          const t = (age - lo.age) / (hi.age - lo.age);
+                          return Math.round(lo.val + t * (hi.val - lo.val));
                         };
                         stackedData = stackedData.map(r => ({ ...r, balaCurve: balaInterp(r.age) }));
                         linesData   = linesData.map(r  => ({ ...r, balaCurve: balaInterp(r.age) }));
@@ -32786,157 +32777,6 @@ ${milestoneSnapshotHtml}
 
 
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SOFT ACCESS GATE — secondary friction layer in front of CPFPlannerApp.
-//
-// This is NOT a security boundary: the bundle (including this code) is
-// downloaded to the browser regardless, and the passphrases below are
-// plain strings visible via DevTools. The actual access control is
-// Cloudflare Access + KV-based expiry enforced at the edge
-// (functions/_middleware.js). This gate exists purely to deter casual use
-// of a leaked link (e.g. a Pages preview-deployment URL not covered by
-// Access) and to mirror the admin / beta-tester expiry split at the edge.
-//
-// Storage key 'cpf_access_gate' -> JSON { role: 'admin' | 'beta', unlockedAt }
-//   - role 'admin' : never re-locks once entered
-//   - role 'beta'  : re-locks 7 days after unlockedAt
-// ═══════════════════════════════════════════════════════════════════════════
-
-const ACCESS_GATE_KEY = 'cpf_access_gate';
-const ACCESS_GATE_BETA_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const ACCESS_GATE_PASSPHRASES = { admin: 'admin$$1188$$', beta: 'beta2026' };
-
-function readAccessGate() {
-  try {
-    const raw = localStorage.getItem(ACCESS_GATE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.role || !parsed.unlockedAt) return null;
-    if (parsed.role === 'beta' && (Date.now() - parsed.unlockedAt) > ACCESS_GATE_BETA_WINDOW_MS) {
-      return { expired: true };
-    }
-    if (parsed.role === 'admin' || parsed.role === 'beta') return { role: parsed.role };
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function writeAccessGate(role) {
-  try {
-    localStorage.setItem(ACCESS_GATE_KEY, JSON.stringify({ role, unlockedAt: Date.now() }));
-  } catch {}
-}
-
-function LockScreen({ initiallyExpired, onUnlock }) {
-  const [value, setValue] = useState('');
-  const [error, setError] = useState(false);
-  const [expired, setExpired] = useState(!!initiallyExpired);
-
-  const submit = () => {
-    const v = value.trim();
-    if (v === ACCESS_GATE_PASSPHRASES.admin) {
-      writeAccessGate('admin');
-      onUnlock();
-    } else if (v === ACCESS_GATE_PASSPHRASES.beta) {
-      writeAccessGate('beta');
-      onUnlock();
-    } else {
-      setError(true);
-      setExpired(false);
-      setValue('');
-    }
-  };
-
-  return (
-    <div style={{
-      minHeight: '100vh', width: '100%',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #0d1424 0%, #131c33 100%)',
-      fontFamily: 'system-ui, -apple-system, sans-serif', padding: 16,
-      boxSizing: 'border-box',
-    }}>
-      <style>{`
-        .cpf-gate-input:focus { outline: none; border-color: #4f8cff !important; }
-        .cpf-gate-btn:hover { background: #3d6fd6 !important; }
-      `}</style>
-      <div style={{
-        background: '#161f38', border: '1px solid #28324f', borderRadius: 12,
-        padding: '32px 28px', maxWidth: 360, width: '100%', textAlign: 'center',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 14 }}>
-          <div style={{ background: '#10b981', padding: 8, borderRadius: 12, display: 'flex' }}>
-            <Calculator style={{ color: '#ffffff', width: 18, height: 18 }} />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 900, fontSize: 16, background: 'linear-gradient(90deg,#10b981,#3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', whiteSpace: 'nowrap' }}>
-              Fusion 富生
-            </div>
-            <div style={{ fontSize: 11, color: '#10b981', fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-              Retirement Engine v2026
-            </div>
-          </div>
-        </div>
-        <div style={{ fontSize: 22, marginBottom: 8 }}>{'\u{1F512}'}</div>
-        <p style={{ fontSize: 13, color: '#9aa4b8', margin: '0 0 20px', lineHeight: 1.5 }}>
-          {expired
-            ? 'Your beta access window has ended. Enter a valid access code to continue.'
-            : 'This app is in private beta. Enter your access code to continue.'}
-        </p>
-        <input
-          className="cpf-gate-input"
-          type="password"
-          value={value}
-          placeholder="Access code"
-          onChange={(e) => { setValue(e.target.value); setError(false); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-          style={{
-            width: '100%', boxSizing: 'border-box', padding: '10px 12px',
-            borderRadius: 8, border: `1px solid ${error ? '#e05252' : '#3a4566'}`,
-            background: '#0d1424', color: '#e6e9ef', fontSize: 14, marginBottom: 12,
-          }}
-          autoFocus
-        />
-        {error && (
-          <div style={{ color: '#e05252', fontSize: 12, marginBottom: 12, marginTop: -4 }}>
-            Incorrect access code.
-          </div>
-        )}
-        <button
-          className="cpf-gate-btn"
-          onClick={submit}
-          style={{
-            width: '100%', padding: '10px 12px', borderRadius: 8, border: 'none',
-            background: '#4f8cff', color: '#fff', fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', transition: 'background 0.15s',
-          }}
-        >
-          Unlock
-        </button>
-        <p style={{ fontSize: 11, color: '#a0b4cc', margin: '20px 0 0' }}>
-          {'\u00A9'} 2026 Fusion 富生. All rights reserved.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
-  const [gate, setGate] = useState(() => {
-    const g = readAccessGate();
-    if (!g) return { status: 'locked' };
-    if (g.expired) return { status: 'expired' };
-    return { status: 'unlocked' };
-  });
-
-  if (gate.status === 'unlocked') return <CPFPlannerApp />;
-
-  return (
-    <LockScreen
-      initiallyExpired={gate.status === 'expired'}
-      onUnlock={() => setGate({ status: 'unlocked' })}
-    />
-  );
+  return <CPFPlannerApp />;
 }
-
