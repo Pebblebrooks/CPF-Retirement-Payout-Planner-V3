@@ -7674,9 +7674,9 @@ const sectionIsLocked = (sectionId, plan) => {
 const LITE_PRESET_IDS = new Set(["blank", "typical35"]);
 
 // ── Beta password gate ───────────────────────────────────────────────────────────
-// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro.
+// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro, BetaAdmin$$2026$$ → Pro (admin override).
 // Replace with server-side auth before public launch.
-const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$' };
+const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$', admin: 'BetaAdmin$$2026$$' };
 
 // ── UpgradeModal ──────────────────────────────────────────────────────────────
 function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
@@ -7687,13 +7687,19 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
   const inputRef = useRef(null);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
 
-  const typedTier = password === TIER_PASSWORDS.pro  ? 'pro'
+  const typedTier = (password === TIER_PASSWORDS.pro || password === TIER_PASSWORDS.admin) ? 'pro'
                   : password === TIER_PASSWORDS.plus ? 'plus' : null;
 
   const tryUnlock = () => {
     if (!password) { setError('Please enter your access password.'); return; }
     setSubmitting(true);
     setTimeout(() => {
+      // Admin override — separate credential from the regular Pro password, also
+      // resolves straight to 'pro' tier so admins/support/testers get full access.
+      if (password === TIER_PASSWORDS.admin) {
+        if (currentPlan === 'pro') { setError('You\'re already on Fusion Pro.'); setSubmitting(false); return; }
+        onUpgrade('pro'); return;
+      }
       if (password === TIER_PASSWORDS.pro) {
         if (currentPlan === 'pro') { setError('You\'re already on Fusion Pro.'); setSubmitting(false); return; }
         onUpgrade('pro'); return;
@@ -8923,9 +8929,16 @@ function CPFPlannerApp() {
         if (fullState.appVersion && fullState.appVersion !== CURRENT_APP_VERSION) {
           showToast(`ℹ️ Share link was saved with ${fullState.appVersion} — loaded on ${CURRENT_APP_VERSION}. Some settings may have reset to defaults. Please review your profile.`);
         }
+        // BUGFIX: mergedInputs was previously declared with `const` inside the block below,
+        // so it went out of scope by the time it was read again a few lines down (~old L8937),
+        // throwing a ReferenceError that was silently swallowed by this effect's catch() —
+        // which meant everything after that point (active tab, scenarios, household state,
+        // what-if sliders, etc.) never restored from the share link. Hoisted here so it stays
+        // in scope for the rest of this branch.
+        let mergedInputs = null;
         if (fullState.inputs) {
           // BUG-1 fix: use module-level buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
-          const mergedInputs = buildSafeInputs(fullState.inputs);
+          mergedInputs = buildSafeInputs(fullState.inputs);
           setInputs(mergedInputs);
           setDebouncedInputs(mergedInputs);
           // BUG-4 fix: clear stale validation highlights when loading from share link
@@ -10308,7 +10321,7 @@ function CPFPlannerApp() {
               if (!Array.isArray(safe.lifeEvents)) safe.lifeEvents = [];
               safe.lifeEvents = [
                 ...safe.lifeEvents,
-                { ...LIFE_EVENT_DEFAULTS, id: `le-migrated-cb-${Date.now()}`, type: 'career_break',
+                { ...LIFE_EVENT_DEFAULTS_MOD, id: `le-migrated-cb-${Date.now()}`, type: 'career_break',
                   label: 'Career Break (migrated)', startAge: legacyCbStart, endAge: legacyCbEnd,
                   magnitude: 0, enabled: true },
               ];
@@ -14952,8 +14965,8 @@ ${milestoneSnapshotHtml}
 
         /* ── Seal icon box: white bg + subtle red border in both themes ──
            The Chinese seal PNG has a white background; keep white bg as a sub-pixel
-           corner fill under the rounded clip. Padding and border removed — user-facing
-           white frame eliminated. ── */
+           corner fill under the rounded clip. Thin white padding reinstated around
+           the seal graphic (both themes) per updated brand lockup. ── */
         .theme-light .cpf-calc-icon-box {
           background: #ffffff !important;
         }
@@ -17481,23 +17494,26 @@ ${milestoneSnapshotHtml}
               so the restored full brand lockup (text+sub+copy) can ellipsis-truncate
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
-          <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
-            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 0, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
-              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 36, height: 36, display: "block" }} />
+          <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0, minWidth: 0 }}>
+            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 3, borderRadius: 11, overflow: "hidden", flexShrink: 0 }}>
+              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 40, height: 40, display: "block" }} />
             </div>
             <div className="cpf-logo-textstack">
-              <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {/* Logo: "Fusion " in green-blue gradient, "富生" in Chinese red — split spans so light-theme
-                    CSS can target each independently without the transparent fill bleeding into 富生. */}
+                    CSS can target each independently without the transparent fill bleeding into 富生.
+                    Sizes enlarged (16→22px text, pills scaled to match) per updated brand lockup;
+                    the "Retirement Engine v2026" sub-line that used to stack below this row has
+                    moved down to the tab strip, which is what makes room for the bigger single line here. */}
                 <div className="cpf-logo-text" style={{ display: "flex", alignItems: "baseline", whiteSpace: "nowrap" }}>
-                  <span style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
-                  <span style={{ fontWeight: 900, fontSize: 16, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
+                  <span style={{ fontWeight: 900, fontSize: 22, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
+                  <span style={{ fontWeight: 900, fontSize: 22, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
                 </div>
                 {/* Plan tier pill — driven by plan state → TIER_CONFIG */}
                 {(() => { const tc = TIER_CONFIG[plan.toUpperCase()]; return tc ? (
                 <span className="cpf-beta-pill" title={tc.title}
-                  style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px",
-                    borderRadius: 999, fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                  style={{ display: "inline-flex", alignItems: "center", padding: "3px 10px",
+                    borderRadius: 999, fontSize: 13, fontWeight: 800, letterSpacing: "0.08em",
                     color: tc.color, background: tc.bg, border: `1px solid ${tc.border}`,
                     animation: tc.anim ?? 'none', whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
                   {tc.label}
@@ -17507,7 +17523,7 @@ ${milestoneSnapshotHtml}
                   <span className="cpf-stage-pill"
                     title="Active beta — features and data are still being refined"
                     style={{ display: "inline-flex", alignItems: "center",
-                      padding: "2px 7px", borderRadius: 999, fontSize: 9,
+                      padding: "3px 9px", borderRadius: 999, fontSize: 12,
                       fontWeight: 700, letterSpacing: "0.07em",
                       color: "var(--clr-amber)", background: "rgba(245,158,11,0.10)",
                       border: "1px solid rgba(245,158,11,0.35)",
@@ -17516,7 +17532,6 @@ ${milestoneSnapshotHtml}
                   </span>
                 )}
               </div>
-              <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
             </div>
           </div>
 
@@ -17758,7 +17773,11 @@ ${milestoneSnapshotHtml}
 
       {/* ── Full-width tab strip — sticky on tablet/mobile; spans full width on all viewports ── */}
       <nav className="cpf-tabs-full-width" aria-label="Dashboard sections">
-        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0, display: "flex", alignItems: "stretch" }}>
+        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0, display: "flex", alignItems: "center" }}>
+          {/* "Retirement Engine v2026" — moved here from the header logo block (used to stack
+              below "Fusion 富生", now sits inline on the tab row instead). Reuses cpf-logo-sub
+              so it keeps the same responsive font-size/color rules it had in its old spot. */}
+          <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap", flexShrink: 0, marginRight: 16, paddingRight: 16, borderRight: "1px solid var(--border-subtle)" }}>Retirement Engine v2026</div>
           {/* Scrollable tab buttons */}
           <div ref={tabsStripRef} className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", flex: "1 1 auto", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
             {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
@@ -26813,6 +26832,11 @@ ${milestoneSnapshotHtml}
                   ────────────────────────────────────────────────────────────── */}
                   {(() => {
                     const projRA        = Math.round(raAtPayout || 0);
+                    // BUGFIX: lifeExpectancy was undefined here (it only existed as a local
+                    // const inside the separate ReadinessTab component). Derived locally using
+                    // the same isMale-based convention used elsewhere in CPFPlannerApp (e.g. ~L13006).
+                    const isMaleLife     = debouncedInputs.isMale !== false;
+                    const lifeExpectancy = isMaleLife ? 85 : 88;
                     const leThreshold   = Math.max(87, lifeExpectancy + 2);
                     const hasSrsIncome  = (Number(inputs.srsAnnualContribution) || 0) > 0;
                     const hasRental     = (Number(inputs.rentalIncome) || 0) > 0;
@@ -31757,7 +31781,7 @@ ${milestoneSnapshotHtml}
                                   <span>{lev.icon}</span>
                                   {lev.seq != null && (lev.eligible || lev.isApplied) && (
                                     <span style={{
-                                      fontSize: 10, fontWeight: 900, color: "var(--text-muted)",
+                                      fontSize: 10, fontWeight: 900,
                                       border: "1px solid var(--border-subtle)", borderRadius: "50%",
                                       width: 18, height: 18, display: "inline-flex", alignItems: "center",
                                       justifyContent: "center", flexShrink: 0,
