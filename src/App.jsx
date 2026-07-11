@@ -20059,12 +20059,12 @@ ${milestoneSnapshotHtml}
                 icon={<PiggyBank style={{ width: 14, height: 14, color: "#fb923c" }} />}
                 color="#fb923c" activeBg="rgba(251,146,60,0.07)"
                 isOpen={openSections.has("retirementSpend")} onToggle={() => sectionIsLocked("retirementSpend", plan) ? setShowUpgradeModal(true) : toggleSection("retirementSpend")}
-                collapsedHint="Post-retirement expense ratio · Healthcare escalator · Income gap"
+                collapsedHint="Expense ratio · Healthcare escalator · Income gap → set as Drawdown income target"
               />
               {openSections.has("retirementSpend") && (
                 <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
                   <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
-                    Model how much of your current monthly expenses you'll still need in retirement, and how healthcare costs escalate with age.
+                    Model how much of your current monthly expenses you'll still need in retirement, and how healthcare costs escalate with age. Use the <strong style={{ color: "#fb923c" }}>→ Set as income target</strong> button below to carry the computed figure directly into Retirement Drawdown.
                   </p>
 
                   {/* Expense ratio */}
@@ -20168,6 +20168,38 @@ ${milestoneSnapshotHtml}
                             Gap of {formatCurrency(Math.abs(gap))}/mo needs to be covered by SRS drawdown, portfolio income, rental, or part-time work.
                           </p>
                         )}
+                        {/* ── Bridge button: copy computed expense → targetMonthlyIncome in Drawdown ── */}
+                        {totalMonthlyRetire > 0 && (() => {
+                          const alreadySet = Number(inputs.targetMonthlyIncome) === totalMonthlyRetire;
+                          return (
+                            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(251,146,60,0.2)" }}>
+                              <button
+                                onClick={() => {
+                                  setInputs(p => ({ ...p, targetMonthlyIncome: totalMonthlyRetire }));
+                                  if (!openSections.has("decumulation")) toggleSection("decumulation");
+                                }}
+                                style={{
+                                  width: "100%", padding: "7px 12px", borderRadius: 8, fontSize: 12, fontWeight: 800,
+                                  border: alreadySet ? "1px solid rgba(251,146,60,0.35)" : "none",
+                                  background: alreadySet ? "rgba(251,146,60,0.08)" : "#fb923c",
+                                  color: alreadySet ? "#fb923c" : "var(--btn-on-accent)",
+                                  cursor: alreadySet ? "default" : "pointer",
+                                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                                  transition: "background 0.15s",
+                                }}>
+                                {alreadySet
+                                  ? <><span style={{ fontSize: 13 }}>✓</span> Income target already set to {formatCurrency(totalMonthlyRetire)}/mo</>
+                                  : <><span style={{ fontSize: 13 }}>→</span> Set {formatCurrency(totalMonthlyRetire)}/mo as income target in Drawdown</>
+                                }
+                              </button>
+                              {!alreadySet && (
+                                <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: "4px 0 0", textAlign: "center", lineHeight: 1.4 }}>
+                                  Copies your computed retirement expense into Retirement Drawdown · opens Fill Gap
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })()}
