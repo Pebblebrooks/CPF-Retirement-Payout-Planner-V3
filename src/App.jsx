@@ -6844,7 +6844,7 @@ function ReadinessTab({
             {/* ── MAS panel header ── */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <p style={{ ...labelStyle, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                MAS Financial Health <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-subtle)", textTransform: "none" }}>(advisory · not in 100-pt score)</span>
+                Financial Health <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-subtle)", textTransform: "none" }}>(advisory · not in 100-pt score)</span>
               </p>
               <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection. The Wellness Score is an unweighted average of the five tile scores — it is NOT an official MAS metric." />
             </div>
@@ -7118,7 +7118,7 @@ function ReadinessTab({
                   <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                     <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-                      MAS Financial Health — 5 pillars
+                      Financial Health — 5 pillars
                     </span>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                   </div>
@@ -7727,9 +7727,9 @@ const sectionIsLocked = (sectionId, plan) => {
 const LITE_PRESET_IDS = new Set(["blank", "typical35"]);
 
 // ── Beta password gate ───────────────────────────────────────────────────────────
-// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro.
+// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro, FusionAdmin$$2026$$ → Pro (admin bypass, skips tier guards).
 // Replace with server-side auth before public launch.
-const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$' };
+const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$', admin: 'FusionAdmin$$2026$$' };
 
 // ── UpgradeModal ──────────────────────────────────────────────────────────────
 function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
@@ -7740,13 +7740,15 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
   const inputRef = useRef(null);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
 
-  const typedTier = password === TIER_PASSWORDS.pro  ? 'pro'
+  const typedTier = (password === TIER_PASSWORDS.pro || password === TIER_PASSWORDS.admin) ? 'pro'
                   : password === TIER_PASSWORDS.plus ? 'plus' : null;
 
   const tryUnlock = () => {
     if (!password) { setError('Please enter your access password.'); return; }
     setSubmitting(true);
     setTimeout(() => {
+      // Admin bypass — skips all tier guards, always upgrades to Pro immediately
+      if (password === TIER_PASSWORDS.admin) { onUpgrade('pro'); return; }
       if (password === TIER_PASSWORDS.pro) {
         if (currentPlan === 'pro') { setError('You\'re already on Fusion Pro.'); setSubmitting(false); return; }
         onUpgrade('pro'); return;
@@ -17609,15 +17611,15 @@ ${milestoneSnapshotHtml}
               badge off-screen on narrow phones. */}
           <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
             <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 12, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 1.5px rgba(255,255,255,0.35), 0 2px 8px rgba(0,0,0,0.25)" }}>
-              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 36, height: 36, display: "block", borderRadius: 6 }} />
+              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 30, height: 30, display: "block", borderRadius: 6 }} />
             </div>
             <div className="cpf-logo-textstack">
               <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 {/* Logo: "Fusion " in green-blue gradient, "富生" in Chinese red — split spans so light-theme
                     CSS can target each independently without the transparent fill bleeding into 富生. */}
                 <div className="cpf-logo-text" style={{ display: "flex", alignItems: "baseline", whiteSpace: "nowrap" }}>
-                  <span style={{ fontWeight: 900, fontSize: 20, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
-                  <span style={{ fontWeight: 900, fontSize: 20, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
+                  <span style={{ fontWeight: 900, fontSize: 17, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
+                  <span style={{ fontWeight: 900, fontSize: 17, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
                 </div>
                 {/* Plan tier pill — driven by plan state → TIER_CONFIG */}
                 {(() => { const tc = TIER_CONFIG[plan.toUpperCase()]; return tc ? (
@@ -17642,6 +17644,7 @@ ${milestoneSnapshotHtml}
                   </span>
                 )}
               </div>
+              <div className="cpf-logo-sub" style={{ fontSize: 9, fontWeight: 700, color: "var(--clr-emerald)", letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.85, marginTop: 2, whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
             </div>
           </div>
 
@@ -17885,7 +17888,6 @@ ${milestoneSnapshotHtml}
       <nav className="cpf-tabs-full-width" aria-label="Dashboard sections">
         <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0, display: "flex", alignItems: "center", gap: 0 }}>
           {/* Engine tag — left side of tab row (hidden on mobile via CSS) */}
-          <span className="cpf-engine-tag" style={{ fontSize: 11, fontWeight: 800, color: "var(--clr-emerald)", letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap", flexShrink: 0, paddingLeft: 16, paddingRight: 12, opacity: 0.9 }}>Retirement Engine v2026</span>
           {/* Scrollable tab buttons */}
           <div ref={tabsStripRef} className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", flex: "1 1 auto", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
             {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
@@ -18471,8 +18473,8 @@ ${milestoneSnapshotHtml}
                   {/* These feed the Tier 2 advisory panel on the Readiness tab.      */}
                   <div style={{ marginTop: 10, padding: "9px 10px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-highlight)", textTransform: "uppercase", letterSpacing: "0.04em" }}>MAS Financial Health</span>
-                      <TooltipBox id="t-masHealth" text="These fields power the MAS Financial Health advisory panel on the Readiness tab. They do not affect CPF projections. Emergency Fund tracks liquid reserves vs the MAS 3–6 month guideline. Legacy Planning confirms you have a Will, CPF nomination (CSNB), and Lasting Power of Attorney (LPA) registered with OPG — all strongly recommended by MAS for holistic retirement planning." />
+                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-highlight)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Financial Health</span>
+                      <TooltipBox id="t-masHealth" text="These fields power the Financial Health advisory panel on the Readiness tab. They do not affect CPF projections. Emergency Fund tracks liquid reserves vs the MAS 3–6 month guideline. Legacy Planning confirms you have a Will, CPF nomination (CSNB), Lasting Power of Attorney (LPA), Advance Medical Directive (AMD), and Advance Care Plan (ACP) — all strongly recommended by MAS for holistic retirement planning. AMD and ACP cover your medical decision-making wishes and are filed separately from estate documents." />
                     </div>
                     {/* Emergency Fund slider */}
                     <div style={{ marginBottom: 8 }}>
@@ -18492,16 +18494,21 @@ ${milestoneSnapshotHtml}
                     {/* Legacy Planning checkboxes */}
                     <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 5px" }}>Legacy Planning</p>
                     {[
-                      ["hasWill",          "Will",            "A legally valid will prepared with witnesses"],
-                      ["hasCPFNomination", "CPF Nomination",  "CPF nomination (CSNB) filed — bypasses probate for CPF assets"],
-                      ["hasLPA",           "LPA",             "Lasting Power of Attorney registered with OPG Singapore"],
-                      ["hasAMD",           "AMD",             "Advance Medical Directive filed with MOH — instructs doctors not to apply extraordinary life-sustaining measures when death is imminent"],
-                      ["hasACP",           "ACP",             "Advance Care Plan completed with a healthcare provider — documents your care preferences and values for future medical decisions"],
+                      ["hasWill",          "Will",            "A legally valid Will prepared with at least two witnesses. Ensures your assets are distributed according to your wishes and avoids intestacy rules. Wills in Singapore do not cover CPF savings — those pass via nomination."],
+                      ["hasCPFNomination", "CPF Nomination",  "CPF Nomination (CSNB) filed with CPF Board. Allows CPF savings to be paid directly to nominees without probate, bypassing the estate — faster and avoids the 9-month delay of grant of probate. Review periodically as life circumstances change."],
+                      ["hasLPA",           "LPA",             "Lasting Power of Attorney registered with the Office of the Public Guardian (OPG) Singapore. Authorises a trusted person to make personal welfare and/or property decisions on your behalf if you lose mental capacity. Without an LPA, family must apply to court for a deputyship order."],
+                      ["hasAMD",           "AMD",             "Advance Medical Directive (AMD) filed with the Ministry of Health. A legal document instructing doctors not to apply extraordinary life-sustaining treatment when death is imminent and the condition is terminal. Must be signed before a doctor and two witnesses. Does not cover withdrawal of ordinary medical care."],
+                      ["hasACP",           "ACP",             "Advance Care Plan (ACP) completed with a healthcare provider or ACP facilitator. Documents your care preferences, values, and goals for future medical decisions — especially important if you become unable to speak for yourself. Unlike the AMD, it is not legally binding but guides your care team and family. Recommended for all adults, especially those with chronic illness."],
                     ].map(([key, label, tip]) => (
-                      <div key={key} title={tip}
+                      <div key={key}
                         onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
                         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", cursor: "pointer" }}>
-                        <span style={{ fontSize: 12, color: "var(--text-main)" }}>{label}</span>
+                        <span style={{ fontSize: 12, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4 }}>
+                          {label}
+                          <span onClick={e => e.stopPropagation()}>
+                            <TooltipBox id={`t-${key}`} text={tip} />
+                          </span>
+                        </span>
                         <div style={{ width: 28, height: 16, borderRadius: 8, background: inputs[key] ? "var(--clr-green)" : "var(--bg-panel)", border: `1px solid ${inputs[key] ? "var(--clr-green)" : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
                           <div style={{ position: "absolute", top: 2, left: inputs[key] ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: inputs[key] ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
                         </div>
@@ -19156,11 +19163,14 @@ ${milestoneSnapshotHtml}
                         Other Liabilities ($)
                         <TooltipBox id="t-other-liab2" text="Outstanding liabilities not captured above (car loan, personal loan, credit card balance). Stored for reference — not currently deducted from net worth in the simulation." />
                       </label>
-                      <input type="number" min={0} step={1000}
-                        value={inputs.otherLiabilities || ""}
-                        placeholder="0"
-                        onChange={e => setInputs(p => ({ ...p, otherLiabilities: Number(e.target.value) || 0 }))}
-                        style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "6px 10px", fontSize: 13, color: "var(--text-bright)", outline: "none", boxSizing: "border-box" }} />
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-subtle)", pointerEvents: "none", userSelect: "none" }}>$</span>
+                        <input type="number" min={0} step={1000}
+                          value={inputs.otherLiabilities || ""}
+                          placeholder="0"
+                          onChange={e => setInputs(p => ({ ...p, otherLiabilities: Number(e.target.value) || 0 }))}
+                          style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "6px 10px 6px 22px", fontSize: 13, color: "var(--text-bright)", outline: "none", boxSizing: "border-box" }} />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -19896,7 +19906,7 @@ ${milestoneSnapshotHtml}
                   const hasFamily = (Number(inputs.marriageAge) > 0) || (Number(inputs.loanMonthlyRepayment) > 0) || (Number(inputs.parentSupportMonthly) > 0) || (inputs.childrenData || []).length > 0;
                   return hasFamily ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "rgba(236,72,153,0.15)", color: "#ec4899" }}>configured</span> : null;
                 })()}
-                collapsedHint="Marriage · Children · Loans · Parent support — ⚠ don't duplicate in Stress Scenarios"
+                collapsedHint="Marriage · Children · Loans · Parent support — model recurring cash impacts in Life Events if needed"
               />
               {openSections.has("familyEvents") && (
                 <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -20732,7 +20742,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader planBadge={sectionIsLocked("transfers", plan) ? { tier: "plus", locked: true } : null} id="transfers" label="CPF Transfers & OA Moves" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => sectionIsLocked("transfers", plan) ? setShowUpgradeModal(true) : toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One · RA → OA at payout age" />
+              <SidebarSectionHeader planBadge={sectionIsLocked("transfers", plan) ? { tier: "plus", locked: true } : null} id="transfers" label="CPF Transfers" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => sectionIsLocked("transfers", plan) ? setShowUpgradeModal(true) : toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One · RA → OA at payout age" />
               {openSections.has("transfers") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* OA → MA */}
@@ -22294,7 +22304,7 @@ ${milestoneSnapshotHtml}
               return (
                 <div ref={lifeEventsSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
                   {/* Header */}
-                  <SidebarSectionHeader planBadge={sectionIsLocked("lifeevents", plan) ? { tier: "pro", locked: true } : null} id="lifeevents" label="Stress Scenarios" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => sectionIsLocked("lifeevents", plan) ? setShowUpgradeModal(true) : toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Overlay temporary economic shocks on your projection — retrenchment, windfall, career break, medical crisis…"} />
+                  <SidebarSectionHeader planBadge={sectionIsLocked("lifeevents", plan) ? { tier: "pro", locked: true } : null} id="lifeevents" label="Life Events" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => sectionIsLocked("lifeevents", plan) ? setShowUpgradeModal(true) : toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Overlay Life Events on your projection — retrenchment, medical crisis, windfall, career break, salary cut…"} />
 
                   {openSections.has("lifeevents") && (
                     <div style={{ padding: "0 16px 16px" }}>
@@ -22354,7 +22364,7 @@ ${milestoneSnapshotHtml}
                           <div style={{ marginBottom: 8 }}>
                             <label className="cpf-label" style={{ marginBottom: 4 }}>Event Type</label>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-                              {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => {
+                              {Object.entries(LIFE_EVENT_TYPES).filter(([key]) => !['marriage','child_birth','parent_support','education_expense'].includes(key)).map(([key, meta]) => {
                                 const TypeIcon = meta.icon || Activity;
                                 return (
                                 <button key={key} onClick={() => setLeFormState(p => ({ ...p, type: key, label: meta.label, endAge: (meta.isPoint ? p.startAge : p.endAge) || p.startAge }))}
@@ -31609,7 +31619,7 @@ ${milestoneSnapshotHtml}
 
                     const vc3aMaxRoom = turboImpacts.vc3aMaxRoom || 0;
                     const vcmaRoom    = turboImpacts.vcmaRoom    || 0;
-                    const mrssAgeBand = isSC && ca >= 55;     // informational call-out condition, not a hard gate
+                    const mrssAgeBand = isSC && (ca >= 55 || !!inputs.isPwD);     // informational call-out; PwD bypass per 2026 policy
                     const mmssAgeBand = isSC && ca >= 55 && ca <= 70;
                     const deferEligible = pa < 70;
 
@@ -32686,6 +32696,19 @@ ${milestoneSnapshotHtml}
                     return (
                       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
 
+                        {/* ── How to use the Tax Optimizer ── */}
+                        <details style={{ marginBottom: 12, background: "rgba(var(--clr-blue-rgb),0.04)", border: "1px solid rgba(var(--clr-blue-rgb),0.15)", borderRadius: 10, padding: "10px 14px" }}>
+                          <summary style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 15 }}>📘</span> How to use the Tax Optimizer
+                          </summary>
+                          <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>What it does:</strong> Computes your IRAS chargeable income and tests four strategies to reduce it — RSTU top-up to SA/RA, VCMA cash top-up to MA, SRS contribution, and a blended combination. Each strategy is optimised to push you into the next lower tax band.</p>
+                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>Step 1 — Enter your income:</strong> Fill in your Gross Monthly Salary and Annual Bonus in the Salary section. The optimizer reads these automatically.</p>
+                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>Step 2 — Set your marginal rate:</strong> Use the <em>Marginal Tax Rate</em> slider in the Goal Simulator to match your actual IRAS rate. The alert above warns if the slider and computed rate are misaligned.</p>
+                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>Step 3 — Review the four strategies:</strong> Each card shows the relief lever, the recommended annual amount, the estimated tax saved, and a 1-click <em>Apply</em> button that writes the value into your profile.</p>
+                            <p style={{ margin: 0 }}><strong style={{ color: "var(--text-main)" }}>Step 4 — Revert if needed:</strong> A yellow banner appears at the top of this tab after you apply a strategy. Click <em>Revert</em> to restore your original values.</p>
+                          </div>
+                        </details>
                         {/* ── Current Tax Position ─────────────────────────────── */}
                         <div style={{ background: "var(--bg-panel-muted)", borderRadius: 12, padding: 16, border: "1px solid var(--border-subtle)" }}>
                           <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", marginBottom: 10 }}>📊 Current Tax Position</div>
@@ -32718,19 +32741,6 @@ ${milestoneSnapshotHtml}
                           )}
                         </div>
 
-                        {/* ── How to use the Tax Optimizer ── */}
-                        <details style={{ marginBottom: 12, background: "rgba(var(--clr-blue-rgb),0.04)", border: "1px solid rgba(var(--clr-blue-rgb),0.15)", borderRadius: 10, padding: "10px 14px" }}>
-                          <summary style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 15 }}>📘</span> How to use the Tax Optimizer
-                          </summary>
-                          <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
-                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>What it does:</strong> Computes your IRAS chargeable income and tests four strategies to reduce it — RSTU top-up to SA/RA, VCMA cash top-up to MA, SRS contribution, and a blended combination. Each strategy is optimised to push you into the next lower tax band.</p>
-                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>Step 1 — Enter your income:</strong> Fill in your Gross Monthly Salary and Annual Bonus in the Salary section. The optimizer reads these automatically.</p>
-                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>Step 2 — Set your marginal rate:</strong> Use the <em>Marginal Tax Rate</em> slider in the Goal Simulator to match your actual IRAS rate. The alert above warns if the slider and computed rate are misaligned.</p>
-                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>Step 3 — Review the four strategies:</strong> Each card shows the relief lever, the recommended annual amount, the estimated tax saved, and a 1-click <em>Apply</em> button that writes the value into your profile.</p>
-                            <p style={{ margin: 0 }}><strong style={{ color: "var(--text-main)" }}>Step 4 — Revert if needed:</strong> A yellow banner appears at the top of this tab after you apply a strategy. Click <em>Revert</em> to restore your original values.</p>
-                          </div>
-                        </details>
                         {/* ── Revert banner — shown when a Tax Optimizer apply is active ── */}
                         {taxOptApplied !== null && taxOptSnapshot && (
                           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.25)", flexWrap: "wrap" }}>
