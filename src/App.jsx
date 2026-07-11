@@ -6519,7 +6519,8 @@ function ReadinessTab({
   // ── Gauge arc path (unchanged from Phase 1/2) ────────────────────────────
   const gaugeArc = (pct) => {
     const cx = 110, cy2 = 90, r = 72;
-    const clampedPct = Math.min(1, Math.max(0, pct / 100));
+    // Guard against null/undefined/NaN — all become 0 so the grey track still shows
+    const clampedPct = Math.min(1, Math.max(0, (Number(pct) || 0) / 100));
     if (clampedPct <= 0) return '';
     const startAngle = Math.PI;
     const endAngle   = Math.PI + Math.PI * clampedPct;
@@ -6867,7 +6868,7 @@ function ReadinessTab({
                       <svg viewBox={`0 0 ${W2} ${H2}`} style={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
                         <path d={trackD} fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
                         {arcD2 && <path d={arcD2} fill="none" stroke={scoreColor} strokeWidth={10} strokeLinecap="round" />}
-                        <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900} fill={scoreColor} fontFamily="monospace">{score}</text>
+                        <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900} fill={scoreColor} fontFamily="monospace">{score != null ? score : 0}</text>
                         <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700} fill={scoreColor}>{scoreLabel}</text>
                       </svg>
                     );
@@ -6909,7 +6910,7 @@ function ReadinessTab({
                     )}
                     {/* Score */}
                     <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900}
-                      fill={wClr} fontFamily="monospace">{wellnessScore}</text>
+                      fill={wClr} fontFamily="monospace">{wellnessScore != null ? wellnessScore : 0}</text>
                     <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700}
                       fill={wClr}>{wLbl}</text>
                   </svg>
@@ -7379,6 +7380,30 @@ function ReadinessTab({
                   </div>
                 ))}
               </div>
+              {/* Net Wealth = Total Assets − Other Liabilities */}
+              {(Number(inputs.otherLiabilities) || 0) > 0 && (() => {
+                const totalAssets = wealthDonutParts.reduce((s, p) => s + p.value, 0);
+                const liabilities = Number(inputs.otherLiabilities) || 0;
+                const netWealth   = totalAssets - liabilities;
+                return (
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--border-subtle)", width: "100%" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>
+                      <span>Total Assets (age {pa})</span>
+                      <span style={{ fontWeight: 700, color: "var(--text-main)" }}>{formatCurrency(totalAssets)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 5 }}>
+                      <span>Other Liabilities</span>
+                      <span style={{ fontWeight: 700, color: "var(--clr-red)" }}>−{formatCurrency(liabilities)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 800, paddingTop: 4, borderTop: "1px dashed var(--border-subtle)" }}>
+                      <span style={{ color: "var(--text-main)" }}>Net Wealth</span>
+                      <span style={{ color: netWealth >= 0 ? "var(--clr-emerald)" : "var(--clr-red)" }}>
+                        {netWealth < 0 ? "-" : ""}{formatCurrency(Math.abs(netWealth))}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           ) : (
             <p style={{ fontSize: 12, color: "var(--text-subtle)", textAlign: "center", marginTop: 20 }}>
@@ -19863,7 +19888,7 @@ ${milestoneSnapshotHtml}
             {/* ── Family & Life Events — marriage, children, loans, parent support ── */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader
-                planBadge={sectionIsLocked("familyEvents", plan) ? { tier: "plus", locked: true } : null} id="familyEvents" label="Family & Life Events"
+                planBadge={sectionIsLocked("familyEvents", plan) ? { tier: "plus", locked: true } : null} id="familyEvents" label="Family Milestones"
                 icon={<Heart style={{ width: 14, height: 14, color: "#ec4899" }} />}
                 color="#ec4899" activeBg="rgba(236,72,153,0.07)"
                 isOpen={openSections.has("familyEvents")} onToggle={() => sectionIsLocked("familyEvents", plan) ? setShowUpgradeModal(true) : toggleSection("familyEvents")}
@@ -19871,7 +19896,7 @@ ${milestoneSnapshotHtml}
                   const hasFamily = (Number(inputs.marriageAge) > 0) || (Number(inputs.loanMonthlyRepayment) > 0) || (Number(inputs.parentSupportMonthly) > 0) || (inputs.childrenData || []).length > 0;
                   return hasFamily ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "rgba(236,72,153,0.15)", color: "#ec4899" }}>configured</span> : null;
                 })()}
-                collapsedHint="Marriage · Children · Loans · Parent support — ⚠ don't duplicate in Life Events"
+                collapsedHint="Marriage · Children · Loans · Parent support — ⚠ don't duplicate in Stress Scenarios"
               />
               {openSections.has("familyEvents") && (
                 <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -22255,9 +22280,9 @@ ${milestoneSnapshotHtml}
                 } else {
                   setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).map(e => e.id === ev.id ? ev : e) }));
                 }
-                setLeEditingId(null); setLeFormState({});
-                // Keep section open so user can add another event immediately
-                setOpenSections(prev => { const n = new Set(prev); n.add("lifeevents"); return n; });
+                // Immediately reset form for the next event (keeps section visually open;
+                // user can dismiss the form with Cancel when finished adding events)
+                startNew();
               };
               const deleteEvent = (id) => setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).filter(e => e.id !== id) }));
               const toggleEvent = (id) => setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).map(e => e.id === id ? { ...e, enabled: e.enabled === false } : e) }));
@@ -22269,7 +22294,7 @@ ${milestoneSnapshotHtml}
               return (
                 <div ref={lifeEventsSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
                   {/* Header */}
-                  <SidebarSectionHeader planBadge={sectionIsLocked("lifeevents", plan) ? { tier: "pro", locked: true } : null} id="lifeevents" label="Life Events & Stress Tests" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => sectionIsLocked("lifeevents", plan) ? setShowUpgradeModal(true) : toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Stress-test retrenchment, windfall, career break, medical crisis…"} />
+                  <SidebarSectionHeader planBadge={sectionIsLocked("lifeevents", plan) ? { tier: "pro", locked: true } : null} id="lifeevents" label="Stress Scenarios" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => sectionIsLocked("lifeevents", plan) ? setShowUpgradeModal(true) : toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Overlay temporary economic shocks on your projection — retrenchment, windfall, career break, medical crisis…"} />
 
                   {openSections.has("lifeevents") && (
                     <div style={{ padding: "0 16px 16px" }}>
@@ -22476,7 +22501,7 @@ ${milestoneSnapshotHtml}
                         <>
                           {(inputs.lifeEvents||[]).some(e => ["marriage","child_birth","loan_repayment","parent_support"].includes(e.type)) && (
                             <div style={{ fontSize: 11, color: "var(--clr-amber)", background: "rgba(var(--clr-amber-rgb),0.08)", border: "1px solid rgba(var(--clr-amber-rgb),0.25)", borderRadius: 7, padding: "6px 10px", marginBottom: 6, lineHeight: 1.5 }}>
-                              ⚠️ <strong>Possible double-count:</strong> Marriage, Child Birth, Loan Repayment and Parent Support are also in <em>Family &amp; Life Events</em> above — using both applies them simultaneously.
+                              ⚠️ <strong>Possible double-count:</strong> Marriage, Child Birth, Loan Repayment and Parent Support are also modelled in <em>Family Milestones</em> above. Using both applies them simultaneously in the engine.
                             </div>
                           )}
                           <button onClick={startNew} style={{ width: "100%", marginTop: 8, padding: "7px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px dashed rgba(239,68,68,0.5)", background: "transparent", color: "#ef4444", cursor: "pointer" }}>
@@ -27076,6 +27101,71 @@ ${milestoneSnapshotHtml}
                             </div>
                           )}
                         </div>
+
+                        {/* ── Data-driven recommendation (mathematical optimum) ── */}
+                        {activeLifePlans && activeLifePlans.length >= 3 && (() => {
+                          const getPayout = (id) => {
+                            const plan = activeLifePlans.find(p => p.id === id);
+                            return plan?.data?.[0]?.payout ?? plan?.monthly ?? 0;
+                          };
+                          const stdMo  = getPayout("standard");
+                          const escMo  = getPayout("escalating");
+                          const basMo  = getPayout("basic");
+                          if (!stdMo || !escMo || !basMo) return null;
+                          // Compute total lifetime income to life expectancy for each plan
+                          const le   = lifeExpectancy;
+                          const pa_  = Number(debouncedInputs.payoutAge) || 65;
+                          const yrs  = Math.max(0, le - pa_);
+                          // Standard: constant payout
+                          const stdTotal  = Math.round(stdMo * 12 * yrs);
+                          // Escalating: 2%/yr increase (geometric series)
+                          const escTotal  = yrs > 0
+                            ? Math.round(escMo * 12 * (Math.pow(1.02, yrs) - 1) / 0.02)
+                            : 0;
+                          // Basic: constant payout, runs until pool depletes (~90)
+                          const basYrs    = Math.min(yrs, Math.max(0, 90 - pa_));
+                          const basTotal  = Math.round(basMo * 12 * basYrs);
+                          const totals    = { standard: stdTotal, escalating: escTotal, basic: basTotal };
+                          const best      = Object.entries(totals).reduce((a, b) => b[1] > a[1] ? b : a);
+                          const bestId    = best[0];
+                          const bestTotal = best[1];
+                          const planMeta  = {
+                            standard:   { label: "Standard Plan",   clr: "#10b981", icon: "✅" },
+                            escalating: { label: "Escalating Plan", clr: "#f59e0b", icon: "📈" },
+                            basic:      { label: "Basic Plan",       clr: "#8b5cf6", icon: "💰" },
+                          };
+                          const meta = planMeta[bestId];
+                          const questPlan = lifeRecommendation?.plan;
+                          const aligned   = questPlan === bestId;
+                          return (
+                            <div style={{ marginTop: 12, padding: "14px 16px", borderRadius: 12, background: `${meta.clr}0d`, border: `1px solid ${meta.clr}44` }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                <span style={{ fontSize: 16 }}>📊</span>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: meta.clr }}>Data-driven: {meta.label}</span>
+                                {aligned
+                                  ? <span style={{ fontSize: 11, fontWeight: 700, background: "#10b9811a", color: "#10b981", borderRadius: 6, padding: "2px 7px" }}>✔ Matches your preference</span>
+                                  : <span style={{ fontSize: 11, fontWeight: 700, background: "#f59e0b1a", color: "#f59e0b", borderRadius: 6, padding: "2px 7px" }}>⚠ Differs from questionnaire</span>
+                                }
+                              </div>
+                              <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                                Based on your projected RA and life expectancy of <strong>{le}</strong>, the <strong style={{ color: meta.clr }}>{meta.label}</strong> pays the most total income — approximately <strong>{formatCurrency(bestTotal)}</strong> over {yrs} years.
+                              </p>
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                                {[["standard", stdTotal], ["escalating", escTotal], ["basic", basTotal]].map(([id, total]) => (
+                                  <div key={id} style={{ fontSize: 11, color: "var(--text-muted)", background: "var(--bg-muted)", borderRadius: 6, padding: "3px 8px" }}>
+                                    {planMeta[id].label}: <strong style={{ color: id === bestId ? planMeta[id].clr : "var(--text-main)" }}>{formatCurrency(total)}</strong>
+                                  </div>
+                                ))}
+                              </div>
+                              {!aligned && (
+                                <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>
+                                  Your questionnaire suggested {planMeta[questPlan || "standard"]?.label} based on preferences. Consider both perspectives before choosing.
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                       </details>
                     );
                   })()}
@@ -31566,7 +31656,7 @@ ${milestoneSnapshotHtml}
                       setTurboSnapshot(prev => ({ ...(prev || {}), [id]: { field, value } }));
                       // Append to change log
                       const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation" };
+                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation", mrss:"MRSS", mmss:"MMSS" };
                       setTurboChangeLog(prev => [
                         { ts, action: "apply", id, label: labelMap[id] || id, from: value },
                         ...(prev || []),
@@ -31616,7 +31706,7 @@ ${milestoneSnapshotHtml}
                       });
                       // Log the undo
                       const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation" };
+                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation", mrss:"MRSS", mmss:"MMSS" };
                       setTurboChangeLog(prev => [
                         { ts, action: "undo", id, label: labelMap[id] || id },
                         ...(prev || []),
@@ -31785,6 +31875,34 @@ ${milestoneSnapshotHtml}
                         note: `Right-size or lease-buyback your home at age ${pmAge} to top up RA and unlock cash proceeds. Change the trigger age in the sidebar.`,
                         ineligibleNote: "Already enabled in your profile.",
                         onApply: applyProp,
+                      },
+                      // ── Government-match grants: MRSS + MMSS ──────────────────
+                      {
+                        id: "mrss", icon: "🎁", title: "MRSS — Govt Retirement Match",
+                        eligible: mrssAgeBand && (Number(inputs.mrssGrant) || 0) < 2000,
+                        isApplied: (Number(inputs.mrssGrant) || 0) >= 2000,
+                        gain: null,  // govt match up to $2k; exact depends on RSTU amount
+                        cashCost: 0, // no cash from user — government grant
+                        note: (Number(inputs.mrssGrant) || 0) >= 2000
+                          ? "Already claiming the maximum $2,000/yr MRSS government retirement match."
+                          : `Set MRSS grant to $2,000/yr for a potential dollar-for-dollar government match of up to $2,000 per year (lifetime cap $20,000). Requires RA < BRS and an equal RSTU top-up.`,
+                        ineligibleNote: mrssAgeBand ? "Already claiming max MRSS." : "MRSS requires age ≥ 55 (PwD: any age) and Singapore Citizenship.",
+                        onApply: () => { snapshotLever("mrss", "mrssGrant", Number(inputs.mrssGrant) || 0); setInputs(prev => ({ ...prev, mrssGrant: 2000 })); },
+                      },
+                      {
+                        id: "mmss", icon: "🏥", title: "MMSS — Govt MediSave Match",
+                        eligible: mmssAgeBand && (Number(inputs.mmssGrant) || 0) < 1000 && mmssYearsLeft > 0,
+                        isApplied: (Number(inputs.mmssGrant) || 0) >= 1000,
+                        gain: null,
+                        cashCost: 0,
+                        expiryPill: mmssAgeBand && mmssYearsLeft > 0
+                          ? `⏰ MMSS pilot ends 2030 — ${mmssYearsLeft} yr${mmssYearsLeft !== 1 ? "s" : ""} left to claim`
+                          : null,
+                        note: (Number(inputs.mmssGrant) || 0) >= 1000
+                          ? "Already claiming the maximum $1,000/yr MMSS government MediSave match."
+                          : `Set MMSS grant to $1,000/yr to claim the government MediSave match. Pilot scheme runs to 2030 (${mmssYearsLeft} yr${mmssYearsLeft !== 1 ? "s" : ""} left). Requires MA below ½ BHS (~$39,500) and SC citizenship.`,
+                        ineligibleNote: mmssAgeBand ? "Already claiming max MMSS." : "MMSS applies age 55–70, SC only. Pilot ends 2030.",
+                        onApply: () => { snapshotLever("mmss", "mmssGrant", Number(inputs.mmssGrant) || 0); setInputs(prev => ({ ...prev, mmssGrant: 1000 })); },
                       },
                     ];
 
@@ -32445,6 +32563,33 @@ ${milestoneSnapshotHtml}
                           )}
 
                         </div>{/* /turbo-lever-grid */}
+
+                        {/* ── Timing & Sequence Insight ─────────────────────────── */}
+                        <details style={{ marginTop: 16, background: "rgba(var(--clr-blue-rgb),0.04)", border: "1px solid rgba(var(--clr-blue-rgb),0.15)", borderRadius: 10, padding: "10px 14px" }}>
+                          <summary style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 15 }}>⏱</span> Why sequence and timing of top-ups matter
+                          </summary>
+                          <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
+                            <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--text-main)" }}>Compound interest multiplier</p>
+                            <p style={{ margin: "0 0 8px" }}>Every $1,000 topped up at age 35 vs age 55 earns ~$2,191 more by age 65 (4% SA/RA rate over 20 extra years). Top up as early as possible.</p>
+                            <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--text-main)" }}>Recommended sequence (before age 55)</p>
+                            <ol style={{ margin: "0 0 8px", paddingLeft: 18 }}>
+                              <li><strong>OA → SA transfer first</strong> — converts 2.5% OA to 4% SA. Irreversible, so do before committing OA to housing.</li>
+                              <li><strong>RSTU to SA</strong> — earns 4% + 1% extra interest on first $40k (SA+OA combined). Also unlocks MRSS match if RA &lt; BRS after 55.</li>
+                              <li><strong>VC3A to OA</strong> — earns 2.5% + 1% extra; useful if CPF Annual Limit not yet hit.</li>
+                              <li><strong>VCMA to MA</strong> — earns 4%. Reduces out-of-pocket medical costs in retirement.</li>
+                              <li><strong>SRS</strong> — primarily a tax lever; earns market returns. Best used after CPF caps are hit.</li>
+                            </ol>
+                            <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--text-main)" }}>After age 55</p>
+                            <ol style={{ margin: "0", paddingLeft: 18 }}>
+                              <li><strong>RSTU goes directly to RA</strong> (after SA is transferred to RA). Earns 4% + 1% on first $30k RA + first $30k OA.</li>
+                              <li><strong>MRSS</strong> — government matches your RSTU dollar-for-dollar (up to $2,000/yr, lifetime cap $20k) if RA &lt; BRS. Claim before RA exceeds BRS.</li>
+                              <li><strong>MMSS</strong> — government matches MediSave top-ups up to $1,000/yr if MA &lt; ½ BHS. Pilot ends 2030.</li>
+                              <li><strong>VHR (Voluntary Housing Refund)</strong> — refunds OA housing principal + accrued interest back to OA; re-earns 2.5% compound.</li>
+                            </ol>
+                          </div>
+                        </details>
+
                         {/* /outer turbo IIFE div */}
                       </div>
                     );
