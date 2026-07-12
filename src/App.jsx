@@ -5913,6 +5913,9 @@ function ReadinessTab({
   const cy           = Number(inputs.currentYear) || 2026;
   const isMale       = inputs.isMale !== false;
   const target       = Number(inputs.targetMonthlyIncome) || 0;
+  // paRow at component-body scope — used by donut, net wealth, and cashflow card.
+  // (Also re-computed locally inside the tiles useMemo for tile-specific calculations.)
+  const paRow        = accumulationByAge?.get?.(pa) || {};
   const rsGrowth     = (Number(inputs.retirementSumGrowth) || 3) / 100;
   const yearsToPA    = Math.max(0, pa - ca);
   const yearsFromNow = Math.max(0, (cy + yearsToPA) - 2026);
