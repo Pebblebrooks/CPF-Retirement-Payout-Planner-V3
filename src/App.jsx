@@ -48,88 +48,6 @@ const SHS_BONUS_RA = {
   '3r_to_2r': 15000,
 };
 
-// ── Schema versioning ───────────────────────────────────────────────────
-// M2 (merge from App_138): restored after being dropped from this branch.
-// Increment on every breaking DEFAULT_INPUTS change.
-const CURRENT_SCHEMA_VERSION = 5;
-
-const migrateProfile = (raw) => {
-  if (!raw || typeof raw !== 'object') return raw;
-  let p = { ...raw };
-  const v = p._schemaVersion || 3;
-  if (v < 4) {
-    p = { ...p, inputs: { ...p.inputs,
-      rentExpense:     p.inputs?.rentExpense     ?? p.inputs?.rentalExpenseMonthly   ?? 0,
-      rentExpStartAge: p.inputs?.rentExpStartAge ?? p.inputs?.rentalExpenseStartAge  ?? 0,
-      rentExpEndAge:   p.inputs?.rentExpEndAge   ?? p.inputs?.rentalExpenseStopAge   ?? 85,
-      hasAMD:                     p.inputs?.hasAMD                     ?? false,
-      hasACP:                     p.inputs?.hasACP                     ?? false,
-      cpfWithdrawalLock:          p.inputs?.cpfWithdrawalLock          ?? false,
-      cpfMoneyLock:               p.inputs?.cpfMoneyLock               ?? false,
-      cpfSafetySwitch:            p.inputs?.cpfSafetySwitch            ?? false,
-      cpfTrustContactSet:         p.inputs?.cpfTrustContactSet         ?? false,
-      otherLiabilities:           p.inputs?.otherLiabilities           ?? 0,
-      secondaryEmploymentEnabled: p.inputs?.secondaryEmploymentEnabled ?? false,
-      secondaryEmploymentType:    p.inputs?.secondaryEmploymentType    ?? 'employed',
-      secondarySalaryGross:       p.inputs?.secondarySalaryGross       ?? 0,
-      secondaryAnnualBonus:       p.inputs?.secondaryAnnualBonus       ?? 0,
-      secondaryCitizenStatus:     p.inputs?.secondaryCitizenStatus     ?? 'SC',
-      secondaryPrYear:            p.inputs?.secondaryPrYear            ?? 3,
-      secondaryContribStopAge:    p.inputs?.secondaryContribStopAge    ?? 65,
-      cpfHousingLoanPrincipal:    p.inputs?.cpfHousingLoanPrincipal    ?? 0,
-      showBalaCurve:              p.inputs?.showBalaCurve              ?? false,
-      showLifeStageBanner:        p.inputs?.showLifeStageBanner        ?? true,
-      shsEnabled:                 p.inputs?.shsEnabled                 ?? false,
-      shsFromFlat:                p.inputs?.shsFromFlat                ?? '5r',
-      shsToFlat:                  p.inputs?.shsToFlat                  ?? '3r',
-      shsAge:                     p.inputs?.shsAge                     ?? 65,
-      propertyType:               p.inputs?.propertyType               ?? 'hdb',
-      loanType:                   p.inputs?.loanType                   ?? 'hdb',
-      mortgagePaymentSource:      p.inputs?.mortgagePaymentSource      ?? 'cpf',
-    }};
-  }
-  if (v < 5) {
-    // Item 4 fix: marriage/loan_repayment/parent_support were removed from LIFE_EVENT_TYPES —
-    // these scenarios are now modelled exclusively via the dedicated Family & Life Events
-    // fields. Strip any legacy events of these 3 types so the list doesn't show blank
-    // label/color entries (LIFE_EVENT_TYPES[type] would resolve to {} for them). The
-    // financial effect these events had is not carried over automatically — re-enter as
-    // marriageAge/housingGrantAmount, loanMonthlyRepayment/loanEndAge, or
-    // parentSupportMonthly/parentSupportEndAge if the amount should still apply.
-    // Deliberately its own version bump (not folded into v<4) so this runs for every
-    // profile saved before this exact change, including ones already on schema v4.
-    p = { ...p, inputs: { ...p.inputs,
-      lifeEvents: (p.inputs?.lifeEvents || []).filter(
-        ev => !['marriage', 'loan_repayment', 'parent_support'].includes(ev?.type)
-      ),
-    }};
-  }
-  p._schemaVersion = CURRENT_SCHEMA_VERSION;
-  return p;
-};
-
-// ── CPF cohort-average curve + life-stage framework (merged from App_138) ──────
-const BALA_CURVE = [
-  { age: 25, val: 12000  }, { age: 30, val: 42000  }, { age: 35, val: 88000  },
-  { age: 40, val: 148000 }, { age: 45, val: 215000 }, { age: 50, val: 268000 },
-  { age: 55, val: 295000 }, { age: 60, val: 248000 }, { age: 65, val: 185000 },
-];
-
-const LIFE_STAGE_MAP = [
-  { maxAge: 29,  label: 'Early Career',   color: '#1D9E75',
-    tip: 'Build OA for housing, start SA for retirement, emergency fund.' },
-  { maxAge: 44,  label: 'Mid-Career',     color: '#185FA5',
-    tip: 'Maximise RSTU, reduce housing outflow, review investment strategy.' },
-  { maxAge: 54,  label: 'Pre-Retirement', color: '#7F77DD',
-    tip: 'Fill FRS, review CPF LIFE plan, SRS top-up for tax savings.' },
-  { maxAge: 64,  label: 'Transition',     color: '#BA7517',
-    tip: 'OA drawdown strategy, SRS depletion plan, property monetisation.' },
-  { maxAge: 999, label: 'Retirement',     color: '#D85A30',
-    tip: 'Income sustainability, estate planning, legacy documents.' },
-];
-const getLifeStage = (age) =>
-  LIFE_STAGE_MAP.find(s => age <= s.maxAge) || LIFE_STAGE_MAP[LIFE_STAGE_MAP.length - 1];
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // CPF POLICY CONSTANTS — UPDATE EACH JANUARY WHEN CPF BOARD PUBLISHES NEW VALUES
 // ───────────────────────────────────────────────────────────────────────────────
@@ -221,6 +139,20 @@ const STYLES = {
 const MMSS_PILOT_START_YEAR = 2026;
 const MMSS_PILOT_END_YEAR   = 2030;
 
+// ── Reserved-for-future-use: citizenship feature flag & CPF Board median benchmarks ──
+// FOREIGNER_MODE_ENABLED: flip to true to surface the foreigner citizenship path
+// in the UI (all isForeigner engine-gating is already in place).
+const FOREIGNER_MODE_ENABLED = false;
+// SG_RETIREMENT_BENCHMARKS: CPF Board median data (2024 cohort).
+// Future use: benchmark overlay on Strategy tab, percentile context in score.
+const SG_RETIREMENT_BENCHMARKS = {
+  medianCPFAt55:            181000,
+  medianCPFHighEarner:      320000,
+  pctMeetingFRS:            0.59,
+  replacementRateBenchmark: 0.70,
+  dataYear:                 2024,
+};
+
 // ── UX-5: TAB_CONFIG — single source of truth for all tab arrays ──────────────
 // Previously the tab list was hardcoded in 4 separate places (desktop strip,
 // mobile hamburger portal, keyboard shortcut ref array × 2). Any tab add/remove
@@ -272,8 +204,14 @@ const LIFE_EVENT_TYPES = {
   salary_cut:       { label: "Salary Cut",          color: "#fb923c", icon: TrendingDown, isPoint: false,
     description: "Reduce gross salary by a percentage for the specified age range. Affects mandatory contributions proportionally. Magnitude = % cut (e.g. 30 = 30% salary reduction, contributions at 70% of normal)." },
   // ── New event types added in the life-events gap-analysis pass ─────────────
+  marriage:         { label: "Marriage",            color: "#ec4899", icon: Heart,        isPoint: true,
+    description: "One-off at marriage age. Magnitude = housing grant received (CPF HDB Enhanced/Family Grant, BTO/resale). Grant flows into OA. Optional: toggle on the household mode to model combined finances from this age." },
   child_birth:      { label: "Child Birth",          color: "#60a5fa", icon: Baby,         isPoint: true,
     description: "Inflow: Baby Bonus (Gov cash gift $11k for 1st/2nd child) + CDA dollar-match up to $6k. Set magnitude = total expected grant. Flows to private assets (Gov credits CDA separately; model the cash-equivalent here). Annual childcare/education outflow is modelled separately via Education Expense events." },
+  loan_repayment:   { label: "Loan / Debt Repayment", color: "#94a3b8", icon: CreditCard,  isPoint: false,
+    description: "Monthly loan repayment outflow for any loan type: car loan, personal loan, student loan, renovation loan. Magnitude = monthly repayment ($). Deducted from private assets each year of the specified age range. Does not affect CPF." },
+  parent_support:   { label: "Parent / Family Support", color: "#a78bfa", icon: Users,     isPoint: false,
+    description: "Regular financial support to aging parents, dependants, or overseas remittance. Magnitude = monthly amount ($). Deducted from private assets each year of the specified age range." },
   education_expense:{ label: "Education Expense",   color: "#2dd4bf", icon: GraduationCap, isPoint: false,
     description: "Annual outflow for child's education: enrichment, tuition, polytechnic, local university (~$30–40k/yr), or overseas university (~$60–150k/yr). Magnitude = annual cost ($). Deducted from private assets. Set age range to child's education years." },
   donation:         { label: "Charitable Giving",   color: "#fbbf24", icon: Heart,         isPoint: false,
@@ -740,6 +678,50 @@ const computeSensitivityRow = (pAge, raAtPayout, isMale, maxAge = 95) => {
 
 const LEGAL_DISCLAIMER = "DISCLAIMER: This application is a prototype simulation tool intended strictly for informational, educational, and testing purposes only. This app and its underlying mathematical models are completely independent and are neither supported, approved, nor sanctioned by the Central Provident Fund (CPF) Board or any government agency. All projections, calculations, and inferences generated by this tool are entirely hypothetical and should not be construed or relied upon as professional financial advice. The author(s) and creator(s) of this application shall not be held liable for any direct, indirect, incidental, consequential damages, losses, or legal repercussions arising from the use or misuse of this tool. Please consult a certified financial advisor before making any financial decisions.";
 
+// ── Schema versioning ────────────────────────────────────────────────────────────────────
+// Increment CURRENT_SCHEMA_VERSION on every breaking DEFAULT_INPUTS field rename.
+// migrateProfile() applies forward migrations on JSON import so old profiles load correctly.
+const CURRENT_SCHEMA_VERSION = 4;
+
+const migrateProfile = (raw) => {
+  if (!raw || typeof raw !== 'object') return raw;
+  let p = { ...raw };
+  const v = p._schemaVersion || 3;
+  if (v < 4) {
+    p = { ...p, inputs: { ...p.inputs,
+      // Field renames: old name ?? new name ?? fallback
+      rentExpense:     p.inputs?.rentExpense     ?? p.inputs?.rentalExpenseMonthly  ?? 0,
+      rentExpStartAge: p.inputs?.rentExpStartAge ?? p.inputs?.rentalExpenseStartAge ?? 0,
+      rentExpEndAge:   p.inputs?.rentExpEndAge   ?? p.inputs?.rentalExpenseStopAge  ?? 85,
+      // Defaults for fields added in v4 (Phase 2 fields — silently dropped by buildSafeInputs
+      // if they are not yet in DEFAULT_INPUTS; they become active once Phase 2 adds them)
+      hasAMD:                     p.inputs?.hasAMD                     ?? false,
+      hasACP:                     p.inputs?.hasACP                     ?? false,
+      cpfWithdrawalLock:          p.inputs?.cpfWithdrawalLock          ?? false,
+      cpfMoneyLock:               p.inputs?.cpfMoneyLock               ?? false,
+      cpfSafetySwitch:            p.inputs?.cpfSafetySwitch            ?? false,
+      cpfTrustContactSet:         p.inputs?.cpfTrustContactSet         ?? false,
+      otherLiabilities:           p.inputs?.otherLiabilities           ?? 0,
+      secondaryEmploymentEnabled: p.inputs?.secondaryEmploymentEnabled ?? false,
+      secondaryEmploymentType:    p.inputs?.secondaryEmploymentType    ?? 'employed',
+      secondarySalaryGross:       p.inputs?.secondarySalaryGross       ?? 0,
+      secondaryAnnualBonus:       p.inputs?.secondaryAnnualBonus       ?? 0,
+      secondaryCitizenStatus:     p.inputs?.secondaryCitizenStatus     ?? 'SC',
+      secondaryPrYear:            p.inputs?.secondaryPrYear            ?? 3,
+      secondaryContribStopAge:    p.inputs?.secondaryContribStopAge    ?? 65,
+      cpfHousingLoanPrincipal:    p.inputs?.cpfHousingLoanPrincipal    ?? 0,
+      showBalaCurve:              p.inputs?.showBalaCurve              ?? false,
+      showLifeStageBanner:        p.inputs?.showLifeStageBanner        ?? true,
+      shsEnabled:                 p.inputs?.shsEnabled                 ?? false,
+      shsFromFlat:                p.inputs?.shsFromFlat                ?? '5r',
+      shsToFlat:                  p.inputs?.shsToFlat                  ?? '3r',
+      shsAge:                     p.inputs?.shsAge                     ?? 65,
+    }};
+  }
+  p._schemaVersion = CURRENT_SCHEMA_VERSION;
+  return p;
+};
+
 const DEFAULT_INPUTS = {
   name: "", currentAge: 35, currentYear: 2026, payoutAge: 65,
   contributionStopAge: 65, housingStopAge: 55,
@@ -774,6 +756,9 @@ const DEFAULT_INPUTS = {
   cpfisSaAmount: 0,    // Annual CPFIS investment from SA (SA must be > $40,000, pre-55 only)
   // Outflows
   housingOutflow: 12000, oaEduLoan: 0, oaEduLoanFreq: 'one-time',
+  mortgagePaymentSource: 'cpf',   // 'cpf' | 'cash' — gates engine debit: OA vs private assets
+  propertyType: 'hdb',            // 'hdb' | 'private' | 'none' — informational; gates label/grant eligibility UI
+  loanType: 'hdb',               // 'hdb' | 'bank' | 'none' — informational; gates loan-type label
   medicalUsage: 500, medishieldIP: 900, medishieldMode: 'manual', elderCareShield: 500,
   medicalInflationRate: 5,
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
@@ -782,7 +767,7 @@ const DEFAULT_INPUTS = {
   cpfOARateOverride: '', cpfSARateOverride: '', cpfMARateOverride: '', // '' = use CPF_RATES defaults; set to a number (e.g. 1.5) for Stress Centre override
   sellPropertyAge: 0,
   // Private Assets & Goals
-  targetMonthlyIncome: 3000,   // sensible SGD baseline — users can adjust in Retirement Drawdown section
+  targetMonthlyIncome: 3000,   // sensible SGD baseline — users can adjust in the Retirement section
   currentPrivateAssets: 0,
   annualPrivateSaving: 0,
   privateAssetGrowthRate: 0,
@@ -828,6 +813,9 @@ const DEFAULT_INPUTS = {
   // Die with Zero — fully deplete liquid assets by a target age
   dieWithZeroEnabled: false,
   dieWithZeroAge: 85,
+  // ── Display toggles (no engine impact — not in engineKey) ─────────
+  showBalaCurve:       false, // CPF Board cohort-avg overlay on Accumulation chart
+  showLifeStageBanner: true,  // dismissible life-stage banner in Dashboard header
   // Cash top-up to MA (direct, annual, any age, capped at BHS)
   vcMaCash: 0,
   // OA→MA transfer destination: false = self (internal move), true = loved one (OA outflow only)
@@ -923,6 +911,14 @@ const DEFAULT_INPUTS = {
   hasWill: false,
   hasCPFNomination: false,
   hasLPA: false,
+  hasAMD: false,             // Advance Medical Directive filed with MOH
+  hasACP: false,             // Advance Care Plan completed with a healthcare provider
+  // ── CPF Safety Features (activate on CPF website — no engine impact) ──────
+  cpfWithdrawalLock:  false, // Prevents OA/SA cash withdrawals before age 65
+  cpfMoneyLock:       false, // Floor on OA/SA withdrawals
+  cpfSafetySwitch:    false, // Temporary transaction freeze
+  cpfTrustContactSet: false, // Nominated trusted person for large-transaction alerts
+  otherLiabilities:   0,     // Outstanding liabilities (car loan, personal loan, etc.)
   // ── Protection Coverage (Q3 — Insurance Wellness Tile) ──────────────────────────────────
   // Non-CPF insurance held outside the DPS/HPS that the engine already tracks.
   // Used for the Protection Adequacy tile in the MAS Wellness Score panel.
@@ -1010,24 +1006,6 @@ const DEFAULT_INPUTS = {
   // Engine reads this array and deducts annualCost from privateAssets for ages [startAge, endAge].
   // Baby Bonus + CDA grants are modelled as a Life Event of type 'child_birth' (see LIFE_EVENT_TYPES).
   childrenData: [],
-
-  // ── Property redesign (merged from App_138, B4/B5/B6) ──────────────────────
-  propertyType: 'hdb',           // 'hdb' | 'private' | 'none' — gates grants/schemes
-  loanType: 'hdb',               // 'hdb' | 'bank' | 'none' — informational, gates ledger rate label
-  mortgagePaymentSource: 'cpf',  // 'cpf' | 'cash' — real engine branch
-
-  // ── Legacy planning extras (merged from App_138) ────────────────────────────
-  hasAMD: false,              // Advance Medical Directive filed with MOH
-  hasACP: false,              // Advance Care Plan completed with a healthcare provider
-  cpfWithdrawalLock: false,   // CPF Withdrawal Lock — prevent OA/SA withdrawals before 65
-  cpfMoneyLock: false,        // CPF Money Lock — floor on OA/SA cash withdrawals
-  cpfSafetySwitch: false,     // CPF Safety Switch — temporary transaction freeze
-  cpfTrustContactSet: false,  // CPF Trust Contact — nominated trusted person for alerts
-  otherLiabilities: 0,        // Outstanding liabilities (car loan, personal loan, etc.)
-
-  // ── Life-stage UI toggles (merged from App_138) ─────────────────────────────
-  showBalaCurve: false,        // show CPF cohort-average overlay on Accumulation chart
-  showLifeStageBanner: true,   // show life-stage contextual banner on Dashboard/Readiness
 };
 
 // ── Household: spouse/partner default inputs ──────────────────────────────────
@@ -1630,6 +1608,7 @@ const INPUT_LABELS = {
   oaToMaTransfer: "OA→MA Transfer", oaWithdrawalAt55: "OA Withdrawal at 55",
   usePropertyPledge: "Property Pledge", cpfisOaAmount: "CPFIS OA Invested", cpfisSaAmount: "CPFIS SA Invested",
   housingOutflow: "Housing Outflow", oaEduLoan: "OA Education Loan", oaEduLoanFreq: "OA Edu Loan Freq",
+  mortgagePaymentSource: "Mortgage Payment Source", propertyType: "Property Type", loanType: "Loan Type",
   medicalUsage: "Medical Usage",
   medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
@@ -1670,7 +1649,7 @@ const INPUT_LABELS = {
   applyRaOaTransfer: "Apply RA→OA Transfer at Payout/Migration Age",
   milestoneAge: "Milestone Age 1", milestoneAge2: "Milestone Age 2", milestoneAge3: "Milestone Age 3", milestoneAge4: "Milestone Age 4", milestoneAge5: "Milestone Age 5",
   budgetLivingExpenses: "Monthly Living Expenses", budgetExpenseInflation: "Expense Inflation (% p.a.)", budgetTaxRate: "Marginal Tax Rate (%)", budgetTaxOverride: "Override Auto Tax",
-  emergencyFundMonths: "Emergency Fund (months)", hasWill: "Has Will", hasCPFNomination: "Has CPF Nomination", hasLPA: "Has LPA",
+  emergencyFundMonths: "Emergency Fund (months)", hasWill: "Has Will", hasCPFNomination: "Has CPF Nomination", hasLPA: "Has LPA", hasAMD: "Has AMD", hasACP: "Has ACP", cpfWithdrawalLock: "CPF Withdrawal Lock", cpfMoneyLock: "CPF Money Lock", cpfSafetySwitch: "CPF Safety Switch", cpfTrustContactSet: "CPF Trust Contact", otherLiabilities: "Other Liabilities",
   cpfisOaFreq: "CPFIS OA Freq", cpfisSaFreq: "CPFIS SA Freq",
   oaWithdrawalFreq: "OA Withdrawal Freq", oaToMaFreq: "OA→MA Freq", oaToSaFreq: "OA→SA Freq", prRateType: "PR Rate Type",
   // Duration fields (years) for recurring freq-controlled inputs (0 = indefinite)
@@ -1732,8 +1711,7 @@ const SCENARIO_LABELS = INPUT_LABELS;
 // Returns the final engine pass array, with the same _dwz* metadata fields
 // the main projection useMemo attaches (used by the DWZ UI panel and PDF).
 function runProjectionWithDWZ(inputs, engineFn) {
-  const maxAge = Number(inputs.maxProjectionAge) || 95; // M-DWZ fix: horizon was silently dropped to 95 on every DWZ pass below
-  if (!inputs.dieWithZeroEnabled) return engineFn(inputs, { maxAge });
+  if (!inputs.dieWithZeroEnabled) return engineFn(inputs);
   const isRSS = inputs.cpfScheme === 'rss';
   const pa   = isRSS
     ? (Number(inputs.currentAge) || 68)
@@ -1741,13 +1719,13 @@ function runProjectionWithDWZ(inputs, engineFn) {
   const dwzA = Number(inputs.dieWithZeroAge) || 85;
   const n    = Math.max(1, dwzA - pa);
   const rOA  = 0.025;
-  const pass1 = engineFn({ ...inputs, oaDrawdownMonthly: 0, oaDrawdownStartAge: 0 }, { maxAge });
+  const pass1 = engineFn({ ...inputs, oaDrawdownMonthly: 0, oaDrawdownStartAge: 0 });
   const pass1ByAge = new Map(pass1.map(r => [r.age, r]));
   const oaAtPayout = pass1ByAge.get(pa)?.oa || 0;
   const dwzPmt = oaAtPayout > 0
     ? (rOA > 0 ? Math.round(oaAtPayout * rOA / (1 - Math.pow(1 + rOA, -n)) / 12) : Math.round(oaAtPayout / n / 12))
     : 0;
-  const pass2 = engineFn({ ...inputs, oaDrawdownMonthly: dwzPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 }, { maxAge });
+  const pass2 = engineFn({ ...inputs, oaDrawdownMonthly: dwzPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 });
   const pass2ByAge = new Map(pass2.map(r => [r.age, r]));
   const residualOa = pass2ByAge.get(dwzA)?.oa || 0;
   let finalPmt  = dwzPmt;
@@ -1755,7 +1733,7 @@ function runProjectionWithDWZ(inputs, engineFn) {
   if (residualOa > 500 && dwzPmt > 0) {
     const correctionMonthly = Math.round(residualOa / Math.max(1, n * 12));
     finalPmt  = dwzPmt + correctionMonthly;
-    finalPass = engineFn({ ...inputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 }, { maxAge });
+    finalPass = engineFn({ ...inputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 });
   }
   const finalPassByAge = new Map(finalPass.map(r => [r.age, r]));
   finalPass._dwzOaMonthly  = finalPmt;
@@ -1770,7 +1748,7 @@ function runProjectionWithDWZ(inputs, engineFn) {
   if (pmtPrivAnnual > 0) {
     let privPass = engineFn(
       { ...inputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
-      { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa, maxAge }
+      { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa }
     );
     let privPassByAge = new Map(privPass.map(r => [r.age, r]));
     const residualPriv = privPassByAge.get(dwzA)?.privateAssets || 0;
@@ -1779,7 +1757,7 @@ function runProjectionWithDWZ(inputs, engineFn) {
       pmtPrivAnnual += correctionAnnual;
       privPass = engineFn(
         { ...inputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
-        { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa, maxAge }
+        { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa }
       );
       privPassByAge = new Map(privPass.map(r => [r.age, r]));
     }
@@ -1791,34 +1769,6 @@ function runProjectionWithDWZ(inputs, engineFn) {
   }
   finalPass._dwzPrivMonthly = Math.round(pmtPrivAnnual / 12);
   return finalPass;
-}
-
-// ── computePortfolioNetWorth ─────────────────────────────────────────────────
-// Item 1 fix: the Investment Portfolio feature has its own isolated projection
-// (portfolioProjection useMemo, declared well after several net-worth totals that
-// need a single point value from it — referencing it there would hit a temporal
-// dead zone). This is a plain module-level function, hoisted, so it's safely
-// callable from anywhere in CPFPlannerApp regardless of declaration order.
-// Mirrors portfolioProjection's exact math for one target age instead of a full
-// year-by-year array. Used by: Dashboard wealth donut, Compare getNetWorth,
-// household combinedTotal (per-spouse), and Stress Centre net worth.
-function computePortfolioNetWorth(inputs, targetAge, ownPayoutAge) {
-  const startBal    = Number(inputs?.portfolioBalance)            || 0;
-  const annualContr = Number(inputs?.portfolioAnnualContribution) || 0;
-  if (startBal <= 0 && annualContr <= 0) return 0;
-  const ca = Number(inputs?.currentAge) || 35;
-  if (targetAge <= ca) return Math.round(startBal);
-  const annualRet     = (Number(inputs?.portfolioAnnualReturn) || 6) / 100;
-  const contribStop   = Number(inputs?.portfolioContribStopAge)     || ownPayoutAge;
-  const withdrawMo    = Number(inputs?.portfolioWithdrawalMonthly)  || 0;
-  const withdrawStart = Number(inputs?.portfolioWithdrawalStartAge) || ownPayoutAge;
-  let bal = startBal;
-  for (let age = ca; age <= targetAge; age++) {
-    if (age > ca) bal = bal * (1 + annualRet);
-    if (age <= contribStop) bal += annualContr;
-    if (age >= withdrawStart && withdrawMo > 0) bal = Math.max(0, bal - withdrawMo * 12);
-  }
-  return Math.round(bal);
 }
 
 // ── makeComputeGF ─────────────────────────────────────────────────────────────
@@ -1847,6 +1797,33 @@ function makeComputeGF(startAge, salaryGrowth, salaryPhaseAge, salaryGrowthRate2
     return gfVal * (1 + bump);
   };
 }
+
+// ─── B0: CPF cohort-average overlay ────────────────────────────────────────
+// BALA_CURVE: CPF Board cohort-average TOTAL CPF balance by age (2026 cohort).
+// IMPORTANT — DISTINCT from BALA_TABLE below (which is the SLA HDB leasehold
+// decay curve for property valuation). The shared 'Bala' name is coincidental.
+const BALA_CURVE = [
+  { age: 25, val:  12000 }, { age: 30, val:  42000 }, { age: 35, val:  88000 },
+  { age: 40, val: 148000 }, { age: 45, val: 215000 }, { age: 50, val: 268000 },
+  { age: 55, val: 295000 }, { age: 60, val: 248000 }, { age: 65, val: 185000 },
+];
+
+// ─── Life-stage framework ────────────────────────────────────────────────────
+// Drives the dismissible banner shown in the Dashboard tab header.
+const LIFE_STAGE_MAP = [
+  { maxAge:  29, label: 'Early Career',   color: '#1D9E75',
+    tip: 'Build OA for housing, start SA for retirement, emergency fund.' },
+  { maxAge:  44, label: 'Mid-Career',     color: '#185FA5',
+    tip: 'Maximise RSTU, reduce housing outflow, review investment strategy.' },
+  { maxAge:  54, label: 'Pre-Retirement', color: '#7F77DD',
+    tip: 'Fill FRS, review CPF LIFE plan, SRS top-up for tax savings.' },
+  { maxAge:  64, label: 'Transition',     color: '#BA7517',
+    tip: 'OA drawdown strategy, SRS depletion plan, property monetisation.' },
+  { maxAge: 999, label: 'Retirement',     color: '#D85A30',
+    tip: 'Income sustainability, estate planning, legacy documents.' },
+];
+const getLifeStage = (age) =>
+  LIFE_STAGE_MAP.find(s => age <= s.maxAge) || LIFE_STAGE_MAP[LIFE_STAGE_MAP.length - 1];
 
 // ─── B1: Bala's Curve / SLA Leasehold Value Table ────────────────────────────
 // Leasehold property value as a % of equivalent freehold value, indexed by
@@ -2628,16 +2605,21 @@ function runRSSEngine(inputs, {
       ra = lifePlanKey === 'bas' ? Math.max(0, migRaRem) : 0;
     }
 
-    // Outflows: housing
+    // Outflows: housing — CPF mortgage debits OA (tracked for CPF refund on sale);
+    //                    Cash mortgage debits private assets only (no OA, no refund obligation).
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
-    if (activeHousing > 0) { yearHousingOut = activeHousing; }
-    if (inputs.mortgagePaymentSource === 'cash') {
-      // M5 (merged from App_138): cash mortgage — deduct from private assets only; no CPF refund obligation on sale
-      privateAssets = Math.max(0, privateAssets - activeHousing);
-    } else {
-      cumHousingOA += activeHousing;
-      cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
-      oa = Math.max(0, oa - activeHousing);
+    if (activeHousing > 0) {
+      yearHousingOut = activeHousing;
+      if (inputs.mortgagePaymentSource === 'cash') {
+        privateAssets = Math.max(0, privateAssets - activeHousing);
+      } else {
+        cumHousingOA += activeHousing;
+        cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
+        oa = Math.max(0, oa - activeHousing);
+      }
+    } else if (inputs.mortgagePaymentSource !== 'cash') {
+      // No housing withdrawal this year — compound prior cumHousingFV at 2.5%/yr
+      cumHousingFV = cumHousingFV * 1.025;
     }
 
     // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
@@ -4057,17 +4039,20 @@ function runProjectionEngine(inputs, {
     if (age < 55) { sa += b1ToSA * yearFraction; ma += b1ToMA * yearFraction; }
     else           { ra += (b1ToRA + b2ToRA) * yearFraction; ma += (b1ToMA + b2ToMA) * yearFraction; }
 
-    // Outflows
+    // Outflows — housing: CPF mortgage debits OA; Cash mortgage debits private assets
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
-    if (activeHousing > 0) { yearHousingOut = activeHousing; }
-    if (inputs.mortgagePaymentSource === 'cash') {
-      // M5 (merged from App_138): cash mortgage — deduct from private assets only; no CPF refund obligation on sale
-      privateAssets = Math.max(0, privateAssets - activeHousing);
-    } else {
-      cumHousingOA += activeHousing;
-      // Compound existing accrued interest and add this year's withdrawal's first year of interest
-      cumHousingFV = (cumHousingFV + activeHousing) * 1.025;   // (prev + this year's withdrawal) × 1.025 — each withdrawal compounds from its own year
-      oa = Math.max(0, oa - activeHousing);
+    if (activeHousing > 0) {
+      yearHousingOut = activeHousing;
+      if (inputs.mortgagePaymentSource === 'cash') {
+        privateAssets = Math.max(0, privateAssets - activeHousing);
+      } else {
+        cumHousingOA += activeHousing;
+        cumHousingFV = (cumHousingFV + activeHousing) * 1.025;
+        oa = Math.max(0, oa - activeHousing);
+      }
+    } else if (inputs.mortgagePaymentSource !== 'cash') {
+      // No housing withdrawal — compound prior cumHousingFV at 2.5%/yr
+      cumHousingFV = cumHousingFV * 1.025;
     }
 
     // DPS — Dependants' Protection Scheme: annual OA deduction (SA/RA fallback), SC/PR only, age 21–64
@@ -4870,14 +4855,6 @@ function buildSafeInputs(raw) {
     }
     return base;
   });
-  // Item 4 fix: marriage/loan_repayment/parent_support were removed from LIFE_EVENT_TYPES —
-  // these scenarios are now modelled exclusively via the dedicated Family & Life Events
-  // fields. Strip any legacy events of these 3 types here (not just in migrateProfile)
-  // since this function also runs on the share-link decode path. The financial effect
-  // these events had is not carried over automatically — re-enter as marriageAge/
-  // housingGrantAmount, loanMonthlyRepayment/loanEndAge, or parentSupportMonthly/
-  // parentSupportEndAge if the amount should still apply.
-  safe.lifeEvents = safe.lifeEvents.filter(ev => !['marriage', 'loan_repayment', 'parent_support'].includes(ev?.type));
   // Legacy field migration: cpfisAmount → cpfisOaAmount
   if (raw.cpfisAmount !== undefined && !raw.cpfisOaAmount) safe.cpfisOaAmount = raw.cpfisAmount;
   // Legacy field migration: srsCitizenPR (boolean) → citizenStatus string
@@ -5926,6 +5903,8 @@ function ReadinessTab({
   spouseEffectiveOaDrawMonthly,
   spouseEffectiveOaDrawStartAge,
   spouseMilestones,
+  // Investment Portfolio: balance at each age (used for donut + liquidity ratio)
+  portfolioByAge,
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
   const [expandedRdTile,  setExpandedRdTile]  = useState(null); // Readiness sub-factor tile expansion
@@ -6389,7 +6368,7 @@ function ReadinessTab({
         id: "portfolio", urgent: false,
         impact: 4,
         label: "Consider building an investment portfolio",
-        desc: "ETFs, unit trusts, REITs, SSBs, T-bills — a separate compounding layer alongside CPF. Configure in the Investment Portfolio sidebar section.",
+        desc: "ETFs, unit trusts, REITs, SSBs, T-bills — a separate compounding layer alongside CPF. Configure in the Investments & Portfolio sidebar section.",
         cta: "Portfolio ↗", tab: "summary", openSidebar: true,
       });
     }
@@ -6526,23 +6505,22 @@ function ReadinessTab({
     const privVal = payoutData.privateAssets || 0;
     const srsVal  = payoutData.srsBalance    || 0;
     const propVal = inputs.includeProperty !== false ? (payoutData.propertyValue || 0) : 0;
-    const portVal = computePortfolioNetWorth(inputs, pa, pa); // Item 1 fix: was missing entirely
+    const portVal = (portfolioByAge?.get?.(pa))?.balance || 0;
     return buildDonutArcs([
-      { key: "cpf",  label: "CPF",            value: cpfVal,  color: "var(--clr-purple)"  },
-      { key: "priv", label: "Private Assets", value: privVal, color: "var(--clr-emerald)" },
-      { key: "srs",  label: "SRS",            value: srsVal,  color: "#0ea5e9"             },
-      { key: "prop", label: "Property",       value: propVal, color: "#f59e0b"             },
-      { key: "port", label: "Portfolio",      value: portVal, color: "#14b8a6"             },
+      { key: "cpf",  label: "CPF",                value: cpfVal,  color: "var(--clr-purple)"  },
+      { key: "priv", label: "Private Assets",     value: privVal, color: "var(--clr-emerald)" },
+      { key: "srs",  label: "SRS",                value: srsVal,  color: "#0ea5e9"             },
+      { key: "port", label: "Investment Portfolio",value: portVal, color: "#f97316"             },
+      { key: "prop", label: "Property",           value: propVal, color: "#f59e0b"             },
     ]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalCPF, payoutData, inputs.includeProperty, inputs.portfolioBalance, inputs.portfolioAnnualReturn,
-      inputs.portfolioAnnualContribution, inputs.portfolioContribStopAge,
-      inputs.portfolioWithdrawalMonthly, inputs.portfolioWithdrawalStartAge, inputs.currentAge, pa]);
+  }, [totalCPF, payoutData, inputs.includeProperty]);
 
   // ── Gauge arc path (unchanged from Phase 1/2) ────────────────────────────
   const gaugeArc = (pct) => {
     const cx = 110, cy2 = 90, r = 72;
-    const clampedPct = Math.min(1, Math.max(0, pct / 100));
+    // Guard against null/undefined/NaN — all become 0 so the grey track still shows
+    const clampedPct = Math.min(1, Math.max(0, (Number(pct) || 0) / 100));
     if (clampedPct <= 0) return '';
     const startAngle = Math.PI;
     const endAngle   = Math.PI + Math.PI * clampedPct;
@@ -6570,13 +6548,13 @@ function ReadinessTab({
         </summary>
         <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[
-            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Stress Resilience (Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Activate the Stress Centre (⚡ Worst Case) for the most meaningful Stress Resilience signal. Below the gauge: a MAS Financial Health advisory panel with 5 non-scoring tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness)."],
+            ["🎯 Readiness Score", "A 5-dimension age-banded weighted composite: FRS Coverage, Income Adequacy, Stress Resilience (Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover, and Healthcare Shield. Weights shift by age band — e.g. Healthcare rises from 10% at 35 to 30% at 75+; FRS drops from 35% at 35 to 10% at 75+. Activate the Stress Centre (⚡ Worst Case) for the most meaningful Stress Resilience signal. Below the gauge: a Financial Health advisory panel with 5 non-scoring tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness)."],
             ["📊 KPI Tiles", "Five headline numbers: total CPF at payout age, monthly CPF LIFE payout, income coverage %, P10 downside (bad-luck scenario), and OA depletion age. Enable Monte Carlo in the Accumulation tab to unlock the downside tile."],
             ["📈 RA vs Retirement Sums", "A progress bar comparing your projected RA at payout age against BRS, FRS, and ERS. These targets grow at the retirement-sum growth rate you set in the sidebar (default 3%/yr)."],
             ["💧 Income Waterfall", "All income sources at payout age stacked in one bar: CPF LIFE + OA Drawdown + SRS + Private Assets. The gap strip shows how much short of your monthly target you are."],
             ["🥧 Wealth Mix", "A doughnut showing how your total wealth at payout age is distributed across CPF, Private Assets, SRS, and Property. Reflects the Include Property toggle."],
             ["⚡ Action Priority Queue", "The five highest-impact actions ranked by urgency — FRS gap, plan switch, income gap, OA depletion risk, and SRS setup. Each card links directly to the relevant tab or sidebar section."],
-            ["🏥 MAS Financial Health", "Five advisory tiles below the gauge — aligned to the MAS Basic Financial Planning Guide pillars: Emergency Buffer (3–6 months liquid savings), Savings Rate (≥10% of income), Inflation Hedge (CPF LIFE plan or private-asset real return), Liquidity Ratio (freely liquid assets as % of total wealth at payout age), and Legacy Readiness (Will · CPF Nomination · LPA). These are advisory only — they do NOT affect the 100-pt Readiness Score. Click any tile to expand its full calculation workings. Set Emergency Fund months, Legacy Planning toggles, and living-expense budget in the Profile (Who I Am) sidebar section."],
+            ["🏥 Financial Health", "Five advisory tiles below the gauge — aligned to the MAS Basic Financial Planning Guide pillars: Emergency Buffer (3–6 months liquid savings), Savings Rate (≥10% of income), Inflation Hedge (CPF LIFE plan or private-asset real return), Liquidity Ratio (freely liquid assets as % of total wealth at payout age), and Legacy Readiness (Will · CPF Nomination · LPA). These are advisory only — they do NOT affect the 100-pt Readiness Score. Click any tile to expand its full calculation workings. Set Emergency Fund months, Legacy Planning toggles, and living-expense budget in the Profile (Who I Am) sidebar section."],
           ].map(([title, desc]) => (
             <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-highlight)", margin: "0 0 2px", whiteSpace: "nowrap" }}>{title}</p>
@@ -6649,7 +6627,7 @@ function ReadinessTab({
             value: coveragePct != null ? `${coveragePct}%` : (wizardCompleted ? "—" : null),
             placeholder: !wizardCompleted && target === 0 ? "Set retirement target" : null,
             color: coveragePct == null ? "var(--text-muted)" : coveragePct >= 100 ? "var(--clr-green)" : coveragePct >= 70 ? "var(--clr-amber)" : "var(--clr-red)",
-            tip: target > 0 ? `CPF LIFE payout covers ${coveragePct}% of your ${formatCurrency(target)}/mo target` : "Enter Target Monthly Income in the Retirement Drawdown section",
+            tip: target > 0 ? `CPF LIFE payout covers ${coveragePct}% of your ${formatCurrency(target)}/mo target` : "Enter Target Monthly Income in the Retirement section",
           },
         ].map(({ label, sublabel, value, placeholder, color, tip }) => (
           <div key={label} title={tip} style={{ ...cardStyle, display: "flex", flexDirection: "column", justifyContent: "center" }}>
@@ -6762,7 +6740,8 @@ function ReadinessTab({
         // N1-FIX: Only OA + SRS + private are truly liquid at payout age.
         // RA is locked in CPF LIFE (irrevocable annuity); MA is medical-restricted;
         // SA is ~0 at payout (transferred to RA at 55 for LIFE members).
-        const liquidAtPA    = (paRow.oa||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0);
+        const portAtPA      = (portfolioByAge?.get?.(pa))?.balance || 0;
+        const liquidAtPA    = (paRow.oa||0) + (paRow.srsBalance||0) + (paRow.privateAssets||0) + portAtPA;
         const illiquidCPF   = (paRow.sa||0) + (paRow.ra||0) + (paRow.ma||0);  // locked: RA (LIFE annuity) + MA (medical) + SA
         const propAtPA      = paRow.propertyValue || 0;
         const totalWealthPA = liquidAtPA + illiquidCPF + propAtPA;  // true total wealth denominator
@@ -6781,7 +6760,7 @@ function ReadinessTab({
         const legacyScore  = Math.round((legacyChecks / 3) * 100);
         const legacyStatus = legacyChecks === 3 ? "green" : legacyChecks >= 1 ? "amber" : "red";
         const legacyLabel  = legacyChecks === 3 ? "All 3 ✓" : `${legacyChecks}/3 done`;
-        const legacyTip    = `Will: ${inputs.hasWill ? "✓" : "✗"}  ·  CPF Nomination: ${inputs.hasCPFNomination ? "✓" : "✗"}  ·  LPA: ${inputs.hasLPA ? "✓" : "✗"}. Set in Profile sidebar. MAS recommends all three for complete estate readiness.`;
+        const legacyTip    = `Will: ${inputs.hasWill ? "✓" : "✗"}  ·  CPF Nomination: ${inputs.hasCPFNomination ? "✓" : "✗"}  ·  LPA: ${inputs.hasLPA ? "✓" : "✗"}. Set in Profile sidebar. MAS recommends all three (Will, Nomination, LPA) for complete estate readiness. AMD and ACP are additional advisory documents.`;
 
         // ── Tile 6: Protection Adequacy (Q3 — Insurance wellness) ───────────
         // Framework: MAS/MoneySense guidelines for Singapore residents.
@@ -6865,7 +6844,7 @@ function ReadinessTab({
             {/* ── MAS panel header ── */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <p style={{ ...labelStyle, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                MAS Financial Health <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-subtle)", textTransform: "none" }}>(advisory · not in 100-pt score)</span>
+                Financial Health <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-subtle)", textTransform: "none" }}>(advisory · not in 100-pt score)</span>
               </p>
               <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection. The Wellness Score is an unweighted average of the five tile scores — it is NOT an official MAS metric." />
             </div>
@@ -6889,7 +6868,7 @@ function ReadinessTab({
                       <svg viewBox={`0 0 ${W2} ${H2}`} style={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
                         <path d={trackD} fill="none" stroke="var(--border-subtle)" strokeWidth={10} strokeLinecap="round" />
                         {arcD2 && <path d={arcD2} fill="none" stroke={scoreColor} strokeWidth={10} strokeLinecap="round" />}
-                        <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900} fill={scoreColor} fontFamily="monospace">{score}</text>
+                        <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900} fill={scoreColor} fontFamily="monospace">{score != null ? score : 0}</text>
                         <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700} fill={scoreColor}>{scoreLabel}</text>
                       </svg>
                     );
@@ -6931,7 +6910,7 @@ function ReadinessTab({
                     )}
                     {/* Score */}
                     <text x={cx2} y={cy2 - 6} textAnchor="middle" fontSize={22} fontWeight={900}
-                      fill={wClr} fontFamily="monospace">{wellnessScore}</text>
+                      fill={wClr} fontFamily="monospace">{wellnessScore != null ? wellnessScore : 0}</text>
                     <text x={cx2} y={cy2 + 10} textAnchor="middle" fontSize={11} fontWeight={700}
                       fill={wClr}>{wLbl}</text>
                   </svg>
@@ -7001,7 +6980,7 @@ function ReadinessTab({
                           : `Surplus: ${formatCurrency(Math.abs(incGap))}/mo above target.`,
                         `Weight in score: 30% at all age bands.`,
                       ]
-                    : ["No target set — enter Target Monthly Income in the Retirement Drawdown sidebar section to activate this dimension."],
+                    : ["No target set — enter Target Monthly Income in the Retirement section to activate this dimension."],
                 },
                 {
                   icon: "⚡", title: "Stress Resilience", pillar: "Downside Risk",
@@ -7036,7 +7015,7 @@ function ReadinessTab({
                       ? [
                           `OA drawdown of ${formatCurrency(Number(inputs.oaDrawdownMonthly))}/mo depletes OA at age ${oaDepletionAge}.`,
                           `${isMale ? "Male" : "Female"} median life expectancy: ${lifeExpectancy} — ${oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}-year income gap risk after depletion.` : "depletion is after median life expectancy."}`,
-                          `Reduce monthly draw or lower the drawdown floor in the Retirement Drawdown section to extend OA.`,
+                          `Reduce monthly draw or lower the drawdown floor in the Retirement section to extend OA.`,
                         ]
                       : [
                           `OA drawdown of ${formatCurrency(Number(inputs.oaDrawdownMonthly))}/mo is sustained to the planning horizon (age ${Number(inputs.maxProjectionAge) || 95}).`,
@@ -7045,7 +7024,7 @@ function ReadinessTab({
                     : [
                         `No OA drawdown active — CPF LIFE provides lifelong cover.`,
                         `Real CPF LIFE payout at age 90 (${(Number(inputs.inflationRate) || 2)}% inflation): ${formatCurrency(realPayoutAt90)}/mo.`,
-                        `Consider an OA drawdown in the Retirement Drawdown section to supplement CPF LIFE in early retirement.`,
+                        `Consider an OA drawdown in the Retirement section to supplement CPF LIFE in early retirement.`,
                       ],
                 },
                 {
@@ -7139,7 +7118,7 @@ function ReadinessTab({
                   <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                     <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-                      MAS Financial Health — 5 pillars
+                      Financial Health — 5 pillars
                     </span>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                   </div>
@@ -7401,6 +7380,30 @@ function ReadinessTab({
                   </div>
                 ))}
               </div>
+              {/* Net Wealth = Total Assets − Other Liabilities */}
+              {(Number(inputs.otherLiabilities) || 0) > 0 && (() => {
+                const totalAssets = wealthDonutParts.reduce((s, p) => s + p.value, 0);
+                const liabilities = Number(inputs.otherLiabilities) || 0;
+                const netWealth   = totalAssets - liabilities;
+                return (
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--border-subtle)", width: "100%" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>
+                      <span>Total Assets (age {pa})</span>
+                      <span style={{ fontWeight: 700, color: "var(--text-main)" }}>{formatCurrency(totalAssets)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 5 }}>
+                      <span>Other Liabilities</span>
+                      <span style={{ fontWeight: 700, color: "var(--clr-red)" }}>−{formatCurrency(liabilities)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 800, paddingTop: 4, borderTop: "1px dashed var(--border-subtle)" }}>
+                      <span style={{ color: "var(--text-main)" }}>Net Wealth</span>
+                      <span style={{ color: netWealth >= 0 ? "var(--clr-emerald)" : "var(--clr-red)" }}>
+                        {netWealth < 0 ? "-" : ""}{formatCurrency(Math.abs(netWealth))}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           ) : (
             <p style={{ fontSize: 12, color: "var(--text-subtle)", textAlign: "center", marginTop: 20 }}>
@@ -7711,9 +7714,9 @@ const tabIsLocked = (tabId, plan) => {
 // Sidebar sections locked per plan tier
 const SECTION_PLAN = {
   cashBudget:      'plus', familyEvents: 'plus', topups:    'plus',
-  transfers:       'plus', outflows:     'plus', decumulation: 'plus',
-  portfolio:       'pro',  investments:  'pro',  property:  'pro',
-  privateAssets:   'pro',  lifeevents:   'pro',  retirementSpend: 'pro',
+  transfers:       'plus', outflows:     'plus', retirement:   'plus',
+  portfolio:       'pro',  property:     'pro',
+  privateAssets:   'pro',  lifeevents:   'pro',
 };
 const sectionIsLocked = (sectionId, plan) => {
   const req = SECTION_PLAN[sectionId];
@@ -7724,9 +7727,9 @@ const sectionIsLocked = (sectionId, plan) => {
 const LITE_PRESET_IDS = new Set(["blank", "typical35"]);
 
 // ── Beta password gate ───────────────────────────────────────────────────────────
-// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro.
+// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro, FusionAdmin$$2026$$ → Pro (admin bypass, skips tier guards).
 // Replace with server-side auth before public launch.
-const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$' };
+const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$', admin: 'FusionAdmin$$2026$$' };
 
 // ── UpgradeModal ──────────────────────────────────────────────────────────────
 function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
@@ -7737,13 +7740,15 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
   const inputRef = useRef(null);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
 
-  const typedTier = password === TIER_PASSWORDS.pro  ? 'pro'
+  const typedTier = (password === TIER_PASSWORDS.pro || password === TIER_PASSWORDS.admin) ? 'pro'
                   : password === TIER_PASSWORDS.plus ? 'plus' : null;
 
   const tryUnlock = () => {
     if (!password) { setError('Please enter your access password.'); return; }
     setSubmitting(true);
     setTimeout(() => {
+      // Admin bypass — skips all tier guards, always upgrades to Pro immediately
+      if (password === TIER_PASSWORDS.admin) { onUpgrade('pro'); return; }
       if (password === TIER_PASSWORDS.pro) {
         if (currentPlan === 'pro') { setError('You\'re already on Fusion Pro.'); setSubmitting(false); return; }
         onUpgrade('pro'); return;
@@ -7762,7 +7767,7 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
     { key: 'plus', label: 'Fusion Plus', pillBg: TIER_CONFIG.PLUS.bg, pillColor: TIER_CONFIG.PLUS.color, note: 'Entry tier',
       features: ['Voluntary top-ups — RSTU, VC3A, VCMA','Govt grants — MRSS, MMSS, WIS','CPF Transfers — OA→SA, OA→MA','Family inputs, Cash Budget','Payout Plans tab — CPF LIFE curves','Data Table — year-by-year rows','Decumulation planner','All preset profiles · Export CSV'] },
     { key: 'pro',  label: 'Fusion Pro',  pillBg: TIER_CONFIG.PRO.bg,  pillColor: TIER_CONFIG.PRO.color, note: 'Full access',
-      features: ['Everything in Plus, plus:','Strategy tabs A/B/C/D + Tax Optimizer','Monte Carlo simulation (200 runs)','Life Events & Stress Tests','Property Monetisation — LBS, SHB','SRS, CPFIS, Investment Portfolio','Compare — scenario A vs B diff','Household — couple co-planning','PDF Report · Share Link'] },
+      features: ['Everything in Plus, plus:','Strategy tabs A/B/C/D + Tax Optimizer','Monte Carlo simulation (200 runs)','Life Events','Property Monetisation — LBS, SHB','SRS, CPFIS, Investments & Portfolio','Compare — scenario A vs B diff','Household — couple co-planning','PDF Report · Share Link'] },
   ];
   const highlighted = typedTier ?? (currentPlan === 'plus' ? 'pro' : 'pro');
 
@@ -8134,7 +8139,7 @@ function CPFPlannerApp() {
   // All section IDs — used for expand-all default and expandAllSections helper
   // BUG-2b fix: "lifeevents" was missing — section never opened on fresh load, was excluded
   // from Expand All, and its open/closed state was not persisted in localStorage.
-  const ALL_SECTION_IDS = ["profile", "cpfBalances", "contribs", "cashBudget", "portfolio", "familyEvents", "retirementSpend", "topups", "outflows", "transfers", "investments", "property", "privateAssets", "lifeevents", "decumulation"];
+  const ALL_SECTION_IDS = ["profile", "cpfBalances", "contribs", "cashBudget", "portfolio", "familyEvents", "topups", "outflows", "transfers", "property", "privateAssets", "lifeevents", "retirement"];
   // Item 28: use localStorage (persists across tab closes) with a versioned key so
   // a future schema change can bump to 'cpf_planner_v2_sections' without reading stale data.
   const SECTIONS_STORAGE_KEY = 'cpf_planner_v1_sections';
@@ -8387,9 +8392,9 @@ function CPFPlannerApp() {
     const maxPAv = Number(inp.maxProjectionAge) || 95; // F1: dynamic upper bound for input validation
     if (ca < 0 || ca > 95) errs.currentAge = "Age must be 0–95";
     // D3: under-16 info note — cash top-ups locked, CPF nominations and CPFIS not yet available
-    if (!errs.currentAge && ca >= 0 && ca < 16) errs.currentAge = "Members under 16 are managed by a parent or guardian. Cash top-ups to SA/MA (VC3A, RSTU, VCMA) can be entered here on the child's behalf. CPF nominations require age 16+. CPFIS requires age 18+ and is locked in the Outflows section.";
+    if (!errs.currentAge && ca >= 0 && ca < 16) errs.currentAge = "Members under 16 are managed by a parent or guardian. Cash top-ups to SA/MA (VC3A, RSTU, VCMA) can be entered here on the child's behalf. CPF nominations require age 16+. CPFIS requires age 18+ and is locked in the Investments & Portfolio section.";
     // D3: age 16–17 info note — nominations OK, CPFIS still locked
-    if (!errs.currentAge && ca >= 16 && ca < 18) errs.currentAge = "CPF nominations are available from age 16. CPFIS requires age 18+ and is locked in the Outflows section.";
+    if (!errs.currentAge && ca >= 16 && ca < 18) errs.currentAge = "CPF nominations are available from age 16. CPFIS requires age 18+ and is locked in the Investments & Portfolio section.";
     // A7: soft warning when current age is at or beyond payout age (no hard block)
     // RSS guard: RSS members use rssPayoutStartAge, not payoutAge — this warning is CPF LIFE-only.
     if (inp.cpfScheme !== 'rss' && !errs.currentAge && ca > 0 && ca >= pa) errs.currentAge = `Age ${ca} ≥ payout age ${pa} — CPF LIFE has likely started. Most contribution fields will have no effect.`;
@@ -9397,15 +9402,14 @@ function CPFPlannerApp() {
     cpfBalances:  (Number(inputs.oaBalance)||0) !== 50000 || (Number(inputs.saBalance)||0) !== 40000 || (Number(inputs.maBalance)||0) !== 30000,
     contribs:     (Number(inputs.empOaCont)||0) !== 12000 || (Number(inputs.empSaCont)||0) !== 4000 || (Number(inputs.empMaCont)||0) !== 4000 || (Number(inputs.salaryGross)||0) !== 6000,
     topups:       (Number(inputs.vc3aCash)||0) > 0 || (Number(inputs.vcSaTopup)||0) > 0 || (Number(inputs.vcMaCash)||0) > 0 || (Number(inputs.vcVhr)||0) > 0 || (Number(inputs.mrssGrant)||0) > 0 || (Number(inputs.mmssGrant)||0) > 0 || (Number(inputs.wisAmount)||0) > 0,
-    outflows:     (Number(inputs.housingOutflow)||0) !== 12000 || (Number(inputs.medicalUsage)||0) !== 500 || (Number(inputs.oaEduLoan)||0) > 0,
-    transfers:    (Number(inputs.oaToSaTransfer)||0) > 0 || (Number(inputs.oaToMaTransfer)||0) > 0 || (Number(inputs.cpfisOaAmount)||0) > 0 || (Number(inputs.cpfisSaAmount)||0) > 0 || (Number(inputs.oaWithdrawalAt55)||0) > 0,
+    outflows:     (Number(inputs.housingOutflow)||0) !== 12000 || (Number(inputs.medicalUsage)||0) !== 500,
+    transfers:    (Number(inputs.oaToSaTransfer)||0) > 0 || (Number(inputs.oaToMaTransfer)||0) > 0,
     property:     (Number(inputs.propertyValue)||0) !== 500000 || (Number(inputs.sellPropertyAge)||0) > 0 || inputs.propMonetiseEnabled || inputs.usePropertyPledge,
     privateAssets:(Number(inputs.currentPrivateAssets)||0) > 0 || (Number(inputs.srsBalance)||0) > 0 || (Number(inputs.annualPrivateSaving)||0) > 0 || (Number(inputs.srsAnnualContribution)||0) > 0,
     lifeevents:   (inputs.lifeEvents||[]).length > 0,
-    decumulation: (Number(inputs.oaDrawdownMonthly)||0) > 0 || (Number(inputs.targetMonthlyIncome)||0) > 0 || inputs.dieWithZeroEnabled || (Number(inputs.plannedDownpaymentOA)||0) > 0,
-    portfolio:       (Number(inputs.portfolioBalance)||0) > 0 || (Number(inputs.portfolioAnnualContribution)||0) > 0,
+    retirement:     (Number(inputs.oaDrawdownMonthly)||0) > 0 || (Number(inputs.targetMonthlyIncome)||0) > 0 || inputs.dieWithZeroEnabled || (Number(inputs.plannedDownpaymentOA)||0) > 0 || (Number(inputs.retirementExpenseRatio)||0) !== 75 || (Number(inputs.retirementHealthcareMonthly)||0) !== 500,
+    portfolio:       (Number(inputs.portfolioBalance)||0) > 0 || (Number(inputs.portfolioAnnualContribution)||0) > 0 || (Number(inputs.cpfisOaAmount)||0) > 0 || (Number(inputs.cpfisSaAmount)||0) > 0 || (Number(inputs.oaEduLoan)||0) > 0 || (Number(inputs.oaWithdrawalAt55)||0) > 0,
     familyEvents:    (Number(inputs.marriageAge)||0) > 0 || (Number(inputs.loanMonthlyRepayment)||0) > 0 || (Number(inputs.parentSupportMonthly)||0) > 0 || (inputs.childrenData||[]).length > 0,
-    retirementSpend: (Number(inputs.retirementExpenseRatio)||0) !== 75 || (Number(inputs.retirementHealthcareMonthly)||0) !== 500,
   };
 
   const annualGross = ((Number(inputs.salaryGross) || 0) * 12) + (Number(inputs.salaryBonus) || 0);
@@ -10996,7 +11000,7 @@ function CPFPlannerApp() {
       annualGovGrant, govGrantMa, wisAmount, // R-5: mrssGrant, mmssGrant removed — permanently 0, engine computes dynamically
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
-      cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
+      cpfisOaAmount, cpfisSaAmount, housingOutflow, mortgagePaymentSource, oaEduLoan, oaEduLoanFreq,
       medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
@@ -11027,9 +11031,6 @@ function CPFPlannerApp() {
       maxProjectionAge, // F1: planning horizon — changes here trigger full re-projection
       cpfOARateOverride, cpfSARateOverride, cpfMARateOverride, // Stress Centre CPF rate overrides — must be here so engine recomputes when stress rates change
       secondaryEmploymentEnabled, secondarySalaryGross, secondaryContribStopAge, // Secondary employment — stacked CPF contributions
-      loanMonthlyRepayment, loanEndAge, parentSupportMonthly, parentSupportEndAge,
-      marriageAge, housingGrantAmount, childrenData, // M1 fix: read inside runProjectionEngine but were missing from engineKey
-      mortgagePaymentSource, propertyType, loanType, // M5: property-classification engine branch (merged from App_138)
     } = debouncedInputs;
     // N-BUG-5 fix: lifeEvents objects carry a UUID `id` field generated at creation time.
     // Including raw lifeEvents in JSON.stringify means deleting+re-adding the same event
@@ -11050,7 +11051,7 @@ function CPFPlannerApp() {
       annualGovGrant, govGrantMa, wisAmount,
       oaToSaTransfer, oaToMaTransfer, oaWithdrawalAt55,
       usePropertyPledge, pledgeWithdrawalAmount, pledgeWithdrawalAge,
-      cpfisOaAmount, cpfisSaAmount, housingOutflow, oaEduLoan, oaEduLoanFreq,
+      cpfisOaAmount, cpfisSaAmount, housingOutflow, mortgagePaymentSource, oaEduLoan, oaEduLoanFreq,
       medicalUsage, medishieldIP, elderCareShield,
       medicalInflationRate, propertyValue, propertyGrowthRate,
       propertyLeasehold, propertyLeaseYears, inflationRate, includeProperty,
@@ -11081,9 +11082,6 @@ function CPFPlannerApp() {
       maxProjectionAge,
       cpfOARateOverride, cpfSARateOverride, cpfMARateOverride,
       secondaryEmploymentEnabled, secondarySalaryGross, secondaryContribStopAge,
-      loanMonthlyRepayment, loanEndAge, parentSupportMonthly, parentSupportEndAge,
-      marriageAge, housingGrantAmount, childrenData,
-      mortgagePaymentSource, propertyType, loanType,
     });
   }, [debouncedInputs]); // eslint-disable-line react-hooks/exhaustive-deps
   const projection = useMemo(() => {
@@ -11092,15 +11090,93 @@ function CPFPlannerApp() {
     // the identical data[] row shape so all downstream consumers work without change.
     const isRSS = debouncedInputs.cpfScheme === 'rss';
     const engineFn = isRSS ? runRSSEngine : runProjectionEngine;
-    // M-DWZ fix: this useMemo used to carry its own ~85-line copy of the Die-with-Zero
-    // multi-pass algorithm (pass1 → PMT → residual correction → private-asset pass),
-    // duplicating runProjectionWithDWZ (which scenario A/B, What-If, and PDF already
-    // call). Both copies also silently dropped maxProjectionAge to 95 on every DWZ
-    // pass regardless of the user's selected horizon (100/105), since neither passed
-    // { maxAge } into the internal engineFn() calls. Fixed at the source in
-    // runProjectionWithDWZ itself, so this — and all 4 other call sites — now honour
-    // the selected horizon whether or not DWZ is enabled.
-    return runProjectionWithDWZ(debouncedInputs, engineFn);
+    if (debouncedInputs.dieWithZeroEnabled) {
+      // Q3 fix: for RSS members, the CPF LIFE "payout age" concept does not apply.
+      // DWZ should drain OA starting from currentAge (the earliest usable reference point
+      // within the simulation window), not from payoutAge (65) which is OUTSIDE the
+      // projection window for members already aged 68+.
+      // pass1ByAge.get(65) returns undefined for an RSS member aged 68 → oaAtPayout = 0
+      // → dwzPmt = 0 → DWZ has zero effect. Using currentAge fixes the Map lookup.
+      const pa   = isRSS
+        ? (Number(debouncedInputs.currentAge) || 68)   // RSS: start OA drawdown now
+        : (Number(debouncedInputs.payoutAge) || 65);    // LIFE: start at CPF LIFE payout age
+      const dwzA = Number(debouncedInputs.dieWithZeroAge) || 85;
+      const n    = Math.max(1, dwzA - pa);
+      const rOA  = 0.025;
+      const pass1 = engineFn({ ...debouncedInputs, oaDrawdownMonthly: 0, oaDrawdownStartAge: 0 });
+      // E2 fix: build O(1) Map after each engine pass — replaces 7 raw .find() scans
+      const pass1ByAge = new Map(pass1.map(r => [r.age, r]));
+      const oaAtPayout = pass1ByAge.get(pa)?.oa || 0;
+      const dwzPmt = oaAtPayout > 0
+        ? (rOA > 0 ? Math.round(oaAtPayout * rOA / (1 - Math.pow(1 + rOA, -n)) / 12) : Math.round(oaAtPayout / n / 12))
+        : 0;
+      const pass2 = engineFn({ ...debouncedInputs, oaDrawdownMonthly: dwzPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 });
+      // NX3 fix: verify OA actually depletes to ~$0 at dwzAge.
+      // If mandatory contributions or other inflows continue post-payout, OA will retain a residual
+      // that the PMT formula (computed on oaAtPayout alone) did not account for.
+      // Apply a first-order correction: spread the residual evenly over the drawdown window and
+      // run a corrected pass3. Store _dwzResidualOa for UI disclosure.
+      const pass2ByAge = new Map(pass2.map(r => [r.age, r])); // E2 fix: O(1) Map for pass2
+      const residualOa = pass2ByAge.get(dwzA)?.oa || 0;
+      let finalPmt  = dwzPmt;
+      let finalPass = pass2;
+      if (residualOa > 500 && dwzPmt > 0) {
+        const correctionMonthly = Math.round(residualOa / Math.max(1, n * 12));
+        finalPmt  = dwzPmt + correctionMonthly;
+        finalPass = engineFn({ ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 });
+      }
+      // E2 fix: build Map from current finalPass (may be pass2 or corrected pass3)
+      const finalPassByAge = new Map(finalPass.map(r => [r.age, r]));
+      finalPass._dwzOaMonthly  = finalPmt;
+      finalPass._dwzStartAge   = pa;
+      finalPass._dwzResidualOa = finalPassByAge.get(dwzA)?.oa || 0;
+      // H2 fix: initialise _dwzResidualPriv = 0 unconditionally so downstream reads never
+      // produce NaN when there are no private assets (pmtPrivAnnual = 0 skips the block
+      // below that was previously the only place this field was assigned).
+      finalPass._dwzResidualPriv = 0;
+
+      // P1-D fix: compute private-asset DWZ draw and inject into the final engine pass.
+      // Pattern mirrors the OA three-pass: read privAssets at payout age from finalPass,
+      // compute PMT over the DWZ window, then re-run the engine with overridePrivDrawdown
+      // so the chart and ledger reflect actual depletion rather than endless growth.
+      const rPriv = Math.max(0, (Number(debouncedInputs.privateAssetGrowthRate) || 0) / 100);
+      const privAtPayout = finalPassByAge.get(pa)?.privateAssets || 0; // E2 fix: O(1)
+      let pmtPrivAnnual = privAtPayout > 0
+        ? (rPriv > 0
+            ? Math.round(privAtPayout * rPriv / (1 - Math.pow(1 + rPriv, -n)))
+            : Math.round(privAtPayout / n))
+        : 0;
+      if (pmtPrivAnnual > 0) {
+        let privPass = engineFn(
+          { ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
+          { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa }
+        );
+        // BUG-9 fix: the PMT formula is computed on privAtPayout alone and assumes no further
+        // inflows. However, the engine unconditionally adds privateSaving every year — including
+        // during the DWZ drawdown window — leaving a residual of ~privateSaving × n at dwzAge.
+        // Mirror the OA residual-correction pass: measure the overshoot, spread it evenly over
+        // the drawdown window, increment pmtPrivAnnual, and re-run once to correct depletion.
+        let privPassByAge = new Map(privPass.map(r => [r.age, r])); // E2 fix: O(1) Map for privPass
+        const residualPriv = privPassByAge.get(dwzA)?.privateAssets || 0;
+        if (residualPriv > 500 && pmtPrivAnnual > 0) {
+          const correctionAnnual = Math.round(residualPriv / Math.max(1, n));
+          pmtPrivAnnual += correctionAnnual;
+          privPass = engineFn(
+            { ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
+            { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa }
+          );
+          privPassByAge = new Map(privPass.map(r => [r.age, r])); // E2 fix: rebuild Map after correction pass
+        }
+        finalPass = privPass;
+        finalPass._dwzOaMonthly   = finalPmt;
+        finalPass._dwzStartAge    = pa;
+        finalPass._dwzResidualOa  = privPassByAge.get(dwzA)?.oa || 0;           // E2 fix: O(1)
+        finalPass._dwzResidualPriv = privPassByAge.get(dwzA)?.privateAssets || 0; // E2 fix: O(1)
+      }
+      finalPass._dwzPrivMonthly = Math.round(pmtPrivAnnual / 12); // monthly draw for UI display
+      return finalPass;
+    }
+    return engineFn(debouncedInputs, { maxAge: maxPA });
   }, [engineKey]); // eslint-disable-line
 
   // projectionByAge: O(1) lookup for the raw (nominal) engine projection — used wherever
@@ -11181,8 +11257,6 @@ function CPFPlannerApp() {
   // variable it closes over must already be initialised at the point useMemo() is called.
   // NX10 fix: payoutAge65 reads debouncedInputs so it matches the debounced projection.
   const payoutAge65 = Number(debouncedInputs.payoutAge) || 65;
-  // Life-stage contextual label (merged from App_138) — reads from getLifeStage in module scope
-  const lifeStage   = getLifeStage(Number(debouncedInputs.currentAge) || 35);
 
   // CQ-2 perf: use projectionByAge Map (O(1)) instead of projection.find() (O(n))
   const raAtPayout = projectionByAge.get(payoutAge65)?.ra || 0;
@@ -11354,18 +11428,10 @@ function CPFPlannerApp() {
       const combinedRA  = pRaForTotal + sRaForTotal;   // bequest-corrected
       // Combined private assets — only primary carries shared property
       const combinedPrivate = (pRow.privateAssets || 0) + (sRow.privateAssets || 0);
-      // Item 1 fix: Property, SRS, and Portfolio were entirely missing from this total.
-      // Property is primary-only (shared asset, matches the comment above for combinedPrivate).
-      // SRS and Portfolio are per-spouse — each member has their own account.
-      const combinedProperty = pRow.propertyValue || 0;
-      const combinedSrs      = (pRow.srsBalance || 0) + (sRow.srsBalance || 0);
-      const combinedPortfolio = computePortfolioNetWorth(debouncedInputs, age, primaryPa)
-                              + computePortfolioNetWorth(debouncedSpouseInputs, age, spousePa);
-      const combinedTotal   = combinedOA + combinedSA + combinedMA + combinedRA + combinedPrivate
-                             + combinedProperty + combinedSrs + combinedPortfolio;
+      const combinedTotal   = combinedOA + combinedSA + combinedMA + combinedRA + combinedPrivate;
       rows.push({
         age, combinedOA, combinedSA, combinedMA, combinedRA,
-        combinedPrivate, combinedProperty, combinedSrs, combinedPortfolio, combinedTotal, combinedLifeMonthly,
+        combinedPrivate, combinedTotal, combinedLifeMonthly,
         primaryTotal: primaryTotalFixed, spouseTotal: spouseTotalFixed,
         // Legacy keys preserved (always Standard) for any backward-compat reads
         pLifeMonthly: pLifeStd, sLifeMonthly: sLifeStd,
@@ -11418,6 +11484,11 @@ function CPFPlannerApp() {
 
   const effectiveOaDrawMonthly  = debouncedInputs.dieWithZeroEnabled ? (projection._dwzOaMonthly || 0) : (Number(debouncedInputs.oaDrawdownMonthly) || 0);
   const effectiveOaDrawStartAge = debouncedInputs.dieWithZeroEnabled ? (projection._dwzStartAge || Number(debouncedInputs.payoutAge) || 65) : (Number(debouncedInputs.oaDrawdownStartAge) || 0);
+  // Life-stage: drives the dismissible banner in Dashboard header
+  const lifeStage = getLifeStage(Number(debouncedInputs.currentAge) || 35);
+  // lifeExpectancy in CPFPlannerApp scope — Payout Plans IIFE + Decumulation insights
+  // (ReadinessTab defines its own copy; these are independent, no conflict)
+  const lifeExpectancy = (debouncedInputs.isMale !== false) ? 85 : 88;
   const effectiveOaDrawFloor    = debouncedInputs.dieWithZeroEnabled ? 0 : (Number(debouncedInputs.oaDrawdownFloor) || 0);
 
   // B-01: spouse OA draw — mirrors primary pattern; spouse doesn't have DWZ engine so falls back cleanly
@@ -12325,15 +12396,13 @@ function CPFPlannerApp() {
         if (pm) {
           const raw = pm[`${highlightPlan}Total`] ?? pm.standardTotal;
           if (raw == null) return undefined;
-          // Include private assets, property equity, SRS, and portfolio so Buy vs Rent comparison is meaningful
+          // Include private assets, property equity and SRS so Buy vs Rent comparison is meaningful
           const projRow    = projMap?.get(age);
           const privAssets = projRow?.privateAssets || 0;
           const propValue  = projRow?.propertyValue  || 0;
           const srsBalance = projRow?.srsBalance     || 0;
-          const ownPA      = Number(scenario.inputs?.payoutAge) || 65;
-          const portVal    = computePortfolioNetWorth(scenario.inputs, age, ownPA); // Item 1 fix: was missing entirely
           // R-1 fix: deflate the net worth figure using the scenario's own inflation params
-          return deflate(raw + privAssets + propValue + srsBalance + portVal, age);
+          return deflate(raw + privAssets + propValue + srsBalance, age);
         }
       }
       // Old format fallback: estimate net worth as accumulation total + cumulative payout estimate
@@ -13205,16 +13274,10 @@ function CPFPlannerApp() {
     const psRow    = psRows.find(r => r.age === pa) || {};
     const psTotalCPF = (psRow.oa||0) + (psRow.sa||0) + (psRow.ra||0) + (psRow.ma||0);
     const psPriv   = psRow.privateAssets || 0;
-    const psSrs    = psRow.srsBalance || 0;
     // Baseline from main projection (accumulationByAge may already include user-set rate overrides)
     const baseRow  = accumulationByAge.get(pa) || {};
     const baseTotalCPF = (baseRow.oa||0) + (baseRow.sa||0) + (baseRow.ra||0) + (baseRow.ma||0);
     const basePriv = baseRow.privateAssets || 0;
-    const baseSrs  = baseRow.srsBalance || 0;
-    // Item 1 fix: Portfolio was missing entirely from this net worth comparison
-    const ownPayoutAge = Number(debouncedInputs.payoutAge) || 65;
-    const psPort   = computePortfolioNetWorth(psInputs, pa, ownPayoutAge);
-    const basePort = computePortfolioNetWorth(debouncedInputs, pa, ownPayoutAge);
     // Property: use stressed value if property stress is active
     const baseProp   = propertyStressData?.baseValueAtPA ?? (Number(debouncedInputs.includeProperty) !== 0 ? (accumulationByAge.get(pa)?.propertyValue || 0) : 0);
     const stressProp = showPropertyStress && propertyStressData ? propertyStressData.stressValueAtPA : baseProp;
@@ -13223,8 +13286,8 @@ function CPFPlannerApp() {
     const hcDuration = Math.max(1, (hcEndAge || 85) - (hcStartAge || 75));
     const hcTotal  = annualHC * hcDuration;
     // Combined stressed net worth
-    const psNetWorth   = psTotalCPF + Math.max(0, psPriv - hcTotal) + stressProp + psSrs + psPort;
-    const baseNetWorth = baseTotalCPF + basePriv + baseProp + baseSrs + basePort;
+    const psNetWorth   = psTotalCPF + Math.max(0, psPriv - hcTotal) + stressProp;
+    const baseNetWorth = baseTotalCPF + basePriv + baseProp;
     const delta    = Math.max(0, baseNetWorth - psNetWorth);
     const deltaPct = baseNetWorth > 0 ? Math.round(delta / baseNetWorth * 100) : 0;
     const cpfDelta = Math.max(0, baseTotalCPF - psTotalCPF);
@@ -14176,7 +14239,10 @@ ${childrenHtml}
     ${(Number(inputs.loanMonthlyRepayment)||0)>0?`<div class="row-kv"><span>Loan Repayment</span><strong style="color:#991b1b">${fc(inputs.loanMonthlyRepayment)}/mo to age ${inputs.loanEndAge||55}</strong></div>`:''}
     ${(Number(inputs.parentSupportMonthly)||0)>0?`<div class="row-kv"><span>Parent / Family Support</span><strong style="color:#991b1b">${fc(inputs.parentSupportMonthly)}/mo to age ${inputs.parentSupportEndAge||75}</strong></div>`:''}
     ${(inputs.childrenData||[]).length>0?`<div class="row-kv"><span>Children Education Plans</span><strong>${(inputs.childrenData||[]).length} child plan(s): ${(inputs.childrenData||[]).map((c,i)=>`Child ${i+1} ${fc(c.annualCost||0)}/yr ages ${c.startAge}–${c.endAge}`).join('; ')}</strong></div>`:''}
-    ${(Number(inputs.retirementExpenseRatio)||75)!==75||(Number(inputs.retirementHealthcareMonthly)||0)>0?`<div class="row-kv"><span>Retirement Spending Model</span><strong>${inputs.retirementExpenseRatio||75}% expense ratio · ${fc(inputs.retirementHealthcareMonthly||500)}/mo healthcare · escalator $${inputs.healthcareEscalatorAnnualIncrease||200}/yr from age ${inputs.healthcareEscalatorAge||75}</strong></div>`:''}
+    ${(Number(inputs.retirementExpenseRatio)||75)!==75||(Number(inputs.retirementHealthcareMonthly)||0)>0?`<div class="row-kv"><span>Retirement — Expense Planning</span><strong>${inputs.retirementExpenseRatio||75}% expense ratio · ${fc(inputs.retirementHealthcareMonthly||500)}/mo healthcare · escalator $${inputs.healthcareEscalatorAnnualIncrease||200}/yr from age ${inputs.healthcareEscalatorAge||75}</strong></div>`:''}
+    ${(Number(inputs.targetMonthlyIncome)||0)>0?`<div class="row-kv"><span>Retirement Income Target</span><strong style="color:#0369a1">${fc(inputs.targetMonthlyIncome)}/mo</strong></div>`:''}
+    ${(Number(inputs.oaDrawdownMonthly)||0)>0?`<div class="row-kv"><span>OA Drawdown</span><strong style="color:#d97706">${fc(inputs.oaDrawdownMonthly)}/mo from age ${Number(inputs.oaDrawdownStartAge)||Number(inputs.payoutAge)||65}${(Number(inputs.oaDrawdownFloor)||0)>0?' · floor '+fc(inputs.oaDrawdownFloor):''}</strong></div>`:''}
+    ${(Number(inputs.otherLiabilities)||0)>0?`<div class="row-kv" style="background:rgba(239,68,68,0.05);border-left:3px solid #ef4444;padding:4px 8px;border-radius:3px"><span style="font-weight:800;color:#b91c1c">Other Liabilities</span><strong style="color:#ef4444">−${fc(inputs.otherLiabilities)} · Net Wealth at payout age: ${fc(Math.max(0,(totalCpf+(pRow.privateAssets||0)+(pRow.srsBalance||0)+(pRow.portfolioBalance||0)+(inputs.includeProperty!==false?pRow.propertyValue||0:0))-(Number(inputs.otherLiabilities)||0)))}</strong></div>`:''}
   </div>
 </div>
 
@@ -14205,7 +14271,7 @@ ${(() => {
     })() : ''}
     ${/* G7: replace bare comma-separated text with a structured table when life events are configured */
     lifeEvts.length > 0 ? (() => {
-      const evTypeLabels = { career_break: 'Career Break', medical_crisis: 'Medical Crisis', retrenchment: 'Retrenchment', windfall: 'Windfall / Lump Sum', early_retirement: 'Early Retirement', loved_one_transfer: 'Loved One Transfer', education_payout: 'Education Payout', hyperinflation: 'Hyperinflation', salary_cut: 'Salary Cut', child_birth: 'Child Birth / Baby Bonus', education_expense: 'Education Expense', donation: 'Charitable Giving' };
+      const evTypeLabels = { career_break: 'Career Break', medical_crisis: 'Medical Crisis', retrenchment: 'Retrenchment', windfall: 'Windfall / Lump Sum', early_retirement: 'Early Retirement', loved_one_transfer: 'Loved One Transfer', education_payout: 'Education Payout', hyperinflation: 'Hyperinflation', salary_cut: 'Salary Cut', marriage: 'Marriage / Housing Grant', child_birth: 'Child Birth / Baby Bonus', loan_repayment: 'Loan Repayment', parent_support: 'Parent & Family Support', education_expense: 'Education Expense', donation: 'Charitable Giving' };
       const evRows = lifeEvts.map(ev => {
         const typeLabel = evTypeLabels[ev.type] || ev.type;
         const ageRange = Number(ev.startAge) === Number(ev.endAge) ? `Age ${ev.startAge}` : `Age ${ev.startAge}–${ev.endAge}`;
@@ -16839,9 +16905,10 @@ ${milestoneSnapshotHtml}
           .cpf-logo-block     { flex-shrink: 1 !important; min-width: 0 !important; }
           .cpf-logo-textstack { min-width: 0 !important; overflow: hidden !important; }
           .cpf-logo-titlerow  { min-width: 0; }
-          .cpf-logo-text { font-size: 13px !important; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+          .cpf-logo-text { font-size: 16px !important; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
           .cpf-beta-pill  { flex-shrink: 0 !important; font-size: 9px !important; padding: 2px 7px !important; }
           .cpf-stage-pill { flex-shrink: 0 !important; font-size: 8px !important; padding: 1px 6px !important; }
+          .cpf-engine-tag { display: none !important; }
           .cpf-logo-sub  {
             display: block !important;
             font-size: 9px !important;
@@ -16879,7 +16946,7 @@ ${milestoneSnapshotHtml}
            restored 3-line brand lockup a bit further so it never contends with the
            gear/Unsaved-badge side on the smallest screens (e.g. iPhone SE @ 375px). */
         @media (max-width: 480px) {
-          .cpf-logo-text { font-size: 12px !important; }
+          .cpf-logo-text { font-size: 15px !important; }
           .cpf-logo-sub  { font-size: 8px !important; letter-spacing: 0.04em !important; }
           .cpf-beta-pill  { font-size: 8px !important; padding: 1px 6px !important; letter-spacing: 0.05em !important; }
           .cpf-stage-pill { font-size: 7px !important; padding: 1px 5px !important; letter-spacing: 0.04em !important; }
@@ -17336,7 +17403,7 @@ ${milestoneSnapshotHtml}
                       ["Education Loan from OA (40% ceiling)", BookOpen], ["PwD MRSS bypass (age-55 waiver)", ShieldCheck],
                       ["MMSS — MA top-up matching grant", Gift], ["SA / RA balance split view at age 55", Split],
                       ["Retirement Sum Growth — adjustable FRS/BHS projection rate", TrendingUp], ["Phased Salary modelling + Career Break via Life Events", Briefcase],
-                      ["Life Events & Stress Testing (retrenchment, medical, windfall)", Activity],
+                      ["Life Events (retrenchment, medical, windfall)", Activity],
                       ["Household Mode — combined projections for two members", Users],
                       ["Goal Simulator — 3-strategy CPF target solver with Apply to Profile", Target],
                       ["VCMA — Voluntary Cash MediSave Top-up (Inflows panel, after RSTU)", Gift],
@@ -17357,7 +17424,7 @@ ${milestoneSnapshotHtml}
                   {[
                     ["1", "Enter your CPF balances & select citizenship", "Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio. Select SC or PR — citizenship gates which schemes apply (MRSS/MMSS are SC-only; PR Year 1/2 use lower contribution rates). The progress bars compare against the 2026 FRS ($220,400), ERS ($440,800), and BHS ($79,000) milestones.", "var(--clr-blue2)"],
                     ["2", "Auto-Calc your contributions", "Click ⚡ Auto-Calc in the Mandatory Contributions panel. Enter OW (Monthly Gross), AW (Annual Bonus), and Salary Growth %, then hit the button. SC uses full rates. PR: select tenure year (1/2/3+) and rate type — G/G (graduated employer, default) or F/G (full employer 17%, requires joint CPF application). The engine advances PR tiers automatically year by year. Use Phase 2 Salary (below Salary Growth) to model a growth rate change at a specific age. To pause contributions (sabbatical, NS, parental leave), add a Career Break in the Life Events section. Set Retirement Sum Growth (default 3%) to control how fast the FRS/BHS targets rise.", "var(--clr-emerald)"],
-                    ["3", "Inflows, Outflows & CPF Transfers", "The Inflows panel has: VC3A (single cash lump-sum, auto-split by age-band), RSTU (SA/RA cash top-up, tax-relievable), VHR, gov grants, MRSS (RA top-up, up to $2,000/yr · SC only · RA below BRS · income ≤ $4,000/mo · age 55+ or PwD), MMSS (MA match, up to $1,000/yr), and WIS/Workfare (60% CPF for employees, 90% MA for SEPs). Outflows: Housing Loan (OA), medical, CPFIS. CPF Transfers: OA→MA, OA→SA (pre-55, capped at FRS), and OA→RA (age 55+, capped at ERS).", "var(--clr-purple)"],
+                    ["3", "Inflows, Outflows & CPF Transfers", "The Inflows panel has: VC3A (single cash lump-sum, auto-split by age-band), RSTU (SA/RA cash top-up, tax-relievable), VHR, gov grants, MRSS (RA top-up, up to $2,000/yr · SC only · RA below BRS · income ≤ $4,000/mo · age 55+ or PwD), MMSS (MA match, up to $1,000/yr), and WIS/Workfare (60% CPF for employees, 90% MA for SEPs). Outflows: Housing Loan (OA) and medical expenses. CPF Transfers: OA→MA, OA→SA (pre-55, capped at FRS), and OA→RA (age 55+, capped at ERS). CPFIS OA/SA, Education Loan, and OA Lump-Sum Withdrawal are in Investments & Portfolio.", "var(--clr-purple)"],
                     ["4", "Set your life-phase timelines", "Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model real-world cash flow transitions accurately.", "var(--clr-amber)"],
                     ["5", "Set up SRS (optional)", "If you contribute to the Supplementary Retirement Scheme, enter your SRS balance, annual contribution, and drawdown start age in the SRS panel. Contributions are tax-deductible; 50% of withdrawals are taxable from age 63. All funds must be withdrawn within 10 years.", "var(--clr-emerald)"],
                                     ].map(([num, title, desc, color]) => (
@@ -17376,7 +17443,7 @@ ${milestoneSnapshotHtml}
                   {[
                     ["Dashboard", Activity, "var(--clr-emerald)", "Your retirement command centre — free on all plans. Two sub-views: Readiness Score (5-dimension arc gauge + Action Priority Queue + FRS/BRS/ERS bars + CPF LIFE payout card + Milestone Summary chart) and CPF Overview (Total CPF at payout age, net worth doughnut, What-If Explorer sliders, Tier Shock notice, RA-to-OA transfer notice, milestone alerts)."],
                     ["Strategy", Target, "#f43f5e", "🔒 Fusion Pro — Three optimization tools. (1) Goal Simulator — enter a CPF balance target, click ⚡ Calculate Strategies for three solver plans (A: RSTU only, B: VC3A only, C: blended). Each card shows feasibility, required cash, and Apply to Profile. Clear Simulator reverts to baseline. (2) Stress Centre — Perfect Storm, Sequence-of-Returns, Inflation, Property Correction. (3) Turbo — scans every CPF lever for unused headroom with one-click Apply All."],
-                    ["Grow/Spend", BarChart3, "var(--clr-blue2)", "Accumulation chart free on all plans. 📈 Accumulation — stacked area chart OA/SA/MA/RA year-by-year. Baseline comparison requires Plus; Monte Carlo P10–P90 band requires Pro. 📉 Decumulation (🔒 Plus) — set a Target Monthly Income, use ⚡ Fill Gap to auto-set OA Drawdown. Gantt + income table shows CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets."],
+                    ["Grow/Spend", BarChart3, "var(--clr-blue2)", "Accumulation chart free on all plans. 📈 Accumulation — stacked area chart OA/SA/MA/RA year-by-year. Show Cohort Avg button overlays the CPF Board cohort-average balance trajectory (amber dashed). Baseline comparison requires Plus; Monte Carlo P10–P90 band requires Pro. 📉 Decumulation (🔒 Plus) — set a Target Monthly Income, use ⚡ Fill Gap to auto-set OA Drawdown. Gantt + income table shows CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets."],
                     ["Payout Plans", ShieldCheck, "var(--clr-purple)", "🔒 Fusion Plus — Side-by-side CPF LIFE payout curves for Standard, Escalating, and Basic plans. Break-even age lines, toggle between Bequest and Cumulative Payout views. Basic payout = PMT formula; bequest includes full premium refund during Phase 1."],
                     ["Compare", Split, "var(--clr-orange)", "🔒 Fusion Pro — Scenario A vs B diff. Save your current profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded side-by-side diff of every metric. The What-If Explorer sliders are available free in Dashboard → CPF Overview."],
                     ["Data Table", TableIcon, "var(--clr-amber)", "🔒 Fusion Plus — Full year-by-year projection table with sticky Age column, Yield (B/S/E), and IRR %. Switch to the Cashflow Ledger for a complete annual breakdown of every inflow, outflow, interest, and transfer component. Download either view as CSV."],
@@ -17402,17 +17469,14 @@ ${milestoneSnapshotHtml}
                       ["Monte Carlo 🔒 Pro", Activity, "Fusion Pro — 200 simulations with user-selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in the Accumulation tab. Shows probability of meeting FRS at payout age and a live P10–P90 confidence band on the chart."],
                       ["Retirement Sum Growth", TrendingUp, "Free on all plans — Control the annual rate at which FRS, BRS, ERS, and BHS targets rise (default 3%). Preset buttons: 2% / 3% / 4%. Found in the Salary section."],
                       ["Phased Salary & Career Break", Briefcase, "Free on all plans — Model two-phase salary growth using Phase 2 Salary in Mandatory Contributions. Career Break events (Life Events panel 🔒 Pro) pause contributions entirely with start/end age bands visible on the chart."],
-                      ["Life Events & Stress Tests 🔒 Pro", Activity, "Fusion Pro — Overlay 10 stress-test events: Retrenchment, Career Break, Medical Crisis, Windfall, Early Retirement, Hyperinflation, Salary Cut, Child Birth, Education Expense, Charitable Giving. Visible as coloured bands on the Grow chart. (Marriage, Loan Repayment, and Parent Support are modelled via their own dedicated fields in Family & Life Events instead — see that entry above.)"],
+                      ["Life Events 🔒 Pro", Activity, "Fusion Pro — Overlay 9 life event types: Retrenchment, Career Break, Medical Crisis, Windfall, Early Retirement, Hyperinflation, Salary Cut, Loan Repayment, Charitable Giving. Coloured bands on the Grow chart. Family milestones (marriage, children, parent support, education) are modelled in the Family Milestones section."],
                       ["Goal Simulator 🔒 Pro", Target, "Fusion Pro — Set a CPF balance target, click ⚡ Calculate Strategies for three solver plans (A: RSTU only, B: VC3A only, C: blended). Each card shows feasibility, required cash, and Apply to Profile. Found in Strategy tab → Goal Simulator."],
                       ["SRS 🔒 Pro", BookOpen, "Fusion Pro — Supplementary Retirement Scheme: tax-deductible contributions up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63. Must deplete within 10 years of first withdrawal. Modelled in the SRS & Private Wealth panel."],
                       ["Property Monetisation 🔒 Pro", Home, "Fusion Pro — Model a one-time monetisation event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds go to private assets; RA top-up credited to RA. Found in the Property & Monetisation panel."],
-                      ["Property Type & Payment Source 🔒 Pro", Home, "Fusion Pro — Classify your home as HDB or Private (gates HDB-only grants and loan-type options) and choose whether mortgage instalments are paid via CPF (OA) or cash. Cash payments skip the CPF Loan Ledger and carry no refund obligation on sale. Found in the Property & Monetisation panel."],
-                      ["Legacy Planning & CPF Safety", ShieldCheck, "Free on all plans — Track Will, CPF Nomination, LPA, Advance Medical Directive (AMD), and Advance Care Plan (ACP) completion. Toggle CPF Withdrawal Lock, Money Lock, Safety Switch, and Trusted Contact status, plus Other Liabilities for a fuller net-worth picture. Found in the Wellness panel on the Dashboard."],
-                      ["Life-Stage Insights", TrendingUp, "Free on all plans — A dismissible banner shows your current life stage (Early Career through Retirement) with a one-line tip. Toggle 'Cohort Avg' on the Accumulation chart to overlay CPF Board's cohort-average balance curve alongside your own projection."],
-                      ["Die with Zero Mode 🔒 Plus", Clock, "Fusion Plus — Toggle in Retirement Drawdown. Uses the PMT annuity formula to compute the optimal monthly draw from OA, SRS, and Private Assets so all reach $0 at your target age. RA/CPF LIFE cannot be depleted."],
+                      ["Die with Zero Mode 🔒 Plus", Clock, "Fusion Plus — Toggle in the Retirement section. Uses the PMT annuity formula to compute the optimal monthly draw from OA, SRS, and Private Assets so all reach $0 at your target age. RA/CPF LIFE cannot be depleted."],
                       ["Sample Profiles", Users, "Lite: 2 free profiles (Blank Slate, Typical Employee 35). Plus/Pro: all 14 scenarios (Late Starter, SEP, High Earner, Near Retirement, Post-55 RA Builder, RSS Member, Household — Tan Family, Baby Millionaire A & B, Family Builder, FIRE, Sandwich Generation). Load from the Samples button in the header."],
                       ["OA→SA / OA→RA Transfer 🔒 Plus", ArrowRightLeft, "Fusion Plus — Pre-55: transfer OA to SA (capped at FRS). Age 55+: transfer OA to RA (capped at ERS). Both earn 4% vs 2.5%. Irreversible. No tax relief. Found in CPF Transfers panel."],
-                      ["OA Drawdown & ⚡ Fill Gap 🔒 Plus", Download, "Fusion Plus — Draw monthly cash from OA post-retirement to supplement CPF LIFE. Set a Target Monthly Income, click ⚡ Fill Gap to auto-set the exact draw. Shows OA exhaustion age. Found in Retirement Drawdown panel."],
+                      ["OA Drawdown & ⚡ Fill Gap 🔒 Plus", Download, "Fusion Plus — Draw monthly cash from OA post-retirement to supplement CPF LIFE. Set a Target Monthly Income, click ⚡ Fill Gap to auto-set the exact draw. Shows OA exhaustion age. Found in the Retirement section."],
                       ["Property Pledge", Target, "Free on all plans — Only BRS needed in RA at 55 (not FRS). Reduces locked-in RA but also reduces monthly CPF LIFE payouts. Toggle in Advanced panel."],
                       ["MRSS Grant 🔒 Plus", Gift, "Fusion Plus — Matched Retirement Savings Scheme: govt matches RSTU cash top-ups up to $2,000/yr (lifetime cap $20,000) for SC aged 55+ with RA below BRS. Found in Boost My CPF panel."],
                       ["What-If Explorer", SlidersHorizontal, "Free on all plans — Drag sliders to instantly simulate how payout age, SA top-ups, housing, salary, OA drawdown, SRS, or private growth affect your balance. Found in Dashboard → CPF Overview."],
@@ -17548,16 +17612,16 @@ ${milestoneSnapshotHtml}
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
           <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
-            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 0, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
-              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 36, height: 36, display: "block" }} />
+            <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 12, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 1.5px rgba(255,255,255,0.35), 0 2px 8px rgba(0,0,0,0.25)" }}>
+              <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 30, height: 30, display: "block", borderRadius: 6 }} />
             </div>
             <div className="cpf-logo-textstack">
               <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 {/* Logo: "Fusion " in green-blue gradient, "富生" in Chinese red — split spans so light-theme
                     CSS can target each independently without the transparent fill bleeding into 富生. */}
                 <div className="cpf-logo-text" style={{ display: "flex", alignItems: "baseline", whiteSpace: "nowrap" }}>
-                  <span style={{ fontWeight: 900, fontSize: 16, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
-                  <span style={{ fontWeight: 900, fontSize: 16, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
+                  <span style={{ fontWeight: 900, fontSize: 17, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
+                  <span style={{ fontWeight: 900, fontSize: 17, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
                 </div>
                 {/* Plan tier pill — driven by plan state → TIER_CONFIG */}
                 {(() => { const tc = TIER_CONFIG[plan.toUpperCase()]; return tc ? (
@@ -17582,7 +17646,7 @@ ${milestoneSnapshotHtml}
                   </span>
                 )}
               </div>
-              <div className="cpf-logo-sub" style={{ fontSize: 12, color: "var(--clr-emerald)", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
+              <div className="cpf-logo-sub" style={{ fontSize: 9, fontWeight: 700, color: "var(--clr-emerald)", letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.85, marginTop: 2, whiteSpace: "nowrap" }}>Retirement Engine v2026</div>
             </div>
           </div>
 
@@ -17824,7 +17888,8 @@ ${milestoneSnapshotHtml}
 
       {/* ── Full-width tab strip — sticky on tablet/mobile; spans full width on all viewports ── */}
       <nav className="cpf-tabs-full-width" aria-label="Dashboard sections">
-        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0, display: "flex", alignItems: "stretch" }}>
+        <div className="cpf-page-wrap" data-mode={desktopMode} style={{ paddingTop: 0, paddingBottom: 0, display: "flex", alignItems: "center", gap: 0 }}>
+          {/* Engine tag — left side of tab row (hidden on mobile via CSS) */}
           {/* Scrollable tab buttons */}
           <div ref={tabsStripRef} className="cpf-tabs" role="tablist" style={{ display: "flex", flexWrap: "nowrap", justifyContent: "flex-end", flex: "1 1 auto", padding: "0", gap: 2, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
             {getVisibleTabs(debouncedInputs.cpfScheme, isForeigner, householdEnabled).map(([id,label,Icon,accent]) => {
@@ -17969,8 +18034,8 @@ ${milestoneSnapshotHtml}
             {(() => {
               const colSections = {
                 1: ["profile", "cpfBalances", "contribs"],
-                2: ["topups", "outflows", "transfers", "decumulation"],
-                3: ["investments", "property", "privateAssets", "lifeevents"],
+                2: ["topups", "outflows", "transfers", "retirement"],
+                3: ["property", "privateAssets", "lifeevents"],
               };
               const colMeta = [
                 { n: 1, label: "Profile & Contributions", clr: "var(--clr-amber)", bg: "rgba(var(--clr-amber-rgb),0.08)", bdr: "rgba(var(--clr-amber-rgb),0.28)", solid: "rgba(var(--clr-amber-rgb),0.15)" },
@@ -18260,7 +18325,7 @@ ${milestoneSnapshotHtml}
                   )}
                   {(Number(inputs.currentAge) || 0) >= 16 && (Number(inputs.currentAge) || 0) < 18 && (
                     <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(var(--clr-blue-rgb),0.08)", border: "1px solid rgba(var(--clr-blue-rgb),0.3)", fontSize: 12, color: "#93c5fd", lineHeight: 1.5 }}>
-                      ℹ️ <strong>Age 16–17:</strong> CPF nominations are available. CPFIS requires age 18+ and is disabled in the Outflows section below.
+                      ℹ️ <strong>Age 16–17:</strong> CPF nominations are available. CPFIS requires age 18+ and is disabled in the Investments & Portfolio section.
                     </div>
                   )}
                   {/* Gender toggle — affects CPF LIFE monthly payout ratio; locked for foreigners */}
@@ -18410,8 +18475,8 @@ ${milestoneSnapshotHtml}
                   {/* These feed the Tier 2 advisory panel on the Readiness tab.      */}
                   <div style={{ marginTop: 10, padding: "9px 10px 10px", borderRadius: 8, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-highlight)", textTransform: "uppercase", letterSpacing: "0.04em" }}>MAS Financial Health</span>
-                      <TooltipBox id="t-masHealth" text="These fields power the MAS Financial Health advisory panel on the Readiness tab. They do not affect CPF projections. Emergency Fund tracks liquid reserves vs the MAS 3–6 month guideline. Legacy Planning confirms you have a Will, CPF nomination (CSNB), and Lasting Power of Attorney (LPA) registered with OPG — all strongly recommended by MAS for holistic retirement planning." />
+                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-highlight)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Financial Health</span>
+                      <TooltipBox id="t-masHealth" text="These fields power the Financial Health advisory panel on the Readiness tab. They do not affect CPF projections. Emergency Fund tracks liquid reserves vs the MAS 3–6 month guideline. Legacy Planning confirms you have a Will, CPF nomination (CSNB), Lasting Power of Attorney (LPA), Advance Medical Directive (AMD), and Advance Care Plan (ACP) — all strongly recommended by MAS for holistic retirement planning. AMD and ACP cover your medical decision-making wishes and are filed separately from estate documents." />
                     </div>
                     {/* Emergency Fund slider */}
                     <div style={{ marginBottom: 8 }}>
@@ -18431,57 +18496,27 @@ ${milestoneSnapshotHtml}
                     {/* Legacy Planning checkboxes */}
                     <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 5px" }}>Legacy Planning</p>
                     {[
-                      ["hasWill",          "Will",            "A legally valid will prepared with witnesses"],
-                      ["hasCPFNomination", "CPF Nomination",  "CPF nomination (CSNB) filed — bypasses probate for CPF assets"],
-                      ["hasLPA",           "LPA",             "Lasting Power of Attorney registered with OPG Singapore"],
-                      ["hasAMD",           "AMD",             "Advance Medical Directive filed with MOH — no extraordinary life-sustaining treatment if terminally ill"],
-                      ["hasACP",           "ACP",             "Advance Care Plan completed with a healthcare provider — documents your care preferences"],
+                      ["hasWill",          "Will",            "A legally valid Will prepared with at least two witnesses. Ensures your assets are distributed according to your wishes and avoids intestacy rules. Wills in Singapore do not cover CPF savings — those pass via nomination."],
+                      ["hasCPFNomination", "CPF Nomination",  "CPF Nomination (CSNB) filed with CPF Board. Allows CPF savings to be paid directly to nominees without probate, bypassing the estate — faster and avoids the 9-month delay of grant of probate. Review periodically as life circumstances change."],
+                      ["hasLPA",           "LPA",             "Lasting Power of Attorney registered with the Office of the Public Guardian (OPG) Singapore. Authorises a trusted person to make personal welfare and/or property decisions on your behalf if you lose mental capacity. Without an LPA, family must apply to court for a deputyship order."],
+                      ["hasAMD",           "AMD",             "Advance Medical Directive (AMD) filed with the Ministry of Health. A legal document instructing doctors not to apply extraordinary life-sustaining treatment when death is imminent and the condition is terminal. Must be signed before a doctor and two witnesses. Does not cover withdrawal of ordinary medical care."],
+                      ["hasACP",           "ACP",             "Advance Care Plan (ACP) completed with a healthcare provider or ACP facilitator. Documents your care preferences, values, and goals for future medical decisions — especially important if you become unable to speak for yourself. Unlike the AMD, it is not legally binding but guides your care team and family. Recommended for all adults, especially those with chronic illness."],
                     ].map(([key, label, tip]) => (
-                      <div key={key} title={tip}
+                      <div key={key}
                         onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
                         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", cursor: "pointer" }}>
-                        <span style={{ fontSize: 12, color: "var(--text-main)" }}>{label}</span>
+                        <span style={{ fontSize: 12, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4 }}>
+                          {label}
+                          <span onClick={e => e.stopPropagation()}>
+                            <TooltipBox id={`t-${key}`} text={tip} />
+                          </span>
+                        </span>
                         <div style={{ width: 28, height: 16, borderRadius: 8, background: inputs[key] ? "var(--clr-green)" : "var(--bg-panel)", border: `1px solid ${inputs[key] ? "var(--clr-green)" : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
                           <div style={{ position: "absolute", top: 2, left: inputs[key] ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: inputs[key] ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
                         </div>
                       </div>
                     ))}
 
-                    {/* CPF Safety Features — merged from App_138 */}
-                    <div style={{ marginTop: 10, borderTop: "1px solid var(--border-subtle)", paddingTop: 8 }}>
-                      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 6 }}>
-                        🔒 CPF Safety Features
-                      </p>
-                      {[
-                        ["cpfWithdrawalLock",  "Withdrawal Lock",  "Prevents OA/SA cash withdrawals before age 65. Activate via CPF digital services."],
-                        ["cpfMoneyLock",       "Money Lock",       "Sets a floor on OA/SA balances that cannot be withdrawn in cash, even after 65."],
-                        ["cpfSafetySwitch",    "Safety Switch",    "Temporary freeze on CPF transactions if you suspect fraud or unauthorised access."],
-                        ["cpfTrustContactSet", "Trusted Contact",  "A nominated trusted person is alerted to unusual CPF account activity."],
-                      ].map(([key, label, tip]) => (
-                        <div key={key} title={tip}
-                          onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}
-                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", cursor: "pointer" }}>
-                          <span style={{ fontSize: 12, color: "var(--text-main)" }}>{label}</span>
-                          <div style={{ width: 28, height: 16, borderRadius: 8, background: inputs[key] ? "var(--clr-green)" : "var(--bg-panel)", border: `1px solid ${inputs[key] ? "var(--clr-green)" : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                            <div style={{ position: "absolute", top: 2, left: inputs[key] ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: inputs[key] ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Other Liabilities — merged from App_138 */}
-                    <div style={{ marginTop: 10 }}>
-                      <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
-                        Other Liabilities ($) <span style={{ color: "var(--text-subtle)" }}>car/personal loans, etc.</span>
-                      </label>
-                      <input
-                        type="number" min={0} step={1000}
-                        value={inputs.otherLiabilities || ""}
-                        placeholder="e.g. 15000"
-                        onChange={e => setInputs(p => ({ ...p, otherLiabilities: Number(e.target.value) || 0 }))}
-                        style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }}
-                      />
-                    </div>
 
                     {/* Protection Coverage inputs — feeds Tile 6: Protection Adequacy */}
                     <div style={{ marginTop: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 10 }}>
@@ -18944,7 +18979,7 @@ ${milestoneSnapshotHtml}
                         <div style={{ background: "var(--bg-panel)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: 8 }}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>OA Drawdown</span>
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                            {[["Monthly Draw ($/mo)", "oaDrawdownMonthly"], ["Start Age", "oaDrawdownStartAge"]].map(([lbl, field]) => (
+                            {[["Draw ($)/mth", "oaDrawdownMonthly"], ["Start Age", "oaDrawdownStartAge"]].map(([lbl, field]) => (
                               <label key={field} style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 3 }}>
                                 {lbl}
                                 <input type="number" min="0" value={spouseInputs[field]} onChange={e => spH(field, e.target.value)}
@@ -19052,6 +19087,84 @@ ${milestoneSnapshotHtml}
                 <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
               </div>
             )}
+            {/* ── CPF Safety Features — standalone section ── */}
+            {!isForeigner && (
+              <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
+                <SidebarSectionHeader id="cpfSafety"
+                  label="🔒 CPF Safety Features"
+                  icon={<ShieldCheck style={{ width: 14, height: 14, color: "#22d3ee" }} />}
+                  color="#22d3ee" activeBg="rgba(34,211,238,0.07)"
+                  isOpen={openSections.has("cpfSafety")}
+                  onToggle={() => toggleSection("cpfSafety")}
+                  badge={null}
+                  collapsedHint="Withdrawal Lock · Money Lock · Safety Switch · Trusted Contact" />
+                {openSections.has("cpfSafety") && (
+                  <div style={{ padding: "10px 16px 16px" }}>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px", lineHeight: 1.5 }}>
+                      These features are activated on <strong>cpf.gov.sg</strong> — not in this app. Toggle them here to track your security posture. They have <strong>no simulation effect</strong>.
+                    </p>
+                    {[
+                      {
+                        key: "cpfWithdrawalLock", label: "Withdrawal Lock",
+                        color: "#22d3ee",
+                        icon: "🔒",
+                        what: "Blocks all cash withdrawals from your OA and SA before age 65 — even if you meet the minimum sum.",
+                        who: "Members who want to ring-fence retirement savings from impulsive withdrawals or social-engineering scams.",
+                        how: "Enable/disable at any CPF Service Centre with SingPass 2FA. Takes effect within 1 business day.",
+                      },
+                      {
+                        key: "cpfMoneyLock", label: "Money Lock (ERS top-up)",
+                        color: "#818cf8",
+                        icon: "💰",
+                        what: "Sets a floor on OA/SA cash withdrawals — keeps a reserve in CPF at all times.",
+                        who: "Members who want to ensure a baseline retirement income even if they withdraw some CPF savings.",
+                        how: "Apply via My CPF portal → Tools & Services → Enhanced Retirement Sum top-up.",
+                      },
+                      {
+                        key: "cpfSafetySwitch", label: "Safety Switch",
+                        color: "#f472b6",
+                        icon: "🛑",
+                        what: "Temporarily freezes all CPF transactions — no withdrawals, transfers, or investments until you unfreeze.",
+                        who: "Members who suspect their account has been compromised, or who are travelling and want a precautionary freeze.",
+                        how: "Toggle instantly via My CPF → Safety Switch. Unlocking requires SingPass re-authentication.",
+                      },
+                      {
+                        key: "cpfTrustContactSet", label: "Trusted Contact Person",
+                        color: "#34d399",
+                        icon: "🧑‍🤝‍🧑",
+                        what: "Nominates someone CPF Board can alert when unusually large transactions occur on your account.",
+                        who: "All members — especially those who want a trusted family member as an early-warning layer against scams.",
+                        how: "Register at My CPF portal → My Profile → Trusted Contact Person. The contact does not gain access to your funds.",
+                      },
+                    ].map(({ key, label, color, icon, what, who, how }) => (
+                      <div key={key} style={{ marginBottom: 10, borderRadius: 10, border: `1px solid ${inputs[key] ? color + "55" : "var(--border-subtle)"}`, background: inputs[key] ? color + "0d" : "var(--bg-muted)", overflow: "hidden" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", cursor: "pointer" }}
+                          onClick={() => setInputs(p => ({ ...p, [key]: !p[key] }))}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 16 }}>{icon}</span>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: inputs[key] ? color : "var(--text-main)" }}>{label}</div>
+                              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{what}</div>
+                            </div>
+                          </div>
+                          <div style={{ flexShrink: 0, width: 32, height: 18, borderRadius: 9, background: inputs[key] ? color : "var(--bg-panel)", border: `1px solid ${inputs[key] ? color : "var(--border-subtle)"}`, position: "relative", transition: "background 0.2s" }}>
+                            <div style={{ position: "absolute", top: 3, left: inputs[key] ? 15 : 3, width: 10, height: 10, borderRadius: "50%", background: inputs[key] ? "#fff" : "var(--text-subtle)", transition: "left 0.2s" }} />
+                          </div>
+                        </div>
+                        {inputs[key] && (
+                          <div style={{ padding: "0 12px 10px", borderTop: `1px solid ${color}22`, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                            <p style={{ margin: "6px 0 3px" }}><strong style={{ color }}>Who should use this:</strong> {who}</p>
+                            <p style={{ margin: 0 }}><strong style={{ color }}>How to activate:</strong> {how}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
               <SidebarSectionHeader id="contribs" label={`Salary & Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 11, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}</>}
                 collapsedHint={isSelfEmployed
@@ -19578,7 +19691,7 @@ ${milestoneSnapshotHtml}
                     {formatCurrency(budgetTakeHome.surplus)}/mo surplus
                   </span>
                 ) : null}
-                collapsedHint="Take-home · Living expenses · Tax rate · Available for voluntary contributions"
+                collapsedHint="Take-home · Living expenses · Tax rate · Available for voluntary contributions · Other Liabilities"
               />
               {openSections.has("cashBudget") && (
                 <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -19704,6 +19817,53 @@ ${milestoneSnapshotHtml}
                     </div>
                   </div>
 
+
+                  {/* ── Other Liabilities ── */}
+                  {(() => {
+                    const liab = Number(inputs.otherLiabilities) || 0;
+                    const assets = (Number(inputs.oaBalance)||0) + (Number(inputs.saBalance)||0) + (Number(inputs.maBalance)||0) + (Number(inputs.privateAssets)||0) + (Number(inputs.srsCurrentBalance)||0);
+                    const netNow = assets - liab;
+                    return (
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                          <CreditCard style={{ width: 11, height: 11 }} />
+                          Other Liabilities
+                          <TooltipBox id="t-other-liab" text="Outstanding liabilities not captured elsewhere — car loan, personal loan, credit card balance, renovation loan. Deducted from Total Assets in the Net Wealth summary (Summary tab). Not modelled as a year-by-year cash outflow — use the Loan fields in Family Milestones or a Loan Repayment Life Event for projection impact." />
+                        </label>
+                        <div style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-subtle)", pointerEvents: "none", userSelect: "none" }}>$</span>
+                          <input type="number" min={0} step={1000}
+                            value={inputs.otherLiabilities || ""}
+                            placeholder="0"
+                            name="otherLiabilities"
+                            onBlur={handleBlur}
+                            onChange={e => setInputs(p => ({ ...p, otherLiabilities: Number(e.target.value) || 0 }))}
+                            style={{ width: "100%", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "8px 10px 8px 22px", fontSize: 13, color: "var(--text-bright)", outline: "none", boxSizing: "border-box" }} />
+                        </div>
+                        {liab > 0 && (
+                          <div style={{ marginTop: 6, padding: "7px 10px", borderRadius: 8, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", fontSize: 12 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                              <span style={{ color: "var(--text-muted)" }}>Total current assets</span>
+                              <span style={{ fontWeight: 700 }}>{formatCurrency(assets)}</span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                              <span style={{ color: "var(--text-muted)" }}>Other liabilities</span>
+                              <span style={{ fontWeight: 700, color: "var(--clr-red)" }}>−{formatCurrency(liab)}</span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 4, borderTop: "1px dashed var(--border-subtle)" }}>
+                              <span style={{ fontWeight: 800, color: "var(--text-bright)" }}>Net worth (today)</span>
+                              <span style={{ fontWeight: 900, color: netNow >= 0 ? "var(--clr-emerald)" : "var(--clr-red)" }}>
+                                {netNow < 0 ? "−" : ""}{formatCurrency(Math.abs(netNow))}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        <p style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 4, lineHeight: 1.5 }}>
+                          For projection impact, add a <strong>Loan Repayment</strong> Life Event or use the Loan fields in Family Milestones.
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -19711,7 +19871,7 @@ ${milestoneSnapshotHtml}
             {/* ── Investment Portfolio ──────────────────────────────────────────── */}
             <div ref={portfolioSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader
-                planBadge={sectionIsLocked("portfolio", plan) ? { tier: "pro", locked: true } : null} id="portfolio" label="Investment Portfolio"
+                planBadge={sectionIsLocked("portfolio", plan) ? { tier: "pro", locked: true } : null} id="portfolio" label="Investments & Portfolio"
                 icon={<TrendingUp style={{ width: 14, height: 14, color: "#2dd4bf" }} />}
                 color="#2dd4bf" activeBg="rgba(45,212,191,0.08)"
                 isOpen={openSections.has("portfolio")} onToggle={() => sectionIsLocked("portfolio", plan) ? setShowUpgradeModal(true) : toggleSection("portfolio")}
@@ -19720,10 +19880,178 @@ ${milestoneSnapshotHtml}
                       {formatCurrency(Number(inputs.portfolioBalance))} balance
                     </span>
                   : null}
-                collapsedHint="Stocks · ETFs · REITs · T-bills · Fixed deposits · Robo-advisory"
+                collapsedHint="CPFIS OA/SA · OA Education Loan · OA Withdrawal · Private Portfolio · ETFs · REITs · T-bills"
               />
               {openSections.has("portfolio") && (
                 <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {/* ── CPF Investment Scheme (CPFIS) ── foreigner-gated ── */}
+                  <div style={{ position: "relative" }}>
+                    {isForeigner && (
+                      <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
+                        <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
+                      </div>
+                    )}
+                    <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", display: "flex", flexDirection: "column", gap: 10, padding: "10px 12px", background: "rgba(var(--clr-orange-rgb),0.04)", border: "1px solid rgba(var(--clr-orange-rgb),0.18)", borderRadius: 12 }}>
+
+                  {/* ── SUB-SECTION: Investment — CPFIS OA + SA ──────────────── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(var(--clr-orange-rgb),0.08)", border: "1px solid rgba(var(--clr-orange-rgb),0.22)", margin: "2px 0 4px" }}>
+                    <TrendingUp style={{ width: 11, height: 11, color: "var(--clr-orange)", flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-orange)", textTransform: "uppercase", letterSpacing: "0.07em" }}>CPF Investment Scheme (CPFIS)</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {/* CPFIS OA */}
+                    <div style={{ padding: "10px 0", borderRadius: 10, background: "rgba(var(--clr-orange-rgb),0.04)", border: "1px solid rgba(var(--clr-orange-rgb),0.18)" }}>
+                    <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 4, paddingLeft: 12, paddingRight: 12 }}>
+                      <span>CPFIS – OA Invested <FreqToggle freqKey="cpfisOaFreq" durKey="cpfisOaDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-cpfis-oa" text="CPF Investment Scheme (OA): Only OA savings ABOVE $20,000 are investible — the first $20k must always remain in OA. Investment returns are NOT modelled — only the annual outflow from OA is applied. Age 18+. Complete CPFIS SAQ first." /></span>
+                      <FieldResetBtn name="cpfisOaAmount" inputs={inputs} setInputs={setInputs} />
+                    </div>
+                    {(() => {
+                      const oaBal = Number(inputs.oaBalance) || 0;
+                      const cpfisOaInvestible = Math.max(0, oaBal - 20000);
+                      const isUnder18_cpfis = (Number(inputs.currentAge) || 0) < 18;
+                      return (
+                      <>
+                        <input type="text" inputMode="decimal" name="cpfisOaAmount" value={getDisplayValue("cpfisOaAmount", inputs.cpfisOaAmount)} onFocus={() => setFocusedField("cpfisOaAmount")}
+                        onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        readOnly={isUnder18_cpfis} tabIndex={isUnder18_cpfis ? -1 : undefined}
+                        aria-label="Annual CPFIS OA investment amount"
+                        className={fieldChanged("cpfisOaAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)",
+                          border: `1px solid ${inputErrors.cpfisOaAmount ? "var(--clr-red)" : "rgba(var(--clr-orange-rgb),0.25)"}`,
+                          borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none",
+                          fontFamily: "monospace", boxSizing: "border-box",
+                          opacity: isUnder18_cpfis ? 0.4 : 1, cursor: isUnder18_cpfis ? "not-allowed" : "text" }} />
+                        {isUnder18_cpfis
+                        ? <p style={{ fontSize: 12, color: "var(--clr-amber)", marginTop: 2, paddingLeft: 12 }}>⚠ CPFIS requires age 18+</p>
+                        : inputErrors.cpfisOaAmount && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2, paddingLeft: 12 }}>⚠ {inputErrors.cpfisOaAmount}</p>}
+                        {!isUnder18_cpfis && (
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3, paddingLeft: 12 }}>
+                          Investible (OA − $20k floor): <strong style={{ color: cpfisOaInvestible === 0 ? "var(--clr-red)" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisOaInvestible)}</strong>
+                          {cpfisOaInvestible === 0 && <span style={{ color: "var(--clr-red)", fontWeight: 700 }}> · OA ≤ $20k</span>}
+                          {" "}· returns not modelled
+                        </p>
+                        )}
+                      </>
+                      );
+                    })()}
+                    </div>
+                    {/* CPFIS SA */}
+                    <div style={{ padding: "10px 0", borderRadius: 10, background: "rgba(var(--clr-orange-rgb),0.04)", border: "1px solid rgba(var(--clr-orange-rgb),0.18)" }}>
+                    <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 4, paddingLeft: 12, paddingRight: 12 }}>
+                      <span>CPFIS – SA Invested <FreqToggle freqKey="cpfisSaFreq" durKey="cpfisSaDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-cpfis-sa" text="CPF Investment Scheme (SA): Only SA savings ABOVE $40,000 are investible. SA CPFIS is only available before age 55 — SA closes at 55 (merges into RA) and cannot be invested via CPFIS after that. Investment returns are NOT modelled — only the annual outflow from SA is applied." /></span>
+                      <FieldResetBtn name="cpfisSaAmount" inputs={inputs} setInputs={setInputs} />
+                    </div>
+                    {(() => {
+                      const saBal = Number(inputs.saBalance) || 0;
+                      const ca = Number(inputs.currentAge) || 0;
+                      const is55Plus_cpfis = ca >= 55;
+                      const isUnder18_cpfis_sa = ca < 18;
+                      const cpfisDisabled = is55Plus_cpfis || isUnder18_cpfis_sa;
+                      const cpfisSaInvestible = cpfisDisabled ? 0 : Math.max(0, saBal - 40000);
+                      return (
+                      <>
+                        <input type="text" inputMode="decimal" name="cpfisSaAmount" value={getDisplayValue("cpfisSaAmount", inputs.cpfisSaAmount)} onFocus={() => setFocusedField("cpfisSaAmount")}
+                        onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        readOnly={cpfisDisabled} tabIndex={cpfisDisabled ? -1 : undefined}
+                        aria-label="Annual CPFIS SA investment amount"
+                        className={fieldChanged("cpfisSaAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)",
+                          border: `1px solid ${inputErrors.cpfisSaAmount ? "var(--clr-red)" : "rgba(var(--clr-orange-rgb),0.25)"}`,
+                          borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none",
+                          fontFamily: "monospace", boxSizing: "border-box",
+                          cursor: cpfisDisabled ? "not-allowed" : "text",
+                          opacity: cpfisDisabled ? 0.4 : 1 }} />
+                        {!cpfisDisabled && inputErrors.cpfisSaAmount && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2, paddingLeft: 12 }}>⚠ {inputErrors.cpfisSaAmount}</p>}
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3, paddingLeft: 12 }}>
+                        {is55Plus_cpfis
+                          ? <span style={{ color: "var(--clr-red)" }}>SA closed at 55 — SA CPFIS not available</span>
+                          : isUnder18_cpfis_sa
+                          ? <span style={{ color: "var(--clr-amber)" }}>⚠ CPFIS requires age 18+</span>
+                          : <>Investible (SA − $40k floor): <strong style={{ color: cpfisSaInvestible === 0 ? "var(--clr-red)" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisSaInvestible)}</strong>
+                            {cpfisSaInvestible === 0 && <span style={{ color: "var(--clr-red)", fontWeight: 700 }}> · SA ≤ $40k</span>}
+                            {" "}· returns not modelled</>}
+                        </p>
+                      </>
+                      );
+                    })()}
+                    </div>
+                  </div>
+
+                  {/* ── SUB-SECTION: Withdrawals ─────────────────────────────── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(var(--clr-orange-rgb),0.08)", border: "1px solid rgba(var(--clr-orange-rgb),0.22)", margin: "6px 0 4px" }}>
+                    <LogOut style={{ width: 11, height: 11, color: "var(--clr-orange)", flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-orange)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Withdrawals</span>
+                  </div>
+
+                  {/* D1: OA Education Loan Scheme */}
+                  {(() => {
+                    const ca = Number(inputs.currentAge) || 0;
+                    const oaBal = Number(inputs.oaBalance) || 0;
+                    // BUG-21 fix: engine uses (oa + cumEduOut) * 0.40 − cumEduOut (cumulative policy formula).
+                    // At input time cumEduOut = 0 (no prior withdrawals yet), so the first-year cap equals oaBal * 0.40.
+                    // However, the engine's cap GROWS as prior education withdrawals accumulate — the sidebar
+                    // was showing this as a hard ceiling, misleading users. We now display it as a "starting cap"
+                    // with a note that the engine applies the correct cumulative formula throughout the projection.
+                    const eduCap40 = Math.max(0, oaBal * 0.40);
+                    const enteredEdu = Number(inputs.oaEduLoan) || 0;
+                    const isOver40 = enteredEdu > eduCap40 && oaBal > 0;
+                    const is55PlusEdu = ca >= 55;
+                    // Age 55+ FRS check (informational — engine enforces per year)
+                    const currentFRS55 = Math.round(RETIREMENT_SUMS_2026.FRS);
+                    const currentSaRa = Number(is55PlusEdu ? inputs.saBalance : 0) || 0;
+                    const frsNotMet = is55PlusEdu && currentSaRa < currentFRS55;
+                    return (
+                    <div>
+                      <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 4 }}>
+                      OA Education Loan Scheme <FreqToggle freqKey="oaEduLoanFreq" durKey="oaEduLoanDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-oaedu" text="CPF Education Loan Scheme: use your OA savings (or a family member's) to pay subsidised tuition fees at approved local institutions (NUS, NTU, SMU, SIT, SUTD, SUSS, polytechnics, LASALLE, NAFA). Withdrawal limit: 40% of accumulated OA savings (excluding housing amounts already used), or remaining OA balance, whichever is lower. Interest accrues at 2.5%/yr immediately upon withdrawal. Repayment must begin 1 year after graduation and be completed within 12 years — in cash only, not CPF. Age 55+ lenders: FRS must be set aside in RA first. Modelled as a pure OA outflow; cash repayment back to OA is not projected here." />
+                      </div>
+                      {frsNotMet && (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "rgba(var(--clr-orange-rgb),0.1)", border: "1px solid rgba(var(--clr-orange-rgb),0.35)", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
+                        <AlertTriangle style={{ width: 11, height: 11, color: "var(--clr-orange)", flexShrink: 0, marginTop: 1 }} />
+                        <p style={{ fontSize: 12, color: "#fdba74", margin: 0, lineHeight: 1.5 }}>
+                        <strong>Age 55+ — FRS not yet met.</strong> CPF policy requires FRS to be set aside in RA before OA can be used for education loans. Engine will skip this outflow until RA ≥ FRS.
+                        </p>
+                      </div>
+                      )}
+                      <input type="text" inputMode="decimal" name="oaEduLoan"
+                      value={getDisplayValue("oaEduLoan", inputs.oaEduLoan)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                      onFocus={() => setFocusedField("oaEduLoan")}
+                      aria-label="Annual OA education loan amount"
+                      className={fieldChanged("oaEduLoan") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px",
+                        background: isOver40 ? "rgba(var(--clr-orange-rgb),0.07)" : "rgba(var(--clr-orange-rgb),0.04)",
+                        border: `1px solid ${inputErrors.oaEduLoan ? "var(--clr-red)" : isOver40 ? "rgba(var(--clr-orange-rgb),0.5)" : "rgba(var(--clr-orange-rgb),0.2)"}`,
+                        borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none",
+                        fontFamily: "monospace", boxSizing: "border-box" }} />
+                      {inputErrors.oaEduLoan
+                      ? <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaEduLoan}</p>
+                      : <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+                        Initial 40% OA cap: <strong style={{ color: eduCap40 === 0 ? "var(--clr-red)" : isOver40 ? "var(--clr-orange)" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(eduCap40)}</strong>
+                        {isOver40 && <span style={{ color: "var(--clr-orange)", fontWeight: 700 }}> · Exceeds initial cap — engine auto-caps</span>}
+                        {" "}· <span style={{ color: "var(--text-subtle)" }} title="Engine uses (OA + cumulative prior edu/investment withdrawals) × 40% − prior withdrawals each year — cap rises as education loans accumulate">Cap grows as loans accumulate ⓘ</span>
+                        {" "}· OA outflow only · repayment in cash (not modelled)
+                        </p>}
+                    </div>
+                    );
+                  })()}
+
+                  {/* OA Lump Sum Withdrawal (from age 55) */}
+                  <div>
+                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 4 }}>
+                    OA Lump Sum Withdrawal (from age 55) <FreqToggle freqKey="oaWithdrawalFreq" durKey="oaWithdrawalDur" inputs={inputs} setInputs={setInputs} />
+                    <TooltipBox id="t-oawithdraw" text="From age 55, after SA closes, you may withdraw OA savings above the BRS ($110,200). Withdrawn from OA permanently. For Property Pledge withdrawals use the Pledge RA Withdrawal fields in the Property & Timelines panel." />
+                    </div>
+                    <input type="text" inputMode="decimal" name="oaWithdrawalAt55" value={getDisplayValue("oaWithdrawalAt55", inputs.oaWithdrawalAt55)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="OA lump sum withdrawal from age 55" onFocus={() => setFocusedField("oaWithdrawalAt55")} className={fieldChanged("oaWithdrawalAt55") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(var(--clr-orange-rgb),0.04)", border: "1px solid rgba(var(--clr-orange-rgb),0.2)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>From age 55 · partial or full withdrawal · OA balance reduces accordingly</p>
+                  </div>
+                    </div>
+                  </div>
+
+                  {/* ── Private Investment Portfolio ── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(45,212,191,0.08)", border: "1px solid rgba(45,212,191,0.22)" }}>
+                    <TrendingUp style={{ width: 11, height: 11, color: "#2dd4bf", flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#2dd4bf", textTransform: "uppercase", letterSpacing: "0.07em" }}>Private Investment Portfolio</span>
+                  </div>
                   <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
                     Track your brokerage and investment portfolio separately from CPF and Private Assets. Shows as its own segment in the Net Worth Trajectory chart.
                   </p>
@@ -19773,7 +20101,7 @@ ${milestoneSnapshotHtml}
             {/* ── Family & Life Events — marriage, children, loans, parent support ── */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
               <SidebarSectionHeader
-                planBadge={sectionIsLocked("familyEvents", plan) ? { tier: "plus", locked: true } : null} id="familyEvents" label="Family & Life Events"
+                planBadge={sectionIsLocked("familyEvents", plan) ? { tier: "plus", locked: true } : null} id="familyEvents" label="Family Milestones"
                 icon={<Heart style={{ width: 14, height: 14, color: "#ec4899" }} />}
                 color="#ec4899" activeBg="rgba(236,72,153,0.07)"
                 isOpen={openSections.has("familyEvents")} onToggle={() => sectionIsLocked("familyEvents", plan) ? setShowUpgradeModal(true) : toggleSection("familyEvents")}
@@ -19781,7 +20109,7 @@ ${milestoneSnapshotHtml}
                   const hasFamily = (Number(inputs.marriageAge) > 0) || (Number(inputs.loanMonthlyRepayment) > 0) || (Number(inputs.parentSupportMonthly) > 0) || (inputs.childrenData || []).length > 0;
                   return hasFamily ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "rgba(236,72,153,0.15)", color: "#ec4899" }}>configured</span> : null;
                 })()}
-                collapsedHint="Marriage grant · Children education · Loans · Parent support"
+                collapsedHint="Marriage · Children · Loans · Parent support — model recurring cash impacts in Life Events if needed"
               />
               {openSections.has("familyEvents") && (
                 <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -19923,129 +20251,6 @@ ${milestoneSnapshotHtml}
                     </button>
                   </div>
 
-                </div>
-              )}
-            </div>
-
-            {/* ── Retirement Spending Model ──────────────────────────────────────── */}
-            <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader
-                planBadge={sectionIsLocked("retirementSpend", plan) ? { tier: "pro", locked: true } : null} id="retirementSpend" label="Retirement Spending"
-                icon={<PiggyBank style={{ width: 14, height: 14, color: "#fb923c" }} />}
-                color="#fb923c" activeBg="rgba(251,146,60,0.07)"
-                isOpen={openSections.has("retirementSpend")} onToggle={() => sectionIsLocked("retirementSpend", plan) ? setShowUpgradeModal(true) : toggleSection("retirementSpend")}
-                collapsedHint="Post-retirement expense ratio · Healthcare escalator · Income gap"
-              />
-              {openSections.has("retirementSpend") && (
-                <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
-                    Model how much of your current monthly expenses you'll still need in retirement, and how healthcare costs escalate with age.
-                  </p>
-
-                  {/* Expense ratio */}
-                  <label style={{ display: "block" }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Retirement expense ratio</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <input type="text" inputMode="decimal" name="retirementExpenseRatio"
-                        value={getDisplayValue("retirementExpenseRatio", inputs.retirementExpenseRatio)} onChange={handleInputChange}
-                        onBlur={handleBlur} onKeyDown={handleKeyDown}
-                        onFocus={e => { setFocusedField("retirementExpenseRatio"); e.target.select(); }}
-                        style={{ width: 70, padding: "8px 10px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace" }} />
-                      <span style={{ fontSize: 13, color: "var(--text-muted)" }}>% of current expenses</span>
-                    </div>
-                    <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>
-                      75% = spend 75% of current monthly expenses. No commute, mortgage often paid off — but leisure &amp; healthcare rise.
-                    </span>
-                    {Number(inputs.budgetLivingExpenses) > 0 && (
-                      <div style={{ marginTop: 5, fontSize: 12, color: "#fb923c", fontWeight: 700 }}>
-                        → {formatCurrency(Math.round(Number(inputs.budgetLivingExpenses) * (Number(inputs.retirementExpenseRatio) || 75) / 100))}/mo at retirement
-                      </div>
-                    )}
-                  </label>
-
-                  {/* Healthcare budget */}
-                  <label style={{ display: "block" }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Additional healthcare budget</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
-                      <input type="text" inputMode="decimal" name="retirementHealthcareMonthly"
-                        value={getDisplayValue("retirementHealthcareMonthly", inputs.retirementHealthcareMonthly)} onChange={handleInputChange}
-                        onBlur={handleBlur} onKeyDown={handleKeyDown}
-                        onFocus={e => { setFocusedField("retirementHealthcareMonthly"); e.target.select(); }}
-                        style={{ flex: 1, padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace" }} />
-                      <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/mo</span>
-                    </div>
-                    <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>On top of the ratio-scaled expenses. Covers out-of-pocket specialist, dental, optical, supplements.</span>
-                  </label>
-
-                  {/* Healthcare escalator */}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <label style={{ display: "block", flex: 1 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Escalator starts at age</span>
-                      <input type="text" inputMode="decimal" name="healthcareEscalatorAge"
-                        value={getDisplayValue("healthcareEscalatorAge", inputs.healthcareEscalatorAge)} onChange={handleInputChange}
-                        onBlur={handleBlur} onKeyDown={handleKeyDown}
-                        onFocus={e => { setFocusedField("healthcareEscalatorAge"); e.target.select(); }}
-                        style={{ width: "100%", padding: "7px 10px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", fontFamily: "monospace" }} />
-                    </label>
-                    <label style={{ display: "block", flex: 1 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Annual increase ($)</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
-                        <input type="text" inputMode="decimal" name="healthcareEscalatorAnnualIncrease"
-                          value={getDisplayValue("healthcareEscalatorAnnualIncrease", inputs.healthcareEscalatorAnnualIncrease)} onChange={handleInputChange}
-                          onBlur={handleBlur} onKeyDown={handleKeyDown}
-                          onFocus={e => { setFocusedField("healthcareEscalatorAnnualIncrease"); e.target.select(); }}
-                          style={{ flex: 1, padding: "7px 10px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", fontFamily: "monospace" }} />
-                      </div>
-                    </label>
-                  </div>
-                  <span style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: -4 }}>
-                    Healthcare budget increases by ${(Number(inputs.healthcareEscalatorAnnualIncrease) || 200).toLocaleString()}/yr after age {Number(inputs.healthcareEscalatorAge) || 75}. At age 85 that adds ~${(((Number(inputs.healthcareEscalatorAnnualIncrease) || 200) * 10) / 12).toFixed(0)}/mo on top of retirement base.
-                  </span>
-
-                  {/* Income vs Expense sustainability preview */}
-                  {(() => {
-                    const baseExp = Number(inputs.budgetLivingExpenses) || 0;
-                    if (baseExp <= 0) return null;
-                    const ratio   = (Number(inputs.retirementExpenseRatio) || 75) / 100;
-                    const hcBase  = Number(inputs.retirementHealthcareMonthly) || 500;
-                    const totalMonthlyRetire = Math.round(baseExp * ratio + hcBase);
-                    const cpfLifeMonthly = lifePlans?.standard?.start || 0;
-                    const oaDrawMo = Number(inputs.oaDrawdownMonthly) || 0;
-                    const totalIncome = cpfLifeMonthly + oaDrawMo;
-                    const gap = totalIncome - totalMonthlyRetire;
-                    return (
-                      <div style={{ background: gap >= 0 ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)", border: `1px solid ${gap >= 0 ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.25)"}`, borderRadius: 10, padding: "10px 14px", marginTop: 4 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>Retirement income vs. expenses at age {payoutAge65}</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ color: "var(--text-subtle)" }}>CPF LIFE (Standard)</span>
-                            <span style={{ color: "var(--clr-emerald)", fontWeight: 700 }}>+{formatCurrency(cpfLifeMonthly)}/mo</span>
-                          </div>
-                          {oaDrawMo > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ color: "var(--text-subtle)" }}>OA Drawdown</span>
-                            <span style={{ color: "var(--clr-emerald)", fontWeight: 700 }}>+{formatCurrency(oaDrawMo)}/mo</span>
-                          </div>}
-                          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "0.5px solid var(--border-subtle)", paddingTop: 4, marginTop: 2 }}>
-                            <span style={{ color: "var(--text-subtle)" }}>Est. retirement expenses</span>
-                            <span style={{ color: "var(--clr-amber)", fontWeight: 700 }}>−{formatCurrency(totalMonthlyRetire)}/mo</span>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "0.5px solid var(--border-subtle)", paddingTop: 4, marginTop: 2 }}>
-                            <span style={{ fontWeight: 800, color: "var(--text-bright)" }}>Monthly {gap >= 0 ? "surplus" : "shortfall"}</span>
-                            <span style={{ fontWeight: 900, fontSize: 15, color: gap >= 0 ? "var(--clr-emerald)" : "#f87171" }}>
-                              {gap >= 0 ? "+" : ""}{formatCurrency(gap)}/mo
-                            </span>
-                          </div>
-                        </div>
-                        {gap < 0 && (
-                          <p style={{ fontSize: 11, color: "#fca5a5", margin: "6px 0 0", lineHeight: 1.5 }}>
-                            Gap of {formatCurrency(Math.abs(gap))}/mo needs to be covered by SRS drawdown, portfolio income, rental, or part-time work.
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })()}
                 </div>
               )}
             </div>
@@ -20617,7 +20822,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader planBadge={sectionIsLocked("transfers", plan) ? { tier: "plus", locked: true } : null} id="transfers" label="CPF Transfers & OA Moves" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => sectionIsLocked("transfers", plan) ? setShowUpgradeModal(true) : toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One · RA → OA at payout age" />
+              <SidebarSectionHeader planBadge={sectionIsLocked("transfers", plan) ? { tier: "plus", locked: true } : null} id="transfers" label="CPF Transfers" icon={<ArrowRightLeft style={{ width: 14, height: 14, color: "var(--clr-amber)" }} />} color="var(--clr-amber)" activeBg="rgba(var(--clr-amber-rgb),0.06)" isOpen={openSections.has("transfers")} onToggle={() => sectionIsLocked("transfers", plan) ? setShowUpgradeModal(true) : toggleSection("transfers")} badge={null} collapsedHint="OA → MA transfer · OA → SA/RA transfer · For Self or For Loved One · RA → OA at payout age" />
               {openSections.has("transfers") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* OA → MA */}
@@ -20909,10 +21114,10 @@ ${milestoneSnapshotHtml}
             </div>{/* /transfers inner */}
             </div>{/* /transfers gate wrapper */}
 
-            {/* Retirement Drawdown — income targets, OA drawdown, Die with Zero */}
+            {/* Retirement — income goals, OA drawdown, Die with Zero · expense planning */}
             <div ref={decumulationSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
-              <SidebarSectionHeader planBadge={sectionIsLocked("decumulation", plan) ? { tier: "plus", locked: true } : null} id="decumulation" label="Retirement Drawdown" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("decumulation")} onToggle={() => sectionIsLocked("decumulation", plan) ? setShowUpgradeModal(true) : toggleSection("decumulation")} badge={null} collapsedHint="Target retirement income · OA drawdown · OA bequest floor · Die with Zero · CPF LIFE or RSS scheme" />
-              {openSections.has("decumulation") && <div style={{ padding: "0 16px 16px" }}>
+              <SidebarSectionHeader planBadge={sectionIsLocked("retirement", plan) ? { tier: "plus", locked: true } : null} id="retirement" label="Retirement" icon={<Target style={{ width: 14, height: 14, color: "#f43f5e" }} />} color="#f43f5e" activeBg="rgba(244,63,94,0.06)" isOpen={openSections.has("retirement")} onToggle={() => sectionIsLocked("retirement", plan) ? setShowUpgradeModal(true) : toggleSection("retirement")} badge={null} collapsedHint="Target income · OA drawdown · Die with Zero · CPF LIFE / RSS · Expense ratio · Healthcare escalator" />
+              {openSections.has("retirement") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* Monthly Goal */}
                   <div style={{ background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.2)", borderRadius: 10, padding: 12, marginBottom: 4 }}>
@@ -21191,6 +21396,124 @@ ${milestoneSnapshotHtml}
                   </div>
 
 
+
+                {/* ── Expense Planning sub-section ── */}
+                <div style={{ paddingTop: 10, borderTop: "1px solid rgba(244,63,94,0.2)", marginTop: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)", margin: "2px 0 8px" }}>
+                    <PiggyBank style={{ width: 11, height: 11, color: "#fb923c", flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#fb923c", textTransform: "uppercase", letterSpacing: "0.07em" }}>Expense Planning</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+                      Model how much of your current monthly expenses you'll still need in retirement, and how healthcare costs escalate with age.
+                    </p>
+
+                  {/* Expense ratio */}
+                  <label style={{ display: "block" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Retirement expense ratio</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input type="text" inputMode="decimal" name="retirementExpenseRatio"
+                        value={getDisplayValue("retirementExpenseRatio", inputs.retirementExpenseRatio)} onChange={handleInputChange}
+                        onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        onFocus={e => { setFocusedField("retirementExpenseRatio"); e.target.select(); }}
+                        style={{ width: 70, padding: "8px 10px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace" }} />
+                      <span style={{ fontSize: 13, color: "var(--text-muted)" }}>% of current expenses</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>
+                      75% = spend 75% of current monthly expenses. No commute, mortgage often paid off — but leisure &amp; healthcare rise.
+                    </span>
+                    {Number(inputs.budgetLivingExpenses) > 0 && (
+                      <div style={{ marginTop: 5, fontSize: 12, color: "#fb923c", fontWeight: 700 }}>
+                        → {formatCurrency(Math.round(Number(inputs.budgetLivingExpenses) * (Number(inputs.retirementExpenseRatio) || 75) / 100))}/mo at retirement
+                      </div>
+                    )}
+                  </label>
+
+                  {/* Healthcare budget */}
+                  <label style={{ display: "block" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Additional healthcare budget</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
+                      <input type="text" inputMode="decimal" name="retirementHealthcareMonthly"
+                        value={getDisplayValue("retirementHealthcareMonthly", inputs.retirementHealthcareMonthly)} onChange={handleInputChange}
+                        onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        onFocus={e => { setFocusedField("retirementHealthcareMonthly"); e.target.select(); }}
+                        style={{ flex: 1, padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace" }} />
+                      <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/mo</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>On top of the ratio-scaled expenses. Covers out-of-pocket specialist, dental, optical, supplements.</span>
+                  </label>
+
+                  {/* Healthcare escalator */}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <label style={{ display: "block", flex: 1 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Escalator starts at age</span>
+                      <input type="text" inputMode="decimal" name="healthcareEscalatorAge"
+                        value={getDisplayValue("healthcareEscalatorAge", inputs.healthcareEscalatorAge)} onChange={handleInputChange}
+                        onBlur={handleBlur} onKeyDown={handleKeyDown}
+                        onFocus={e => { setFocusedField("healthcareEscalatorAge"); e.target.select(); }}
+                        style={{ width: "100%", padding: "7px 10px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", fontFamily: "monospace" }} />
+                    </label>
+                    <label style={{ display: "block", flex: 1 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>Annual increase ($)</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>$</span>
+                        <input type="text" inputMode="decimal" name="healthcareEscalatorAnnualIncrease"
+                          value={getDisplayValue("healthcareEscalatorAnnualIncrease", inputs.healthcareEscalatorAnnualIncrease)} onChange={handleInputChange}
+                          onBlur={handleBlur} onKeyDown={handleKeyDown}
+                          onFocus={e => { setFocusedField("healthcareEscalatorAnnualIncrease"); e.target.select(); }}
+                          style={{ flex: 1, padding: "7px 10px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 13, outline: "none", fontFamily: "monospace" }} />
+                      </div>
+                    </label>
+                  </div>
+                  <span style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: -4 }}>
+                    Healthcare budget increases by ${(Number(inputs.healthcareEscalatorAnnualIncrease) || 200).toLocaleString()}/yr after age {Number(inputs.healthcareEscalatorAge) || 75}. At age 85 that adds ~${(((Number(inputs.healthcareEscalatorAnnualIncrease) || 200) * 10) / 12).toFixed(0)}/mo on top of retirement base.
+                  </span>
+
+                  {/* Income vs Expense sustainability preview */}
+                  {(() => {
+                    const baseExp = Number(inputs.budgetLivingExpenses) || 0;
+                    if (baseExp <= 0) return null;
+                    const ratio   = (Number(inputs.retirementExpenseRatio) || 75) / 100;
+                    const hcBase  = Number(inputs.retirementHealthcareMonthly) || 500;
+                    const totalMonthlyRetire = Math.round(baseExp * ratio + hcBase);
+                    const cpfLifeMonthly = lifePlans?.standard?.start || 0;
+                    const oaDrawMo = Number(inputs.oaDrawdownMonthly) || 0;
+                    const totalIncome = cpfLifeMonthly + oaDrawMo;
+                    const gap = totalIncome - totalMonthlyRetire;
+                    return (
+                      <div style={{ background: gap >= 0 ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)", border: `1px solid ${gap >= 0 ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.25)"}`, borderRadius: 10, padding: "10px 14px", marginTop: 4 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>Retirement income vs. expenses at age {payoutAge65}</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ color: "var(--text-subtle)" }}>CPF LIFE (Standard)</span>
+                            <span style={{ color: "var(--clr-emerald)", fontWeight: 700 }}>+{formatCurrency(cpfLifeMonthly)}/mo</span>
+                          </div>
+                          {oaDrawMo > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ color: "var(--text-subtle)" }}>OA Drawdown</span>
+                            <span style={{ color: "var(--clr-emerald)", fontWeight: 700 }}>+{formatCurrency(oaDrawMo)}/mo</span>
+                          </div>}
+                          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "0.5px solid var(--border-subtle)", paddingTop: 4, marginTop: 2 }}>
+                            <span style={{ color: "var(--text-subtle)" }}>Est. retirement expenses</span>
+                            <span style={{ color: "var(--clr-amber)", fontWeight: 700 }}>−{formatCurrency(totalMonthlyRetire)}/mo</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "0.5px solid var(--border-subtle)", paddingTop: 4, marginTop: 2 }}>
+                            <span style={{ fontWeight: 800, color: "var(--text-bright)" }}>Monthly {gap >= 0 ? "surplus" : "shortfall"}</span>
+                            <span style={{ fontWeight: 900, fontSize: 15, color: gap >= 0 ? "var(--clr-emerald)" : "#f87171" }}>
+                              {gap >= 0 ? "+" : ""}{formatCurrency(gap)}/mo
+                            </span>
+                          </div>
+                        </div>
+                        {gap < 0 && (
+                          <p style={{ fontSize: 11, color: "#fca5a5", margin: "6px 0 0", lineHeight: 1.5 }}>
+                            Gap of {formatCurrency(Math.abs(gap))}/mo needs to be covered by SRS drawdown, portfolio income, rental, or part-time work.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  </div>
+                </div>
                 </div>
               </div>}
             </div>
@@ -21198,185 +21521,10 @@ ${milestoneSnapshotHtml}
               </div>{/* /sidebar-col-2-body */}
             </div>{/* /sidebar-col-2 */}
 
-            {/* ── FHD COL 3: Private Assets, Life Events & Decumulation (3 sections) ──
+            {/* ── FHD COL 3: Property, Private Assets & Life Events ──
                 Passthrough flex-column on ≤1919px; grid column on ≥1920px. */}
             <div className="sidebar-col sidebar-col-3">
               <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
-            {/* ── All Advanced Sections: Investments · Property · Private Assets · Life Events ── */}
-            {/* ── Investments & Withdrawals — Advanced Setting ───────────────────────
-                Extracted from Outflows for conceptual clarity: these are capital decisions
-                (investing OA/SA via CPFIS, education loan draws, age-55 OA withdrawals),
-                not recurring medical expense outflows.                                   */}
-            {showAdvanced && (
-            <div style={{ position: "relative" }}>
-              {isForeigner && (
-                <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
-                  <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
-                </div>
-              )}
-              <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-                <SidebarSectionHeader planBadge={sectionIsLocked("investments", plan) ? { tier: "pro", locked: true } : null} id="investments" label="CPFIS Investments" icon={<TrendingUp style={{ width: 14, height: 14, color: "var(--clr-orange)" }} />} color="var(--clr-orange)" activeBg="rgba(var(--clr-orange-rgb),0.06)" isOpen={openSections.has("investments")} onToggle={() => sectionIsLocked("investments", plan) ? setShowUpgradeModal(true) : toggleSection("investments")} badge={null} collapsedHint="CPFIS OA (>$20k floor) · CPFIS SA (>$40k floor) · OA Education Loan · OA Lump Sum Withdrawal (55+)" />
-                {openSections.has("investments") && <div style={{ padding: "0 16px 16px" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-                    {/* ── SUB-SECTION: Investment — CPFIS OA + SA ──────────────── */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(var(--clr-orange-rgb),0.08)", border: "1px solid rgba(var(--clr-orange-rgb),0.22)", margin: "2px 0 4px" }}>
-                      <TrendingUp style={{ width: 11, height: 11, color: "var(--clr-orange)", flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-orange)", textTransform: "uppercase", letterSpacing: "0.07em" }}>CPF Investment Scheme (CPFIS)</span>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {/* CPFIS OA */}
-                      <div style={{ padding: "10px 0", borderRadius: 10, background: "rgba(var(--clr-orange-rgb),0.04)", border: "1px solid rgba(var(--clr-orange-rgb),0.18)" }}>
-                        <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 4, paddingLeft: 12, paddingRight: 12 }}>
-                          <span>CPFIS – OA Invested <FreqToggle freqKey="cpfisOaFreq" durKey="cpfisOaDur" inputs={inputs} setInputs={setInputs} />
-                          <TooltipBox id="t-cpfis-oa" text="CPF Investment Scheme (OA): Only OA savings ABOVE $20,000 are investible — the first $20k must always remain in OA. Investment returns are NOT modelled — only the annual outflow from OA is applied. Age 18+. Complete CPFIS SAQ first." /></span>
-                          <FieldResetBtn name="cpfisOaAmount" inputs={inputs} setInputs={setInputs} />
-                        </div>
-                        {(() => {
-                          const oaBal = Number(inputs.oaBalance) || 0;
-                          const cpfisOaInvestible = Math.max(0, oaBal - 20000);
-                          const isUnder18_cpfis = (Number(inputs.currentAge) || 0) < 18;
-                          return (
-                            <>
-                              <input type="text" inputMode="decimal" name="cpfisOaAmount" value={getDisplayValue("cpfisOaAmount", inputs.cpfisOaAmount)} onFocus={() => setFocusedField("cpfisOaAmount")}
-                                onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                                readOnly={isUnder18_cpfis} tabIndex={isUnder18_cpfis ? -1 : undefined}
-                                aria-label="Annual CPFIS OA investment amount"
-                                className={fieldChanged("cpfisOaAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)",
-                                  border: `1px solid ${inputErrors.cpfisOaAmount ? "var(--clr-red)" : "rgba(var(--clr-orange-rgb),0.25)"}`,
-                                  borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none",
-                                  fontFamily: "monospace", boxSizing: "border-box",
-                                  opacity: isUnder18_cpfis ? 0.4 : 1, cursor: isUnder18_cpfis ? "not-allowed" : "text" }} />
-                              {isUnder18_cpfis
-                                ? <p style={{ fontSize: 12, color: "var(--clr-amber)", marginTop: 2, paddingLeft: 12 }}>⚠ CPFIS requires age 18+</p>
-                                : inputErrors.cpfisOaAmount && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2, paddingLeft: 12 }}>⚠ {inputErrors.cpfisOaAmount}</p>}
-                              {!isUnder18_cpfis && (
-                                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3, paddingLeft: 12 }}>
-                                  Investible (OA − $20k floor): <strong style={{ color: cpfisOaInvestible === 0 ? "var(--clr-red)" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisOaInvestible)}</strong>
-                                  {cpfisOaInvestible === 0 && <span style={{ color: "var(--clr-red)", fontWeight: 700 }}> · OA ≤ $20k</span>}
-                                  {" "}· returns not modelled
-                                </p>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                      {/* CPFIS SA */}
-                      <div style={{ padding: "10px 0", borderRadius: 10, background: "rgba(var(--clr-orange-rgb),0.04)", border: "1px solid rgba(var(--clr-orange-rgb),0.18)" }}>
-                        <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 4, paddingLeft: 12, paddingRight: 12 }}>
-                          <span>CPFIS – SA Invested <FreqToggle freqKey="cpfisSaFreq" durKey="cpfisSaDur" inputs={inputs} setInputs={setInputs} />
-                          <TooltipBox id="t-cpfis-sa" text="CPF Investment Scheme (SA): Only SA savings ABOVE $40,000 are investible. SA CPFIS is only available before age 55 — SA closes at 55 (merges into RA) and cannot be invested via CPFIS after that. Investment returns are NOT modelled — only the annual outflow from SA is applied." /></span>
-                          <FieldResetBtn name="cpfisSaAmount" inputs={inputs} setInputs={setInputs} />
-                        </div>
-                        {(() => {
-                          const saBal = Number(inputs.saBalance) || 0;
-                          const ca = Number(inputs.currentAge) || 0;
-                          const is55Plus_cpfis = ca >= 55;
-                          const isUnder18_cpfis_sa = ca < 18;
-                          const cpfisDisabled = is55Plus_cpfis || isUnder18_cpfis_sa;
-                          const cpfisSaInvestible = cpfisDisabled ? 0 : Math.max(0, saBal - 40000);
-                          return (
-                            <>
-                              <input type="text" inputMode="decimal" name="cpfisSaAmount" value={getDisplayValue("cpfisSaAmount", inputs.cpfisSaAmount)} onFocus={() => setFocusedField("cpfisSaAmount")}
-                                onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                                readOnly={cpfisDisabled} tabIndex={cpfisDisabled ? -1 : undefined}
-                                aria-label="Annual CPFIS SA investment amount"
-                                className={fieldChanged("cpfisSaAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)",
-                                  border: `1px solid ${inputErrors.cpfisSaAmount ? "var(--clr-red)" : "rgba(var(--clr-orange-rgb),0.25)"}`,
-                                  borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none",
-                                  fontFamily: "monospace", boxSizing: "border-box",
-                                  cursor: cpfisDisabled ? "not-allowed" : "text",
-                                  opacity: cpfisDisabled ? 0.4 : 1 }} />
-                              {!cpfisDisabled && inputErrors.cpfisSaAmount && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2, paddingLeft: 12 }}>⚠ {inputErrors.cpfisSaAmount}</p>}
-                              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3, paddingLeft: 12 }}>
-                                {is55Plus_cpfis
-                                  ? <span style={{ color: "var(--clr-red)" }}>SA closed at 55 — SA CPFIS not available</span>
-                                  : isUnder18_cpfis_sa
-                                    ? <span style={{ color: "var(--clr-amber)" }}>⚠ CPFIS requires age 18+</span>
-                                    : <>Investible (SA − $40k floor): <strong style={{ color: cpfisSaInvestible === 0 ? "var(--clr-red)" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(cpfisSaInvestible)}</strong>
-                                      {cpfisSaInvestible === 0 && <span style={{ color: "var(--clr-red)", fontWeight: 700 }}> · SA ≤ $40k</span>}
-                                      {" "}· returns not modelled</>}
-                              </p>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-
-                    {/* ── SUB-SECTION: Withdrawals ─────────────────────────────── */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 6, background: "rgba(var(--clr-orange-rgb),0.08)", border: "1px solid rgba(var(--clr-orange-rgb),0.22)", margin: "6px 0 4px" }}>
-                      <LogOut style={{ width: 11, height: 11, color: "var(--clr-orange)", flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-orange)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Withdrawals</span>
-                    </div>
-
-                    {/* D1: OA Education Loan Scheme */}
-                    {(() => {
-                      const ca = Number(inputs.currentAge) || 0;
-                      const oaBal = Number(inputs.oaBalance) || 0;
-                      // BUG-21 fix: engine uses (oa + cumEduOut) * 0.40 − cumEduOut (cumulative policy formula).
-                      // At input time cumEduOut = 0 (no prior withdrawals yet), so the first-year cap equals oaBal * 0.40.
-                      // However, the engine's cap GROWS as prior education withdrawals accumulate — the sidebar
-                      // was showing this as a hard ceiling, misleading users. We now display it as a "starting cap"
-                      // with a note that the engine applies the correct cumulative formula throughout the projection.
-                      const eduCap40 = Math.max(0, oaBal * 0.40);
-                      const enteredEdu = Number(inputs.oaEduLoan) || 0;
-                      const isOver40 = enteredEdu > eduCap40 && oaBal > 0;
-                      const is55PlusEdu = ca >= 55;
-                      // Age 55+ FRS check (informational — engine enforces per year)
-                      const currentFRS55 = Math.round(RETIREMENT_SUMS_2026.FRS);
-                      const currentSaRa = Number(is55PlusEdu ? inputs.saBalance : 0) || 0;
-                      const frsNotMet = is55PlusEdu && currentSaRa < currentFRS55;
-                      return (
-                        <div>
-                          <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 4 }}>
-                            OA Education Loan Scheme <FreqToggle freqKey="oaEduLoanFreq" durKey="oaEduLoanDur" inputs={inputs} setInputs={setInputs} />
-                            <TooltipBox id="t-oaedu" text="CPF Education Loan Scheme: use your OA savings (or a family member's) to pay subsidised tuition fees at approved local institutions (NUS, NTU, SMU, SIT, SUTD, SUSS, polytechnics, LASALLE, NAFA). Withdrawal limit: 40% of accumulated OA savings (excluding housing amounts already used), or remaining OA balance, whichever is lower. Interest accrues at 2.5%/yr immediately upon withdrawal. Repayment must begin 1 year after graduation and be completed within 12 years — in cash only, not CPF. Age 55+ lenders: FRS must be set aside in RA first. Modelled as a pure OA outflow; cash repayment back to OA is not projected here." />
-                          </div>
-                          {frsNotMet && (
-                            <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "rgba(var(--clr-orange-rgb),0.1)", border: "1px solid rgba(var(--clr-orange-rgb),0.35)", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
-                              <AlertTriangle style={{ width: 11, height: 11, color: "var(--clr-orange)", flexShrink: 0, marginTop: 1 }} />
-                              <p style={{ fontSize: 12, color: "#fdba74", margin: 0, lineHeight: 1.5 }}>
-                                <strong>Age 55+ — FRS not yet met.</strong> CPF policy requires FRS to be set aside in RA before OA can be used for education loans. Engine will skip this outflow until RA ≥ FRS.
-                              </p>
-                            </div>
-                          )}
-                          <input type="text" inputMode="decimal" name="oaEduLoan"
-                            value={getDisplayValue("oaEduLoan", inputs.oaEduLoan)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                            onFocus={() => setFocusedField("oaEduLoan")}
-                            aria-label="Annual OA education loan amount"
-                            className={fieldChanged("oaEduLoan") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px",
-                              background: isOver40 ? "rgba(var(--clr-orange-rgb),0.07)" : "rgba(var(--clr-orange-rgb),0.04)",
-                              border: `1px solid ${inputErrors.oaEduLoan ? "var(--clr-red)" : isOver40 ? "rgba(var(--clr-orange-rgb),0.5)" : "rgba(var(--clr-orange-rgb),0.2)"}`,
-                              borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none",
-                              fontFamily: "monospace", boxSizing: "border-box" }} />
-                          {inputErrors.oaEduLoan
-                            ? <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.oaEduLoan}</p>
-                            : <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
-                                Initial 40% OA cap: <strong style={{ color: eduCap40 === 0 ? "var(--clr-red)" : isOver40 ? "var(--clr-orange)" : "var(--text-highlight)", fontFamily: "monospace" }}>{formatCurrency(eduCap40)}</strong>
-                                {isOver40 && <span style={{ color: "var(--clr-orange)", fontWeight: 700 }}> · Exceeds initial cap — engine auto-caps</span>}
-                                {" "}· <span style={{ color: "var(--text-subtle)" }} title="Engine uses (OA + cumulative prior edu/investment withdrawals) × 40% − prior withdrawals each year — cap rises as education loans accumulate">Cap grows as loans accumulate ⓘ</span>
-                                {" "}· OA outflow only · repayment in cash (not modelled)
-                              </p>}
-                        </div>
-                      );
-                    })()}
-
-                    {/* OA Lump Sum Withdrawal (from age 55) */}
-                    <div>
-                      <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-orange)", textTransform: "uppercase", marginBottom: 4 }}>
-                        OA Lump Sum Withdrawal (from age 55) <FreqToggle freqKey="oaWithdrawalFreq" durKey="oaWithdrawalDur" inputs={inputs} setInputs={setInputs} />
-                        <TooltipBox id="t-oawithdraw" text="From age 55, after SA closes, you may withdraw OA savings above the BRS ($110,200). Withdrawn from OA permanently. For Property Pledge withdrawals use the Pledge RA Withdrawal fields in the Property & Timelines panel." />
-                      </div>
-                      <input type="text" inputMode="decimal" name="oaWithdrawalAt55" value={getDisplayValue("oaWithdrawalAt55", inputs.oaWithdrawalAt55)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="OA lump sum withdrawal from age 55" onFocus={() => setFocusedField("oaWithdrawalAt55")} className={fieldChanged("oaWithdrawalAt55") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "rgba(var(--clr-orange-rgb),0.04)", border: "1px solid rgba(var(--clr-orange-rgb),0.2)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                      <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>From age 55 · partial or full withdrawal · OA balance reduces accordingly</p>
-                    </div>
-
-                  </div>
-                </div>}
-              </div>
-            </div>
-            )}{/* /investments advanced gate */}
-
             {/* ── Property — Advanced Setting ────────────────────────────────── */}
             {showAdvanced && (
             <>
@@ -21385,30 +21533,6 @@ ${milestoneSnapshotHtml}
               <SidebarSectionHeader planBadge={sectionIsLocked("property", plan) ? { tier: "pro", locked: true } : null} id="property" label="Property & Monetisation" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => sectionIsLocked("property", plan) ? setShowUpgradeModal(true) : toggleSection("property")} badge={null} collapsedHint="Housing loan timelines · OA used for housing · Property sale & CPF refund · LBS · Monetisation" />
               {openSections.has("property") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-                  {/* Property Type — merged from App_138 (B4/B5/B6 classification layer) */}
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>Type</div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      {[["hdb", "🏠 HDB"], ["private", "🏢 Private"], ["none", "None"]].map(([val, lbl]) => {
-                        const active = (inputs.propertyType || "hdb") === val;
-                        return (
-                          <button key={val} onClick={() => {
-                            const updates = { propertyType: val };
-                            if (val === "private") {
-                              updates.ehgAmount = 0; updates.cpfHousingGrantResale = 0; updates.phgAmount = 0; updates.stepUpGrantAmount = 0;
-                              if (inputs.loanType === "hdb") updates.loanType = "bank";
-                            }
-                            if (val === "none") { updates.includeProperty = false; }
-                            setInputs(p => ({ ...p, ...updates }));
-                          }}
-                            style={{ flex: 1, padding: "5px 4px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: active ? "none" : "1px solid var(--border-strong)", cursor: "pointer", background: active ? "var(--clr-blue)" : "var(--bg-muted)", color: active ? "#fff" : "var(--text-muted)", transition: "background 0.15s" }}>
-                            {lbl}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
 
                   {/* Timelines */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -21479,12 +21603,11 @@ ${milestoneSnapshotHtml}
 
                   {/* Housing loan — locked for foreigners (no OA account) */}
                   {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
-
-                    {/* Payment Source + Loan Type — merged from App_138 (A3/B4/B5) */}
+                    {/* Payment Source: CPF vs Cash */}
                     <div style={{ marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>
                         Payment Source
-                        <TooltipBox id="t-mortgage-source" text="CPF: monthly mortgage instalments debit your OA. The OA amount is tracked — on property sale, CPF requires refund of principal + 2.5%/yr interest. Cash: instalments debit your private assets. No OA is touched, so there is no CPF refund obligation when you sell." />
+                        <TooltipBox id="t-mortgage-source" text="CPF: monthly mortgage instalments debit your OA. Tracked — on property sale CPF requires refund of principal + 2.5%/yr interest. Cash: instalments debit your private assets. No OA is touched, so there is no CPF refund obligation when you sell." />
                       </div>
                       <div style={{ display: "flex", gap: 4 }}>
                         {[["cpf", "CPF (OA)"], ["cash", "Cash"]].map(([val, lbl]) => {
@@ -21498,51 +21621,47 @@ ${milestoneSnapshotHtml}
                         })}
                       </div>
                       {(inputs.mortgagePaymentSource || "cpf") === "cash" && (
-                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Cash mortgage debits private assets. CPF Loan Ledger is not applicable.</p>
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>Cash mortgage debits private assets. CPF Loan Ledger and VHR are not applicable.</p>
                       )}
                     </div>
+
+                    {/* Loan Type */}
                     <div style={{ marginBottom: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>Loan Type</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>Loan Type</div>
                       <div style={{ display: "flex", gap: 4 }}>
-                        {(() => {
-                          const loanOpts = (inputs.propertyType || "hdb") === "hdb"
-                            ? [["hdb", "HDB (2.6%)"], ["bank", "Bank"], ["none", "None"]]
-                            : [["bank", "Bank"], ["none", "None"]];
-                          return loanOpts.map(([val, lbl]) => {
-                            const active = (inputs.loanType || "hdb") === val;
-                            return (
-                              <button key={val} onClick={() => setInputs(p => ({ ...p, loanType: val }))}
-                                style={{ flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 12, fontWeight: 700, border: active ? "none" : "1px solid var(--border-strong)", cursor: "pointer", background: active ? "var(--clr-blue)" : "var(--bg-muted)", color: active ? "#fff" : "var(--text-muted)", transition: "background 0.15s" }}>
-                                {lbl}
-                              </button>
-                            );
-                          });
-                        })()}
+                        {[["hdb", "HDB (2.6%)"], ["bank", "Bank"], ["none", "None"]].map(([val, lbl]) => {
+                          const active = (inputs.loanType || "hdb") === val;
+                          return (
+                            <button key={val} onClick={() => setInputs(p => ({ ...p, loanType: val }))}
+                              style={{ flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 12, fontWeight: 700, border: active ? "none" : "1px solid var(--border-strong)", cursor: "pointer", background: active ? "var(--clr-blue)" : "var(--bg-muted)", color: active ? "#fff" : "var(--text-muted)", transition: "background 0.15s" }}>
+                              {lbl}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
                     <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                      <span>Housing Loan — OA/Cash Outflow ($/yr) <FreqToggle freqKey="housingFreq" durKey="housingDur" inputs={inputs} setInputs={setInputs} />
-                      <TooltipBox id="t-housing-prop" text="Annual OA or cash deduction for mortgage repayment (see Payment Source above). Stops at Housing Stop Age. Tracked for CPF refund on property sale — CPF mode only." /></span>
+                      <span>Housing Loan — OA / Cash Outflow ($/yr) <FreqToggle freqKey="housingFreq" durKey="housingDur" inputs={inputs} setInputs={setInputs} />
+                      <TooltipBox id="t-housing-prop" text="Annual OA (CPF mortgage) or cash (cash mortgage) deduction for mortgage repayment. Stops at Housing Stop Age. CPF mode: tracked for CPF refund on property sale." /></span>
                       <FieldResetBtn name="housingOutflow" inputs={inputs} setInputs={setInputs} />
                     </div>
                     <input type="text" inputMode="decimal" name="housingOutflow" value={getDisplayValue("housingOutflow", inputs.housingOutflow)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Annual housing loan outflow" onFocus={() => setFocusedField("housingOutflow")} className={fieldChanged("housingOutflow") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.housingOutflow ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     {inputErrors.housingOutflow && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.housingOutflow}</p>}
 
-                    {/* ── OA Loan Ledger — CPF mode only (M5: not applicable when paying by cash) ── cpfHousingLoanPrincipal input + amortisation chart */}
-                    {(inputs.mortgagePaymentSource || "cpf") === "cpf" && <div style={{ marginTop: 10 }}>
-                      {/* a11y fix: was <label> — TooltipBox inside label causes double-focus on mobile. Input already has aria-label. */}
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>
+                    {(inputs.mortgagePaymentSource || "cpf") === "cpf" && <>{/* ── OA Loan Ledger ── CPF mortgage only: cpfHousingLoanPrincipal + amortisation chart */}
+                    <div style={{ marginTop: 10 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>
                         CPF Loan Outstanding Principal ($)
                         <TooltipBox id="t-loan-ledger" text="Enter the current outstanding principal of your CPF OA housing loan. FusionPlus will display a live amortisation chart showing when the loan clears and how much interest accrues." />
-                      </div>
+                      </label>
                       <input type="text" inputMode="decimal" name="cpfHousingLoanPrincipal"
                         value={getDisplayValue("cpfHousingLoanPrincipal", inputs.cpfHousingLoanPrincipal)}
                         onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
-                        placeholder="0" aria-label="CPF Loan Outstanding Principal"
+                        placeholder="0"
                         style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                    </div>}
-                    {(inputs.mortgagePaymentSource || "cpf") === "cpf" && cpfLoanLedger.length > 0 && (() => {
+                    </div>
+                    {cpfLoanLedger.length > 0 && (() => {
                       const lastRow = cpfLoanLedger[cpfLoanLedger.length - 1];
                       return (
                         <div style={{ marginTop: 10 }}>
@@ -21567,7 +21686,8 @@ ${milestoneSnapshotHtml}
                           </p>
                         </div>
                       );
-                    })()}
+                    })()}</>
+                  }
                   </div>}
 
                   {/* OA Downpayment — locked for foreigners (no OA account) */}
@@ -21780,7 +21900,7 @@ ${milestoneSnapshotHtml}
                           </div>
                           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
                             {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Sell existing home, buy smaller. Enter net cash after CPF OA refund (handled by Sell Property at Age), agent fees, stamp duty, and replacement home cost. Any voluntary RA top-up from proceeds is optional."}
-                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "Sell tail-end of HDB lease to HDB; you stay in your flat for life. Available from age 65 (SC only). HDB pays an annuity premium directly into RA (enter in RA field below); you may also receive a smaller cash component. ⚠ Monthly LBS income is not modelled as a cash stream — add it as private income in Retirement Drawdown if needed."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "Sell tail-end of HDB lease to HDB; you stay in your flat for life. Available from age 65 (SC only). HDB pays an annuity premium directly into RA (enter in RA field below); you may also receive a smaller cash component. ⚠ Monthly LBS income is not modelled as a cash stream — add it as private income in the Retirement section if needed."}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Downgrade to a 3-room or smaller HDB; govt tops up RA as a CPF bonus. Cash bonus (if any) enters private assets; CPF RA bonus enters RA. Bonus amount depends on flat type — verify the exact figures with CPF Board before entering."}
                           </p>
                         </div>
@@ -21942,14 +22062,13 @@ ${milestoneSnapshotHtml}
                       </p>
                     )}
                   </div>
-
-                  {/* Rent Expense — moved into the same container as Rental Income (was a separate card) */}
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(251,113,133,0.15)" }}>
+                  {/* ── Rent Expense ── unified inside Rental Income container */}
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(251,113,133,0.25)" }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#fb7185", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Rental Expense</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>Monthly cash outflow when renting a home as tenant (debited from private assets)</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "#fb7185", textTransform: "uppercase", marginBottom: 4 }}>Monthly ($)<TooltipBox id="t-rentexp-mo" text="Monthly rent you pay as a tenant. Modelled as an annual outflow (×12) debited from your private assets each year between start and end age. Set 0 to disable. Use the Scenario Compare tab to run a Buy vs Rent comparison side-by-side." /></div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>Monthly cash outflow when renting a home as tenant (debited from private assets)</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#fb7185", textTransform: "uppercase", marginBottom: 4 }}>Monthly ($)<TooltipBox id="t-rentexp-mo" text="Monthly rent you pay as a tenant. Modelled as an annual outflow (×12) debited from your private assets each year between start and end age. Set 0 to disable. Use the Scenario Compare tab to run a Buy vs Rent comparison side-by-side." /></div>
                       <input type="text" inputMode="decimal" name="rentExpense" placeholder="0"
                         value={getDisplayValue("rentExpense", inputs.rentExpense)}
                         onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
@@ -21983,7 +22102,7 @@ ${milestoneSnapshotHtml}
                     <p style={{ fontSize: 12, color: "#fb7185", marginTop: 6 }}>
                       −${(Number(inputs.rentExpense) || 0).toLocaleString()}/mo · age {inputs.rentExpStartAge}–{inputs.rentExpEndAge} · −${((Number(inputs.rentExpense)||0) * 12).toLocaleString()}/yr debited from private assets
                     </p>
-                  )}
+                    )}
                   </div>
                 </div>
               </div>}
@@ -22191,14 +22310,12 @@ ${milestoneSnapshotHtml}
                 const ev = { ...leFormState, endAge: isPoint ? leFormState.startAge : leFormState.endAge };
                 if (leEditingId === 'new') {
                   setInputs(p => ({ ...p, lifeEvents: [...(p.lifeEvents || []), ev] }));
-                  // Fix: stay in the add-flow with a fresh blank form so the user can add
-                  // several events in a row without re-clicking "+ Add Event" each time.
-                  // Cancel (below) remains the explicit way to exit back to the list.
-                  startNew();
                 } else {
                   setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).map(e => e.id === ev.id ? ev : e) }));
-                  setLeEditingId(null); setLeFormState({});
                 }
+                // Immediately reset form for the next event (keeps section visually open;
+                // user can dismiss the form with Cancel when finished adding events)
+                startNew();
               };
               const deleteEvent = (id) => setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).filter(e => e.id !== id) }));
               const toggleEvent = (id) => setInputs(p => ({ ...p, lifeEvents: (p.lifeEvents || []).map(e => e.id === id ? { ...e, enabled: e.enabled === false } : e) }));
@@ -22210,7 +22327,7 @@ ${milestoneSnapshotHtml}
               return (
                 <div ref={lifeEventsSectionRef} style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "visible" }}>
                   {/* Header */}
-                  <SidebarSectionHeader planBadge={sectionIsLocked("lifeevents", plan) ? { tier: "pro", locked: true } : null} id="lifeevents" label="Life Events & Stress Tests" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => sectionIsLocked("lifeevents", plan) ? setShowUpgradeModal(true) : toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Stress-test retrenchment, windfall, career break, medical crisis…"} />
+                  <SidebarSectionHeader planBadge={sectionIsLocked("lifeevents", plan) ? { tier: "pro", locked: true } : null} id="lifeevents" label="Life Events" icon={<Activity style={{ width: 14, height: 14, color: "#ef4444" }} />} color="#ef4444" activeBg="rgba(239,68,68,0.06)" isOpen={openSections.has("lifeevents")} onToggle={() => sectionIsLocked("lifeevents", plan) ? setShowUpgradeModal(true) : toggleSection("lifeevents")} badge={<>{lifeEvents.length > 0 ? <span style={{ fontSize: 12, fontWeight: 800, background: enabledCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(100,116,139,0.2)", color: enabledCount > 0 ? "#ef4444" : "var(--text-muted)", padding: "2px 7px", borderRadius: 10, border: `1px solid ${enabledCount > 0 ? "rgba(239,68,68,0.4)" : "var(--border-strong)"}` }}>{enabledCount} active</span> : null}</>} collapsedHint={lifeEvents.length > 0 ? `${lifeEvents.length} event${lifeEvents.length !== 1 ? "s" : ""} · ${enabledCount} active — click to view or edit` : "Overlay Life Events on your projection — retrenchment, medical crisis, windfall, career break, salary cut…"} />
 
                   {openSections.has("lifeevents") && (
                     <div style={{ padding: "0 16px 16px" }}>
@@ -22270,7 +22387,7 @@ ${milestoneSnapshotHtml}
                           <div style={{ marginBottom: 8 }}>
                             <label className="cpf-label" style={{ marginBottom: 4 }}>Event Type</label>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-                              {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => {
+                              {Object.entries(LIFE_EVENT_TYPES).filter(([key]) => !['marriage','child_birth','parent_support','education_expense'].includes(key)).map(([key, meta]) => {
                                 const TypeIcon = meta.icon || Activity;
                                 return (
                                 <button key={key} onClick={() => setLeFormState(p => ({ ...p, type: key, label: meta.label, endAge: (meta.isPoint ? p.startAge : p.endAge) || p.startAge }))}
@@ -22412,11 +22529,18 @@ ${milestoneSnapshotHtml}
                         </div>
                       )}
 
-                      {/* Add button */}
+                      {/* Add button + optional duplication warning */}
                       {leEditingId === null && (
-                        <button onClick={startNew} style={{ width: "100%", marginTop: 8, padding: "7px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px dashed rgba(239,68,68,0.5)", background: "transparent", color: "#ef4444", cursor: "pointer" }}>
-                          + Add Life Event
-                        </button>
+                        <>
+                          {(inputs.lifeEvents||[]).some(e => ["marriage","child_birth","loan_repayment","parent_support"].includes(e.type)) && (
+                            <div style={{ fontSize: 11, color: "var(--clr-amber)", background: "rgba(var(--clr-amber-rgb),0.08)", border: "1px solid rgba(var(--clr-amber-rgb),0.25)", borderRadius: 7, padding: "6px 10px", marginBottom: 6, lineHeight: 1.5 }}>
+                              ⚠️ <strong>Possible double-count:</strong> Marriage, Child Birth, Loan Repayment and Parent Support are also modelled in <em>Family Milestones</em> above. Using both applies them simultaneously in the engine.
+                            </div>
+                          )}
+                          <button onClick={startNew} style={{ width: "100%", marginTop: 8, padding: "7px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "1px dashed rgba(239,68,68,0.5)", background: "transparent", color: "#ef4444", cursor: "pointer" }}>
+                            + Add Life Event
+                          </button>
+                        </>
                       )}
                     </div>
                   )}
@@ -22607,7 +22731,7 @@ ${milestoneSnapshotHtml}
                             const gap = target_ > 0 ? totalMonthly - target_ : null;
                             const gapClr = gap == null ? "var(--text-muted)" : gap >= 0 ? "var(--clr-emerald)" : "var(--clr-red)";
                             const gapVal = gap == null ? "—" : (gap >= 0 ? `+${formatCurrency(gap)}` : `−${formatCurrency(Math.abs(gap))}`);
-                            return { label: "Monthly gap", sublabel: target_ > 0 ? `vs ${formatCurrency(target_)}/mo target` : "set target in sidebar", value: gapVal, color: gapClr, tip: target_ > 0 ? `CPF LIFE payout + OA drawdown = ${formatCurrency(totalMonthly)}/mo vs ${formatCurrency(target_)}/mo target. ${gap != null && gap < 0 ? "Gap: add SRS drawdown or OA drawdown to close." : "Surplus — you are on track."}` : "Enter Target Monthly Income in the Retirement Drawdown section to track your income gap.", isNew: true };
+                            return { label: "Monthly gap", sublabel: target_ > 0 ? `vs ${formatCurrency(target_)}/mo target` : "set target in sidebar", value: gapVal, color: gapClr, tip: target_ > 0 ? `CPF LIFE payout + OA drawdown = ${formatCurrency(totalMonthly)}/mo vs ${formatCurrency(target_)}/mo target. ${gap != null && gap < 0 ? "Gap: add SRS drawdown or OA drawdown to close." : "Surplus — you are on track."}` : "Enter Target Monthly Income in the Retirement section to track your income gap.", isNew: true };
                           })(),
                         ];
                       })();
@@ -22643,13 +22767,32 @@ ${milestoneSnapshotHtml}
                     <PieChart style={{ width: 12, height: 12, display: "inline", marginRight: 5, verticalAlign: "middle" }} />CPF overview
                   </button>
                 </div>
-                {/* Life-stage contextual banner — dismissible (merged from App_138) */}
+                {/* Life Stage Banner — dismissible, keyed to current age bracket */}
                 {debouncedInputs.showLifeStageBanner !== false && lifeStage && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: `${lifeStage.color}18`, border: `1px solid ${lifeStage.color}40`, fontSize: 12, color: lifeStage.color, fontWeight: 600, flexShrink: 0 }}>
-                    <span style={{ opacity: 0.8 }}>●</span>
-                    <span>{lifeStage.label} Phase</span>
-                    <span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 11 }}> — {lifeStage.tip}</span>
-                    <button onClick={() => setInputs(p => ({ ...p, showLifeStageBanner: false }))} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 0, lineHeight: 1, marginLeft: 2, fontSize: 13, outline: "none" }}>✕</button>
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 8, marginTop: 8, padding: "7px 12px", borderRadius: 8,
+                    background: `${lifeStage.color}1a`,
+                    border: `1px solid ${lifeStage.color}55`,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em",
+                        textTransform: "uppercase", color: lifeStage.color, whiteSpace: "nowrap" }}>
+                        {lifeStage.label}
+                      </span>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)", overflow: "hidden",
+                        textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {lifeStage.tip}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setInputs(p => ({ ...p, showLifeStageBanner: false }))}
+                      style={{ background: "none", border: "none", cursor: "pointer",
+                        color: "var(--text-muted)", padding: 0, lineHeight: 1,
+                        marginLeft: 2, fontSize: 13, outline: "none", flexShrink: 0 }}
+                      title="Dismiss life-stage banner">
+                      ✕
+                    </button>
                   </div>
                 )}
               </div>
@@ -22705,6 +22848,7 @@ ${milestoneSnapshotHtml}
                 spouseEffectiveOaDrawMonthly={spouseEffectiveOaDrawMonthly}
                 spouseEffectiveOaDrawStartAge={spouseEffectiveOaDrawStartAge}
                 spouseMilestones={spouseMilestones}
+                portfolioByAge={portfolioByAge}
               />
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
@@ -22792,7 +22936,7 @@ ${milestoneSnapshotHtml}
                     <div style={{ padding: "16px 20px" }}>
                       <p style={{ color: "var(--text-main)", fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>This tool models your entire CPF journey — from today's balances through to monthly payouts in retirement — using <strong>2026 CPF Board rates and policies</strong>.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8 }}>
-                        {[["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck], ["Monte Carlo stress testing", Activity], ["Milestone alerts", Bell], ["Holistic Strategy & ⚡ Fill Gap", Target], ["OA Drawdown decumulation engine", ArrowRightLeft], ["Side-by-side scenario diff", Split], ["PDF & CSV export", Download], ["SRS tax-deferred savings", BookOpen], ["Property Monetisation (LBS / downgrade)", Home], ["Die with Zero draw-down planner", Clock], ["11 sample profiles to explore instantly", Users], ["PR G/G & F/G rates with auto-advancement", Users], ["Recurring / One-Time frequency toggles", ArrowRightLeft], ["OA→SA / OA→RA For Loved One transfers", Users], ["Annual Cashflow Ledger", TableIcon], ["OA Education Loan Scheme", BookOpen], ["PwD MRSS under-55 bypass", ShieldCheck], ["MMSS 5-year pilot (2026–2030)", Gift], ["Accumulation: SA pre-55 / RA from-55 split", BarChart3], ["Life Events & Stress Testing (retrenchment, windfall…)", Activity], ["Retirement Sum Growth — adjustable FRS/BHS rate", TrendingUp], ["Phased Salary & Career Break modelling", Briefcase]].map(([text, Icon], i) => (
+                        {[["Year-by-year accumulation", TrendingUp], ["CPF LIFE plan comparison", ShieldCheck], ["Monte Carlo stress testing", Activity], ["Milestone alerts", Bell], ["Holistic Strategy & ⚡ Fill Gap", Target], ["OA Drawdown decumulation engine", ArrowRightLeft], ["Side-by-side scenario diff", Split], ["PDF & CSV export", Download], ["SRS tax-deferred savings", BookOpen], ["Property Monetisation (LBS / downgrade)", Home], ["Die with Zero draw-down planner", Clock], ["11 sample profiles to explore instantly", Users], ["PR G/G & F/G rates with auto-advancement", Users], ["Recurring / One-Time frequency toggles", ArrowRightLeft], ["OA→SA / OA→RA For Loved One transfers", Users], ["Annual Cashflow Ledger", TableIcon], ["OA Education Loan Scheme", BookOpen], ["PwD MRSS under-55 bypass", ShieldCheck], ["MMSS 5-year pilot (2026–2030)", Gift], ["Accumulation: SA pre-55 / RA from-55 split", BarChart3], ["Life Events (retrenchment, windfall…)", Activity], ["Retirement Sum Growth — adjustable FRS/BHS rate", TrendingUp], ["Phased Salary & Career Break modelling", Briefcase]].map(([text, Icon], i) => (
                           <div key={i} style={{ background: "var(--bg-base)", padding: "8px 12px", borderRadius: 12, display: "flex", alignItems: "center", gap: 10, border: "1px solid var(--border-subtle)" }}>
                             <Icon style={{ width: 13, height: 13, color: "var(--clr-emerald)" }} />
                             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-highlight)" }}>{text}</span>
@@ -22811,7 +22955,7 @@ ${milestoneSnapshotHtml}
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#eff6ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Setting Up Your Profile</h4><p style={{ fontSize: 13, color: "rgba(239,246,255,0.8)", margin: 0 }}>Step 1 — The Input Engine (left panel)</p></div>
                     </div>
                     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[["1", "Enter your CPF balances, gender & citizenship", "Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). Select citizenship: SC or PR have full CPF access; Foreigners have no CPF account — all CPF sections lock automatically and only SRS, Property, and Private Assets apply. MRSS and MMSS are SC-only. PR members in Year 1 or 2 get lower contribution rates, with the engine automatically advancing from Yr 1 → Yr 2 → Yr 3+ rates each projection year.", "var(--clr-blue2)"], ["2", "Auto-Calc Contributions (SC / PR / SEP)", "For employed members: enter OW, AW, and Salary Growth %, then click ⚡ Auto-Calc. SC uses full rates. PR members: select tenure year (1 / 2 / 3+) and rate type — G/G (default, graduated employer) or F/G (full employer 17%, requires joint CPF application). Auto-Calc uses the correct rates and the engine advances tiers automatically year-by-year. SEP members use the Inflows (VC3A) panel instead.", "var(--clr-emerald)"], ["3", "Add voluntary top-ups & CPF Transfers", "RSTU top-ups to SA/RA, gov grants, MRSS/MMSS. Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the current year. CPF Transfers: OA→SA/RA (For Self: internal move; For Loved One: OA outflow only, no FRS cap). CPFIS: OA above $20k and SA above $40k are investible separately.", "var(--clr-purple)"], ["4", "Review the Inflows panel limit", "The Inflows panel tracks the $37,740 CPF Annual Limit for VC contributions. It turns orange if your combined VC3A/RSTU inputs exceed your remaining allowance.", "var(--clr-amber)"], ["5", "Set your life-phase timelines", "Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model transitions accurately. If selling property, enter Sell Property at Age — CPF requires refund of OA housing principal + 2.5%/yr accrued interest, credited back to OA.", "var(--clr-orange)"], ["6", "Configure SRS (optional)", "Enter your SRS balance, annual contribution (max $15,300/yr for SC/PR), and drawdown start age in the SRS panel. Contributions are tax-deductible; 50% of each withdrawal is taxable from age 63; full balance must be withdrawn within 10 years of first withdrawal. The engine models growth and drawdown separately.", "#0ea5e9"], ["7", "Plan decumulation income & Property Monetisation", "Set a Target Monthly Income in Retirement Drawdown. Click ⚡ Fill Gap to auto-set the OA Drawdown amount. If you plan to downgrade, use LBS, or sell and buy smaller, toggle Property Monetisation in the Property & Timelines section to add net cash proceeds and any RA top-up to the projection.", "#f43f5e"], ["8", "Try Die with Zero mode (optional)", "Toggle Die with Zero in Retirement Drawdown. Set a target depletion age — the tool automatically computes the exact monthly OA draw using the PMT annuity formula and applies it directly to the projection. The OA draw is shown as auto-applied in the panel. RA and CPF LIFE payouts are unaffected.", "var(--clr-green)"]].map(([num, title, desc, color]) => (
+                      {[["1", "Enter your CPF balances, gender & citizenship", "Type your current OA, SA, and MA balances. Select Male or Female — this sets the correct CPF LIFE payout ratio (~$540/mo vs ~$500/mo per $100k RA). Select citizenship: SC or PR have full CPF access; Foreigners have no CPF account — all CPF sections lock automatically and only SRS, Property, and Private Assets apply. MRSS and MMSS are SC-only. PR members in Year 1 or 2 get lower contribution rates, with the engine automatically advancing from Yr 1 → Yr 2 → Yr 3+ rates each projection year.", "var(--clr-blue2)"], ["2", "Auto-Calc Contributions (SC / PR / SEP)", "For employed members: enter OW, AW, and Salary Growth %, then click ⚡ Auto-Calc. SC uses full rates. PR members: select tenure year (1 / 2 / 3+) and rate type — G/G (default, graduated employer) or F/G (full employer 17%, requires joint CPF application). Auto-Calc uses the correct rates and the engine advances tiers automatically year-by-year. SEP members use the Inflows (VC3A) panel instead.", "var(--clr-emerald)"], ["3", "Add voluntary top-ups & CPF Transfers", "RSTU top-ups to SA/RA, gov grants, MRSS/MMSS. Every inflow and outflow field has a Recurring / One-Time frequency toggle — use One-Time for lump sums that only apply in the current year. CPF Transfers: OA→SA/RA (For Self: internal move; For Loved One: OA outflow only, no FRS cap). CPFIS: OA above $20k and SA above $40k are investible separately.", "var(--clr-purple)"], ["4", "Review the Inflows panel limit", "The Inflows panel tracks the $37,740 CPF Annual Limit for VC contributions. It turns orange if your combined VC3A/RSTU inputs exceed your remaining allowance.", "var(--clr-amber)"], ["5", "Set your life-phase timelines", "Use Contrib Stop Age (when you retire) and Housing Stop Age (when your mortgage ends) to model transitions accurately. If selling property, enter Sell Property at Age — CPF requires refund of OA housing principal + 2.5%/yr accrued interest, credited back to OA.", "var(--clr-orange)"], ["6", "Configure SRS (optional)", "Enter your SRS balance, annual contribution (max $15,300/yr for SC/PR), and drawdown start age in the SRS panel. Contributions are tax-deductible; 50% of each withdrawal is taxable from age 63; full balance must be withdrawn within 10 years of first withdrawal. The engine models growth and drawdown separately.", "#0ea5e9"], ["7", "Plan retirement income & Property Monetisation", "Set a Target Monthly Income in the Retirement section. Click ⚡ Fill Gap to auto-set the OA Drawdown amount. If you plan to downgrade, use LBS, or sell and buy smaller, toggle Property Monetisation in the Property & Timelines section to add net cash proceeds and any RA top-up to the projection.", "#f43f5e"], ["8", "Try Die with Zero mode (optional)", "Toggle Die with Zero in the Retirement section. Set a target depletion age — the tool automatically computes the exact monthly OA draw using the PMT annuity formula and applies it directly to the projection. The OA draw is shown as auto-applied in the panel. RA and CPF LIFE payouts are unaffected.", "var(--clr-green)"]].map(([num, title, desc, color]) => (
                         <div key={num} style={{ display: "flex", gap: 12 }}>
                           <div style={{ width: 26, height: 26, borderRadius: "50%", background: `${color}20`, color, border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, flexShrink: 0 }}>{num}</div>
                           <div><h5 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)", marginBottom: 2 }}>{title}</h5><p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</p></div>
@@ -22826,7 +22970,7 @@ ${milestoneSnapshotHtml}
                       <div><h4 style={{ fontSize: 15, fontWeight: 900, color: "#faf5ff", marginBottom: 1, textShadow: "0 1px 4px rgba(0,0,0,0.3)" }}>Exploring the Dashboard</h4><p style={{ fontSize: 13, color: "rgba(250,245,255,0.8)", margin: 0 }}>Step 2 — The right panel tabs</p></div>
                     </div>
                     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[["CPF Overview", PieChart, "var(--clr-emerald)", "Sub-view inside the Dashboard tab — toggle using the pills at the top. Shows: five-card KPI strip (Total CPF · Monthly Payout · Payout Age · FRS Progress · Monthly Gap), net worth doughnut, a 🏆 High Net Worth badge (appears once projected total wealth at payout age crosses $1M), estate planning panel, Milestone Snapshots chart, contribution gap alert, What-If Explorer sliders, and milestone alerts."], ["Strategy", Target, "#f43f5e", "Three optimization tools in one tab. (1) Goal Simulator — enter a CPF balance target at payout age and click ⚡ Calculate Strategies for three solver plans: A (RSTU only), B (VC3A only), C (blended). Each card shows feasibility, required cash, and Apply to Profile. Clear Simulator reverts to your original baseline even after applying multiple strategies. (2) Stress Centre — Perfect Storm, Sequence-of-Returns, Inflation, and Property Correction stress tests. (3) Turbo — scans every CPF lever (RSTU, VC3A, VCMA, OA→SA, VHR, Deferment, Property Monetisation) for unused headroom and lets you Apply All eligible financial levers in one click."], ["Grow/Spend", BarChart3, "var(--clr-blue2)", "Two sub-tabs covering the full lifecycle. (1) Accumulation — stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance. Life Events overlay shows coloured bands for retrenchment, career break, windfall and other stress scenarios. Real vs Nominal dollar toggle adjusts for inflation. (2) Decumulation — set a Target Monthly Income, use ⚡ Fill Gap to auto-set the OA Drawdown needed to close the income gap. Gantt and income table show CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets."], ["Payout Plans", ShieldCheck, "var(--clr-purple)", "Side-by-side CPF LIFE payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."], ["Compare", Split, "var(--clr-orange)", "Scenario A vs B diff — save your current profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded side-by-side diff of every metric that changes. The What-If Explorer is in the Dashboard → CPF Overview sub-view."], ["Household", Users, "#8b5cf6", "Enable Household Mode in the Profile section sidebar toggle to add a spouse or partner. Shows combined CPF accumulation, side-by-side payout cards (with gender, citizenship, FRS headroom), Income Coverage vs your target, OA Depletion Risk, Key Ages table (5-year intervals), and a Children & Dependants milestone guide. Each member runs a fully independent projection engine."], ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, interest, and transfer component. Download either view as CSV."]].map(([title, Icon, color, desc]) => (
+                      {[["CPF Overview", PieChart, "var(--clr-emerald)", "Sub-view inside the Dashboard tab — toggle using the pills at the top. A colour-coded Life Stage Banner (Early Career / Mid-Career / Pre-Retirement / Transition / Retirement) appears below the pill row — tap ✕ to dismiss. Shows: five-card KPI strip (Total CPF · Monthly Payout · Payout Age · FRS Progress · Monthly Gap), net worth doughnut, a 🏆 High Net Worth badge (appears once projected total wealth at payout age crosses $1M), estate planning panel, Milestone Snapshots chart, contribution gap alert, What-If Explorer sliders, and milestone alerts."], ["Strategy", Target, "#f43f5e", "Three optimization tools in one tab. (1) Goal Simulator — enter a CPF balance target at payout age and click ⚡ Calculate Strategies for three solver plans: A (RSTU only), B (VC3A only), C (blended). Each card shows feasibility, required cash, and Apply to Profile. Clear Simulator reverts to your original baseline even after applying multiple strategies. (2) Stress Centre — Perfect Storm, Sequence-of-Returns, Inflation, and Property Correction stress tests. (3) Turbo — scans every CPF lever (RSTU, VC3A, VCMA, OA→SA, VHR, Deferment, Property Monetisation) for unused headroom and lets you Apply All eligible financial levers in one click."], ["Grow/Spend", BarChart3, "var(--clr-blue2)", "Two sub-tabs covering the full lifecycle. (1) Accumulation — stacked area chart of OA/SA/MA/RA year-by-year. Toggle Monte Carlo to overlay a P10–P90 confidence band from 200 simulations. Choose Mild (±0.5%), Base (±1%), or Stress (±2%) variance. Click “Show Cohort Avg” to overlay the CPF Board cohort-average balance trajectory (amber dashed line). Life Events overlay shows coloured bands for retrenchment, career break, windfall and other stress scenarios. Real vs Nominal dollar toggle adjusts for inflation. (2) Decumulation — set a Target Monthly Income, use ⚡ Fill Gap to auto-set the OA Drawdown needed to close the income gap. Gantt and income table show CPF LIFE, OA Drawdown (with real exhaustion age), SRS, and Private Assets."], ["Payout Plans", ShieldCheck, "var(--clr-purple)", "Side-by-side CPF LIFE payout curves for Standard, Escalating, and Basic plans. Vertical lines mark exact break-even ages. Toggle between Bequest and Cumulative Payout views. Basic plan payout = PMT formula; bequest includes full premium refund during Phase 1."], ["Compare", Split, "var(--clr-orange)", "Scenario A vs B diff — save your current profile as Scenario A, adjust any inputs, save as Scenario B, and view a colour-coded side-by-side diff of every metric that changes. The What-If Explorer is in the Dashboard → CPF Overview sub-view."], ["Household", Users, "#8b5cf6", "Enable Household Mode in the Profile section sidebar toggle to add a spouse or partner. Shows combined CPF accumulation, side-by-side payout cards (with gender, citizenship, FRS headroom), Income Coverage vs your target, OA Depletion Risk, Key Ages table (5-year intervals), and a Children & Dependants milestone guide. Each member runs a fully independent projection engine."], ["Data Table", TableIcon, "var(--clr-amber)", "Full year-by-year projection table with sticky Age column, Yield (B/S/E) amounts, and Yield IRR %. Switch to the Cashflow Ledger sub-tab for a complete annual breakdown of every inflow, outflow, interest, and transfer component. Download either view as CSV."]].map(([title, Icon, color, desc]) => (
                         <div key={title}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}15`, border: `1px solid ${color}33`, padding: "4px 10px", borderRadius: 10, marginBottom: 5 }}>
                             <Icon style={{ width: 12, height: 12, color }} />
@@ -22845,7 +22989,7 @@ ${milestoneSnapshotHtml}
                     </div>
                     <div style={{ padding: "16px 20px" }}>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 8, marginBottom: 16 }}>
-                        {[["Goal Simulator", Target, "Set a CPF balance target at payout age. Click ⚡ Calculate Strategies for three solver plans — A (RSTU only), B (VC3A only), C (blended). Each card shows feasibility, required annual cash, monthly equivalent, and Apply to Profile. Clear Simulator reverts to the original baseline even after applying multiple strategies. Found in Strategy tab → Goal Simulator."], ["VCMA — Cash Top-up to MA", Gift, "Voluntary Cash MediSave Top-up — direct annual cash deposit to your MA. Found in the Inflows panel directly after RSTU. Capped at BHS ($79,000). Not subject to the $37,740 Annual Limit. MMSS-eligible members get an automatic government match up to $1,000/yr."], ["Share Link", Link, "Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."], ["PDF Report", Download, "Comprehensive multi-section PDF report: cover KPIs, input parameters & optional features, charts, FRS tracker & breakeven, year-by-year projection, Cashflow Ledger, sensitivity analysis, and conditional SRS / Scenario Comparison sections."], ["SEP Mode", Briefcase, "Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr split proportionally across OA/SA/MA. BHS and ERS caps enforced."], ["Monte Carlo", Activity, "200 simulations with selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in Grow/Spend → Accumulation. Probability of Sufficiency badge shows the active band."], ["SRS", BookOpen, "Tax-deferred savings scheme — contributions deductible up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63; full balance must be withdrawn within 10 years. Model in the SRS panel."], ["Property Monetisation", Home, "One-time event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds to private assets; RA top-up to RA. Now in the Property & Monetisation panel."], ["Die with Zero", Clock, "PMT-based draw-down planner — toggle in Retirement Drawdown. Set a target depletion age; the OA draw is computed via PMT and auto-applied to the projection immediately. All liquid assets reach $0 at that age; RA/CPF LIFE unaffected."], ["Sample Profiles", Users, "14 pre-built scenarios: Blank Slate, Typical Employee (35), Late Starter (50), Self-Employed (40), High Earner (40), Near Retirement (54), Post-55 RA Builder (57), RSS Member (68), Household — Tan Family, Baby Millionaire A & B, Family Builder (28), FIRE — Retire Early (32), Sandwich Generation (42). Load from the Samples button in the header (desktop) or hamburger menu (mobile) to explore the tool instantly."], ["PR G/G & F/G Rates", Users, "PR members in Year 1 or 2 can select G/G (graduated employer, default) or F/G (full employer 17% — requires joint CPF application). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates in the projection."], ["Recurring / One-Time Toggles", ArrowRightLeft, "Every inflow/outflow field has a frequency toggle. 'Recurring' applies the amount every projection year. 'One-Time' applies it only in the first projection year — ideal for lump-sum top-ups or one-off withdrawals."], ["OA→SA / OA→RA For Loved One", Users, "CPF Transfers panel supports For Self (internal move with FRS/ERS cap) and For Loved One (OA outflow only, no headroom constraint on the recipient). Applies to both OA→SA (pre-55) and OA→RA (55+)."], ["Annual Cashflow Ledger", TableIcon, "In the Data Table tab, switch to Cashflow Ledger for a full year-by-year breakdown: mandatory, voluntary, grants, OA/SA/RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with column totals."], ["Gender Toggle", Users, "Male/Female selection affects CPF LIFE payout. Female payouts are ~7% lower (0.93× male) due to longer life expectancy. Estimates use 2026 CPF Board data with linear interpolation."], ["OA Drawdown & ⚡ Fill Gap", Download, "Draw monthly cash from OA after CPF LIFE starts to close the income gap. Set a Target Monthly Income, then click ⚡ Fill Gap to auto-set the exact draw amount. OA Exhaustion Age badge updates live."], ["Property Sale & CPF Refund", Home, "Enter Sell Property at Age in Timelines & Property. On sale, CPF refunds OA housing principal + 2.5%/yr interest to OA. With pledge active, refund restores RA to FRS first."], ["OA Education Loan", BookOpen, "Model CPF Education Scheme withdrawals: use OA savings to fund tuition at approved local institutions. Engine enforces the 40% OA ceiling and age 55+ FRS-first rule. Modelled as a pure OA outflow."], ["PwD MRSS Bypass", ShieldCheck, "Enable the Person with Disabilities (PwD) flag in Profile to unlock MRSS below age 55. PwD members are exempt from the age-55 requirement for the Matched Retirement Savings Scheme."], ["Retirement Sum Growth", TrendingUp, "Control how fast FRS, BRS, ERS, and BHS targets rise each year (default 3%, CPF Board historical average). Preset buttons: 2% / 3% / 4%. Found in the Salary section."], ["Phased Salary & Career Break", Briefcase, "Model a growth rate change at a specific age (Phase 2) or a full contribution pause for a career break age range (sabbatical, NS, parental leave). Both affect mandatory contribution projections. Found in the Salary section."], ["Life Events & Stress Tests", Activity, "Overlay 10 event types: Retrenchment, Career Break, Medical Crisis, Windfall, Early Retirement, Hyperinflation, Salary Cut, Child Birth (Baby Bonus), Education Expense, Charitable Giving. Coloured bands on the Accumulation chart. Marriage, Loan Repayment, and Parent Support moved to the dedicated Family & Life Events fields — enter them there instead. Found in the Life Events & Stress Tests panel."]].map(([title, Icon, desc]) => (
+                        {[["Goal Simulator", Target, "Set a CPF balance target at payout age. Click ⚡ Calculate Strategies for three solver plans — A (RSTU only), B (VC3A only), C (blended). Each card shows feasibility, required annual cash, monthly equivalent, and Apply to Profile. Clear Simulator reverts to the original baseline even after applying multiple strategies. Found in Strategy tab → Goal Simulator."], ["VCMA — Cash Top-up to MA", Gift, "Voluntary Cash MediSave Top-up — direct annual cash deposit to your MA. Found in the Inflows panel directly after RSTU. Capped at BHS ($79,000). Not subject to the $37,740 Annual Limit. MMSS-eligible members get an automatic government match up to $1,000/yr."], ["Share Link", Link, "Encode your entire profile into a compact code. Send to a financial advisor or save as a bookmark."], ["PDF Report", Download, "Comprehensive multi-section PDF report: cover KPIs, input parameters & optional features, charts, FRS tracker & breakeven, year-by-year projection, Cashflow Ledger, sensitivity analysis, and conditional SRS / Scenario Comparison sections."], ["SEP Mode", Briefcase, "Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr split proportionally across OA/SA/MA. BHS and ERS caps enforced."], ["Monte Carlo", Activity, "200 simulations with selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in Grow/Spend → Accumulation. Probability of Sufficiency badge shows the active band."], ["SRS", BookOpen, "Tax-deferred savings scheme — contributions deductible up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63; full balance must be withdrawn within 10 years. Model in the SRS panel."], ["Property Monetisation", Home, "One-time event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds to private assets; RA top-up to RA. Now in the Property & Monetisation panel."], ["Die with Zero", Clock, "PMT-based draw-down planner — toggle in the Retirement section. Set a target depletion age; the OA draw is computed via PMT and auto-applied to the projection immediately. All liquid assets reach $0 at that age; RA/CPF LIFE unaffected."], ["Sample Profiles", Users, "14 pre-built scenarios: Blank Slate, Typical Employee (35), Late Starter (50), Self-Employed (40), High Earner (40), Near Retirement (54), Post-55 RA Builder (57), RSS Member (68), Household — Tan Family, Baby Millionaire A & B, Family Builder (28), FIRE — Retire Early (32), Sandwich Generation (42). Load from the Samples button in the header (desktop) or hamburger menu (mobile) to explore the tool instantly."], ["PR G/G & F/G Rates", Users, "PR members in Year 1 or 2 can select G/G (graduated employer, default) or F/G (full employer 17% — requires joint CPF application). The engine automatically advances Yr 1 → Yr 2 → Yr 3+ rates in the projection."], ["Recurring / One-Time Toggles", ArrowRightLeft, "Every inflow/outflow field has a frequency toggle. 'Recurring' applies the amount every projection year. 'One-Time' applies it only in the first projection year — ideal for lump-sum top-ups or one-off withdrawals."], ["OA→SA / OA→RA For Loved One", Users, "CPF Transfers panel supports For Self (internal move with FRS/ERS cap) and For Loved One (OA outflow only, no headroom constraint on the recipient). Applies to both OA→SA (pre-55) and OA→RA (55+)."], ["Annual Cashflow Ledger", TableIcon, "In the Data Table tab, switch to Cashflow Ledger for a full year-by-year breakdown: mandatory, voluntary, grants, OA/SA/RA/MA interest, housing outflow, medical, OA drawdown, loved-one transfers, and CPFIS — with column totals."], ["Gender Toggle", Users, "Male/Female selection affects CPF LIFE payout. Female payouts are ~7% lower (0.93× male) due to longer life expectancy. Estimates use 2026 CPF Board data with linear interpolation."], ["OA Drawdown & ⚡ Fill Gap", Download, "Draw monthly cash from OA after CPF LIFE starts to close the income gap. Set a Target Monthly Income, then click ⚡ Fill Gap to auto-set the exact draw amount. OA Exhaustion Age badge updates live."], ["Property Sale & CPF Refund", Home, "Enter Sell Property at Age in Timelines & Property. CPF mortgage: OA housing principal + 2.5%/yr accrued interest is refunded to OA on sale; with pledge active, refund restores RA to FRS first. Cash mortgage (Payment Source = Cash): no CPF was used, so there is no refund obligation on sale."], ["OA Education Loan", BookOpen, "Model CPF Education Scheme withdrawals: use OA savings to fund tuition at approved local institutions. Engine enforces the 40% OA ceiling and age 55+ FRS-first rule. Modelled as a pure OA outflow."], ["PwD MRSS Bypass", ShieldCheck, "Enable the Person with Disabilities (PwD) flag in Profile to unlock MRSS below age 55. PwD members are exempt from the age-55 requirement for the Matched Retirement Savings Scheme."], ["CPF Safety Features", ShieldCheck, "Four CPF security measures you can activate at cpf.gov.sg: Withdrawal Lock (prevents OA/SA cash withdrawals before 65), Money Lock (floor on withdrawals), Safety Switch (temporary transaction freeze), and Trust Contact (alerts a nominated person for large transactions). Toggle each on/off in the Financial Health panel to track your security posture. No simulation effect."], ["Mortgage Payment Source", Home, "Select CPF or Cash in the Housing Loan sidebar section. CPF mode: monthly instalments debit your OA and are tracked for the CPF refund-on-sale calculation (principal + 2.5%/yr). Cash mode: instalments debit private assets only — OA is untouched, and there is no CPF refund obligation when you sell. Affects both the Projection engine and the Cashflow Ledger."], ["Retirement Sum Growth", TrendingUp, "Control how fast FRS, BRS, ERS, and BHS targets rise each year (default 3%, CPF Board historical average). Preset buttons: 2% / 3% / 4%. Found in the Salary section."], ["Phased Salary & Career Break", Briefcase, "Model a growth rate change at a specific age (Phase 2) or a full contribution pause for a career break age range (sabbatical, NS, parental leave). Both affect mandatory contribution projections. Found in the Salary section."], ["Life Events", Activity, "Overlay 9 life event types on your projection: Retrenchment, Career Break, Medical Crisis, Windfall, Early Retirement, Hyperinflation, Salary Cut, Loan Repayment, Charitable Giving. Family milestones (marriage, children, parent support, education) are in the Family Milestones section. Events appear as coloured bands on the Accumulation chart."]].map(([title, Icon, desc]) => (
                           <div key={title} style={{ background: "var(--bg-base)", padding: "12px 14px", borderRadius: 12, border: "1px solid var(--border-subtle)" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
                               <Icon style={{ width: 13, height: 13, color: "var(--clr-blue2)" }} />
@@ -22946,13 +23090,13 @@ ${milestoneSnapshotHtml}
                         {[
                           { label: "Add voluntary top-ups →", section: "topups",       icon: TrendingUp },
                           { label: "Add a life event →",       section: "lifeevents",  icon: Activity   },
-                          { label: "Set drawdown goals →",     section: "decumulation", icon: Target     },
+                          { label: "Set retirement goals →",   section: "retirement",   icon: Target     },
                         ].map(({ label, section, icon: QuickIcon }) => (
                           <button key={section} type="button"
                             onClick={() => {
                               setOpenSections(prev => { const n = new Set(prev); n.add(section); return n; });
                               setSidebarOpen(true);
-                              const refMap = { topups: topupsSectionRef, lifeevents: lifeEventsSectionRef, decumulation: decumulationSectionRef };
+                              const refMap = { topups: topupsSectionRef, lifeevents: lifeEventsSectionRef, retirement: decumulationSectionRef };
                               const sRef = refMap[section];
                               if (sRef) setTimeout(() => sRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
                             }}
@@ -23026,7 +23170,7 @@ ${milestoneSnapshotHtml}
                           ? "Gantt chart showing when contributions, housing outflows, and RSS drawdown are active across your lifetime."
                           : "Gantt chart showing when contributions, housing outflows, LIFE payouts, and each plan phase are active across your lifetime."],
                         ["🎯 FRS Tracker", "Projected RA at age 55 vs BRS/FRS/ERS targets. Shows if you're on track and how much more is needed."],
-                        ["🥧 Net Worth Breakdown", "Doughnut chart of CPF (OA+SA/RA+MA) + Private Assets + SRS + Property + Portfolio at payout age. Shows how your wealth is distributed across buckets."],
+                        ["🥧 Net Worth Breakdown", "Doughnut chart of OA + MA + RA + Property at payout age. Shows how your wealth is distributed across buckets."],
                         ["🔔 Milestone Alerts", isRssDesc
                           ? "Automatic alerts for key events like BHS reached, OA drawdown exhaustion, RSS depletion age, and property sale."
                           : "Automatic alerts for key events like BRS/FRS/ERS achievement, SA closure, BHS reached, OA drawdown exhaustion, and payout start."],
@@ -24257,6 +24401,7 @@ ${milestoneSnapshotHtml}
                   // `ra` correctly in both RSS-drawdown and post-migration-to-LIFE cases, so their raw
                   // value is already accurate and should not be overridden here.
                   const isRSSScheme = debouncedInputs.cpfScheme === 'rss';
+                  const liabilities = Number(inputs.otherLiabilities) || 0;
                   const nwData = displayAccumulation.map(row => {
                     const payoutRow = (!isRSSScheme && row.age >= payoutAge65) ? displayProjectionByAge.get(row.age) : null;
                     const raForChart = payoutRow ? (payoutRow[`${highlightPlan}Bequest`] ?? (row.ra || 0)) : (row.ra || 0);
@@ -24265,14 +24410,16 @@ ${milestoneSnapshotHtml}
                     const srs   = row.srsBalance || 0;
                     const prop  = showProp ? (row.propertyValue || 0) : 0;
                     const port  = portfolioByAge.get(row.age)?.balance || 0;
-                    return { age: row.age, cpf, priv, srs, prop, port, total: cpf + priv + srs + prop + port };
+                    const total = cpf + priv + srs + prop + port;
+                    return { age: row.age, cpf, priv, srs, prop, port, total, liab: liabilities, net: Math.max(0, total - liabilities) };
                   }).filter(r => r.age >= (Number(inputs.currentAge) || 35));
                   if (!nwData.length) return null;
-                  const peakNW = Math.max(...nwData.map(r => r.total), 1);
-                  const hasProperty = showProp && nwData.some(r => r.prop > 0);
-                  const hasSRS      = nwData.some(r => r.srs  > 0);
-                  const hasPriv     = nwData.some(r => r.priv > 0);
-                  const hasPort     = nwData.some(r => r.port > 0);
+                  const peakNW = Math.max(...nwData.map(r => liabilities > 0 ? r.net : r.total), 1);
+                  const hasProperty    = showProp && nwData.some(r => r.prop > 0);
+                  const hasSRS         = nwData.some(r => r.srs  > 0);
+                  const hasPriv        = nwData.some(r => r.priv > 0);
+                  const hasPort        = nwData.some(r => r.port > 0);
+                  const hasLiabilities = liabilities > 0;
                   const fmtK = v => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`;
                   return (
                     <div data-zone="nw-chart" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 20, padding: "16px 20px" }}>
@@ -24280,7 +24427,7 @@ ${milestoneSnapshotHtml}
                         <TrendingUp style={{ width: 15, height: 15, color: "var(--clr-purple)", flexShrink: 0 }} />
                         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-bright)" }}>Net Worth Trajectory</span>
                         <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 2 }}>CPF{hasPriv ? " · Private" : ""}{hasPort ? " · Portfolio" : ""}{hasSRS ? " · SRS" : ""}{hasProperty ? " · Property" : ""}</span>
-                        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--clr-purple)", fontWeight: 700 }}>Peak {fmtK(peakNW)}</span>
+                        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--clr-purple)", fontWeight: 700 }}>{hasLiabilities ? "Peak Net Worth " : "Peak "}{fmtK(peakNW)}</span>
                       </div>
                       <ResponsiveContainer width="100%" height={200}>
                         <AreaChart data={nwData} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
@@ -24313,7 +24460,40 @@ ${milestoneSnapshotHtml}
                             contentStyle={{ background: "var(--tooltip-bg)", border: "1px solid var(--tooltip-border)", borderRadius: 10, fontSize: 12, padding: "8px 12px" }}
                             labelStyle={{ fontSize: 13, color: "var(--tooltip-label)", fontWeight: 800, marginBottom: 4 }}
                             labelFormatter={v => `Age ${v}`}
-                            formatter={(v, n) => [fmtK(v), n]}
+                            formatter={(v, n, props) => {
+                              if (n === "Net Worth") return [fmtK(v), n];
+                              return [fmtK(v), n];
+                            }}
+                            content={({ active, payload, label }) => {
+                              if (!active || !payload || !payload.length) return null;
+                              const totalVal = payload.reduce((s, p) => p.dataKey === "net" ? s : s + (p.value || 0), 0);
+                              const netVal   = (payload.find(p => p.dataKey === "net") || {}).value;
+                              return (
+                                <div style={{ background: "var(--tooltip-bg)", border: "1px solid var(--tooltip-border)", borderRadius: 10, padding: "8px 12px", fontSize: 12 }}>
+                                  <div style={{ fontSize: 13, color: "var(--tooltip-label)", fontWeight: 800, marginBottom: 4 }}>Age {label}</div>
+                                  {payload.filter(p => p.dataKey !== "net" && p.value > 0).map(p => (
+                                    <div key={p.dataKey} style={{ display: "flex", justifyContent: "space-between", gap: 16, color: "var(--text-muted)" }}>
+                                      <span>{p.name}</span><span style={{ fontWeight: 700, color: p.color }}>{fmtK(p.value)}</span>
+                                    </div>
+                                  ))}
+                                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16, borderTop: "1px solid var(--border-subtle)", marginTop: 4, paddingTop: 4 }}>
+                                    <span style={{ fontWeight: 700, color: "var(--text-bright)" }}>Gross Total</span>
+                                    <span style={{ fontWeight: 800, fontFamily: "monospace" }}>{fmtK(totalVal)}</span>
+                                  </div>
+                                  {hasLiabilities && (
+                                    <>
+                                      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, color: "var(--clr-red)" }}>
+                                        <span>Liabilities</span><span style={{ fontWeight: 700 }}>−{fmtK(liabilities)}</span>
+                                      </div>
+                                      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, borderTop: "1px dashed var(--border-subtle)", marginTop: 3, paddingTop: 3 }}>
+                                        <span style={{ fontWeight: 800, color: "#1e40af" }}>Net Worth</span>
+                                        <span style={{ fontWeight: 900, fontFamily: "monospace", color: "#1e40af" }}>{fmtK(netVal ?? 0)}</span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            }}
                             wrapperStyle={{ pointerEvents: "none" }}
                           />
                           <Area isAnimationActive={false} type="monotone" dataKey="cpf"  stackId="nw" stroke="#7c3aed" strokeWidth={1.5} fill="url(#nwCpfGrad)"  name="CPF" />
@@ -24321,6 +24501,10 @@ ${milestoneSnapshotHtml}
                           {hasPort     && <Area isAnimationActive={false} type="monotone" dataKey="port" stackId="nw" stroke="#2dd4bf" strokeWidth={1.5} fill="url(#nwPortGrad)" name="Investment Portfolio" />}
                           {hasSRS      && <Area isAnimationActive={false} type="monotone" dataKey="srs"  stackId="nw" stroke="#0ea5e9" strokeWidth={1.5} fill="url(#nwSrsGrad)"  name="SRS" />}
                           {hasProperty && <Area isAnimationActive={false} type="monotone" dataKey="prop" stackId="nw" stroke="#f59e0b" strokeWidth={1.5} fill="url(#nwPropGrad)" name="Property" />}
+                          {hasLiabilities && (
+                            <Line isAnimationActive={false} type="monotone" dataKey="net" stroke="#1d4ed8" strokeWidth={2.5} dot={false} strokeDasharray="0" name="Net Worth"
+                              style={{ filter: "drop-shadow(0 0 3px rgba(29,78,216,0.45))" }} />
+                          )}
                         </AreaChart>
                       </ResponsiveContainer>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
@@ -24329,10 +24513,11 @@ ${milestoneSnapshotHtml}
                           ...(hasPriv     ? [["Private Assets", "#10b981"]]        : []),
                           ...(hasPort     ? [["Investment Portfolio", "#2dd4bf"]]  : []),
                           ...(hasSRS      ? [["SRS", "#0ea5e9"]]                   : []),
-                          ...(hasProperty ? [["Property", "#f59e0b"]]              : []),
-                        ].map(([name, color]) => (
+                          ...(hasProperty     ? [["Property",        "#f59e0b"]]  : []),
+                          ...(hasLiabilities   ? [["Net Worth",     "#1d4ed8", true]] : []),
+                        ].map(([name, color, isLine]) => (
                           <div key={name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-muted)" }}>
-                            <div style={{ width: 10, height: 10, borderRadius: 2, background: color, opacity: 0.8 }} />
+                            {isLine ? <div style={{ width: 16, height: 2.5, borderRadius: 1, background: color, boxShadow: "0 0 4px rgba(29,78,216,0.5)" }} /> : <div style={{ width: 10, height: 10, borderRadius: 2, background: color, opacity: 0.8 }} />}
                             <span>{name}</span>
                           </div>
                         ))}
@@ -24633,7 +24818,7 @@ ${milestoneSnapshotHtml}
                     { id: "accumulation", label: "📈 Accumulation" },
                     { id: "decumulation", label: "📉 Decumulation" },
                   ].map(({ id, label }) => {
-                    const isDecumLocked = id === "decumulation" && plan === 'lite';
+                    const isDecumLocked = id === "retirement" && plan === 'lite';
                     return (
                       <button key={id}
                         onClick={() => isDecumLocked ? setShowUpgradeModal(true) : setGrowSubTab(id)}
@@ -24688,7 +24873,7 @@ ${milestoneSnapshotHtml}
                       ["∑ Attribution mode", "Annual stacked bar chart showing how your CPF balance grew each year by source: Mandatory contributions (dark blue), Voluntary top-ups (green), Government grants (amber), and Interest earned (purple). Reveals the crossover point where compound interest overtakes your own contributions — the most powerful signal of whether your CPF is compounding strongly."],
                       ["📉 Baseline ghost", "The dashed grey line shows the mandatory-contributions-only projection with all voluntary top-ups, transfers, and grants zeroed. The gap between the ghost and the solid line is the value your active voluntary strategy adds."],
                       ["🎲 Monte Carlo band", "200 simulations with randomised CPF interest rates each year. The shaded purple band is the P10–P90 range; the dashed line is P50. The Probability of Sufficiency badge shows the share of runs where CPF at payout age ≥ projected FRS. Variance presets: Mild ±0.5%, Base ±1%, Stress ±2%."],
-                      ["🔔 Life Events overlay", "Coloured vertical bands mark active life events (retrenchment, career break, windfall, etc.). Toggle the Events button to show or hide them. Events are configured in the Life Events & Stress Tests panel in the sidebar."],
+                      ["🔔 Life Events overlay", "Coloured vertical bands mark active life events (retrenchment, career break, windfall, etc.). Toggle the Events button to show or hide them. Events are configured in the Life Events panel in the sidebar."],
                       ["📍 Vertical markers", "The dotted line at age 55 marks when the SA is converted to RA. The solid line at your payout age marks when CPF LIFE begins and accumulation ends."],
                     ].map(([title, desc]) => (
                       <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
@@ -24837,10 +25022,12 @@ ${milestoneSnapshotHtml}
                       <Activity style={{ width: 13, height: 13 }} />{showMonteCarlo ? "Hide" : "Show"} Monte Carlo (200 runs)
                       {(plan==='lite'||plan==='plus') && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 5, background: "#b45309", color: "#fef3c7", marginLeft: 4 }}>PRO</span>}
                     </button>
-                    {/* Cohort-average overlay toggle — merged from App_138 */}
-                    <button onClick={() => setInputs(p => ({ ...p, showBalaCurve: !p.showBalaCurve }))} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${inputs.showBalaCurve ? "rgba(251,191,36,0.5)" : "var(--border-strong)"}`, background: inputs.showBalaCurve ? "rgba(251,191,36,0.12)" : "var(--bg-input)", color: inputs.showBalaCurve ? "var(--clr-amber)" : "var(--text-muted)", cursor: "pointer" }}
-                      title="Show CPF Board cohort-average balance trajectory alongside your projection">
-                      <TrendingUp style={{ width: 13, height: 13 }} />{inputs.showBalaCurve ? "Hide" : "Show"} Cohort Avg
+                    {/* BALA_CURVE cohort-average overlay toggle */}
+                    <button
+                      onClick={() => setInputs(p => ({ ...p, showBalaCurve: !p.showBalaCurve }))}
+                      title="Show CPF Board cohort-average balance trajectory"
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${inputs.showBalaCurve ? "rgba(251,191,36,0.5)" : "var(--border-strong)"}`, background: inputs.showBalaCurve ? "rgba(251,191,36,0.12)" : "var(--bg-input)", color: inputs.showBalaCurve ? "var(--clr-amber)" : "var(--text-muted)", cursor: "pointer" }}>
+                      <TrendingUp style={{ width: 13, height: 13 }} /> {inputs.showBalaCurve ? "Hide" : "Show"} Cohort Avg
                     </button>
                     {(inputs.lifeEvents || []).filter(e => e.enabled !== false).length > 0 && (
                       <button onClick={() => setShowLifeEventMarkers(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, border: `1px solid ${showLifeEventMarkers ? "rgba(239,68,68,0.5)" : "var(--border-strong)"}`, background: showLifeEventMarkers ? "rgba(239,68,68,0.12)" : "var(--bg-input)", color: showLifeEventMarkers ? "#ef4444" : "var(--text-muted)", cursor: "pointer" }}>
@@ -24893,7 +25080,7 @@ ${milestoneSnapshotHtml}
                         linesData = linesData.map(row => { const bl = blByAge.get(row.age); return bl ? { ...row, baselineTotal: bl.baselineTotal } : row; });
                       }
 
-                      // Cohort-average overlay — merged from App_138
+                      // ── BALA_CURVE cohort-average overlay ───────────────────────
                       if (inputs.showBalaCurve) {
                         const balaInterp = (age) => {
                           const pts = BALA_CURVE;
@@ -24901,8 +25088,7 @@ ${milestoneSnapshotHtml}
                           if (age >= pts[pts.length-1].age) return pts[pts.length-1].val;
                           const i = pts.findIndex(p => p.age >= age);
                           const lo = pts[i-1], hi = pts[i];
-                          const t = (age - lo.age) / (hi.age - lo.age);
-                          return Math.round(lo.val + t * (hi.val - lo.val));
+                          return Math.round(lo.val + (age-lo.age)/(hi.age-lo.age)*(hi.val-lo.val));
                         };
                         stackedData = stackedData.map(r => ({ ...r, balaCurve: balaInterp(r.age) }));
                         linesData   = linesData.map(r  => ({ ...r, balaCurve: balaInterp(r.age) }));
@@ -26989,6 +27175,71 @@ ${milestoneSnapshotHtml}
                             </div>
                           )}
                         </div>
+
+                        {/* ── Data-driven recommendation (mathematical optimum) ── */}
+                        {activeLifePlans && activeLifePlans.length >= 3 && (() => {
+                          const getPayout = (id) => {
+                            const plan = activeLifePlans.find(p => p.id === id);
+                            return plan?.data?.[0]?.payout ?? plan?.monthly ?? 0;
+                          };
+                          const stdMo  = getPayout("standard");
+                          const escMo  = getPayout("escalating");
+                          const basMo  = getPayout("basic");
+                          if (!stdMo || !escMo || !basMo) return null;
+                          // Compute total lifetime income to life expectancy for each plan
+                          const le   = lifeExpectancy;
+                          const pa_  = Number(debouncedInputs.payoutAge) || 65;
+                          const yrs  = Math.max(0, le - pa_);
+                          // Standard: constant payout
+                          const stdTotal  = Math.round(stdMo * 12 * yrs);
+                          // Escalating: 2%/yr increase (geometric series)
+                          const escTotal  = yrs > 0
+                            ? Math.round(escMo * 12 * (Math.pow(1.02, yrs) - 1) / 0.02)
+                            : 0;
+                          // Basic: constant payout, runs until pool depletes (~90)
+                          const basYrs    = Math.min(yrs, Math.max(0, 90 - pa_));
+                          const basTotal  = Math.round(basMo * 12 * basYrs);
+                          const totals    = { standard: stdTotal, escalating: escTotal, basic: basTotal };
+                          const best      = Object.entries(totals).reduce((a, b) => b[1] > a[1] ? b : a);
+                          const bestId    = best[0];
+                          const bestTotal = best[1];
+                          const planMeta  = {
+                            standard:   { label: "Standard Plan",   clr: "#10b981", icon: "✅" },
+                            escalating: { label: "Escalating Plan", clr: "#f59e0b", icon: "📈" },
+                            basic:      { label: "Basic Plan",       clr: "#8b5cf6", icon: "💰" },
+                          };
+                          const meta = planMeta[bestId];
+                          const questPlan = lifeRecommendation?.plan;
+                          const aligned   = questPlan === bestId;
+                          return (
+                            <div style={{ marginTop: 12, padding: "14px 16px", borderRadius: 12, background: `${meta.clr}0d`, border: `1px solid ${meta.clr}44` }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                <span style={{ fontSize: 16 }}>📊</span>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: meta.clr }}>Data-driven: {meta.label}</span>
+                                {aligned
+                                  ? <span style={{ fontSize: 11, fontWeight: 700, background: "#10b9811a", color: "#10b981", borderRadius: 6, padding: "2px 7px" }}>✔ Matches your preference</span>
+                                  : <span style={{ fontSize: 11, fontWeight: 700, background: "#f59e0b1a", color: "#f59e0b", borderRadius: 6, padding: "2px 7px" }}>⚠ Differs from questionnaire</span>
+                                }
+                              </div>
+                              <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                                Based on your projected RA and life expectancy of <strong>{le}</strong>, the <strong style={{ color: meta.clr }}>{meta.label}</strong> pays the most total income — approximately <strong>{formatCurrency(bestTotal)}</strong> over {yrs} years.
+                              </p>
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                                {[["standard", stdTotal], ["escalating", escTotal], ["basic", basTotal]].map(([id, total]) => (
+                                  <div key={id} style={{ fontSize: 11, color: "var(--text-muted)", background: "var(--bg-muted)", borderRadius: 6, padding: "3px 8px" }}>
+                                    {planMeta[id].label}: <strong style={{ color: id === bestId ? planMeta[id].clr : "var(--text-main)" }}>{formatCurrency(total)}</strong>
+                                  </div>
+                                ))}
+                              </div>
+                              {!aligned && (
+                                <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>
+                                  Your questionnaire suggested {planMeta[questPlan || "standard"]?.label} based on preferences. Consider both perspectives before choosing.
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                       </details>
                     );
                   })()}
@@ -27440,8 +27691,8 @@ ${milestoneSnapshotHtml}
                     const kpis = [
                       { label: "Combined CPF at Later Payout Age", value: fmtM((pAtPA.total || 0) + (sAtPA.total || 0)), sub: `At age ${combinedPA}`, color: "#8b5cf6", tip: "Sum of both members' total CPF at the later of the two payout ages. Each member's projection runs independently." },
                       { label: "Est. Combined CPF LIFE", value: `${fmt(combinedMonthly)}/mo`, sub: `${pName}: ${pPlanLabel} · ${sName}: ${sPlanLabel}`, color: "var(--clr-green)", tip: "Sum of each member's CPF LIFE monthly payout under each member's independently selected plan. Female payouts are ~7% lower. Both members must meet RA ≥ $60,000 threshold." },
-                      { label: "Income Coverage", value: coveragePct != null ? `${coveragePct}%` : "—", sub: coveragePct != null ? `${fmt(combinedMonthly)}/mo vs ${fmt(targetMo)} target` : "Enter target in sidebar", color: coverageColor, tip: "Combined monthly CPF LIFE vs the primary member's Target Monthly Income. Green ≥ 100%, amber ≥ 75%, red < 75%. Set your Target in the Retirement Drawdown section." },
-                      { label: `Combined Net Worth at ${maxPA}`, value: fmtM(hAt95.combinedTotal || 0), sub: "CPF + Private + Property + SRS + Portfolio, both members", color: "var(--clr-blue2)", tip: `Sum of CPF balances, private assets, shared property, and each member's own SRS and Investment Portfolio at age ${maxPA}, after all outflows and drawdowns.` },
+                      { label: "Income Coverage", value: coveragePct != null ? `${coveragePct}%` : "—", sub: coveragePct != null ? `${fmt(combinedMonthly)}/mo vs ${fmt(targetMo)} target` : "Enter target in sidebar", color: coverageColor, tip: "Combined monthly CPF LIFE vs the primary member's Target Monthly Income. Green ≥ 100%, amber ≥ 75%, red < 75%. Set your Target in the Retirement section." },
+                      { label: `Combined Net Worth at ${maxPA}`, value: fmtM(hAt95.combinedTotal || 0), sub: "Private + CPF both members", color: "var(--clr-blue2)", tip: `Sum of CPF balances and private assets for both members at age ${maxPA}, after all outflows and drawdowns.` },
                       { label: "OA Depletion Risk", value: deplLabel, sub: deplSub, color: deplColor, tip: "Flags if either member's OA drawdown reaches its floor before age 90. Only shown when OA Drawdown is configured. Green = no risk through 90." },
                     ];
                     return (
@@ -27998,7 +28249,7 @@ ${milestoneSnapshotHtml}
                         <p style={{ fontSize: 12, lineHeight: 1.6, margin: 0 }}>
                           <strong style={{ color: "var(--clr-green)" }}>Inflows:</strong> Mandatory contributions · Voluntary (VC3A/RSTU/VHR/Cash MA) · Gov grants/MRSS/MMSS/WIS &nbsp;|&nbsp;
                           <strong style={{ color: "var(--clr-blue)" }}>Interest:</strong> OA (2.5%) · {is55Plus ? "RA" : "SA"} (4%) · MA (4%) &nbsp;|&nbsp;
-                          <strong style={{ color: "#f472b6" }}>Outflows:</strong> Housing loan · Medical · OA Drawdown · CPFIS (OA+SA) · Education Loan · Loved-one transfers
+                          <strong style={{ color: "#f472b6" }}>Outflows:</strong> Housing loan · Medical · OA Drawdown · CPFIS (OA+SA) · Education Loan · OA Withdrawal · Loved-one transfers
                         </p>
                       </div>
                       {/* Export bar — matches projection table style */}
@@ -28502,7 +28753,7 @@ ${milestoneSnapshotHtml}
                         [TrendingUp, "Portfolio CTA, Baby VC3A label, and Liquidity score fix", "var(--clr-blue2)",
                           "Three targeted fixes: (1) The \"Portfolio \u2197\" action button in the Readiness tab now correctly opens the sidebar and scrolls to the Investment Portfolio section instead of landing at CPF Overview. (2) Both Baby Millionaire sample profiles now show \"21 yrs\" as the VC3A top-up duration instead of \"Annually (to 65)\" — the engine was always correct; only the badge label was wrong. (3) The MAS Wellness Liquidity Ratio score is now null (excluded from the average) when total projected wealth at payout is zero, matching the \"No data\" label that was already displayed — previously a misleading floor score of 30 was included in the average even with no wealth data."],
                         [Activity, "Life Events — stress-test your projection", "#ef4444",
-                          "A configurable Life Events & Stress Tests panel lets you overlay retrenchment, career breaks, medical crises, windfalls, hyperinflation, and black-swan shocks on any age range. Each event type has tailored parameters — retrenchment pauses mandatory contributions and optionally injects a redundancy payout; medical crisis draws from OA then private assets; windfall routes to OA, private assets, or SRS. Events appear as coloured bands on the Grow chart and as milestone markers in the PDF. Add events from the Life Events section in the sidebar."],
+                          "A configurable Life Events panel lets you overlay retrenchment, career breaks, medical crises, windfalls, hyperinflation, and black-swan shocks on any age range. Each event type has tailored parameters — retrenchment pauses mandatory contributions and optionally injects a redundancy payout; medical crisis draws from OA then private assets; windfall routes to OA, private assets, or SRS. Events appear as coloured bands on the Grow chart and as milestone markers in the PDF. Add events from the Life Events panel in the sidebar."],
                         [ArrowRightLeft, "RA→OA Transfer at payout / migration age", "var(--clr-blue2)",
                           "A toggle in the Age-55 Options panel models the birth-year-gated CPF Board transfer of eligible RA back to OA at payout age (or RSS migration age). Born 1958+: 20% of eligible RA minus $5,000 credited to OA. Born 1957: 10%. Born 1956 or earlier: not eligible. Eligible base = full RA minus all cash top-ups (RSTU, OA→RA transfers, government grants). When the toggle is ON, CPF LIFE payouts recalculate on the reduced post-transfer RA — important for accurate payout modelling."],
                         [Clock, "Birth Year / Birth Month precision (D4)", "var(--clr-purple)",
@@ -28558,9 +28809,9 @@ ${milestoneSnapshotHtml}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
-                        ["Readiness Gauge & Action Queue", "The arc gauge shows your Retirement Readiness Score (0–100) — a 5-dimension age-banded weighted composite: FRS Coverage (10–35%), Income Adequacy (20–25%), Stress Resilience (15–20% — Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover (15–25%), and Healthcare Shield (10–30%). Weights shift by age band — healthcare escalates to 30% for members 75+; FRS steps down to 10% post-retirement. Null sub-scores excluded and remaining weights renormalised. Colour: green ≥ 75, amber 50–74, red < 50. Below the gauge: a MAS Financial Health advisory panel with 5 tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness). These advisory tiles do not affect the 100-pt score. Below that: the Action Priority Queue with the five highest-impact actions ranked by urgency."],
+                        ["Readiness Gauge & Action Queue", "The arc gauge shows your Retirement Readiness Score (0–100) — a 5-dimension age-banded weighted composite: FRS Coverage (10–35%), Income Adequacy (20–25%), Stress Resilience (15–20% — Perfect Storm primary, P10 Monte Carlo fallback), Longevity Cover (15–25%), and Healthcare Shield (10–30%). Weights shift by age band — healthcare escalates to 30% for members 75+; FRS steps down to 10% post-retirement. Null sub-scores excluded and remaining weights renormalised. Colour: green ≥ 75, amber 50–74, red < 50. Below the gauge: a Financial Health advisory panel with 5 tiles (Emergency Buffer, Savings Rate, Inflation Hedge, Liquidity Ratio, Legacy Readiness). These advisory tiles do not affect the 100-pt score. Below that: the Action Priority Queue with the five highest-impact actions ranked by urgency."],
                         ["Five sub-score bars", "FRS Coverage (RA vs projected FRS), Income Adequacy (CPF LIFE payout vs target with income tier label — Active ≥ ERS payout, Comfortable ≥ FRS payout, Basic ≥ BRS payout), Stress Resilience (Perfect Storm worst-case delta; falls back to P10 Monte Carlo when Stress Centre is inactive; shows '—' when both are off), Longevity Cover (real purchasing power of CPF LIFE at age 90 vs BRS-payout floor, or OA coverage years vs age-90 for drawdown members), Healthcare Shield (MA at payout vs projected BHS)."],
-                        ["MAS Financial Health Panel", "Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense 2024). Emergency Buffer: months of liquid savings vs 3–6 month guideline (set in Profile sidebar). Savings Rate: total CPF contributions + voluntary as % of annual gross salary vs ≥10% MAS minimum. Inflation Hedge: CPF LIFE plan type and private asset return vs inflation rate. Liquidity Ratio: liquid assets (CPF+SRS+private) vs total net worth — penalises >75% property concentration. Legacy Readiness: Will, CPF nomination, and LPA status (set as toggles in Profile sidebar)."],
+                        ["Financial Health Panel", "Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense 2024). Emergency Buffer: months of liquid savings vs 3–6 month guideline (set in Profile sidebar). Savings Rate: total CPF contributions + voluntary as % of annual gross salary vs ≥10% MAS minimum. Inflation Hedge: CPF LIFE plan type and private asset return vs inflation rate. Liquidity Ratio: liquid assets (CPF+SRS+private) vs total net worth — penalises >75% property concentration. Legacy Readiness: Will, CPF nomination, and LPA status (set as toggles in Profile sidebar)."],
                         ["What counts as 'on track'?", "FRS Coverage: RA at payout ≥ projected FRS. Income Adequacy: payout ≥ target (tier: Active ≥ ERS, Comfortable ≥ FRS, Basic ≥ BRS). Stress Resilience: perfect storm + P10 net worth ≥ base case. Longevity Cover: real CPF LIFE at age 90 ≥ BRS payout floor. Healthcare Shield: MA ≥ projected BHS. Advisory: Emergency ≥ 6 months, Savings Rate ≥ 20%, Escalating plan or positive real return, Liquidity ≤ 75% property, all 3 legacy docs complete."],
                         ["Milestone Snapshots row", "The Milestone Snapshots bar under the gauge shows your projected CPF balance at age 55 (SA lock-in), your payout age, and age 95 (longevity benchmark). Each snapshot shows OA, SA/RA, and MA individually. Balances are shown in nominal dollars by default — toggle Real ($) in Display settings to deflate for inflation."],
                         ["Setting your target income", "The Target Monthly Income field in the sidebar (Private Assets & Goals section) drives the Income Coverage card, the income roadmap, and the Goal Simulator. Set it to your desired post-retirement monthly household spend. A typical Singapore benchmark is $3,000–$5,000/mo for a single individual, or $5,000–$8,000/mo for a couple."],
@@ -28577,16 +28828,16 @@ ${milestoneSnapshotHtml}
                     </div>
                   </section>
 
-                  {/* ── Investment Portfolio + Family Events + Retirement Spending ── */}
+                  {/* ── Investments & Portfolio + Family Events + Retirement ── */}
                   <section id="doc-new-modules">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#2dd4bf", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><TrendingUp style={{ width: 18, height: 18 }} />New Modules — Portfolio, Family &amp; Spending</h4>
                     {[
-                      ["Investment Portfolio", "A dedicated compounding pool for brokerage, ETF, REIT, unit trust, robo-advisory, SSB, T-bill, and fixed-deposit portfolios. Separate from CPF and Private Assets. Configure: current balance, expected annual return %, annual DCA contribution (stops at a configurable age), and systematic monthly withdrawal at retirement. The portfolio appears as its own teal segment in the Net Worth Trajectory chart and as a row in the Grow/Spend income strategy table. Configure in the Investment Portfolio sidebar section."],
+                      ["Investment Portfolio", "Two-in-one section: CPF Investment Scheme (CPFIS OA/SA, Education Loan, OA Lump-Sum Withdrawal) and a Private Investment Portfolio (brokerage, ETF, REIT, unit trust, robo-advisory, SSB, T-bill, fixed deposit). The portfolio appears as its own teal segment in the Net Worth Trajectory chart. Configure in the Investments & Portfolio sidebar section."],
                       ["Marriage & Housing Grant", "Enter your marriage age and the total housing grant received (EHG up to $120k, Family Grant $30–50k, PHG $10–20k). The grant is credited to OA at your marriage age. You can also add a Marriage life event for the same effect with greater control over the label and age. Configure in the Family & Life Events sidebar section."],
                       ["Children Education", "Model annual education costs per child as outflows from private assets. Add up to 3 children with individual annual cost, education start age, and education end age. Typical costs: local polytechnic $8–12k/yr, local university $28–40k/yr, overseas $60–150k/yr. Baby Bonus government cash grants are modelled via a Child Birth life event. Configure in Family & Life Events."],
-                      ["Loans & Debt", "Consolidated monthly loan repayment (car loan, personal loan, student loan, renovation loan) deducted from private assets each year until the loan end age. For multiple loans with different end dates, use individual Loan Repayment life events in the Life Events & Stress Tests panel. Configure in Family & Life Events."],
+                      ["Loans & Debt", "Consolidated monthly loan repayment (car loan, personal loan, student loan, renovation loan) deducted from private assets each year until the loan end age. For multiple loans with different end dates, use individual Loan Repayment life events in the Life Events panel. Configure in Family & Life Events."],
                       ["Parent & Family Support", "Regular monthly financial support to aging parents, dependants, or overseas remittances. Deducted from private assets each year until the stop age. Configure in Family & Life Events or via Parent/Family Support life events for start/stop age control."],
-                      ["Retirement Spending Model", "Configure how much of your current monthly expenses you expect to need in retirement (default: 75% — no commute, mortgage often paid off, but leisure and healthcare rise). An additional monthly healthcare budget applies from your payout age, escalating by a configurable annual dollar amount after a healthcare escalator age (default: $200/yr more from age 75). The panel shows a live Income vs Expense sustainability preview: CPF LIFE + OA Drawdown vs projected retirement expenses, surfacing the monthly surplus or shortfall. Configure in the Retirement Spending sidebar section."],
+                      ["Retirement — Expense Planning", "Configure how much of your current monthly expenses you expect to need in retirement (default: 75% — no commute, mortgage often paid off, but leisure and healthcare rise). An additional monthly healthcare budget applies from your payout age, escalating by a configurable annual dollar amount after a healthcare escalator age (default: $200/yr more from age 75). The panel shows a live Income vs Expense sustainability preview: CPF LIFE + OA Drawdown vs projected retirement expenses, surfacing the monthly surplus or shortfall. Configure in the Retirement section."],
                       ["Charitable Donations (tax benefit)", "Annual donations to IRAS-approved IPCs receive a 250% tax deduction. The engine auto-credits back the resulting tax saving (donation × 2.5 × marginalTaxRate) to your private assets, so the net modelled cost reflects the real after-tax impact. Set your Tax Rate in the Cash Budget section and add Charitable Giving life events in the Life Events panel."],
                     ].map(([title, desc]) => (
                       <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
@@ -29140,7 +29391,7 @@ ${milestoneSnapshotHtml}
                   <section id="doc-lifeevents">
                     <h4 style={{ fontSize: 16, fontWeight: 800, color: "#ef4444", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Activity style={{ width: 18, height: 18 }} />Life Events &amp; Stress Testing</h4>
                     <div style={{ background: "var(--bg-muted)", padding: 18, borderRadius: 14, border: "1px solid var(--border-strong)", fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 }}>
-                      <p style={{ marginBottom: 12 }}>The Life Events & Stress Tests panel (between Timelines and Decumulation in the left sidebar) lets you overlay named stress-test scenarios onto your projection. Events are processed by the engine each year and appear as coloured markers on the Accumulation chart and a dedicated row in the Decumulation Gantt timeline.</p>
+                      <p style={{ marginBottom: 12 }}>The Life Events panel (in the left sidebar) lets you overlay named life events and stress scenarios onto your projection. Events are processed by the engine each year and appear as coloured markers on the Accumulation chart and a dedicated row in the Gantt timeline.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                         {Object.entries(LIFE_EVENT_TYPES).map(([key, meta]) => {
                           const DocEvIcon = meta.icon || Activity;
@@ -29155,7 +29406,7 @@ ${milestoneSnapshotHtml}
                       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>How to add an event:</strong> Open the Life Events & Stress Tests panel, click <strong>+ Add Life Event</strong>, select a type, fill in the label, age range, and magnitude, then click <strong>Save Event</strong>. The projection updates immediately. Use the ON/OFF toggle on each event to compare your plan with and without it — or use Disable All to see your baseline.</div>
+                          <div><strong style={{ color: "var(--text-highlight)" }}>How to add an event:</strong> Open the Life Events panel, click <strong>+ Add Life Event</strong>, select a type, fill in the label, age range, and magnitude, then click <strong>Save Event</strong>. The projection updates immediately. Use the ON/OFF toggle on each event to compare your plan with and without it — or use Disable All to see your baseline.</div>
                         </li>
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-purple)", marginTop: 6, flexShrink: 0 }} />
@@ -29188,7 +29439,7 @@ ${milestoneSnapshotHtml}
                         ["Independent engines", "Each member (primary + spouse) runs a completely separate full CPF projection engine. There is no cross-member balance sharing. Mandatory contributions, voluntary top-ups, CPFIS, SRS, OA drawdown, and CPF LIFE are all computed per-member. The combined view is a post-hoc sum of both projections."],
                         ["What stays on the primary profile", "Property model, housing outflow, and SRS are anchored to the primary member. If the spouse has a separate property or SRS, model it as private assets in the spouse's inputs. To split housing costs, use the Housing Split % slider in the Household sidebar — this allocates the primary's housing outflow between both members for the combined net worth view."],
                         ["Combined CPF LIFE", "The 'Combined Monthly Income' in the Key Ages table and the 'Est. Combined CPF LIFE' KPI are arithmetic sums of each member's independently computed CPF LIFE payout. Female payouts are ~7% lower than male (0.93× multiplier). Both members must meet the RA ≥ $60,000 threshold and be SC/PR born 1958 or after."],
-                        ["Income Coverage KPI", "Compares combined monthly CPF LIFE against the primary member's Target Monthly Income. Green ≥ 100%; amber 75–99%; red < 75%. Set your Target in the Retirement Drawdown section of the sidebar."],
+                        ["Income Coverage KPI", "Compares combined monthly CPF LIFE against the primary member's Target Monthly Income. Green ≥ 100%; amber 75–99%; red < 75%. Set your Target in the Retirement section of the sidebar."],
                         ["OA Depletion Risk KPI", "Checks whether either member's OA drawdown balance hits its floor before age 90. Only active when OA Drawdown is configured. Red warning shows the earliest depletion age across both members; green 'No risk to 90' otherwise."],
                         ["Key Ages table", "Shows 5-year interval ages from the younger member's current age to 95, plus age 55 (SA→RA conversion), both payout ages, and age 65 (statutory retirement). Payout-age rows are highlighted in purple. Combined Monthly Income only shows once each member has passed their own payout age."],
                         ["FRS headroom badge on member cards", "Each member card shows a progress bar comparing SA/RA at payout age vs the projected FRS at that age (grown at the configured Retirement Sum Growth rate). Green ≥ 100%; amber 60–99%; red < 60%. A gap amount shows additional top-up needed."],
@@ -29316,9 +29567,9 @@ ${milestoneSnapshotHtml}
                       <Users style={{ width: 18, height: 18 }} />New Sample Profiles
                     </h4>
                     {[
-                      ["Family Builder (Zhi Hao, 28)", "A typical Singapore dual-income household at the family formation stage. Showcases: EHG $80k housing grant credited to OA at marriage age 29; Baby Bonus inflows ($11k each) at two child births; children's education outflows modelled as annual costs in future years (child 1 polytechnic $10k/yr, child 2 local university $32k/yr); parent support $800/mo from age 45; and a $500/mo ETF index fund DCA portfolio compounding at 7% p.a. alongside CPF. Useful for understanding how family cash outflows interact with CPF accumulation and how the investment portfolio adds a parallel wealth layer. Configure via the Family & Life Events and Investment Portfolio sidebar sections."],
+                      ["Family Builder (Zhi Hao, 28)", "A typical Singapore dual-income household at the family formation stage. Showcases: EHG $80k housing grant credited to OA at marriage age 29; Baby Bonus inflows ($11k each) at two child births; children's education outflows modelled as annual costs in future years (child 1 polytechnic $10k/yr, child 2 local university $32k/yr); parent support $800/mo from age 45; and a $500/mo ETF index fund DCA portfolio compounding at 7% p.a. alongside CPF. Useful for understanding how family cash outflows interact with CPF accumulation and how the investment portfolio adds a parallel wealth layer. Configure via the Family Milestones and Investments & Portfolio sections."],
                       ["FIRE — Financial Independence, Retire Early (Mei Xin, 32)", "A high-earning tech professional on a deliberate path to stop working at 50. Key features: large $180k investment portfolio ($4k/mo DCA at 8% p.a.), systematic withdrawal of $4k/mo from age 50 funding the 15-year pre-CPF LIFE gap; CPF LIFE deferred to age 70 for maximum payout; SRS maxed at $15,300/yr until retirement; die-with-zero toggled on at 85; property downgrade at 55 unlocks $350k as a windfall. Demonstrates the interplay between the investment portfolio, CPF LIFE deferral strategy, OA drawdown, and die-with-zero in a FIRE context. The retirement spending panel shows whether the portfolio + CPF LIFE covers the 65% expense ratio target."],
-                      ["Sandwich Generation (Kok Leong, 42)", "The profile most Singaporeans in their 40s will recognise. HDB fully paid but simultaneously squeezed from three directions: car loan $1,200/mo (via life event, ends 47) + personal loan $500/mo (via structural field, ends 44); parent support $1,200/mo to 70; overseas university fees $38k/yr and local university fees $32k/yr hitting in the same decade. Annual church donation with 250% IRAS tax credit auto-calculated. Parental inheritance windfall $80k at 58. This profile is intentionally tight — the Retirement Spending panel will surface a monthly shortfall, and the Grow/Spend Gantt shows the income gaps that need to be closed by SRS drawdown or continued part-time work."],
+                      ["Sandwich Generation (Kok Leong, 42)", "The profile most Singaporeans in their 40s will recognise. HDB fully paid but simultaneously squeezed from three directions: car loan $1,200/mo (via life event, ends 47) + personal loan $500/mo (via structural field, ends 44); parent support $1,200/mo to 70; overseas university fees $38k/yr and local university fees $32k/yr hitting in the same decade. Annual church donation with 250% IRAS tax credit auto-calculated. Parental inheritance windfall $80k at 58. This profile is intentionally tight — the Retirement section will surface a monthly shortfall, and the Grow/Spend Gantt shows the income gaps that need to be closed by SRS drawdown or continued part-time work."],
                     ].map(([title, desc]) => (
                       <div key={title} style={{ background: "var(--bg-muted)", borderRadius: 12, border: "1px solid var(--border-strong)", overflow: "hidden", marginBottom: 4 }}>
                         <div style={{ background: "rgba(45,212,191,0.08)", borderBottom: "1px solid rgba(45,212,191,0.2)", borderLeft: "4px solid #2dd4bf", padding: "9px 16px" }}>
@@ -29387,7 +29638,7 @@ ${milestoneSnapshotHtml}
                       <ShieldCheck style={{ width: 18, height: 18 }} />🛡 Protection Adequacy — Wellness Tile 6
                     </h4>
                     <div style={{ background: "rgba(168,85,247,0.06)", border: "1px solid rgba(168,85,247,0.25)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7 }}>
-                      <strong style={{ color: "#a855f7" }}>What is the Protection Tile?</strong> The sixth tile in the MAS Financial Health Panel (Readiness tab) scores your insurance coverage adequacy against MAS/MoneySense benchmarks. Enter coverage in the Profile sidebar under "🛡 Protection Coverage" (after the Legacy Planning checkboxes).
+                      <strong style={{ color: "#a855f7" }}>What is the Protection Tile?</strong> The sixth tile in the Financial Health Panel (Readiness tab) scores your insurance coverage adequacy against MAS/MoneySense benchmarks. Enter coverage in the Profile sidebar under "🛡 Protection Coverage" (after the Legacy Planning checkboxes).
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       {[
@@ -30451,11 +30702,11 @@ ${milestoneSnapshotHtml}
                               ["SORR", "Sequence of Returns Risk — private assets hit by a market crash in early retirement. Configure crash duration and depth."],
                               ["Inflation Stress", "Tests how higher CPI erodes the real purchasing power of your fixed nominal CPF LIFE payout."],
                               ["Property Correction", "Stress-tests your property value trajectory at a downside growth rate. Range: −15% (Crisis) to 0%. Use presets — Mild −3%, Correction −6%, Crash −10%, Crisis −15% — or fine-tune with the slider. Rates are sustained annual, not one-time crashes. A Crash/Crisis warning banner appears below −10%."],
-                              ["Salary Cut", "Reduces your gross salary by a user-defined % for a specified age range — useful for modelling a demotion, industry downturn, or gig-economy transition. Add via the Life Events & Stress Tests panel."],
-                              ["Marriage / Housing Grant", "One-time OA credit at your marriage age. Set magnitude = total housing grant (EHG up to $120k, Family Grant $30–50k, PHG $10–20k). Modelled via the dedicated Marriage Age / Housing Grant fields in the Family & Life Events sidebar section."],
+                              ["Salary Cut", "Reduces your gross salary by a user-defined % for a specified age range — useful for modelling a demotion, industry downturn, or gig-economy transition. Add via the Life Events panel."],
+                              ["Marriage / Housing Grant", "One-time OA credit at your marriage age. Set magnitude = total housing grant (EHG up to $120k, Family Grant $30–50k, PHG $10–20k). Add via Life Events, type Marriage."],
                               ["Child Birth / Baby Bonus", "One-time private-assets inflow at child's birth year. Magnitude = Baby Bonus Gov cash gift (typically $11k for 1st/2nd child). Add via Life Events, type Child Birth."],
-                              ["Loan / Debt Repayment", "Monthly repayment × 12 deducted from private assets each year. Covers car loans, personal loans, student loans, renovation loans. Set magnitude = monthly repayment, age range = loan period. Modelled via the dedicated Loan fields in the Family & Life Events sidebar section."],
-                              ["Parent / Family Support", "Regular financial support to aging parents, dependants, or overseas remittances. Magnitude = monthly support amount. Deducted from private assets. Modelled via the dedicated fields in the Family & Life Events sidebar section."],
+                              ["Loan / Debt Repayment", "Monthly repayment × 12 deducted from private assets each year. Covers car loans, personal loans, student loans, renovation loans. Set magnitude = monthly repayment, age range = loan period. Add via Life Events panel, or use the dedicated Loan fields in Family & Life Events sidebar section."],
+                              ["Parent / Family Support", "Regular financial support to aging parents, dependants, or overseas remittances. Magnitude = monthly support amount. Deducted from private assets. Add via Life Events panel or Family & Life Events sidebar section."],
                               ["Education Expense", "Annual education outflow per child — enrichment, tuition, local university (~$30–40k/yr), overseas (~$60–150k/yr). Set age range to the child's education years. Deducted from private assets."],
                               ["Charitable Giving / Donation", "Annual donation to IPC-registered charities. 250% IRAS tax deduction is automatically credited back as a cash saving at your marginal tax rate. Net cost = donation × (1 − marginalRate × 2.5)."],
                               ["Tier Shock", "CPF LIFE payout if your RA falls to a lower tier at payout age — full inline analysis shows the tier ladder, per-plan payout impact, and estimated lifetime payout loss."],
@@ -31432,7 +31683,7 @@ ${milestoneSnapshotHtml}
 
                     const vc3aMaxRoom = turboImpacts.vc3aMaxRoom || 0;
                     const vcmaRoom    = turboImpacts.vcmaRoom    || 0;
-                    const mrssAgeBand = isSC && ca >= 55;     // informational call-out condition, not a hard gate
+                    const mrssAgeBand = isSC && (ca >= 55 || !!inputs.isPwD);     // informational call-out; PwD bypass per 2026 policy
                     const mmssAgeBand = isSC && ca >= 55 && ca <= 70;
                     const deferEligible = pa < 70;
 
@@ -31479,7 +31730,7 @@ ${milestoneSnapshotHtml}
                       setTurboSnapshot(prev => ({ ...(prev || {}), [id]: { field, value } }));
                       // Append to change log
                       const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation" };
+                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation", mrss:"MRSS", mmss:"MMSS" };
                       setTurboChangeLog(prev => [
                         { ts, action: "apply", id, label: labelMap[id] || id, from: value },
                         ...(prev || []),
@@ -31529,7 +31780,7 @@ ${milestoneSnapshotHtml}
                       });
                       // Log the undo
                       const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation" };
+                      const labelMap = { rstu:"RSTU", vc3a:"VC3A", vcma:"VCMA", oaSa:"OA→SA/RA", vhr:"VHR", srs:"SRS", defer:"Deferment", prop:"Property Monetisation", mrss:"MRSS", mmss:"MMSS" };
                       setTurboChangeLog(prev => [
                         { ts, action: "undo", id, label: labelMap[id] || id },
                         ...(prev || []),
@@ -31698,6 +31949,34 @@ ${milestoneSnapshotHtml}
                         note: `Right-size or lease-buyback your home at age ${pmAge} to top up RA and unlock cash proceeds. Change the trigger age in the sidebar.`,
                         ineligibleNote: "Already enabled in your profile.",
                         onApply: applyProp,
+                      },
+                      // ── Government-match grants: MRSS + MMSS ──────────────────
+                      {
+                        id: "mrss", icon: "🎁", title: "MRSS — Govt Retirement Match",
+                        eligible: mrssAgeBand && (Number(inputs.mrssGrant) || 0) < 2000,
+                        isApplied: (Number(inputs.mrssGrant) || 0) >= 2000,
+                        gain: null,  // govt match up to $2k; exact depends on RSTU amount
+                        cashCost: 0, // no cash from user — government grant
+                        note: (Number(inputs.mrssGrant) || 0) >= 2000
+                          ? "Already claiming the maximum $2,000/yr MRSS government retirement match."
+                          : `Set MRSS grant to $2,000/yr for a potential dollar-for-dollar government match of up to $2,000 per year (lifetime cap $20,000). Requires RA < BRS and an equal RSTU top-up.`,
+                        ineligibleNote: mrssAgeBand ? "Already claiming max MRSS." : "MRSS requires age ≥ 55 (PwD: any age) and Singapore Citizenship.",
+                        onApply: () => { snapshotLever("mrss", "mrssGrant", Number(inputs.mrssGrant) || 0); setInputs(prev => ({ ...prev, mrssGrant: 2000 })); },
+                      },
+                      {
+                        id: "mmss", icon: "🏥", title: "MMSS — Govt MediSave Match",
+                        eligible: mmssAgeBand && (Number(inputs.mmssGrant) || 0) < 1000 && mmssYearsLeft > 0,
+                        isApplied: (Number(inputs.mmssGrant) || 0) >= 1000,
+                        gain: null,
+                        cashCost: 0,
+                        expiryPill: mmssAgeBand && mmssYearsLeft > 0
+                          ? `⏰ MMSS pilot ends 2030 — ${mmssYearsLeft} yr${mmssYearsLeft !== 1 ? "s" : ""} left to claim`
+                          : null,
+                        note: (Number(inputs.mmssGrant) || 0) >= 1000
+                          ? "Already claiming the maximum $1,000/yr MMSS government MediSave match."
+                          : `Set MMSS grant to $1,000/yr to claim the government MediSave match. Pilot scheme runs to 2030 (${mmssYearsLeft} yr${mmssYearsLeft !== 1 ? "s" : ""} left). Requires MA below ½ BHS (~$39,500) and SC citizenship.`,
+                        ineligibleNote: mmssAgeBand ? "Already claiming max MMSS." : "MMSS applies age 55–70, SC only. Pilot ends 2030.",
+                        onApply: () => { snapshotLever("mmss", "mmssGrant", Number(inputs.mmssGrant) || 0); setInputs(prev => ({ ...prev, mmssGrant: 1000 })); },
                       },
                     ];
 
@@ -32358,6 +32637,33 @@ ${milestoneSnapshotHtml}
                           )}
 
                         </div>{/* /turbo-lever-grid */}
+
+                        {/* ── Timing & Sequence Insight ─────────────────────────── */}
+                        <details style={{ marginTop: 16, background: "rgba(var(--clr-blue-rgb),0.04)", border: "1px solid rgba(var(--clr-blue-rgb),0.15)", borderRadius: 10, padding: "10px 14px" }}>
+                          <summary style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 15 }}>⏱</span> Why sequence and timing of top-ups matter
+                          </summary>
+                          <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
+                            <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--text-main)" }}>Compound interest multiplier</p>
+                            <p style={{ margin: "0 0 8px" }}>Every $1,000 topped up at age 35 vs age 55 earns ~$2,191 more by age 65 (4% SA/RA rate over 20 extra years). Top up as early as possible.</p>
+                            <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--text-main)" }}>Recommended sequence (before age 55)</p>
+                            <ol style={{ margin: "0 0 8px", paddingLeft: 18 }}>
+                              <li><strong>OA → SA transfer first</strong> — converts 2.5% OA to 4% SA. Irreversible, so do before committing OA to housing.</li>
+                              <li><strong>RSTU to SA</strong> — earns 4% + 1% extra interest on first $40k (SA+OA combined). Also unlocks MRSS match if RA &lt; BRS after 55.</li>
+                              <li><strong>VC3A to OA</strong> — earns 2.5% + 1% extra; useful if CPF Annual Limit not yet hit.</li>
+                              <li><strong>VCMA to MA</strong> — earns 4%. Reduces out-of-pocket medical costs in retirement.</li>
+                              <li><strong>SRS</strong> — primarily a tax lever; earns market returns. Best used after CPF caps are hit.</li>
+                            </ol>
+                            <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--text-main)" }}>After age 55</p>
+                            <ol style={{ margin: "0", paddingLeft: 18 }}>
+                              <li><strong>RSTU goes directly to RA</strong> (after SA is transferred to RA). Earns 4% + 1% on first $30k RA + first $30k OA.</li>
+                              <li><strong>MRSS</strong> — government matches your RSTU dollar-for-dollar (up to $2,000/yr, lifetime cap $20k) if RA &lt; BRS. Claim before RA exceeds BRS.</li>
+                              <li><strong>MMSS</strong> — government matches MediSave top-ups up to $1,000/yr if MA &lt; ½ BHS. Pilot ends 2030.</li>
+                              <li><strong>VHR (Voluntary Housing Refund)</strong> — refunds OA housing principal + accrued interest back to OA; re-earns 2.5% compound.</li>
+                            </ol>
+                          </div>
+                        </details>
+
                         {/* /outer turbo IIFE div */}
                       </div>
                     );
@@ -32454,28 +32760,19 @@ ${milestoneSnapshotHtml}
                     return (
                       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
 
-                        {/* ── How to use (collapsible) — matches Goal Simulator / Stress Centre / Turbo ── */}
-                        <details style={{ borderRadius: 12, background: "var(--bg-panel-muted)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
-                          <summary style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", listStyle: "none", outline: "none" }}>
-                            <Calculator style={{ width: 13, height: 13, color: "#22d3ee", flexShrink: 0 }} />
-                            <span style={{ fontWeight: 700, color: "var(--text-highlight)", fontSize: 14 }}>How to use the Tax Optimizer</span>
-                            <span className="details-chevron-label" style={{ fontSize: 13, color: "var(--text-muted)", marginLeft: "auto" }} />
+                        {/* ── How to use the Tax Optimizer ── */}
+                        <details style={{ marginBottom: 12, background: "rgba(var(--clr-blue-rgb),0.04)", border: "1px solid rgba(var(--clr-blue-rgb),0.15)", borderRadius: 10, padding: "10px 14px" }}>
+                          <summary style={{ fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 15 }}>📘</span> How to use the Tax Optimizer
                           </summary>
-                          <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-                            {[
-                              ["1 — How this differs from Strategy D", "Strategy D (elsewhere in this tab) optimises which lever — RSTU or VC3A — grows your CPF most efficiently after tax. This Tax Optimizer instead finds the relief mix that drops your chargeable income to the nearest lower IRAS bracket. Both write to the same RSTU/VCMA/SRS inputs, so a change in one is reflected in the other immediately."],
-                              ["2 — How brackets are computed", "Starting from gross salary + bonus + trade income, less CPF employee contribution relief (capped at $20,400/yr), the Current Tax Position card shows your chargeable income and marginal rate today. Up to 4 scenarios are then generated — one for each IRAS bracket floor below your current chargeable income."],
-                              ["3 — Reading the bracket-drop cards", "Each scenario shows the relief still needed to reach that bracket, filled first from RSTU headroom, then VCMA, then SRS, then RSTU-for-others. A scenario is marked infeasible if your combined headroom across all four levers can't fully reach it."],
-                              ["4 — Apply and Revert", "Click Apply on a feasible scenario to write that allocation to your sidebar instantly. A Revert banner then appears — use it any time before making other changes to undo the apply and restore your prior RSTU/VCMA/SRS amounts."],
-                            ].map(([title, desc]) => (
-                              <div key={title} style={{ display: "flex", gap: 10, padding: "6px 0", borderTop: "0.5px solid var(--border-subtle)" }}>
-                                <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-highlight)", margin: "0 0 2px", whiteSpace: "nowrap" }}>{title}</p>
-                                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>{desc}</p>
-                              </div>
-                            ))}
+                          <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>What it does:</strong> Computes your IRAS chargeable income and tests four strategies to reduce it — RSTU top-up to SA/RA, VCMA cash top-up to MA, SRS contribution, and a blended combination. Each strategy is optimised to push you into the next lower tax band.</p>
+                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>Step 1 — Enter your income:</strong> Fill in your Gross Monthly Salary and Annual Bonus in the Salary section. The optimizer reads these automatically.</p>
+                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>Step 2 — Set your marginal rate:</strong> Use the <em>Marginal Tax Rate</em> slider in the Goal Simulator to match your actual IRAS rate. The alert above warns if the slider and computed rate are misaligned.</p>
+                            <p style={{ margin: "0 0 6px" }}><strong style={{ color: "var(--text-main)" }}>Step 3 — Review the four strategies:</strong> Each card shows the relief lever, the recommended annual amount, the estimated tax saved, and a 1-click <em>Apply</em> button that writes the value into your profile.</p>
+                            <p style={{ margin: 0 }}><strong style={{ color: "var(--text-main)" }}>Step 4 — Revert if needed:</strong> A yellow banner appears at the top of this tab after you apply a strategy. Click <em>Revert</em> to restore your original values.</p>
                           </div>
                         </details>
-
                         {/* ── Current Tax Position ─────────────────────────────── */}
                         <div style={{ background: "var(--bg-panel-muted)", borderRadius: 12, padding: 16, border: "1px solid var(--border-subtle)" }}>
                           <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-bright)", marginBottom: 10 }}>📊 Current Tax Position</div>
