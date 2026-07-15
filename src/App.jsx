@@ -7774,9 +7774,10 @@ const sectionIsLocked = (sectionId, plan) => {
 const LITE_PRESET_IDS = new Set(["blank", "typical35"]);
 
 // ── Beta password gate ───────────────────────────────────────────────────────────
-// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro, FusionAdmin$$2026$$ → Pro (admin bypass, skips tier guards).
+// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro, FusionAdmin$$2026$$ / Admin$$1188$$ → Pro (admin bypass, skips tier guards).
+// admin2 (Admin$$1188$$) is the short-form launch password — same immediate Pro bypass as admin, no tier card required.
 // Replace with server-side auth before public launch.
-const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$', admin: 'FusionAdmin$$2026$$' };
+const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$', admin: 'FusionAdmin$$2026$$', admin2: 'Admin$$1188$$' };
 
 // ── UpgradeModal ──────────────────────────────────────────────────────────────
 function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
@@ -7787,7 +7788,7 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
   const inputRef = useRef(null);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
 
-  const typedTier = (password === TIER_PASSWORDS.pro || password === TIER_PASSWORDS.admin) ? 'pro'
+  const typedTier = (password === TIER_PASSWORDS.pro || password === TIER_PASSWORDS.admin || password === TIER_PASSWORDS.admin2) ? 'pro'
                   : password === TIER_PASSWORDS.plus ? 'plus' : null;
 
   const tryUnlock = () => {
@@ -7795,7 +7796,9 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
     setSubmitting(true);
     setTimeout(() => {
       // Admin bypass — skips all tier guards, always upgrades to Pro immediately
-      if (password === TIER_PASSWORDS.admin) { onUpgrade('pro'); return; }
+      // admin2 (Admin$$1188$$) is the short-form launch password — identical behaviour
+      if (password === TIER_PASSWORDS.admin2) { onUpgrade('pro'); return; }
+      if (password === TIER_PASSWORDS.admin)  { onUpgrade('pro'); return; }
       if (password === TIER_PASSWORDS.pro) {
         if (currentPlan === 'pro') { setError('You\'re already on Fusion Pro.'); setSubmitting(false); return; }
         onUpgrade('pro'); return;
@@ -8077,7 +8080,12 @@ function CPFPlannerApp() {
   const [plan, setPlan] = useState(() => {
     try { return localStorage.getItem('fusion_plan') ?? 'lite'; } catch { return 'lite'; }
   });
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  // Auto-show the upgrade/access modal on first launch if no plan has been saved yet.
+  // This makes the UpgradeModal behave as a launch access gate for first-time visitors.
+  // On return visits where a plan is already stored (lite, plus, or pro), the modal stays hidden.
+  const [showUpgradeModal, setShowUpgradeModal] = useState(() => {
+    try { return localStorage.getItem('fusion_plan') === null; } catch { return false; }
+  });
   const upgradePlan = (newPlan) => {
     setPlan(newPlan);
     try { localStorage.setItem('fusion_plan', newPlan); } catch { /* noop */ }
@@ -16671,9 +16679,13 @@ ${milestoneSnapshotHtml}
           overflow-x: hidden;
         }
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-chart-grow {
-          flex: 1 1 0 !important;
-          height: auto !important;
-          min-height: 220px !important;
+          /* FIX: height:auto !important was overriding the inline height:380 on the chart div.
+             ResponsiveContainer uses height="100%" — inside an auto-height parent it measures 0px
+             and renders nothing. Removing height:auto lets the inline height:380 take effect
+             (same as HD mode) so ResponsiveContainer resolves to a known pixel height.
+             flex:1 1 0 removed — it only works in a fixed-height flex parent, which fhd-tab-inner
+             is not (it has height:auto). min-height keeps a safety floor; max-height caps balloons. */
+          min-height: 320px !important;
           max-height: 540px;
         }
         @media (min-width: 1920px) {
@@ -16690,9 +16702,9 @@ ${milestoneSnapshotHtml}
             overflow-x: hidden;
           }
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-chart-grow {
-            flex: 1 1 0 !important;
-            height: auto !important;
-            min-height: 220px !important;
+            /* Same fix as FHD above — height:auto collapses ResponsiveContainer on auto≥1920px.
+               Remove height:auto and flex:1 1 0; keep min/max-height caps only. */
+            min-height: 320px !important;
             max-height: 540px;
           }
         }
@@ -17705,17 +17717,18 @@ ${milestoneSnapshotHtml}
               so the restored full brand lockup (text+sub+copy) can ellipsis-truncate
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
-          <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
+          <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minWidth: 0 }}>
             <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 12, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 1.5px rgba(255,255,255,0.35), 0 2px 8px rgba(0,0,0,0.25)" }}>
               <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 30, height: 30, display: "block", borderRadius: 6 }} />
             </div>
             <div className="cpf-logo-textstack">
-              <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {/* Logo: "Fusion " in green-blue gradient, "富生" in Chinese red — split spans so light-theme
-                    CSS can target each independently without the transparent fill bleeding into 富生. */}
+                    CSS can target each independently without the transparent fill bleeding into 富生.
+                    fontSize 15 harmonises with navbar action buttons (13px) and tab strip (14px). */}
                 <div className="cpf-logo-text" style={{ display: "flex", alignItems: "baseline", whiteSpace: "nowrap" }}>
-                  <span style={{ fontWeight: 900, fontSize: 17, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
-                  <span style={{ fontWeight: 900, fontSize: 17, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
+                  <span style={{ fontWeight: 900, fontSize: 15, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
+                  <span style={{ fontWeight: 900, fontSize: 15, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
                 </div>
                 {/* Plan tier pill — driven by plan state → TIER_CONFIG */}
                 {(() => { const tc = TIER_CONFIG[plan.toUpperCase()]; return tc ? (
