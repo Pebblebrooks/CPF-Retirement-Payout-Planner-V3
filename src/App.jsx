@@ -78,12 +78,11 @@ const SRS_CAP_FOREIGNER = 35700;
 const STYLES = {
   // ── Recharts <Tooltip> props — used on every chart ──
   chartTooltip: {
-    background: "var(--tooltip-bg)",
-    backdropFilter: "blur(4px)",
-    border: "1px solid var(--tooltip-border)",
+    background: "var(--clr-panel-deep, var(--tooltip-bg))",
+    border: "1px solid var(--clr-border-mmp, var(--tooltip-border))",
     borderRadius: 8,
     fontSize: 12,
-    padding: "6px 8px",
+    padding: "6px 10px",
   },
   chartTooltipItem:  { padding: 0, color: "var(--tooltip-text)" },
   chartTooltipLabel: { fontSize: 12, color: "var(--tooltip-label)", marginBottom: 2 },
@@ -159,17 +158,18 @@ const SG_RETIREMENT_BENCHMARKS = {
 // required 4 edits and could silently diverge. All tab consumers now reference
 // this constant and filter dynamically using the isForeigner / cpfScheme / householdEnabled flags.
 // Format: [id, label, Icon, accentColor]
+// MMP redesign: all tab accents unified to --clr-gold; active tab uses gold underline only (no pill bg per tab)
 const TAB_CONFIG = [
-  ["readiness",    "Dashboard",      Activity,    "var(--clr-emerald)"],  // UX: merged Readiness + Summary into one Dashboard tab with sub-view toggle
+  ["readiness",    "Dashboard",      Activity,    "var(--clr-gold)"],
   // "summary" removed from tab strip — accessible via the Score / Overview toggle inside Dashboard
-  ["strategy",     "Strategy",       Target,      "#f43f5e"],
-  ["accumulation", "Grow/Spend",     BarChart3,   "var(--clr-blue2)"],    // UX: renamed from "Growth" to "Grow", then "Grow/Spend" once Decumulation (former Income Roadmap) moved in
-  ["rss",          "RSS",            Clock,       "var(--clr-blue)"],      // shown only when cpfScheme === 'rss'
-  ["life",         "Payout Plans",   ShieldCheck, "var(--clr-purple)"],   // UX: renamed from "LIFE" — self-explanatory; hidden for foreigners + rss mode
-  ["compare",      "Compare",        Split,       "var(--clr-amber3)"],
-  ["household",    "Household",      Users,       "#8b5cf6"],              // shown only when householdEnabled
-  ["table",        "Data Table",     TableIcon,   "var(--clr-slate)"],    // UX: renamed from "Table" to "Data Table"
-  ["guide",        "Docs",           BookOpen,    "var(--clr-blue)"],      // merged Welcome (Quick Start) + Docs (Reference) — always last
+  ["strategy",     "Strategy",       Target,      "var(--clr-gold)"],
+  ["accumulation", "Grow/Spend",     BarChart3,   "var(--clr-gold)"],
+  ["rss",          "RSS",            Clock,       "var(--clr-gold)"],      // shown only when cpfScheme === 'rss'
+  ["life",         "Payout Plans",   ShieldCheck, "var(--clr-gold)"],     // hidden for foreigners + rss mode
+  ["compare",      "Compare",        Split,       "var(--clr-gold)"],
+  ["household",    "Household",      Users,       "var(--clr-gold)"],      // shown only when householdEnabled
+  ["table",        "Data Table",     TableIcon,   "var(--clr-gold)"],
+  ["guide",        "Docs",           BookOpen,    "var(--clr-gold)"],
   // "notes" tab removed — merged into "guide" tab (Quick Start + Reference sub-views)
 ];
 // Helper: filter TAB_CONFIG to only the tabs visible in a given context.
@@ -681,7 +681,7 @@ const LEGAL_DISCLAIMER = "DISCLAIMER: This application is a prototype simulation
 // ── Schema versioning ────────────────────────────────────────────────────────────────────
 // Increment CURRENT_SCHEMA_VERSION on every breaking DEFAULT_INPUTS field rename.
 // migrateProfile() applies forward migrations on JSON import so old profiles load correctly.
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 4;
 
 const migrateProfile = (raw) => {
   if (!raw || typeof raw !== 'object') return raw;
@@ -721,16 +721,6 @@ const migrateProfile = (raw) => {
       propertyAge:   p.inputs?.propertyAge   ?? 0,
       loanType:      p.inputs?.loanType      ?? 'hdb',
       mortgagePaymentSource: p.inputs?.mortgagePaymentSource ?? 'cpf',
-    }};
-  }
-  // v5: strip legacy life event types removed from LIFE_EVENT_TYPES
-  // (marriage, loan_repayment, parent_support → superseded by dedicated Family Milestones fields)
-  // Old profiles with these types would show blank label/colour on the timeline.
-  if (v < 5) {
-    p = { ...p, inputs: { ...p.inputs,
-      lifeEvents: (p.inputs?.lifeEvents || []).filter(
-        ev => !['marriage', 'loan_repayment', 'parent_support'].includes(ev?.type)
-      ),
     }};
   }
   p._schemaVersion = CURRENT_SCHEMA_VERSION;
@@ -1726,30 +1716,6 @@ const SCENARIO_LABELS = INPUT_LABELS;
 //
 // Returns the final engine pass array, with the same _dwz* metadata fields
 // the main projection useMemo attaches (used by the DWZ UI panel and PDF).
-// ── computePortfolioNetWorth ────────────────────────────────────────────────
-// Standalone helper: computes the investment portfolio balance at a target age
-// using the same compounding model as portfolioProjection, without needing the
-// full React useMemo chain. Used by the Stress Centre and Zone 6 so that
-// Portfolio is included in net-worth comparisons even outside the main projection.
-function computePortfolioNetWorth(inputs, targetAge) {
-  const startBal      = Number(inputs?.portfolioBalance)              || 0;
-  const annualContr   = Number(inputs?.portfolioAnnualContribution)   || 0;
-  const ca            = Number(inputs?.currentAge)                    || 35;
-  const annualRet     = (Number(inputs?.portfolioAnnualReturn)        || 6) / 100;
-  const pa            = Number(inputs?.payoutAge)                     || 65;
-  const contribStop   = Number(inputs?.portfolioContribStopAge)       || pa;
-  const withdrawMo    = Number(inputs?.portfolioWithdrawalMonthly)    || 0;
-  const withdrawStart = Number(inputs?.portfolioWithdrawalStartAge)   || pa;
-  let bal = startBal;
-  for (let age = ca; age < targetAge; age++) {
-    const contrib = age < contribStop ? annualContr : 0;
-    const draw    = age >= withdrawStart ? withdrawMo * 12 : 0;
-    bal = bal * (1 + annualRet) + contrib - draw;
-    if (bal < 0) bal = 0;
-  }
-  return Math.round(Math.max(0, bal));
-}
-
 function runProjectionWithDWZ(inputs, engineFn) {
   const maxAge = Number(inputs.maxProjectionAge) || 95; // M-DWZ: thread horizon through all engine passes
   if (!inputs.dieWithZeroEnabled) return engineFn(inputs, { maxAge });
@@ -5088,37 +5054,94 @@ class ErrorBoundary extends React.Component {
 // on the primary metric; `isEarly` applies the faint emerald tint on items 2-4.
 // `tip` is rendered as a native title tooltip (no extra DOM cost).
 function KpiCard({ label, sublabel, value, color, tip, isFirst = false, isEarly = false, isNew = false }) {
-  const bg = isFirst
-    ? "rgba(var(--clr-blue-rgb),0.08)"
-    : isEarly
-    ? "rgba(var(--clr-emerald-rgb),0.04)"
-    : "transparent";
-  const labelColor = color;
+  /* MMP redesign — isFirst renders as the gold-bordered hero card;
+     all other cards use a uniform muted treatment (no per-card colour backgrounds). */
+  if (isFirst) {
+    return (
+      <div
+        title={tip || ""}
+        style={{
+          padding: "14px 16px",
+          borderRadius: 12,
+          border: "1px solid var(--clr-gold)",
+          background: "var(--clr-panel-deep)",
+          minWidth: 0,
+          textAlign: "center",
+          boxSizing: "border-box",
+          cursor: "help",
+          position: "relative",
+          flex: "1 1 auto",
+        }}
+      >
+        <div
+          className="cpf-kpi-label"
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            color: "var(--clr-muted-text)",
+            marginBottom: 4,
+            textTransform: "uppercase",
+            letterSpacing: "0.07em",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {label}
+        </div>
+        <div
+          className="cpf-kpi-value"
+          style={{ fontSize: 28, fontWeight: 600, color: "var(--clr-gold)", fontFamily: "monospace", lineHeight: 1.15, marginBottom: sublabel ? 6 : 0 }}
+        >
+          {value}
+        </div>
+        {sublabel && (
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: "var(--clr-positive)",
+              marginTop: 2,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {sublabel}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* Standard card — uniform quiet treatment, value coloured semantically */
   return (
     <div
       title={tip || ""}
       style={{
         padding: "6px 10px",
         borderRadius: 8,
-        border: isNew ? "1px solid rgba(var(--clr-emerald-rgb),0.25)" : "1px solid var(--border-subtle)",
+        border: "1px solid var(--clr-border-mmp)",
         minWidth: 0,
         textAlign: "center",
         boxSizing: "border-box",
         cursor: "help",
-        background: isNew ? "rgba(var(--clr-emerald-rgb),0.04)" : bg,
+        background: isEarly ? "rgba(var(--clr-gold-rgb),0.04)" : "transparent",
         position: "relative",
       }}
     >
       {isNew && (
-        <span style={{ position: "absolute", top: 4, right: 5, fontSize: 9, fontWeight: 800, background: "rgba(var(--clr-emerald-rgb),0.18)", color: "var(--clr-emerald)", border: "1px solid rgba(var(--clr-emerald-rgb),0.35)", borderRadius: 4, padding: "0 4px", letterSpacing: "0.04em" }}>NEW</span>
+        <span style={{ position: "absolute", top: 4, right: 5, fontSize: 9, fontWeight: 800, background: "rgba(var(--clr-gold-rgb),0.18)", color: "var(--clr-gold)", border: "1px solid rgba(var(--clr-gold-rgb),0.35)", borderRadius: 4, padding: "0 4px", letterSpacing: "0.04em" }}>NEW</span>
       )}
       <div
         className="cpf-kpi-label"
         style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: labelColor,
+          fontSize: 11,
+          fontWeight: 400,
+          color: "var(--clr-muted-text)",
           marginBottom: 1,
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -5127,23 +5150,13 @@ function KpiCard({ label, sublabel, value, color, tip, isFirst = false, isEarly 
         {label}
       </div>
       {sublabel && (
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 500,
-            color: "var(--text-muted)",
-            marginBottom: 3,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
+        <div style={{ fontSize: 11, fontWeight: 500, color: "var(--clr-muted-text)", marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {sublabel}
         </div>
       )}
       <div
         className="cpf-kpi-value"
-        style={{ fontSize: 17, fontWeight: 900, color, fontFamily: "monospace", textShadow: "var(--shadow-kpi)" }}
+        style={{ fontSize: 16, fontWeight: 700, color, fontFamily: "monospace" }}
       >
         {value}
       </div>
@@ -5193,7 +5206,7 @@ function TagPill({ color, bg, border, size = 10, bold = true, uppercase = false,
 //                   e.g. "VC3A · RSTU · VCMA · MRSS". Helps users scan what's
 //                   inside each section without expanding it. Safe to omit for
 //                   sections that are always open (profile, balances, contribs).
-function SidebarSectionHeader({ id, label, icon, color, activeBg, badge, isOpen, onToggle, collapsedHint, planBadge }) {
+function SidebarSectionHeader({ id, label, icon, color, activeBg, badge, isOpen, onToggle, collapsedHint, planBadge, sectionNumber }) {
   const isLocked = planBadge?.locked;
   const tierLabel = planBadge?.tier?.toUpperCase();
   const tierBg    = tierLabel === 'PRO' ? '#b45309' : '#0284c7';
@@ -5221,8 +5234,18 @@ function SidebarSectionHeader({ id, label, icon, color, activeBg, badge, isOpen,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {icon}
-          <span style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color }}>
+          {/* MMP-style numbered circle — shown when sectionNumber is provided */}
+          {sectionNumber != null ? (
+            <div style={{
+              width: 20, height: 20, borderRadius: "50%",
+              background: "rgba(var(--clr-gold-rgb),0.10)",
+              border: "1px solid rgba(var(--clr-gold-rgb),0.45)",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: "var(--clr-gold)", lineHeight: 1 }}>{sectionNumber}</span>
+            </div>
+          ) : icon}
+          <span style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: sectionNumber != null ? "var(--clr-gold)" : color }}>
             {label}
           </span>
           {badge}
@@ -5283,6 +5306,7 @@ function SidebarSection({
   children,
   bodyPad = "0 16px 16px",
   wrapStyle,
+  sectionNumber,
 }) {
   return (
     <div
@@ -5317,8 +5341,17 @@ function SidebarSection({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {icon}
-          <span style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color }}>
+          {sectionNumber != null ? (
+            <div style={{
+              width: 20, height: 20, borderRadius: "50%",
+              background: "rgba(var(--clr-gold-rgb),0.10)",
+              border: "1px solid rgba(var(--clr-gold-rgb),0.45)",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: "var(--clr-gold)", lineHeight: 1 }}>{sectionNumber}</span>
+            </div>
+          ) : icon}
+          <span style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: sectionNumber != null ? "var(--clr-gold)" : color }}>
             {label}
           </span>
           {badge}
@@ -6823,7 +6856,7 @@ function ReadinessTab({
         // Weighted composite: Life 40%, CI 40%, H&S 20%
         const protScore         = annualGross_t > 0
           ? Math.round(lifeAdeqPct * 0.40 + ciAdeqPct * 0.40 + hsPct * 0.20)
-          : ((Number(inputs.termLifeSumAssured)||0) > 0 || ciSA > 0 || inputs.hasISP ? 35 : null); // partial only if user configured supplementary cover; mandatory DPS alone = null
+          : (dpsBase > 0 || ciSA > 0 || inputs.hasISP ? 35 : null);   // partial if no salary set
         const protStatus        = protScore == null ? "grey" : protScore >= 75 ? "green" : protScore >= 45 ? "amber" : "red";
         const protLabel         = protScore == null ? "Add salary + coverage"
           : protScore >= 75 ? "Adequately covered"
@@ -7406,14 +7439,9 @@ function ReadinessTab({
                   <path key={s.key} d={s.d} fill="none" stroke={s.color} strokeWidth="14" strokeLinecap="butt" />
                 ))}
                 <circle cx="60" cy="60" r="34" fill="var(--bg-panel)" />
-                <text x="60" y="57" textAnchor="middle" style={{ fontSize: 11, fontWeight: 700, fill: "var(--text-muted)" }}>
-                  {(Number(inputs.otherLiabilities)||0) > 0 ? "Net Wealth" : "Total"}
-                </text>
+                <text x="60" y="57" textAnchor="middle" style={{ fontSize: 11, fontWeight: 700, fill: "var(--text-muted)" }}>Total</text>
                 <text x="60" y="70" textAnchor="middle" style={{ fontSize: 11, fontWeight: 700, fill: "var(--text-bright)" }}>
-                  {formatCurrency((Number(inputs.otherLiabilities)||0) > 0
-                    ? Math.max(0, wealthDonutParts.reduce((s, p) => s + p.value, 0) - (Number(inputs.otherLiabilities)||0))
-                    : wealthDonutParts.reduce((s, p) => s + p.value, 0)
-                  )}
+                  {formatCurrency(wealthDonutParts.reduce((s, p) => s + p.value, 0))}
                 </text>
               </svg>
               <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
@@ -7774,10 +7802,9 @@ const sectionIsLocked = (sectionId, plan) => {
 const LITE_PRESET_IDS = new Set(["blank", "typical35"]);
 
 // ── Beta password gate ───────────────────────────────────────────────────────────
-// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro, FusionAdmin$$2026$$ / Admin$$1188$$ → Pro (admin bypass, skips tier guards).
-// admin2 (Admin$$1188$$) is the short-form launch password — same immediate Pro bypass as admin, no tier card required.
+// BetaPlus$$2026$$ → Plus, BetaPro$$2026$$ → Pro, FusionAdmin$$2026$$ → Pro (admin bypass, skips tier guards).
 // Replace with server-side auth before public launch.
-const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$', admin: 'FusionAdmin$$2026$$', admin2: 'Admin$$1188$$' };
+const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$', admin: 'FusionAdmin$$2026$$' };
 
 // ── UpgradeModal ──────────────────────────────────────────────────────────────
 function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
@@ -7788,7 +7815,7 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
   const inputRef = useRef(null);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
 
-  const typedTier = (password === TIER_PASSWORDS.pro || password === TIER_PASSWORDS.admin || password === TIER_PASSWORDS.admin2) ? 'pro'
+  const typedTier = (password === TIER_PASSWORDS.pro || password === TIER_PASSWORDS.admin) ? 'pro'
                   : password === TIER_PASSWORDS.plus ? 'plus' : null;
 
   const tryUnlock = () => {
@@ -7796,9 +7823,7 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
     setSubmitting(true);
     setTimeout(() => {
       // Admin bypass — skips all tier guards, always upgrades to Pro immediately
-      // admin2 (Admin$$1188$$) is the short-form launch password — identical behaviour
-      if (password === TIER_PASSWORDS.admin2) { onUpgrade('pro'); return; }
-      if (password === TIER_PASSWORDS.admin)  { onUpgrade('pro'); return; }
+      if (password === TIER_PASSWORDS.admin) { onUpgrade('pro'); return; }
       if (password === TIER_PASSWORDS.pro) {
         if (currentPlan === 'pro') { setError('You\'re already on Fusion Pro.'); setSubmitting(false); return; }
         onUpgrade('pro'); return;
@@ -8080,12 +8105,7 @@ function CPFPlannerApp() {
   const [plan, setPlan] = useState(() => {
     try { return localStorage.getItem('fusion_plan') ?? 'lite'; } catch { return 'lite'; }
   });
-  // Auto-show the upgrade/access modal on first launch if no plan has been saved yet.
-  // This makes the UpgradeModal behave as a launch access gate for first-time visitors.
-  // On return visits where a plan is already stored (lite, plus, or pro), the modal stays hidden.
-  const [showUpgradeModal, setShowUpgradeModal] = useState(() => {
-    try { return localStorage.getItem('fusion_plan') === null; } catch { return false; }
-  });
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const upgradePlan = (newPlan) => {
     setPlan(newPlan);
     try { localStorage.setItem('fusion_plan', newPlan); } catch { /* noop */ }
@@ -8671,26 +8691,6 @@ function CPFPlannerApp() {
     const privGoal = Number(inp.privateAssetGoal) || 0;
     if (privGoal < 0 || privGoal > 50000000) errs.privateAssetGoal = "0 – $50M";
     else if (privGoal > 0 && privGoal < (Number(inp.currentPrivateAssets) || 0)) errs.privateAssetGoal = "Goal is below current balance — intentional?";
-    // CPF Housing Grants — caps per 2026 HDB policy; type-gated in UI but also validated here
-    const pType = inp.propertyType || 'hdb_bto';
-    const isHdbType = pType === 'hdb_bto' || pType === 'hdb_resale';
-    const ehg = Number(inp.ehgAmount) || 0;
-    const cpr = Number(inp.cpfHousingGrantResale) || 0;
-    const phg = Number(inp.phgAmount) || 0;
-    const sug = Number(inp.stepUpGrantAmount) || 0;
-    if (ehg > 0 && !isHdbType) errs.ehgAmount = 'EHG only applies to HDB BTO or Resale. Change property type or clear this field.';
-    else if (ehg > 120000) errs.ehgAmount = 'EHG cap: $120,000 (families) / $60,000 (singles). Enter actual grant from your HDB approval letter.';
-    if (cpr > 0 && pType !== 'hdb_resale') errs.cpfHousingGrantResale = 'CPF Housing Grant (Resale) only applies to HDB Resale flats.';
-    else if (cpr > 80000) errs.cpfHousingGrantResale = 'Resale Grant cap: $80,000 (families) / $40,000 (singles).';
-    if (phg > 0 && !isHdbType) errs.phgAmount = 'PHG only applies to HDB BTO or Resale.';
-    else if (phg > 30000) errs.phgAmount = 'PHG cap: $30,000 (families with / near parents) / $20,000 (within 4km). Singles receive half.';
-    if (sug > 0 && pType !== 'hdb_bto') errs.stepUpGrantAmount = 'Step-Up CPF Housing Grant only applies to HDB BTO (2-room Flexi second-timers).';
-    else if (sug > 15000) errs.stepUpGrantAmount = 'Step-Up Grant cap: $15,000.';
-    // CPF mortgage + private property with lease < 30 yrs: CPF Board does not allow OA for such properties
-    if ((inp.mortgagePaymentSource || 'cpf') === 'cpf' && pType === 'private' && inp.propertyLeasehold) {
-      const remLease = Number(inp.propertyLeaseYears) || 99;
-      if (remLease < 30) errs.mortgagePaymentSource = `CPF cannot be used for private property with remaining lease < 30 years (currently ${remLease} yrs). Switch Payment Source to Cash.`;
-    }
     // Housing outflow: 0 – $200,000/yr
     const ho = Number(inp.housingOutflow) || 0;
     if (ho < 0 || ho > 200000) errs.housingOutflow = "0 – $200,000/yr";
@@ -9053,14 +9053,9 @@ function CPFPlannerApp() {
         if (fullState.appVersion && fullState.appVersion !== CURRENT_APP_VERSION) {
           showToast(`ℹ️ Share link was saved with ${fullState.appVersion} — loaded on ${CURRENT_APP_VERSION}. Some settings may have reset to defaults. Please review your profile.`);
         }
-        // Scope fix: hoist mergedInputs so setActiveTab below can read cpfScheme after the if-block closes.
-        // Previously `const mergedInputs` was declared inside the if-body — a block-scoped const — so
-        // the setActiveTab call outside that block threw a ReferenceError (swallowed by the try-catch),
-        // meaning the landing tab was never set correctly for any share-link load.
-        let mergedInputs = null;
         if (fullState.inputs) {
           // BUG-1 fix: use module-level buildSafeInputs (boolean coercion, lifeEvents guards, legacy migrations)
-          mergedInputs = buildSafeInputs(fullState.inputs);
+          const mergedInputs = buildSafeInputs(fullState.inputs);
           setInputs(mergedInputs);
           setDebouncedInputs(mergedInputs);
           // BUG-4 fix: clear stale validation highlights when loading from share link
@@ -10442,7 +10437,7 @@ function CPFPlannerApp() {
               if (!Array.isArray(safe.lifeEvents)) safe.lifeEvents = [];
               safe.lifeEvents = [
                 ...safe.lifeEvents,
-                { ...LIFE_EVENT_DEFAULTS_MOD, id: `le-migrated-cb-${Date.now()}`, type: 'career_break',
+                { ...LIFE_EVENT_DEFAULTS, id: `le-migrated-cb-${Date.now()}`, type: 'career_break',
                   label: 'Career Break (migrated)', startAge: legacyCbStart, endAge: legacyCbEnd,
                   magnitude: 0, enabled: true },
               ];
@@ -13380,16 +13375,13 @@ function CPFPlannerApp() {
     // Property: use stressed value if property stress is active
     const baseProp   = propertyStressData?.baseValueAtPA ?? (Number(debouncedInputs.includeProperty) !== 0 ? (accumulationByAge.get(pa)?.propertyValue || 0) : 0);
     const stressProp = showPropertyStress && propertyStressData ? propertyStressData.stressValueAtPA : baseProp;
-    // Portfolio: grows at its own rate — independent of CPF interest rate stress.
-    // Use computePortfolioNetWorth (pure function) so no extra useMemo dep is needed.
-    const basePort   = computePortfolioNetWorth(debouncedInputs, pa);
     // Healthcare: total surge cost drawn from private assets
     const annualHC = showHealthcareStress ? (hcMonthlyCost || 0) * 12 : 0;
     const hcDuration = Math.max(1, (hcEndAge || 85) - (hcStartAge || 75));
     const hcTotal  = annualHC * hcDuration;
-    // Combined stressed net worth (portfolio added to both base and stressed scenarios)
-    const psNetWorth   = psTotalCPF + Math.max(0, psPriv - hcTotal) + stressProp + basePort;
-    const baseNetWorth = baseTotalCPF + basePriv + baseProp + basePort;
+    // Combined stressed net worth
+    const psNetWorth   = psTotalCPF + Math.max(0, psPriv - hcTotal) + stressProp;
+    const baseNetWorth = baseTotalCPF + basePriv + baseProp;
     const delta    = Math.max(0, baseNetWorth - psNetWorth);
     const deltaPct = baseNetWorth > 0 ? Math.round(delta / baseNetWorth * 100) : 0;
     const cpfDelta = Math.max(0, baseTotalCPF - psTotalCPF);
@@ -15071,6 +15063,14 @@ ${milestoneSnapshotHtml}
           /* ── Section-header accent colours (theme-aware) ── */
           --clr-sky:  #38bdf8;   /* Profile & Balances header + body accents */
           --clr-lime: #a3e635;   /* Mandatory Contributions header + body accents */
+          /* ── MMP design system tokens ── */
+          --clr-gold:       #E8A820;   /* Primary accent — section headers, hero card border, active tab */
+          --clr-gold-rgb:   232,168,32;
+          --clr-positive:   #4CAF89;   /* Positive / success values */
+          --clr-warning:    #E05C5C;   /* Warning / negative values */
+          --clr-muted-text: #8CAFD4;   /* Secondary text — input labels, axis labels */
+          --clr-panel-deep: #132038;   /* Hero / result card background */
+          --clr-border-mmp: #1D3357;   /* Card border inside dark panels */
         }
         .theme-light {
           /* ── Backgrounds: reduced luminance ~15% to ease eye strain ── */
@@ -15147,6 +15147,14 @@ ${milestoneSnapshotHtml}
           /* ── Section-header accent colours — WCAG AA on new darker base ── */
           --clr-sky:  #0059a0;   /* 4.72:1 on #c4d2de — was #0284c7 (3.19:1 fail) */
           --clr-lime: #166534;   /* 4.62:1 on #c4d2de — was #4d7c0f (3.89:1 fail) */
+          /* ── MMP design system tokens (light-mode WCAG-AA values) ── */
+          --clr-gold:       #9A6B00;   /* AAA on white — maps to gold accent on dark */
+          --clr-gold-rgb:   154,107,0;
+          --clr-positive:   #1A7A55;   /* Positive values */
+          --clr-warning:    #C0382B;   /* Warning / negative values */
+          --clr-muted-text: #3B5E7A;   /* Secondary text */
+          --clr-panel-deep: #f0f4f8;   /* Hero card bg on light */
+          --clr-border-mmp: rgba(20,40,70,0.18);
         }
         /* ══════════════════════════════════════════════════════════════
            LIGHT MODE SPECIFIC OVERRIDES
@@ -16679,13 +16687,9 @@ ${milestoneSnapshotHtml}
           overflow-x: hidden;
         }
         .cpf-layout[data-mode="fhd"][data-sidebar-open="false"] .fhd-chart-grow {
-          /* FIX: height:auto !important was overriding the inline height:380 on the chart div.
-             ResponsiveContainer uses height="100%" — inside an auto-height parent it measures 0px
-             and renders nothing. Removing height:auto lets the inline height:380 take effect
-             (same as HD mode) so ResponsiveContainer resolves to a known pixel height.
-             flex:1 1 0 removed — it only works in a fixed-height flex parent, which fhd-tab-inner
-             is not (it has height:auto). min-height keeps a safety floor; max-height caps balloons. */
-          min-height: 320px !important;
+          flex: 1 1 0 !important;
+          height: auto !important;
+          min-height: 220px !important;
           max-height: 540px;
         }
         @media (min-width: 1920px) {
@@ -16702,9 +16706,9 @@ ${milestoneSnapshotHtml}
             overflow-x: hidden;
           }
           .cpf-layout[data-mode="auto"][data-sidebar-open="false"] .fhd-chart-grow {
-            /* Same fix as FHD above — height:auto collapses ResponsiveContainer on auto≥1920px.
-               Remove height:auto and flex:1 1 0; keep min/max-height caps only. */
-            min-height: 320px !important;
+            flex: 1 1 0 !important;
+            height: auto !important;
+            min-height: 220px !important;
             max-height: 540px;
           }
         }
@@ -17604,9 +17608,12 @@ ${milestoneSnapshotHtml}
                       </div>
                     ))}
                   </div>
-                  <div style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "10px" }}>
-                    <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER} By using this tool, you acknowledge and accept that you are using the information provided at your own risk.</p>
-                    <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Fusion 富生. All rights reserved.</p>
+                  <div style={{ display: "flex", gap: 10, background: "rgba(var(--clr-gold-rgb),0.04)", border: "1px solid var(--clr-border-mmp)", borderLeft: "3px solid var(--clr-gold)", padding: "12px 14px", borderRadius: "10px", alignItems: "flex-start" }}>
+                    <Info style={{ width: 15, height: 15, color: "var(--clr-muted-text)", flexShrink: 0, marginTop: 1 }} />
+                    <div>
+                      <p style={{ fontSize: 12, color: "var(--clr-muted-text)", lineHeight: 1.6, margin: 0 }}><strong style={{ fontWeight: 600, color: "var(--text-main)" }}>Estimation only.</strong> {LEGAL_DISCLAIMER} By using this tool, you acknowledge and accept that you are using the information provided at your own risk.</p>
+                      <p style={{ fontSize: 11, color: "var(--clr-muted-text)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Fusion 富生. All rights reserved.</p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -17717,18 +17724,17 @@ ${milestoneSnapshotHtml}
               so the restored full brand lockup (text+sub+copy) can ellipsis-truncate
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
-          <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minWidth: 0 }}>
+          <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
             <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 12, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 1.5px rgba(255,255,255,0.35), 0 2px 8px rgba(0,0,0,0.25)" }}>
               <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 30, height: 30, display: "block", borderRadius: 6 }} />
             </div>
             <div className="cpf-logo-textstack">
-              <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 {/* Logo: "Fusion " in green-blue gradient, "富生" in Chinese red — split spans so light-theme
-                    CSS can target each independently without the transparent fill bleeding into 富生.
-                    fontSize 15 harmonises with navbar action buttons (13px) and tab strip (14px). */}
+                    CSS can target each independently without the transparent fill bleeding into 富生. */}
                 <div className="cpf-logo-text" style={{ display: "flex", alignItems: "baseline", whiteSpace: "nowrap" }}>
-                  <span style={{ fontWeight: 900, fontSize: 15, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
-                  <span style={{ fontWeight: 900, fontSize: 15, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
+                  <span style={{ fontWeight: 900, fontSize: 17, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
+                  <span style={{ fontWeight: 900, fontSize: 17, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
                 </div>
                 {/* Plan tier pill — driven by plan state → TIER_CONFIG */}
                 {(() => { const tc = TIER_CONFIG[plan.toUpperCase()]; return tc ? (
@@ -18008,8 +18014,8 @@ ${milestoneSnapshotHtml}
                 <button key={id} role="tab" aria-selected={activeTab === id || (id === "readiness" && activeTab === "summary")} aria-controls={`panel-${id}`}
                   onClick={() => { if (isLifeLocked) return; if (isPlanLocked) { setShowUpgradeModal(true); return; } setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
                   title={isLifeLocked ? "CPF LIFE — not available to foreigners" : isPlanLocked ? `Requires Fusion ${reqTier === 'pro' ? 'Pro' : 'Plus'}` : undefined}
-                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLocked ? (isLifeLocked ? "not-allowed" : "pointer") : "pointer", background: "transparent", color: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : isLocked ? "var(--text-subtle)" : "var(--text-muted)", borderBottom: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLocked ? 0.55 : 1 }}>
-                  <Icon style={{ width: 14, height: 14 }} />{label}
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 14px", fontSize: 13, fontWeight: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? 600 : 400, border: "none", cursor: isLocked ? (isLifeLocked ? "not-allowed" : "pointer") : "pointer", background: "transparent", color: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? "var(--clr-gold)" : isLocked ? "var(--text-subtle)" : "var(--clr-muted-text)", borderBottom: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? "2px solid var(--clr-gold)" : "2px solid transparent", transition: "color 0.15s, border-color 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLocked ? 0.5 : 1 }}>
+                  {label}
                   {isLifeLocked && <span style={{ fontSize: 11, marginLeft: 2 }}>🔒</span>}
                   {isPlanLocked && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: reqTier === 'pro' ? "#b45309" : "#0284c7", color: reqTier === 'pro' ? "#fef3c7" : "#fff", marginLeft: 4 }}>{reqTier === 'pro' ? 'PRO' : 'PLUS'}</span>}
                 </button>
@@ -18046,8 +18052,8 @@ ${milestoneSnapshotHtml}
                   const reqTier      = PLAN_REQUIRED_TABS[id];
                   return (
                     <button key={id} onClick={() => { if (isLifeLocked) return; if (isPlanLocked) { setShowUpgradeModal(true); setShowTabsMenu(false); return; } setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? 800 : 600, border: "none", background: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `${accent}18` : "transparent", color: (isPlanLocked||isLifeLocked) ? "var(--text-subtle)" : (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: (isPlanLocked||isLifeLocked) ? 0.55 : 1 }}>
-                      <Icon style={{ width: 13, height: 13 }} />{label}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? 600 : 400, border: "none", borderLeft: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? "2px solid var(--clr-gold)" : "2px solid transparent", background: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? "rgba(var(--clr-gold-rgb),0.08)" : "transparent", color: (isPlanLocked||isLifeLocked) ? "var(--text-subtle)" : (activeTab === id || (id === "readiness" && activeTab === "summary")) ? "var(--clr-gold)" : "var(--clr-muted-text)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: (isPlanLocked||isLifeLocked) ? 0.5 : 1 }}>
+                      {label}
                       {isLifeLocked && " 🔒"}
                       {isPlanLocked && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: reqTier === 'pro' ? "#b45309" : "#0284c7", color: reqTier === 'pro' ? "#fef3c7" : "#fff", marginLeft: 4 }}>{reqTier === 'pro' ? 'PRO' : 'PLUS'}</span>}
                     </button>
@@ -18246,7 +18252,7 @@ ${milestoneSnapshotHtml}
             <div className="sidebar-col sidebar-col-1">
               <div className={`sidebar-col-body${colOpen[1] ? "" : " col-collapsed"}`}>
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="profile" label="Who I Am" icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} badge={null}
+              <SidebarSectionHeader id="profile" label="Profile & Employment" sectionNumber={1} icon={<User style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(var(--clr-gold-rgb),0.06)" isOpen={openSections.has("profile")} onToggle={() => toggleSection("profile")} badge={null}
                 collapsedHint="Name · Age · Citizenship (SC / PR / Foreigner) · Gender · CPF scheme · Payout age · Milestone ages" />
               {openSections.has("profile") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -19134,7 +19140,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="cpfBalances" label="Today's CPF Balances" icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(56,189,248,0.08)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} badge={null}
+              <SidebarSectionHeader id="cpfBalances" label="CPF Balances" sectionNumber={2} icon={<Scale style={{ width: 14, height: 14, color: "var(--clr-sky)" }} />} color="var(--clr-sky)" activeBg="rgba(var(--clr-gold-rgb),0.06)" isOpen={openSections.has("cpfBalances")} onToggle={() => toggleSection("cpfBalances")} badge={null}
                 collapsedHint="Ordinary (OA) · Special / Retirement (SA/RA) · MediSave (MA) · Progress trackers toward FRS, ERS and BHS" />
               {openSections.has("cpfBalances") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -19273,7 +19279,7 @@ ${milestoneSnapshotHtml}
             )}
 
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader id="contribs" label={`Salary & Contributions${isSelfEmployed ? " (SEP)" : ""}`} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(163,230,53,0.07)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 11, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}</>}
+              <SidebarSectionHeader id="contribs" label={`Salary & Contributions${isSelfEmployed ? " (SEP)" : ""}`} sectionNumber={3} icon={<Briefcase style={{ width: 14, height: 14, color: "var(--clr-lime)" }} />} color="var(--clr-lime)" activeBg="rgba(var(--clr-gold-rgb),0.06)" isOpen={openSections.has("contribs")} onToggle={() => toggleSection("contribs")} badge={<>{isSelfEmployed ? <span style={{ fontSize: 11, background: "rgba(var(--clr-orange-rgb),0.15)", color: "var(--clr-orange)", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>SEP</span> : null}</>}
                 collapsedHint={isSelfEmployed
                   ? "SEP — MediSave contributions only · Salary reference for retirement sum projections"
                   : "OA · SA · MA employee & employer amounts · Auto-Calc from OW + AW · Salary growth · Phase 2 salary · Career break · PR tenure"} />
@@ -20386,7 +20392,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: `1px solid ${isVcOverLimit && openSections.has("topups") ? "#f97316" : isVcOverLimit ? "rgba(249,115,22,0.3)" : isSelfEmployed ? "rgba(var(--clr-orange-rgb),0.3)" : "var(--border-subtle)"}`, borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader planBadge={sectionIsLocked("topups", plan) ? { tier: "plus", locked: true } : null} id="topups" label="Boost My CPF" icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg={isVcOverLimit ? "rgba(249,115,22,0.06)" : "rgba(163,230,53,0.08)"} isOpen={openSections.has("topups")} onToggle={() => sectionIsLocked("topups", plan) ? setShowUpgradeModal(true) : toggleSection("topups")} collapsedHint="VC3A · RSTU · VCMA cash top-up to MA · MRSS · MMSS · Gov Grants · WIS" badge={(() => {
+              <SidebarSectionHeader planBadge={sectionIsLocked("topups", plan) ? { tier: "plus", locked: true } : null} id="topups" label="Voluntary Top-Ups" sectionNumber={4} icon={<Gift style={{ width: 14, height: 14, color: isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)" }} />} color={isVcOverLimit ? "var(--clr-orange)" : "var(--clr-green)"} activeBg="rgba(var(--clr-gold-rgb),0.06)" isOpen={openSections.has("topups")} onToggle={() => sectionIsLocked("topups", plan) ? setShowUpgradeModal(true) : toggleSection("topups")} collapsedHint="VC3A · RSTU · VCMA cash top-up to MA · MRSS · MMSS · Gov Grants · WIS" badge={(() => {
                 // Fix 3: badge now reflects VC3A + RSTU combined so it updates when either field changes.
                 // Policy: only VC3A counts toward the $37,740 Annual Limit; RSTU is exempt.
                 // usedPct uses totalVC (vc3aOnly + rstuOnly) for display; isVcOverLimit checks vc3aOnly only.
@@ -21653,13 +21659,9 @@ ${milestoneSnapshotHtml}
                     ))}
                   </div>
 
-                  {/* Inflation — general CPI; separate from propertyGrowthRate which is property-specific appreciation */}
+                  {/* Inflation */}
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 2 }}>
-                      Inflation Rate (%)
-                      <TooltipBox id="t-inflation" text="General CPI inflation rate (default 2%). Used for: (1) Real $ toggle — deflates all projected values to today's purchasing power. (2) MAS Wellness hedge score — compares private asset growth vs inflation. This is NOT the property appreciation rate — set property growth below." />
-                    </div>
-                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px" }}>General CPI — not property appreciation (set below)</p>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Inflation Rate (%)</label>
                     <input type="text" inputMode="decimal" name="inflationRate" value={inputs.inflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Inflation rate" className={fieldChanged("inflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.inflationRate ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                     {inputErrors.inflationRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.inflationRate}</p>}
                   </div>
@@ -21690,15 +21692,6 @@ ${milestoneSnapshotHtml}
                                 } else if (val === "private") {
                                   updates.includeProperty = true;
                                   // leasehold toggle left to user
-                                  // Grant-zeroing: HDB-only grants must not persist in inputs after switching to Private.
-                                  // The engine applies _totalHousingGrants unconditionally at downpaymentAge with
-                                  // no propertyType check, so stale EHG/Resale/PHG/Step-Up amounts would silently
-                                  // inflate the OA projection even though the grants section is hidden in the UI.
-                                  updates.ehgAmount = 0;
-                                  updates.cpfHousingGrantResale = 0;
-                                  updates.phgAmount = 0;
-                                  updates.stepUpGrantAmount = 0;
-                                  if ((inputs.loanType || "hdb") === "hdb") updates.loanType = "bank"; // HDB loans not available for private
                                 } else {
                                   updates.includeProperty = false;
                                 }
@@ -21752,10 +21745,7 @@ ${milestoneSnapshotHtml}
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                            Prop Growth (%)
-                            <TooltipBox id="t-prop-growth" text="Annual nominal appreciation rate for this property (not general CPI — that is the Inflation Rate above). Applied as compound growth each projection year. For leasehold: the Bala Curve decay multiplier is applied ON TOP of this growth, so the effective net growth is lower. Example at 30 yrs remaining: Bala ratio ≈ 60%, so a 3% growth year still results in a net property value lower than the freehold equivalent. Decay accelerates sharply below 30 yrs remaining lease." />
-                          </div>
+                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Prop Growth (%)</label>
                           <input type="text" inputMode="decimal" name="propertyGrowthRate" value={inputs.propertyGrowthRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} className={fieldChanged("propertyGrowthRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propertyGrowthRate ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                         </div>
                         <div>
@@ -21807,9 +21797,8 @@ ${milestoneSnapshotHtml}
                     <div style={{ marginBottom: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>
                         Payment Source
-                        <TooltipBox id="t-mortgage-source" text="CPF (OA): monthly mortgage instalments debit your OA. Tracked — on property sale CPF requires refund of principal + 2.5%/yr compounded interest. Cash: instalments debit your private assets only. No OA is touched and there is no CPF refund obligation when you sell. HDB flats: both CPF and Cash are allowed for HDB or bank loans. Private property: CPF OA can only be used if the remaining lease is ≥ 30 years AND the lease covers the buyer to at least age 95." />
+                        <TooltipBox id="t-mortgage-source" text="CPF: monthly mortgage instalments debit your OA. Tracked — on property sale CPF requires refund of principal + 2.5%/yr interest. Cash: instalments debit your private assets. No OA is touched, so there is no CPF refund obligation when you sell." />
                       </div>
-                      {inputErrors.mortgagePaymentSource && <p style={{ fontSize: 11, color: "var(--clr-red)", marginBottom: 4 }}>⚠ {inputErrors.mortgagePaymentSource}</p>}
                       <div style={{ display: "flex", gap: 4 }}>
                         {[["cpf", "CPF (OA)"], ["cash", "Cash"]].map(([val, lbl]) => {
                           const active = (inputs.mortgagePaymentSource || "cpf") === val;
@@ -21821,29 +21810,16 @@ ${milestoneSnapshotHtml}
                           );
                         })}
                       </div>
-                      {/* Contextual rule note per property type + payment source */}
-                      {(() => {
-                        const pType = inputs.propertyType || "hdb_bto";
-                        const isCPF = (inputs.mortgagePaymentSource || "cpf") === "cpf";
-                        const remLease = Number(inputs.propertyLeaseYears) || 99;
-                        if (pType === "private" && isCPF && inputs.propertyLeasehold && remLease < 30)
-                          return <p style={{ fontSize: 11, color: "var(--clr-red)", marginTop: 4 }}>⚠ CPF cannot be used for private property with remaining lease &lt; 30 yrs. Switch to Cash.</p>;
-                        if (pType === "private" && isCPF)
-                          return <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>CPF OA allowed for private property only if remaining lease ≥ 30 yrs and covers buyer to age 95.</p>;
-                        if (!isCPF)
-                          return <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Cash: debits private assets. No OA used — CPF Loan Ledger and VHR not applicable. No CPF refund on sale.</p>;
-                        return <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>CPF OA: instalments tracked for CPF refund on sale (principal + 2.5%/yr interest). Use VHR to reduce refund obligation.</p>;
-                      })()}
+                      {(inputs.mortgagePaymentSource || "cpf") === "cash" && (
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>Cash mortgage debits private assets. CPF Loan Ledger and VHR are not applicable.</p>
+                      )}
                     </div>
 
-                    {/* Loan Type — hide HDB option for private property (HDB loans not available for private) */}
+                    {/* Loan Type */}
                     <div style={{ marginBottom: 8 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>Loan Type</div>
                       <div style={{ display: "flex", gap: 4 }}>
-                        {(["hdb_bto", "hdb_resale"].includes(inputs.propertyType || "hdb_bto")
-                          ? [["hdb", "HDB (2.6%)"], ["bank", "Bank"], ["none", "None"]]
-                          : [["bank", "Bank"], ["none", "None"]]
-                        ).map(([val, lbl]) => {
+                        {[["hdb", "HDB (2.6%)"], ["bank", "Bank"], ["none", "None"]].map(([val, lbl]) => {
                           const active = (inputs.loanType || "hdb") === val;
                           return (
                             <button key={val} onClick={() => setInputs(p => ({ ...p, loanType: val }))}
@@ -21853,7 +21829,6 @@ ${milestoneSnapshotHtml}
                           );
                         })}
                       </div>
-                      {(inputs.propertyType === "private") && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>HDB loans are not available for private property.</p>}
                     </div>
 
                     <div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
@@ -21918,59 +21893,26 @@ ${milestoneSnapshotHtml}
                     <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Amount ($) · Age of purchase</p>
                   </div>}
 
-                  {/* Housing Grants — HDB only (BTO/Resale); SC/PR only; credited to OA at downpaymentAge */}
-                  {!isForeigner && (inputs.propertyType === "hdb_bto" || inputs.propertyType === "hdb_resale") && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                  {/* Housing Grants — SC/PR only; credited to OA at downpaymentAge; included in CPF refund on sale */}
+                  {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
                       🏠 CPF Housing Grants
-                      <TooltipBox id="t-housing-grants" text="One-time OA credits at your downpayment age from HDB/CPF grant approval. Included in cumHousingOA for CPF refund tracking — on property sale these amounts (+ 2.5%/yr interest) must be refunded to OA. Enter amounts from your HDB/CPF approval letter. Grants are SC/PR only. Not available for private property." />
+                      <TooltipBox id="t-housing-grants" text="One-time OA credits at your downpayment age from HDB/CPF grant approval. Included in cumHousingOA for CPF refund tracking — on property sale these amounts (+ 2.5%/yr interest) must be refunded to OA. Enter amounts from your HDB/CPF approval letter. Grants are SC/PR only." />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      {/* EHG — applies to BTO and Resale */}
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
-                          EHG (up to $120k/$60k)<TooltipBox id="t-ehgAmount" text="Enhanced CPF Housing Grant — tiered by household income. Families up to $120,000; singles up to $60,000. Applies to BTO and resale flats." />
-                        </div>
-                        <input type="text" inputMode="decimal" name="ehgAmount" placeholder="0" value={getDisplayValue("ehgAmount", inputs.ehgAmount)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("ehgAmount")} aria-label="EHG amount" className={fieldChanged("ehgAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.ehgAmount ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                        {inputErrors.ehgAmount && <p style={{ fontSize: 11, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.ehgAmount}</p>}
-                      </div>
-                      {/* Resale Grant — Resale only */}
-                      {inputs.propertyType === "hdb_resale" ? (
-                        <div>
+                      {[
+                        ["ehgAmount",             "EHG (up to $120k/$60k)",   "Enhanced CPF Housing Grant — tiered by household income. Families up to $120,000; singles up to $60,000. Applies to BTO and resale flats."],
+                        ["cpfHousingGrantResale",  "Resale Grant (up to $80k)", "CPF Housing Grant for Resale Flats — first-timers. Families up to $80,000; singles up to $40,000."],
+                        ["phgAmount",              "PHG (up to $30k)",          "Proximity Housing Grant — purchase near/with parents or married children. Families up to $30,000 (with) or $20,000 (within 4km). Singles half-amount."],
+                        ["stepUpGrantAmount",       "Step-Up Grant (up to $15k)","Step-Up CPF Housing Grant — second-timers upgrading from 2-room to 3-room flat in non-mature estate. Up to $15,000."],
+                      ].map(([name, label, tip]) => (
+                        <div key={name}>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
-                            Resale Grant (up to $80k)<TooltipBox id="t-cpfHousingGrantResale" text="CPF Housing Grant for Resale Flats — first-timers. Families up to $80,000; singles up to $40,000. Resale only." />
+                            {label}<TooltipBox id={`t-${name}`} text={tip} />
                           </div>
-                          <input type="text" inputMode="decimal" name="cpfHousingGrantResale" placeholder="0" value={getDisplayValue("cpfHousingGrantResale", inputs.cpfHousingGrantResale)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("cpfHousingGrantResale")} aria-label="CPF Resale grant" className={fieldChanged("cpfHousingGrantResale") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.cpfHousingGrantResale ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                          {inputErrors.cpfHousingGrantResale && <p style={{ fontSize: 11, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.cpfHousingGrantResale}</p>}
+                          <input type="text" inputMode="decimal" name={name} placeholder="0" value={getDisplayValue(name, inputs[name])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(name)} aria-label={label} className={fieldChanged(name) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                         </div>
-                      ) : (
-                        <div style={{ opacity: 0.35, pointerEvents: "none" }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>Resale Grant</div>
-                          <div style={{ padding: "8px 12px", background: "var(--bg-muted)", borderRadius: 8, fontSize: 12, color: "var(--text-muted)", border: "1px solid var(--border-strong)" }}>Resale only</div>
-                        </div>
-                      )}
-                      {/* PHG — BTO + Resale */}
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
-                          PHG (up to $30k)<TooltipBox id="t-phgAmount" text="Proximity Housing Grant — purchase near/with parents or married children. Families up to $30,000 (living together) or $20,000 (within 4km). Singles receive half. Applies to BTO and Resale." />
-                        </div>
-                        <input type="text" inputMode="decimal" name="phgAmount" placeholder="0" value={getDisplayValue("phgAmount", inputs.phgAmount)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("phgAmount")} aria-label="PHG amount" className={fieldChanged("phgAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.phgAmount ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                        {inputErrors.phgAmount && <p style={{ fontSize: 11, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.phgAmount}</p>}
-                      </div>
-                      {/* Step-Up Grant — BTO only */}
-                      {inputs.propertyType === "hdb_bto" ? (
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
-                            Step-Up (up to $15k)<TooltipBox id="t-stepUpGrantAmount" text="Step-Up CPF Housing Grant — second-timers upgrading from 2-room Flexi to 3-room flat in non-mature estate. Up to $15,000. BTO only." />
-                          </div>
-                          <input type="text" inputMode="decimal" name="stepUpGrantAmount" placeholder="0" value={getDisplayValue("stepUpGrantAmount", inputs.stepUpGrantAmount)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("stepUpGrantAmount")} aria-label="Step-Up grant" className={fieldChanged("stepUpGrantAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.stepUpGrantAmount ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                          {inputErrors.stepUpGrantAmount && <p style={{ fontSize: 11, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.stepUpGrantAmount}</p>}
-                        </div>
-                      ) : (
-                        <div style={{ opacity: 0.35, pointerEvents: "none" }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>Step-Up Grant</div>
-                          <div style={{ padding: "8px 12px", background: "var(--bg-muted)", borderRadius: 8, fontSize: 12, color: "var(--text-muted)", border: "1px solid var(--border-strong)" }}>BTO only</div>
-                        </div>
-                      )}
+                      ))}
                     </div>
                     {(() => {
                       const totalGrants = (Number(inputs.ehgAmount)||0) + (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) + (Number(inputs.stepUpGrantAmount)||0);
@@ -21980,9 +21922,6 @@ ${milestoneSnapshotHtml}
                         </p>
                       ) : null;
                     })()}
-                    {(inputs.propertyType === "private" || inputs.propertyType === "none") && (
-                      <p style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>CPF housing grants are only available for HDB BTO and Resale flats.</p>
-                    )}
                   </div>}
 
                   {/* Insurance — DPS and HPS: annual OA deductions, SC/PR only */}
@@ -23250,9 +23189,12 @@ ${milestoneSnapshotHtml}
                           </div>
                         ))}
                       </div>
-                      <div id="qs-disclaimer" style={{ background: "rgba(var(--clr-amber3-rgb),0.08)", border: "1px solid rgba(var(--clr-amber3-rgb),0.3)", padding: "12px 14px", borderRadius: "12px" }}>
-                        <p style={{ fontSize: 12, color: "var(--clr-amber)", lineHeight: 1.6, textAlign: "justify" }}><strong style={{ fontWeight: 800 }}>Legal Disclaimer:</strong> {LEGAL_DISCLAIMER}</p>
-                        <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Fusion 富生. All rights reserved.</p>
+                      <div id="qs-disclaimer" style={{ display: "flex", gap: 10, background: "rgba(var(--clr-gold-rgb),0.04)", border: "1px solid var(--clr-border-mmp)", borderLeft: "3px solid var(--clr-gold)", padding: "12px 14px", borderRadius: "12px", alignItems: "flex-start" }}>
+                        <Info style={{ width: 15, height: 15, color: "var(--clr-muted-text)", flexShrink: 0, marginTop: 1 }} />
+                        <div>
+                          <p style={{ fontSize: 12, color: "var(--clr-muted-text)", lineHeight: 1.6, margin: 0 }}><strong style={{ fontWeight: 600, color: "var(--text-main)" }}>Estimation only.</strong> {LEGAL_DISCLAIMER}</p>
+                          <p style={{ fontSize: 11, color: "var(--clr-muted-text)", textAlign: "center", marginTop: 8 }}>{'\u00A9'} 2026 Fusion 富生. All rights reserved.</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -24464,8 +24406,7 @@ ${milestoneSnapshotHtml}
                         const xirrEsc6  = isLifeForRatios6 ? (xirrByAge['escalating']?.[summaryRefAge] ?? null) : null;
                         const xirrBas6  = isLifeForRatios6 ? (xirrByAge['basic']?.[summaryRefAge]      ?? null) : null;
                         const xirrCol6  = (v) => v === null ? "var(--text-muted)" : v >= 4 ? "var(--clr-green)" : v >= 2 ? "var(--clr-amber)" : "var(--clr-red)";
-                        const portAtRef6  = portfolioByAge?.get?.(summaryRefAge)?.balance || 0;
-                        const totalNW6  = (_z6AccRow.oa||0)+(_z6AccRow.sa||0)+(_z6AccRow.ma||0)+(_z6AccRow.ra||0)+(_z6AccRow.srsBalance||0)+(_z6AccRow.privateAssets||0)+portAtRef6;
+                        const totalNW6  = (_z6AccRow.oa||0)+(_z6AccRow.sa||0)+(_z6AccRow.ma||0)+(_z6AccRow.ra||0)+(_z6AccRow.srsBalance||0)+(_z6AccRow.privateAssets||0);
                         const wealthMul6 = target6 > 0 && totalNW6 > 0 ? totalNW6 / (target6 * 12) : null;
                         const contribMul6 = totalPutIn6 > 1 && finalCPF6 > 0 ? finalCPF6 / totalPutIn6 : null;
                         const oaDraw6   = Number(debouncedInputs.oaDrawdownMonthly) || 0;
@@ -25435,17 +25376,17 @@ ${milestoneSnapshotHtml}
                               <stop offset="95%" stopColor="#059669" stopOpacity={0.06} />
                             </linearGradient>
                             <linearGradient id="accRaGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.30} />
-                              <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.06} />
+                              <stop offset="5%"  stopColor="#E8A820" stopOpacity={0.32} />
+                              <stop offset="95%" stopColor="#E8A820" stopOpacity={0.06} />
                             </linearGradient>
                           </defs>
                           {/* Stack: OA->MA->SA->RA. MA above OA only, immune to SA closing at 55. */}
-                          <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#1d4ed8" strokeWidth={2} fill="url(#accOaGrad)" name="OA" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="url(#accMaGrad)" name="MA" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="oa" stackId="1" stroke="#8CAFD4" strokeWidth={2} fill="url(#accOaGrad)" name="OA" />
+                          <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#4CAF89" strokeWidth={2} fill="url(#accMaGrad)" name="MA" />
                           <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" connectNulls={false} stroke="#f59e0b" strokeWidth={2} fill="url(#accSaGrad)" name="SA (pre-55)" />
-                          <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" connectNulls={false} stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
-                          {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="var(--clr-violet2)" strokeWidth={0.5} strokeDasharray="2 2" fill="var(--clr-purple2)" fillOpacity={0.18} name="MC Band (P10-P90)" legendType="square" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
-                          {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
+                          <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" connectNulls={false} stroke="#E8A820" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
+                          {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="#E8A820" strokeWidth={0.5} strokeDasharray="2 2" fill="#E8A820" fillOpacity={0.12} name="MC Band (P10-P90)" legendType="square" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="#E8A820" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
+                          {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-muted-text)" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
                           {inputs.showBalaCurve && <Line isAnimationActive={false} type="monotone" dataKey="balaCurve" stroke="var(--clr-amber)" strokeWidth={1.5} strokeDasharray="3 3" dot={false} name="CPF Board cohort avg" />}
                         </AreaChart>
                       );
@@ -25472,13 +25413,13 @@ ${milestoneSnapshotHtml}
                       return (
                         <LineChart data={linesData}>
                           {sharedInternals}
-                          <Line isAnimationActive={false} type="monotone" dataKey="oa"    stroke="#1d4ed8"            strokeWidth={2}   dot={false} connectNulls={false} name="OA" />
-                          <Line isAnimationActive={false} type="monotone" dataKey="ma"    stroke="#059669"            strokeWidth={2}   dot={false} connectNulls={false} name="MA" />
-                          <Line isAnimationActive={false} type="monotone" dataKey="sa"    stroke="#f59e0b"            strokeWidth={2}   dot={false} connectNulls={false} name="SA (pre-55)" />
-                          <Line isAnimationActive={false} type="monotone" dataKey="ra"    stroke="var(--clr-purple2)" strokeWidth={2}   dot={false} connectNulls={false} name="RA (from 55)" />
-                          <Line isAnimationActive={false} type="monotone" dataKey="total" stroke="var(--clr-slate)"  strokeWidth={1.5} dot={false} connectNulls={false} name="Total CPF" strokeDasharray="6 3" />
-                          {showMonteCarlo && monteCarloData && <Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" />}
-                          {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
+                          <Line isAnimationActive={false} type="monotone" dataKey="oa"    stroke="#8CAFD4"              strokeWidth={2}   dot={false} connectNulls={false} name="OA" />
+                          <Line isAnimationActive={false} type="monotone" dataKey="ma"    stroke="#4CAF89"              strokeWidth={2}   dot={false} connectNulls={false} name="MA" />
+                          <Line isAnimationActive={false} type="monotone" dataKey="sa"    stroke="#f59e0b"              strokeWidth={2}   dot={false} connectNulls={false} name="SA (pre-55)" />
+                          <Line isAnimationActive={false} type="monotone" dataKey="ra"    stroke="#E8A820"              strokeWidth={2.5} dot={false} connectNulls={false} name="RA (from 55)" />
+                          <Line isAnimationActive={false} type="monotone" dataKey="total" stroke="rgba(255,255,255,0.7)" strokeWidth={1.5} dot={false} connectNulls={false} name="Total CPF" strokeDasharray="6 3" />
+                          {showMonteCarlo && monteCarloData && <Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="#E8A820" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" />}
+                          {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-muted-text)" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
                           {inputs.showBalaCurve && <Line isAnimationActive={false} type="monotone" dataKey="balaCurve" stroke="var(--clr-amber)" strokeWidth={1.5} strokeDasharray="3 3" dot={false} name="CPF Board cohort avg" />}
                         </LineChart>
                       );
