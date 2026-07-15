@@ -17883,8 +17883,9 @@ ${milestoneSnapshotHtml}
                     BETA
                   </span>
                 )}
-              </div>
-          </div>
+              </div>{/* /cpf-logo-titlerow */}
+            </div>{/* /cpf-logo-textstack */}
+          </div>{/* /cpf-logo-block */}
 
           {/* ── Header actions ── */}
           <div className="cpf-header-actions" style={{ display: "flex", alignItems: "center", gap: 5, flex: "1 1 auto", minWidth: 0, justifyContent: "flex-end" }}>
