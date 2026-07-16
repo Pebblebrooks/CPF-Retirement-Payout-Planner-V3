@@ -5949,6 +5949,7 @@ function ReadinessTab({
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
   const [expandedRdTile,  setExpandedRdTile]  = useState(null); // Readiness sub-factor tile expansion
+  const [rdCollapsed,     setRdCollapsed]     = useState(false); // Retirement Readiness 5-dim section collapse
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
   const cy           = Number(inputs.currentYear) || 2026;
@@ -7095,15 +7096,22 @@ function ReadinessTab({
 
               return (
                 <>
-                  {/* ── Sub-header ── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
+                  {/* ── Sub-header (collapsible) ── */}
+                  <div
+                    role="button" tabIndex={0} aria-expanded={!rdCollapsed}
+                    onClick={() => { setRdCollapsed(v => !v); setExpandedRdTile(null); }}
+                    onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setRdCollapsed(v => !v)}
+                    style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px", cursor: "pointer", userSelect: "none" }}>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
                       Retirement Readiness — 5 dimensions
+                      <span style={{ fontSize: 9, color: "var(--text-subtle)", transition: "transform 0.2s", transform: rdCollapsed ? "rotate(-90deg)" : "rotate(0deg)", display: "inline-block" }}>▾</span>
                     </span>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                   </div>
 
+                  {/* ── Tiles grid + expansion — hidden when section is collapsed ── */}
+                  {!rdCollapsed && <>
                   {/* ── Tiles grid — identical markup to MAS tiles ── */}
                   <div className="mas-tiles-grid" style={{ marginBottom: 0 }}>
                     {rdTiles.map(({ icon, title, label, status, score: sc, pillar }) => (
@@ -7157,6 +7165,7 @@ function ReadinessTab({
                   })()}
 
                   {/* ── Divider before MAS tiles ── */}
+                  </>}{/* /rdCollapsed */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                     <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
@@ -15971,8 +15980,8 @@ ${milestoneSnapshotHtml}
         /* Beta pill — soft pulsing glow via animated box-shadow (not opacity, so the
            pill itself stays fully legible while the halo breathes around it). */
         @keyframes betaGlow {
-          0%, 100% { box-shadow: 0 0 4px 0px rgba(var(--clr-purple-rgb),0.55), 0 0 1px 0px rgba(var(--clr-cyan-rgb),0); }
-          50%       { box-shadow: 0 0 13px 3px rgba(var(--clr-purple-rgb),0.85), 0 0 20px 6px rgba(var(--clr-cyan-rgb),0.30); }
+          0%, 100% { box-shadow: 0 0 3px 0px rgba(245,158,11,0.45), 0 0 1px 0px rgba(245,158,11,0); }
+          50%       { box-shadow: 0 0 10px 3px rgba(245,158,11,0.75), 0 0 18px 5px rgba(245,158,11,0.25); }
         }
         /* UX-17: tooltip portal fade-in — opacity only; no transform to avoid
            overriding the inline tipTransform positioning (translateX(-50%) etc.) */
@@ -17879,7 +17888,8 @@ ${milestoneSnapshotHtml}
                       fontWeight: 700, letterSpacing: "0.07em",
                       color: "var(--clr-amber)", background: "rgba(245,158,11,0.10)",
                       border: "1px solid rgba(245,158,11,0.35)",
-                      whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
+                      whiteSpace: "nowrap", userSelect: "none", flexShrink: 0,
+                      animation: "betaGlow 2.5s ease-in-out infinite" }}>
                     BETA
                   </span>
                 )}
@@ -17890,7 +17900,18 @@ ${milestoneSnapshotHtml}
           {/* ── Header actions ── */}
           <div className="cpf-header-actions" style={{ display: "flex", alignItems: "center", gap: 5, flex: "1 1 auto", minWidth: 0, justifyContent: "flex-end" }}>
 
-            {/* NAV ORDER (desktop): Unsaved | Nom/Real | Samples | Share▾ | Report▾ | Display▾ | Reset | ⚙(tablet/mobile) */}
+            {/* NAV ORDER (desktop): Home | Unsaved | Nom/Real | Samples | Share▾ | Report▾ | Display▾ | Reset | ⚙(tablet/mobile) */}
+
+            {/* 0. Home — navigates to landing page */}
+            <a href="/" aria-label="Go to landing page" title="Fusion 富生 — Landing page"
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 11px", borderRadius: 8,
+                       background: "var(--bg-panel)", color: "var(--text-muted)", fontSize: 13, fontWeight: 700,
+                       border: "1px solid var(--border-strong)", textDecoration: "none", flexShrink: 0,
+                       transition: "color 0.15s, background 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "var(--text-highlight)"; e.currentTarget.style.background = "var(--bg-muted)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-panel)"; }}>
+              <Home style={{ width: 13, height: 13 }} />
+            </a>
 
             {/* 1. Unsaved badge — all viewports (moved first: highest-priority signal) */}
             {hasUnsaved && (
@@ -21874,7 +21895,7 @@ ${milestoneSnapshotHtml}
                       </div>
                     )}
 
-                    <div style={{ opacity: inputs.propertyType !== "none" ? 1 : 0.4, pointerEvents: inputs.propertyType !== "none" ? "auto" : "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                    {(inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <div>
                         <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Property Value ($)</label>
                         <input type="text" inputMode="decimal" name="propertyValue" value={getDisplayValue("propertyValue", inputs.propertyValue)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Property value" onFocus={() => setFocusedField("propertyValue")} className={fieldChanged("propertyValue") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propertyValue ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
@@ -21929,10 +21950,10 @@ ${milestoneSnapshotHtml}
                         {(Number(inputs.propertyGoalValue) || 0) > 0 && !inputErrors.propertyGoalValue && <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Target shown as progress on Summary card</p>}
                       </div>
                     </div>
-                  </div>
+                  </div>}{/* /propertyType !== 'none' property value block */}
 
-                  {/* Housing loan — locked for foreigners (no OA account) */}
-                  {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                  {/* Housing loan — locked for foreigners (no OA account) AND hidden when no property */}
+                  {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     {/* Payment Source: CPF vs Cash */}
                     <div style={{ marginBottom: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>
@@ -22035,8 +22056,8 @@ ${milestoneSnapshotHtml}
                   }
                   </div>}
 
-                  {/* OA Downpayment — locked for foreigners (no OA account) */}
-                  {!isForeigner && <div>
+                  {/* OA Downpayment — locked for foreigners; hidden when no property */}
+                  {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div>
                     <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                       OA Downpayment
                       <TooltipBox id="t-dp-prop" text="One-time OA deduction for property purchase downpayment. Applied once at the specified age if OA balance permits." />
@@ -22115,8 +22136,8 @@ ${milestoneSnapshotHtml}
                     )}
                   </div>}
 
-                  {/* Insurance — DPS and HPS: annual OA deductions, SC/PR only */}
-                  {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                  {/* Insurance — DPS and HPS: annual OA deductions, SC/PR only. Hidden when no property (HPS requires property; DPS independent but hidden for clean UX when no property) */}
+                  {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
                       🛡️ CPF Insurance Premiums
                       <TooltipBox id="t-cpf-insurance" text="Annual OA premiums deducted by CPF Board. DPS: OA deducted first, SA/RA fallback if OA insufficient. Covers death, terminal illness, TPD up to $70k (reduces to $55k at 60). HPS: OA only, ends at 65 or mortgage payoff. Both SC/PR only." />
@@ -22203,9 +22224,8 @@ ${milestoneSnapshotHtml}
                       )}
                     </div>
                   </div>}
-                  <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
-                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                      Sell Property at Age
+                  {/* Sell Property at Age — hidden when no property */}
+                  {(inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                       <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA. Property value is removed from net worth at the sale age." />
                     </div>
                     <input type="text" inputMode="decimal" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" className={fieldChanged("sellPropertyAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.sellPropertyAge ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
@@ -22213,8 +22233,10 @@ ${milestoneSnapshotHtml}
                     {(Number(inputs.sellPropertyAge) || 0) > 0 && <p style={{ fontSize: 12, color: "var(--clr-blue)", marginTop: 4, lineHeight: 1.5 }}>Sale at age {inputs.sellPropertyAge}: OA principal + 2.5%/yr interest refunded to OA.{inputs.usePropertyPledge ? " Pledge active: RA restored to FRS first." : ""} Property removed from net worth.</p>}
                   </div>
 
-                  {/* Property Pledge — hidden for foreigners (requires CPF RA; SC/PR only) */}
-                  {!isForeigner && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                  </div>}{/* /sellProperty !== none */}
+
+                  {/* Property Pledge — hidden for foreigners (requires CPF RA; SC/PR only) AND hidden when no property */}
+                  {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
@@ -22257,8 +22279,8 @@ ${milestoneSnapshotHtml}
                   </div>}
 
 
-                  {/* Property Monetisation — hidden for foreigners (LBS = HDB/SC-only; SHB = SC-only; RA top-up requires CPF RA) */}
-                  {!isForeigner && <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.2)" }}>
+                  {/* Property Monetisation — hidden for foreigners AND hidden when no property */}
+                  {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.2)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                       <div>
                         <p style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-blue)", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
@@ -22393,8 +22415,8 @@ ${milestoneSnapshotHtml}
                     </div>
                   )}
 
-                  {/* Rental Income — recurring monthly cash inflow; available to all (SC/PR/Foreigner) */}
-                  <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                  {/* Rental Income — hidden when no property (you need to own to earn rental); available to SC/PR/Foreigner */}
+                  {(inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                       <div>
                         <p style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-blue)", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
@@ -22443,7 +22465,8 @@ ${milestoneSnapshotHtml}
                       </p>
                     )}
                   </div>
-                  {/* ── Rent Expense ── unified inside Rental Income container */}
+                  </div>}{/* /rentalIncome !== none */}
+                  {/* ── Rent Expense — always visible; you may pay rent even when you own no property ── */}
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(251,113,133,0.25)" }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#fb7185", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Rental Expense</div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>Monthly cash outflow when renting a home as tenant (debited from private assets)</div>
