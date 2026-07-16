@@ -22227,12 +22227,9 @@ ${milestoneSnapshotHtml}
                   {/* Sell Property at Age — hidden when no property */}
                   {(inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                       <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA. Property value is removed from net worth at the sale age." />
-                    </div>
                     <input type="text" inputMode="decimal" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" className={fieldChanged("sellPropertyAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.sellPropertyAge ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
                     {inputErrors.sellPropertyAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.sellPropertyAge}</p>}
                     {(Number(inputs.sellPropertyAge) || 0) > 0 && <p style={{ fontSize: 12, color: "var(--clr-blue)", marginTop: 4, lineHeight: 1.5 }}>Sale at age {inputs.sellPropertyAge}: OA principal + 2.5%/yr interest refunded to OA.{inputs.usePropertyPledge ? " Pledge active: RA restored to FRS first." : ""} Property removed from net worth.</p>}
-                  </div>
-
                   </div>}{/* /sellProperty !== none */}
 
                   {/* Property Pledge — hidden for foreigners (requires CPF RA; SC/PR only) AND hidden when no property */}
