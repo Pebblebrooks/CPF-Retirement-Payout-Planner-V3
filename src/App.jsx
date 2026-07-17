@@ -2060,7 +2060,17 @@ function runRSSEngine(inputs, {
   const downpaymentAge       = Number(inputs.downpaymentAge) || 35;
   let downpaymentApplied = startAge > downpaymentAge;
   // Housing grants — one-time OA credits at downpaymentAge, tracked in cumHousingOA/FV for CPF refund
-  const _totalHousingGrants = (Number(inputs.ehgAmount)||0) + (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) + (Number(inputs.stepUpGrantAmount)||0);
+  // Property-(sub)type gated: EHG applies to BTO+Resale; Resale Grant and PHG are resale-only
+  // (verified: HDB does not extend PHG to BTO buyers); Step-Up is BTO-only; none apply to
+  // private property or "no property". Previously summed unconditionally — a value left in a
+  // field the UI has since disabled (e.g. PHG after switching hdb_resale → hdb_bto) would
+  // otherwise still silently inflate the OA projection.
+  const _pType = inputs.propertyType || 'hdb_bto';
+  const _totalHousingGrants = (_pType === 'hdb_bto' || _pType === 'hdb_resale') ? (
+    (Number(inputs.ehgAmount)||0)
+    + (_pType === 'hdb_resale' ? (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) : 0)
+    + (_pType === 'hdb_bto' ? (Number(inputs.stepUpGrantAmount)||0) : 0)
+  ) : 0;
   let housingGrantApplied = startAge > downpaymentAge;
   // Insurance deductions from OA — dpsMode drives whether/how DPS is applied
   const _dpsMode = inputs.dpsMode || 'auto'; // "auto"|"optout"|"custom"
@@ -3130,7 +3140,13 @@ function runProjectionEngine(inputs, {
   const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0);
   const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
   // Housing grants + insurance — declared here so engine loop can reference them
-  const _totalHousingGrantsPE = (Number(inputs.ehgAmount)||0) + (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) + (Number(inputs.stepUpGrantAmount)||0);
+  // Property-type gated to match the sidebar (see _totalHousingGrants in the RSS engine for detail).
+  const _pTypePE = inputs.propertyType || 'hdb_bto';
+  const _totalHousingGrantsPE = (_pTypePE === 'hdb_bto' || _pTypePE === 'hdb_resale') ? (
+    (Number(inputs.ehgAmount)||0)
+    + (_pTypePE === 'hdb_resale' ? (Number(inputs.cpfHousingGrantResale)||0) + (Number(inputs.phgAmount)||0) : 0)
+    + (_pTypePE === 'hdb_bto' ? (Number(inputs.stepUpGrantAmount)||0) : 0)
+  ) : 0;
   const _dpsModePE = inputs.dpsMode || 'auto'; // "auto"|"optout"|"custom"
   const _hpsAnnualPE = Number(inputs.hpsAnnualPremium) || 0;
   const medInfl = (Number(inputs.medicalInflationRate) || 0) / 100;
@@ -6100,7 +6116,7 @@ function ReadinessTab({
     milestones, inputs.inflationRate, ca, perfectStormData,
     inputs.portfolioWithdrawalMonthly, inputs.portfolioWithdrawalStartAge,
     inputs.oaDrawdownMonthly, inputs.budgetLivingExpenses,
-    inputs.retirementExpenseRatio, inputs.retirementHealthcareMonthly,
+    inputs.retirementExpenseRatio, inputs.retirementHealthcareMonthly, payoutAge65,
   ]);
 
   // ── Derived metrics ──────────────────────────────────────────────────────
@@ -8821,7 +8837,7 @@ function CPFPlannerApp() {
     else if (ehg > 120000) errs.ehgAmount = 'EHG cap: $120,000 (families) / $60,000 (singles). Enter actual grant from your HDB approval letter.';
     if (cpr > 0 && pType !== 'hdb_resale') errs.cpfHousingGrantResale = 'CPF Housing Grant (Resale) only applies to HDB Resale flats.';
     else if (cpr > 80000) errs.cpfHousingGrantResale = 'Resale Grant cap: $80,000 (families) / $40,000 (singles).';
-    if (phg > 0 && !isHdbType) errs.phgAmount = 'PHG only applies to HDB BTO or Resale.';
+    if (phg > 0 && pType !== 'hdb_resale') errs.phgAmount = 'PHG (Proximity Housing Grant) only applies to HDB Resale flats — not extended to BTO.';
     else if (phg > 30000) errs.phgAmount = 'PHG cap: $30,000 (families with / near parents) / $20,000 (within 4km). Singles receive half.';
     if (sug > 0 && pType !== 'hdb_bto') errs.stepUpGrantAmount = 'Step-Up CPF Housing Grant only applies to HDB BTO (2-room Flexi second-timers).';
     else if (sug > 15000) errs.stepUpGrantAmount = 'Step-Up Grant cap: $15,000.';
@@ -11311,93 +11327,15 @@ function CPFPlannerApp() {
     // the identical data[] row shape so all downstream consumers work without change.
     const isRSS = debouncedInputs.cpfScheme === 'rss';
     const engineFn = isRSS ? runRSSEngine : runProjectionEngine;
-    if (debouncedInputs.dieWithZeroEnabled) {
-      // Q3 fix: for RSS members, the CPF LIFE "payout age" concept does not apply.
-      // DWZ should drain OA starting from currentAge (the earliest usable reference point
-      // within the simulation window), not from payoutAge (65) which is OUTSIDE the
-      // projection window for members already aged 68+.
-      // pass1ByAge.get(65) returns undefined for an RSS member aged 68 → oaAtPayout = 0
-      // → dwzPmt = 0 → DWZ has zero effect. Using currentAge fixes the Map lookup.
-      const pa   = isRSS
-        ? (Number(debouncedInputs.currentAge) || 68)   // RSS: start OA drawdown now
-        : (Number(debouncedInputs.payoutAge) || 65);    // LIFE: start at CPF LIFE payout age
-      const dwzA = Number(debouncedInputs.dieWithZeroAge) || 85;
-      const n    = Math.max(1, dwzA - pa);
-      const rOA  = 0.025;
-      const pass1 = engineFn({ ...debouncedInputs, oaDrawdownMonthly: 0, oaDrawdownStartAge: 0 }, { maxAge: maxPA });
-      // E2 fix: build O(1) Map after each engine pass — replaces 7 raw .find() scans
-      const pass1ByAge = new Map(pass1.map(r => [r.age, r]));
-      const oaAtPayout = pass1ByAge.get(pa)?.oa || 0;
-      const dwzPmt = oaAtPayout > 0
-        ? (rOA > 0 ? Math.round(oaAtPayout * rOA / (1 - Math.pow(1 + rOA, -n)) / 12) : Math.round(oaAtPayout / n / 12))
-        : 0;
-      const pass2 = engineFn({ ...debouncedInputs, oaDrawdownMonthly: dwzPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 }, { maxAge: maxPA });
-      // NX3 fix: verify OA actually depletes to ~$0 at dwzAge.
-      // If mandatory contributions or other inflows continue post-payout, OA will retain a residual
-      // that the PMT formula (computed on oaAtPayout alone) did not account for.
-      // Apply a first-order correction: spread the residual evenly over the drawdown window and
-      // run a corrected pass3. Store _dwzResidualOa for UI disclosure.
-      const pass2ByAge = new Map(pass2.map(r => [r.age, r])); // E2 fix: O(1) Map for pass2
-      const residualOa = pass2ByAge.get(dwzA)?.oa || 0;
-      let finalPmt  = dwzPmt;
-      let finalPass = pass2;
-      if (residualOa > 500 && dwzPmt > 0) {
-        const correctionMonthly = Math.round(residualOa / Math.max(1, n * 12));
-        finalPmt  = dwzPmt + correctionMonthly;
-        finalPass = engineFn({ ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 }, { maxAge: maxPA });
-      }
-      // E2 fix: build Map from current finalPass (may be pass2 or corrected pass3)
-      const finalPassByAge = new Map(finalPass.map(r => [r.age, r]));
-      finalPass._dwzOaMonthly  = finalPmt;
-      finalPass._dwzStartAge   = pa;
-      finalPass._dwzResidualOa = finalPassByAge.get(dwzA)?.oa || 0;
-      // H2 fix: initialise _dwzResidualPriv = 0 unconditionally so downstream reads never
-      // produce NaN when there are no private assets (pmtPrivAnnual = 0 skips the block
-      // below that was previously the only place this field was assigned).
-      finalPass._dwzResidualPriv = 0;
-
-      // P1-D fix: compute private-asset DWZ draw and inject into the final engine pass.
-      // Pattern mirrors the OA three-pass: read privAssets at payout age from finalPass,
-      // compute PMT over the DWZ window, then re-run the engine with overridePrivDrawdown
-      // so the chart and ledger reflect actual depletion rather than endless growth.
-      const rPriv = Math.max(0, (Number(debouncedInputs.privateAssetGrowthRate) || 0) / 100);
-      const privAtPayout = finalPassByAge.get(pa)?.privateAssets || 0; // E2 fix: O(1)
-      let pmtPrivAnnual = privAtPayout > 0
-        ? (rPriv > 0
-            ? Math.round(privAtPayout * rPriv / (1 - Math.pow(1 + rPriv, -n)))
-            : Math.round(privAtPayout / n))
-        : 0;
-      if (pmtPrivAnnual > 0) {
-        let privPass = engineFn(
-          { ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
-          { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa, maxAge: maxPA }
-        );
-        // BUG-9 fix: the PMT formula is computed on privAtPayout alone and assumes no further
-        // inflows. However, the engine unconditionally adds privateSaving every year — including
-        // during the DWZ drawdown window — leaving a residual of ~privateSaving × n at dwzAge.
-        // Mirror the OA residual-correction pass: measure the overshoot, spread it evenly over
-        // the drawdown window, increment pmtPrivAnnual, and re-run once to correct depletion.
-        let privPassByAge = new Map(privPass.map(r => [r.age, r])); // E2 fix: O(1) Map for privPass
-        const residualPriv = privPassByAge.get(dwzA)?.privateAssets || 0;
-        if (residualPriv > 500 && pmtPrivAnnual > 0) {
-          const correctionAnnual = Math.round(residualPriv / Math.max(1, n));
-          pmtPrivAnnual += correctionAnnual;
-          privPass = engineFn(
-            { ...debouncedInputs, oaDrawdownMonthly: finalPmt, oaDrawdownStartAge: pa, oaDrawdownFloor: 0 },
-            { overridePrivDrawdown: pmtPrivAnnual, overridePrivDrawdownStart: pa, maxAge: maxPA }
-          );
-          privPassByAge = new Map(privPass.map(r => [r.age, r])); // E2 fix: rebuild Map after correction pass
-        }
-        finalPass = privPass;
-        finalPass._dwzOaMonthly   = finalPmt;
-        finalPass._dwzStartAge    = pa;
-        finalPass._dwzResidualOa  = privPassByAge.get(dwzA)?.oa || 0;           // E2 fix: O(1)
-        finalPass._dwzResidualPriv = privPassByAge.get(dwzA)?.privateAssets || 0; // E2 fix: O(1)
-      }
-      finalPass._dwzPrivMonthly = Math.round(pmtPrivAnnual / 12); // monthly draw for UI display
-      return finalPass;
-    }
-    return engineFn(debouncedInputs, { maxAge: maxPA });
+    // M-DWZ fix (re-applied): this useMemo had regained its own ~85-line copy of the
+    // Die-with-Zero multi-pass algorithm (Q3/E2/NX3/H2/P1-D/BUG-9 logic), duplicating
+    // runProjectionWithDWZ — the same module-level function Scenario A/B and the PORT 4
+    // recommender already call. Verified line-by-line that this inline copy and the
+    // shared function compute identically (same pa/dwzA/n/rOA math, same 3-pass residual
+    // correction for OA and private assets), so delegating back to it is a pure dedup
+    // with no behavior change — restores one source of truth instead of two that can
+    // silently drift apart (the exact failure mode behind the LIFE_EVENT_DEFAULTS_MOD bug).
+    return runProjectionWithDWZ(debouncedInputs, engineFn);
   }, [engineKey]); // eslint-disable-line
 
   // projectionByAge: O(1) lookup for the raw (nominal) engine projection — used wherever
@@ -11670,7 +11608,7 @@ function CPFPlannerApp() {
       // D4-Bug2: raAtPayout (full pre-transfer RA) now drives CPF LIFE interpolation for primary.
       raAtPayout, basicPremiumPct,
       debouncedInputs.applyRaOaTransfer,
-      debouncedSpouseInputs.currentYear]);
+      debouncedSpouseInputs.currentYear, debouncedSpouseInputs.birthYear, maxPA, raAfterTransfer]);
 
   const householdByAge = useMemo(
     () => new Map((householdData || []).map(r => [r.age, r])),
@@ -11988,9 +11926,7 @@ function CPFPlannerApp() {
       debouncedInputs.portfolioBalance, debouncedInputs.portfolioAnnualReturn,
       debouncedInputs.portfolioAnnualContribution, debouncedInputs.portfolioContribStopAge,
       debouncedInputs.portfolioWithdrawalMonthly, debouncedInputs.portfolioWithdrawalStartAge,
-      debouncedInputs.currentAge, maxPA]);
-
-  // Spouse payout projection — structural mirror of payoutProjection using spouse data.
+      debouncedInputs.currentAge, maxPA, debouncedInputs.applyRaOaTransfer]);
   // Gated on householdEnabled so it adds zero cost for primary-only users.
   const spousePayoutProjection = useMemo(() => {
     if (!householdEnabled || !spouseLifePlans || !spouseProjection?.length) return [];
@@ -12320,7 +12256,7 @@ function CPFPlannerApp() {
         ra:    row.age <  55 ? null : (row.ra || 0),
         total: (row.oa || 0) + (row.ma || 0) + (row.sa || 0) + (row.ra || 0),
       }));
-  }, [displayAccumulation, debouncedInputs, payoutAge65]);
+  }, [displayAccumulation, debouncedInputs, payoutAge65, maxPA]);
 
   const payoutByAge = useMemo(
     () => new Map((payoutProjection || []).map(r => [r.age, r])),
@@ -12453,7 +12389,7 @@ function CPFPlannerApp() {
   // were never read inside this memo body; removing them eliminates unnecessary recomputes
   // whenever the real/nominal display mode toggles (which rebuilds displayAccumulation).
   // Intentional: gapAlert always compares nominal RA vs nominal FRS regardless of display mode.
-  }, [projection, projectionByAge, debouncedInputs.currentAge, debouncedInputs.currentYear,
+  }, [projectionByAge, debouncedInputs.currentAge, debouncedInputs.currentYear,
       debouncedInputs.payoutAge, debouncedInputs.saBalance, debouncedInputs.vcSaTopup, debouncedInputs.retirementSumGrowth]);
 
   const monteCarloData = useMemo(() => {
@@ -12507,7 +12443,7 @@ function CPFPlannerApp() {
       ? Math.round((payoutRow.allVals.filter(v => v >= frsAtPayout).length / payoutRow.allVals.length) * 100)
       : null;
     return { rows: rows.map(({ allVals: _, ...r }) => r), probSufficiency, frsAtPayout };
-  }, [showMonteCarlo, debouncedInputs, isRealDollars]);
+  }, [showMonteCarlo, debouncedInputs, isRealDollars, maxPA]);
 
   // Baseline projection — mandatory contributions only, all voluntary inputs zeroed.
   // Used as a dashed ghost line on the Grow chart to show how much voluntary
@@ -12542,7 +12478,7 @@ function CPFPlannerApp() {
       return rows.map(r => ({ age: r.age, baselineTotal: Math.round(r.total / Math.pow(1 + inflRate, Math.max(0, r.age - ca))) }));
     }
     return rows.map(r => ({ age: r.age, baselineTotal: r.total }));
-  }, [showBaseline, debouncedInputs, isRealDollars]);
+  }, [showBaseline, debouncedInputs, isRealDollars, maxPA]);
 
   const whatIfProjection = useMemo(() => {
     // Gate: compute when any slider is set OR when on the compare/summary tab.
@@ -12597,7 +12533,7 @@ function CPFPlannerApp() {
     return { rows, effPA, effST, effH, effSB, effCS, effOAD, effSRS, effPG };
   }, [whatIfPayoutAge, whatIfSaTopup, whatIfHousing, whatIfSalaryBump,
       whatIfContribStop, whatIfOaDrawdown, whatIfSrsContrib, whatIfPrivGrowth,
-      debouncedInputs]);
+      debouncedInputs, activeTab]);
 
   const comparisonData = useMemo(() => {
     // E4 fix: pre-build O(1) Maps per scenario so getNetWorth() doesn't scan arrays on every age iteration
@@ -12692,7 +12628,7 @@ function CPFPlannerApp() {
     }
     return data;
   // R-1 fix: add isRealDollars to deps so the chart re-runs when the toggle changes
-  }, [scenarioA, scenarioB, highlightPlan, isRealDollars]);
+  }, [scenarioA, scenarioB, highlightPlan, isRealDollars, maxPA]);
 
   // BUG-09 fix: use payoutAge65 (debounced) instead of live inputs.payoutAge so intersection
   // ages are always computed against the same debounced payoutProjection they filter.
@@ -12820,11 +12756,10 @@ function CPFPlannerApp() {
       }
       return computeSensitivityRow(pAge, raForSens, isMaleSens, maxPA); // F1: pass planning horizon so cumulative payout/breakeven uses correct age ceiling
     });
-  }, [projection, projectionByAge, debouncedInputs.isMale,
+  }, [projectionByAge, debouncedInputs.isMale,
       debouncedInputs.cpfScheme, debouncedInputs.rssMonthlyPayout,
       debouncedInputs.rssPayoutStartAge, debouncedInputs.saBalance,
-      debouncedInputs.currentYear, debouncedInputs.currentAge,
-      debouncedInputs.applyRaOaTransfer, debouncedInputs.birthYear, _birthYear]);
+      debouncedInputs.applyRaOaTransfer, _birthYear, maxPA]);
 
   // Spouse sensitivity table — same computeSensitivityRow helper, spouse projection data.
   // Bug fix: same RA→OA toggle-blindness as the primary member's table above — now mirrors
@@ -12848,7 +12783,7 @@ function CPFPlannerApp() {
       return computeSensitivityRow(pAge, raForSens, isMaleSens);
     });
   }, [householdEnabled, spouseProjectionByAge, debouncedSpouseInputs.isMale,
-      debouncedSpouseInputs.applyRaOaTransfer, debouncedSpouseInputs.birthYear, _sBirthYearForTransfer]);
+      debouncedSpouseInputs.applyRaOaTransfer, _sBirthYearForTransfer]);
 
   // R7: formatCurrency hoisted to module level
 
@@ -13207,7 +13142,7 @@ function CPFPlannerApp() {
     return data;
   // I-1/II-7/II-8 fix: replace payoutByAge with displayProjectionByAge (deflation-aware);
   // add debouncedInputs.inflationRate + currentAge for the _scDeflate helper.
-  }, [displayProjection, displayAccumulation, accumulationByAge, displayProjectionByAge, isRealDollars, payoutAge65,
+  }, [accumulationByAge, displayProjectionByAge, isRealDollars, payoutAge65,
     debouncedInputs.inflationRate, debouncedInputs.currentAge,
     debouncedInputs.srsDrawdownStartAge, debouncedInputs.srsDrawdownYears,
     effectiveOaDrawStartAge, effectiveOaDrawMonthly, effectiveOaDrawFloor,
@@ -13215,7 +13150,7 @@ function CPFPlannerApp() {
     debouncedInputs.propMonetiseScheme, debouncedInputs.lbsMonthlyPayout, debouncedInputs.lbsPayoutEndAge,
     debouncedInputs.rentalIncome, debouncedInputs.rentalStartAge, debouncedInputs.rentalEndAge,
     debouncedInputs.srsReturnRate, highlightPlan,
-    debouncedInputs.cpfScheme, debouncedInputs.rssPayoutStartAge, debouncedInputs.rssMonthlyPayout]);
+    debouncedInputs.cpfScheme, debouncedInputs.rssPayoutStartAge, debouncedInputs.rssMonthlyPayout, maxPA]);
 
   // ── SORR (Sequence of Returns Risk) stress test ─────────────────────────────
   // Models the impact of bad market returns in the FIRST N years of retirement on private assets.
@@ -13278,7 +13213,7 @@ function CPFPlannerApp() {
       crashEndAge: pa + sorrCrashYears,
     };
   }, [showSorr, sorrCrashYears, sorrCrashReturn, strategyChartData, accumulationByAge,
-      payoutAge65, debouncedInputs.privateAssetGrowthRate, debouncedInputs.annualPrivateSaving]);
+      payoutAge65, debouncedInputs.privateAssetGrowthRate, debouncedInputs.annualPrivateSaving, maxPA]);
 
   // ── F2: Inflation Stress Data ─────────────────────────────────────────────
   // Shows real purchasing-power erosion of CPF LIFE monthly payout under a higher
@@ -13311,7 +13246,7 @@ function CPFPlannerApp() {
     return { rows, cpfLifeNom, lifetimeLoss, atPA, at80, atLifeExp, lifeExp };
   }, [showInflationStress, inflationStressRate, debouncedInputs.inflationRate,
       debouncedInputs.isMale, debouncedInputs.basicPremiumPct,
-      lifePlans, highlightPlan, payoutAge65]);
+      lifePlans, highlightPlan, payoutAge65, maxPA]);
 
   // ── F4: Property Correction Stress Data ──────────────────────────────────
   // Computes stressed property value trajectory at an alternative growth rate.
@@ -17856,25 +17791,26 @@ ${milestoneSnapshotHtml}
               so the restored full brand lockup (text+sub+copy) can ellipsis-truncate
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
-          <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minWidth: 0 }}>
+          <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minWidth: 0 }}>
             <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 12, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 1.5px rgba(255,255,255,0.35), 0 2px 8px rgba(0,0,0,0.25)" }}>
               <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 30, height: 30, display: "block", borderRadius: 6 }} />
             </div>
             <div className="cpf-logo-textstack">
-              <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div className="cpf-logo-titlerow" style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 {/* Logo: "Fusion " in green-blue gradient, "富生" in Chinese red — split spans so light-theme
                     CSS can target each independently without the transparent fill bleeding into 富生.
                     Sub-label removed: textstack is now single-row, so cpf-logo-block alignItems:"center"
-                    automatically places the text on the seal's horizontal centreline. */}
+                    automatically places the text on the seal's horizontal centreline. Text/pills enlarged
+                    (17→24px) per explicit sizing request — icon box left untouched. */}
                 <div className="cpf-logo-text" style={{ display: "flex", alignItems: "baseline", whiteSpace: "nowrap" }}>
-                  <span style={{ fontWeight: 900, fontSize: 17, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
-                  <span style={{ fontWeight: 900, fontSize: 17, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
+                  <span style={{ fontWeight: 900, fontSize: 24, background: "linear-gradient(90deg,#10b981,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Fusion&nbsp;</span>
+                  <span style={{ fontWeight: 900, fontSize: 24, color: "#dc2626", WebkitTextFillColor: "#dc2626" }}>富生</span>
                 </div>
                 {/* Plan tier pill — driven by plan state → TIER_CONFIG */}
                 {(() => { const tc = TIER_CONFIG[plan.toUpperCase()]; return tc ? (
                 <span className="cpf-beta-pill" title={tc.title}
-                  style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px",
-                    borderRadius: 999, fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                  style={{ display: "inline-flex", alignItems: "center", padding: "3px 10px",
+                    borderRadius: 999, fontSize: 13, fontWeight: 800, letterSpacing: "0.08em",
                     color: tc.color, background: tc.bg, border: `1px solid ${tc.border}`,
                     animation: tc.anim ?? 'none', whiteSpace: "nowrap", userSelect: "none", flexShrink: 0 }}>
                   {tc.label}
@@ -17884,7 +17820,7 @@ ${milestoneSnapshotHtml}
                   <span className="cpf-stage-pill"
                     title="Active beta — features and data are still being refined"
                     style={{ display: "inline-flex", alignItems: "center",
-                      padding: "2px 7px", borderRadius: 999, fontSize: 9,
+                      padding: "3px 9px", borderRadius: 999, fontSize: 12,
                       fontWeight: 700, letterSpacing: "0.07em",
                       color: "var(--clr-amber)", background: "rgba(245,158,11,0.10)",
                       border: "1px solid rgba(245,158,11,0.35)",
@@ -19489,6 +19425,19 @@ ${milestoneSnapshotHtml}
                       </div>
                       {inputErrors.retirementSumGrowth && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>{inputErrors.retirementSumGrowth}</p>}
                       <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>CPF Board historical average ~3%/yr</p>
+                    </div>
+                    {/* Moved here from the Property section — this is a general, economy-wide
+                        assumption (Real $ toggle, MAS Wellness hedge score), not a property-specific
+                        figure. It was easy to confuse with the separate, property-only "Prop Growth"
+                        rate when both sat side-by-side in Property. Grouped here with the other
+                        global rate assumption (Retirement Sum Growth) instead. */}
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-lime)", textTransform: "uppercase", marginBottom: 3 }}>
+                        Inflation Rate (%/yr)
+                        <TooltipBox id="t-inflation" text="General CPI inflation rate (default 2%). Used for: (1) Real $ toggle — deflates all projected values to today's purchasing power. (2) MAS Wellness hedge score — compares private asset growth vs inflation. This is separate from Prop Growth Rate (property-specific appreciation, set in the Property section) and Retirement Sum Growth (how fast FRS/BRS/ERS targets rise, above) — the three rates are independent and don't affect each other." />
+                      </div>
+                      <input type="text" inputMode="decimal" name="inflationRate" value={inputs.inflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Inflation rate" className={fieldChanged("inflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "6px 10px", background: "var(--bg-panel)", border: `1px solid ${inputErrors.inflationRate ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 6, color: "var(--text-bright)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                      {inputErrors.inflationRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.inflationRate}</p>}
                     </div>
                     {/* Rev #22: Phase 2 Salary sub-section (career break moved to Life Events) */}
                     {(() => {
@@ -21805,16 +21754,6 @@ ${milestoneSnapshotHtml}
                   </div>
 
                   {/* Inflation — general CPI; separate from propertyGrowthRate which is property-specific appreciation */}
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 2 }}>
-                      Inflation Rate (%)
-                      <TooltipBox id="t-inflation" text="General CPI inflation rate (default 2%). Used for: (1) Real $ toggle — deflates all projected values to today's purchasing power. (2) MAS Wellness hedge score — compares private asset growth vs inflation. This is NOT the property appreciation rate — set property growth below." />
-                    </div>
-                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px" }}>General CPI — not property appreciation (set below)</p>
-                    <input type="text" inputMode="decimal" name="inflationRate" value={inputs.inflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Inflation rate" className={fieldChanged("inflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.inflationRate ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                    {inputErrors.inflationRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.inflationRate}</p>}
-                  </div>
-
                   {/* Property details */}
                   <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     {/* ── Property Type selector ── */}
@@ -21834,17 +21773,21 @@ ${milestoneSnapshotHtml}
                                   updates.includeProperty   = true;
                                   updates.propertyLeasehold = true;
                                   updates.propertyLeaseYears = 99;
+                                  // Resale-only grants don't apply to BTO — zero so the now-disabled fields don't show stale amounts.
+                                  updates.cpfHousingGrantResale = 0;
+                                  updates.phgAmount = 0;
                                 } else if (val === "hdb_resale") {
                                   updates.includeProperty   = true;
                                   updates.propertyLeasehold = true;
                                   updates.propertyLeaseYears = Math.max(1, 99 - (Number(inputs.propertyAge) || 0));
+                                  // BTO-only grant doesn't apply to Resale.
+                                  updates.stepUpGrantAmount = 0;
                                 } else if (val === "private") {
                                   updates.includeProperty = true;
                                   // leasehold toggle left to user
                                   // Grant-zeroing: HDB-only grants must not persist in inputs after switching to Private.
-                                  // The engine applies _totalHousingGrants unconditionally at downpaymentAge with
-                                  // no propertyType check, so stale EHG/Resale/PHG/Step-Up amounts would silently
-                                  // inflate the OA projection even though the grants section is hidden in the UI.
+                                  // The engine now gates _totalHousingGrants by property type too (belt-and-suspenders),
+                                  // but zeroing here keeps the input itself from showing a stale amount once hidden.
                                   updates.ehgAmount = 0;
                                   updates.cpfHousingGrantResale = 0;
                                   updates.phgAmount = 0;
@@ -21852,6 +21795,17 @@ ${milestoneSnapshotHtml}
                                   if ((inputs.loanType || "hdb") === "hdb") updates.loanType = "bank"; // HDB loans not available for private
                                 } else {
                                   updates.includeProperty = false;
+                                  updates.ehgAmount = 0;
+                                  updates.cpfHousingGrantResale = 0;
+                                  updates.phgAmount = 0;
+                                  updates.stepUpGrantAmount = 0;
+                                }
+                                // LBS/SHB are HDB-only schemes — if the user had one selected and
+                                // switches to private/no-property, fall back to Downgrade so the
+                                // scheme selector doesn't end up pointed at a now-hidden option.
+                                if (val !== "hdb_bto" && val !== "hdb_resale" &&
+                                    (inputs.propMonetiseScheme === "lbs" || inputs.propMonetiseScheme === "shb")) {
+                                  updates.propMonetiseScheme = "downgrade";
                                 }
                                 setInputs(p => ({ ...p, ...updates }));
                               }}
@@ -21950,7 +21904,14 @@ ${milestoneSnapshotHtml}
                         {(Number(inputs.propertyGoalValue) || 0) > 0 && !inputErrors.propertyGoalValue && <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Target shown as progress on Summary card</p>}
                       </div>
                     </div>
-                  </div>}{/* /propertyType !== 'none' property value block */}
+                  }{/* /propertyType !== 'none' property value block */}
+
+                  {/* CPF vs Cash quick reference — which housing costs are CPF-eligible, cash-only, or a choice */}
+                  {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && (
+                    <div style={{ background: "rgba(var(--clr-blue-rgb),0.05)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", borderRadius: 8, padding: "8px 10px", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                      <strong style={{ color: "var(--clr-blue)" }}>💳 CPF vs Cash, at a glance:</strong> Mortgage instalments — your choice below (CPF debits OA and must be refunded on sale; Cash debits private assets, no refund owed). OA Downpayment — CPF only, by definition. CPF Housing Grants — always CPF (credited straight to OA, never cash). DPS/HPS premiums — CPF (OA, SA/RA fallback for DPS). Everything else — agent fees, stamp duties, and any downpayment beyond what OA covers — is cash, paid from private assets; this app doesn't itemise those separately, they're expected to be netted into fields like "Net Cash Proceeds" when you model a sale.
+                    </div>
+                  )}
 
                   {/* Housing loan — locked for foreigners (no OA account) AND hidden when no property */}
                   {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
@@ -22099,14 +22060,21 @@ ${milestoneSnapshotHtml}
                           <div style={{ padding: "8px 12px", background: "var(--bg-muted)", borderRadius: 8, fontSize: 12, color: "var(--text-muted)", border: "1px solid var(--border-strong)" }}>Resale only</div>
                         </div>
                       )}
-                      {/* PHG — BTO + Resale */}
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
-                          PHG (up to $30k)<TooltipBox id="t-phgAmount" text="Proximity Housing Grant — purchase near/with parents or married children. Families up to $30,000 (living together) or $20,000 (within 4km). Singles receive half. Applies to BTO and Resale." />
+                      {/* PHG — Resale only (verified: HDB does not extend PHG to BTO buyers) */}
+                      {inputs.propertyType === "hdb_resale" ? (
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
+                            PHG (up to $30k)<TooltipBox id="t-phgAmount" text="Proximity Housing Grant — purchase near/with parents or married children. Families up to $30,000 (living together) or $20,000 (within 4km). Singles receive half. Resale flats only — HDB does not extend PHG to BTO buyers." />
+                          </div>
+                          <input type="text" inputMode="decimal" name="phgAmount" placeholder="0" value={getDisplayValue("phgAmount", inputs.phgAmount)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("phgAmount")} aria-label="PHG amount" className={fieldChanged("phgAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.phgAmount ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                          {inputErrors.phgAmount && <p style={{ fontSize: 11, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.phgAmount}</p>}
                         </div>
-                        <input type="text" inputMode="decimal" name="phgAmount" placeholder="0" value={getDisplayValue("phgAmount", inputs.phgAmount)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField("phgAmount")} aria-label="PHG amount" className={fieldChanged("phgAmount") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.phgAmount ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                        {inputErrors.phgAmount && <p style={{ fontSize: 11, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.phgAmount}</p>}
-                      </div>
+                      ) : (
+                        <div style={{ opacity: 0.35, pointerEvents: "none" }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>PHG</div>
+                          <div style={{ padding: "8px 12px", background: "var(--bg-muted)", borderRadius: 8, fontSize: 12, color: "var(--text-muted)", border: "1px solid var(--border-strong)" }}>Resale only</div>
+                        </div>
+                      )}
                       {/* Step-Up Grant — BTO only */}
                       {inputs.propertyType === "hdb_bto" ? (
                         <div>
@@ -22206,8 +22174,8 @@ ${milestoneSnapshotHtml}
                       )}
                     </div>
 
-                    {/* ── HPS: unchanged simple input ─────────────────────── */}
-                    <div>
+                    {/* ── HPS: HDB only — does not apply to private property or ECs (per tooltip below) ── */}
+                    {(inputs.propertyType === "hdb_bto" || inputs.propertyType === "hdb_resale") && <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 3 }}>
                         HPS Premium ($/yr)
                         <TooltipBox id="t-hpsAnnualPremium" text="Home Protection Scheme — HDB flat owners using CPF for mortgage instalments only. Mortgage-reducing insurance that clears your outstanding HDB loan on death, terminal illness, or TPD. Deducted annually from OA. Coverage ends at 65 or when loan is fully paid (Housing Stop Age), whichever is earlier. Does not apply to private property or ECs. Enter your annual premium from your CPF statement." />
@@ -22222,15 +22190,18 @@ ${milestoneSnapshotHtml}
                       {(Number(inputs.hpsAnnualPremium) || 0) > 0 && (
                         <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Deducted from OA each year until age {Math.min(65, Number(inputs.housingStopAge) || 55)}</p>
                       )}
-                    </div>
+                    </div>}
                   </div>}
                   {/* Sell Property at Age — hidden when no property */}
                   {(inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                    <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
+                      Sell Property at Age
                       <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA. Property value is removed from net worth at the sale age." />
+                    </div>
                     <input type="text" inputMode="decimal" name="sellPropertyAge" value={inputs.sellPropertyAge} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="0 = no sale" aria-label="Age to sell property" className={fieldChanged("sellPropertyAge") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.sellPropertyAge ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
                     {inputErrors.sellPropertyAge && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.sellPropertyAge}</p>}
                     {(Number(inputs.sellPropertyAge) || 0) > 0 && <p style={{ fontSize: 12, color: "var(--clr-blue)", marginTop: 4, lineHeight: 1.5 }}>Sale at age {inputs.sellPropertyAge}: OA principal + 2.5%/yr interest refunded to OA.{inputs.usePropertyPledge ? " Pledge active: RA restored to FRS first." : ""} Property removed from net worth.</p>}
-                  </div>}{/* /sellProperty !== none */}
+                  </div>}                  </div>}{/* /sellProperty !== none */}
 
                   {/* Property Pledge — hidden for foreigners (requires CPF RA; SC/PR only) AND hidden when no property */}
                   {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
@@ -22290,14 +22261,20 @@ ${milestoneSnapshotHtml}
                     </div>
                     {inputs.propMonetiseEnabled && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {/* Scheme selector — labels, tooltips, validation, and guidance text are scheme-specific */}
+                        {/* Scheme selector — labels, tooltips, validation, and guidance text are scheme-specific.
+                            LBS and SHB are HDB-only (sell/downsize an HDB lease to HDB) — hidden for private property. */}
                         <div>
                           <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>Scheme</label>
                           <div style={{ display: "flex", background: "var(--bg-input)", padding: 3, borderRadius: 8, border: "1px solid var(--border-strong)", gap: 2 }}>
-                            {[["downgrade", "Downgrade"], ["lbs", "LBS"], ["shb", "Silver HB"]].map(([val, label]) => (
+                            {[["downgrade", "Downgrade"], ["lbs", "LBS"], ["shb", "Silver HB"]]
+                              .filter(([val]) => val === "downgrade" || inputs.propertyType === "hdb_bto" || inputs.propertyType === "hdb_resale")
+                              .map(([val, label]) => (
                               <button key={val} onClick={() => setInputs(p => ({ ...p, propMonetiseScheme: val }))} style={{ flex: 1, padding: "4px 6px", borderRadius: 6, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: (inputs.propMonetiseScheme ?? "downgrade") === val ? "var(--clr-blue)" : "transparent", color: (inputs.propMonetiseScheme ?? "downgrade") === val ? "var(--btn-on-accent)" : "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</button>
                             ))}
                           </div>
+                          {inputs.propertyType === "private" && (inputs.propMonetiseScheme === "lbs" || inputs.propMonetiseScheme === "shb") && (
+                            <p style={{ fontSize: 11, color: "var(--clr-amber)", marginTop: 4 }}>⚠ LBS and Silver Housing Bonus require an HDB flat — this scheme won't apply to a private property. Switch to Downgrade, or change Property Type back to HDB.</p>
+                          )}
                           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
                             {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Sell existing home, buy smaller. Enter net cash after CPF OA refund (handled by Sell Property at Age), agent fees, stamp duty, and replacement home cost. Any voluntary RA top-up from proceeds is optional."}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "Sell tail-end of HDB lease to HDB; you stay in your flat for life. Available from age 65 (SC only). HDB pays an annuity premium directly into RA (enter in RA field below); you may also receive a smaller cash component. ⚠ Monthly LBS income is not modelled as a cash stream — add it as private income in the Retirement section if needed."}
@@ -22462,7 +22439,7 @@ ${milestoneSnapshotHtml}
                       </p>
                     )}
                   </div>
-                  </div>}{/* /rentalIncome !== none */}
+                  }{/* /rentalIncome !== none */}
                   {/* ── Rent Expense — always visible; you may pay rent even when you own no property ── */}
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(251,113,133,0.25)" }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#fb7185", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Rental Expense</div>
@@ -32508,7 +32485,7 @@ ${milestoneSnapshotHtml}
                                   <span>{lev.icon}</span>
                                   {lev.seq != null && (lev.eligible || lev.isApplied) && (
                                     <span style={{
-                                      fontSize: 10, fontWeight: 900, color: "var(--text-muted)",
+                                      fontSize: 10, fontWeight: 900,
                                       border: "1px solid var(--border-subtle)", borderRadius: "50%",
                                       width: 18, height: 18, display: "inline-flex", alignItems: "center",
                                       justifyContent: "center", flexShrink: 0,
