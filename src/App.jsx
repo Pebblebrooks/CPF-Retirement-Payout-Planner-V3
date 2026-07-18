@@ -5949,7 +5949,8 @@ function ReadinessTab({
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
   const [expandedRdTile,  setExpandedRdTile]  = useState(null); // Readiness sub-factor tile expansion
-  const [rdCollapsed,     setRdCollapsed]     = useState(false); // Retirement Readiness 5-dim section collapse
+  const [rdCollapsed,     setRdCollapsed]     = useState(true);  // Retirement Readiness 5-dim — collapsed until gauge clicked
+  const [masCollapsed,    setMasCollapsed]    = useState(true);  // Financial Health 5-pillar — collapsed until Wellness gauge clicked
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
   const cy           = Number(inputs.currentYear) || 2026;
@@ -6895,8 +6896,11 @@ function ReadinessTab({
             {/* ── Side-by-side: Retirement Readiness gauge (left) | Wellness Score (right) ── */}
             <div className="rd-mas-side-by-side">
 
-              {/* LEFT — Retirement Readiness gauge, matching Wellness anatomy */}
-              <div className="rd-readiness-gauge-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+              {/* LEFT — Retirement Readiness gauge — click to expand the 5-dimension breakdown */}
+              <div className="rd-readiness-gauge-row"
+                onClick={() => setRdCollapsed(false)}
+                title="Click to expand Retirement Readiness — 5 Dimensions"
+                style={{ display: "flex", alignItems: "center", gap: 20, background: rdCollapsed ? "rgba(var(--clr-emerald-rgb),0.06)" : "var(--bg-muted)", border: rdCollapsed ? "1px solid rgba(var(--clr-emerald-rgb),0.3)" : "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px", cursor: rdCollapsed ? "pointer" : "default", transition: "background 0.2s, border-color 0.2s" }}>
                 <div className="mas-wellness-gauge">
                   {(() => {
                     const W2 = 140, H2 = 78, cx2 = 70, cy2 = 74, r2 = 58;
@@ -6936,10 +6940,18 @@ function ReadinessTab({
                     </div>
                   ))}
                 </div>
+              {rdCollapsed && (
+                <p style={{ fontSize: 10, color: "var(--clr-emerald)", fontWeight: 700, margin: "6px 0 0", textAlign: "center", opacity: 0.8, letterSpacing: "0.04em" }}>
+                  ▾ Click to expand 5 dimensions
+                </p>
+              )}
               </div>
 
-              {/* RIGHT — Wellness Score gauge ── */}
-              <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+              {/* RIGHT — Wellness Score gauge — click to expand Financial Health — 5 Pillars */}
+              <div className="mas-wellness-row"
+                onClick={() => setMasCollapsed(false)}
+                title="Click to expand Financial Health — 5 Pillars"
+                style={{ display: "flex", alignItems: "center", gap: 20, background: masCollapsed ? "rgba(245,158,11,0.06)" : "var(--bg-muted)", border: masCollapsed ? "1px solid rgba(245,158,11,0.3)" : "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px", cursor: masCollapsed ? "pointer" : "default", transition: "background 0.2s, border-color 0.2s" }}>
                 {/* Arc gauge */}
                 <div className="mas-wellness-gauge">
                   <svg viewBox={`0 0 ${W2} ${H2}`} style={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
@@ -6965,6 +6977,11 @@ function ReadinessTab({
                     MAS-aligned advisory score — unweighted average of the 5 pillars below.
                     Not an official MAS metric.
                   </p>
+                  {masCollapsed && (
+                    <p style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, margin: "4px 0 0", opacity: 0.8, letterSpacing: "0.04em" }}>
+                      ▾ Click to expand 5 pillars
+                    </p>
+                  )}
                   {/* Mini sub-bar breakdown */}
                   {tiles.map(({ title, score: ts, status }) => ts != null && (
                     <div key={title} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
@@ -7166,10 +7183,15 @@ function ReadinessTab({
 
                   {/* ── Divider before MAS tiles ── */}
                   </>}{/* /rdCollapsed */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
+                  <div
+                    role="button" tabIndex={0} aria-expanded={!masCollapsed}
+                    onClick={() => { setMasCollapsed(v => !v); setExpandedMasTile(null); }}
+                    onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setMasCollapsed(v => !v)}
+                    style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px", cursor: "pointer", userSelect: "none" }}>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
                       Financial Health — 5 pillars
+                      <span style={{ fontSize: 9, color: "var(--text-subtle)", transition: "transform 0.2s", transform: masCollapsed ? "rotate(-90deg)" : "rotate(0deg)", display: "inline-block" }}>▾</span>
                     </span>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                   </div>
@@ -7177,7 +7199,8 @@ function ReadinessTab({
               );
             })()}
 
-            {/* ── 5 MAS tiles — 3+2 on mobile via .mas-tiles-grid ── */}
+            {/* ── 5 MAS tiles + expansion panel — hidden when masCollapsed ── */}
+            {!masCollapsed && <>
             <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
                 <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()} onClick={() => { setExpandedMasTile(expandedMasTile === title ? null : title); setExpandedRdTile(null); }} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", border: expandedMasTile === title ? `1px solid ${clr[status]}` : "1px solid transparent" }}>
@@ -7218,6 +7241,7 @@ function ReadinessTab({
                 </div>
               );
             })()}
+            </>}{/* /masCollapsed */}
           </div>
         );
       })()}
@@ -18794,26 +18818,32 @@ ${milestoneSnapshotHtml}
                         <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
                           Term / Whole Life SA ($) <span style={{ color: "var(--text-subtle)" }}>excl. DPS</span>
                         </label>
-                        <input
-                          type="number" min={0} step={50000}
-                          value={inputs.termLifeSumAssured || ""}
-                          placeholder="e.g. 500000"
-                          onChange={e => setInputs(p => ({ ...p, termLifeSumAssured: Number(e.target.value) || 0 }))}
-                          style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }}
-                        />
+                        <div style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--text-subtle)", pointerEvents: "none", userSelect: "none" }}>$</span>
+                          <input
+                            type="number" min={0} step={50000}
+                            value={inputs.termLifeSumAssured || ""}
+                            placeholder="e.g. 500000"
+                            onChange={e => setInputs(p => ({ ...p, termLifeSumAssured: Number(e.target.value) || 0 }))}
+                            style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px 5px 20px", fontSize: 12, color: "var(--text-bright)", outline: "none", boxSizing: "border-box" }}
+                          />
+                        </div>
                       </div>
                       {/* Critical Illness sum assured */}
                       <div style={{ marginBottom: 8 }}>
                         <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
                           Critical Illness SA ($) <span style={{ color: "var(--text-subtle)" }}>CI or ECI</span>
                         </label>
-                        <input
-                          type="number" min={0} step={50000}
-                          value={inputs.criticalIllnessSumAssured || ""}
-                          placeholder="e.g. 300000"
-                          onChange={e => setInputs(p => ({ ...p, criticalIllnessSumAssured: Number(e.target.value) || 0 }))}
-                          style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }}
-                        />
+                        <div style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--text-subtle)", pointerEvents: "none", userSelect: "none" }}>$</span>
+                          <input
+                            type="number" min={0} step={50000}
+                            value={inputs.criticalIllnessSumAssured || ""}
+                            placeholder="e.g. 300000"
+                            onChange={e => setInputs(p => ({ ...p, criticalIllnessSumAssured: Number(e.target.value) || 0 }))}
+                            style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px 5px 20px", fontSize: 12, color: "var(--text-bright)", outline: "none", boxSizing: "border-box" }}
+                          />
+                        </div>
                       </div>
                       {/* Integrated Shield Plan toggle */}
                       <div
