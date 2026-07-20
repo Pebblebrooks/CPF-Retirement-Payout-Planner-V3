@@ -717,6 +717,8 @@ const migrateProfile = (raw) => {
       shsToFlat:                  p.inputs?.shsToFlat                  ?? '3r',
       shsAge:                     p.inputs?.shsAge                     ?? 65,
       // M5: property classification — remap old generic 'hdb' value to granular 'hdb_bto'
+      propertyIntention: p.inputs?.propertyIntention ?? (p.inputs?.propertyType === 'none' ? 'none' : 'own'),
+      monthlyRentExpense: p.inputs?.monthlyRentExpense ?? 0,
       propertyType:  (p.inputs?.propertyType === 'hdb' ? 'hdb_bto' : p.inputs?.propertyType) ?? 'hdb_bto',
       propertyAge:   p.inputs?.propertyAge   ?? 0,
       loanType:      p.inputs?.loanType      ?? 'hdb',
@@ -772,6 +774,8 @@ const DEFAULT_INPUTS = {
   // Outflows
   housingOutflow: 12000, oaEduLoan: 0, oaEduLoanFreq: 'one-time',
   mortgagePaymentSource: 'cpf',   // 'cpf' | 'cash' — gates engine debit: OA vs private assets
+  propertyIntention: 'own',       // 'own' | 'rent_out' | 'renting' | 'none' — gates which property inputs are shown
+  monthlyRentExpense: 0,          // monthly rent paid to landlord (renting intent only) — debits private assets
   propertyType: 'hdb_bto',        // 'hdb_bto' | 'hdb_resale' | 'private' | 'none' — gates leasehold auto-set + grant UI
   propertyAge:  0,                // age of property in years (HDB resale / private); auto-computes remaining lease
   loanType: 'hdb',               // 'hdb' | 'bank' | 'none' — informational; gates loan-type label
@@ -1624,7 +1628,7 @@ const INPUT_LABELS = {
   oaToMaTransfer: "OA→MA Transfer", oaWithdrawalAt55: "OA Withdrawal at 55",
   usePropertyPledge: "Property Pledge", cpfisOaAmount: "CPFIS OA Invested", cpfisSaAmount: "CPFIS SA Invested",
   housingOutflow: "Housing Outflow", oaEduLoan: "OA Education Loan", oaEduLoanFreq: "OA Edu Loan Freq",
-  mortgagePaymentSource: "Mortgage Payment Source", propertyType: "Property Type", propertyAge: "Property Age (years)", loanType: "Loan Type",
+  mortgagePaymentSource: "Mortgage Payment Source", propertyIntention: "Property Intention", monthlyRentExpense: "Monthly Rent Expense", propertyType: "Property Type", propertyAge: "Property Age (years)", loanType: "Loan Type",
   medicalUsage: "Medical Usage",
   medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
@@ -2060,11 +2064,8 @@ function runRSSEngine(inputs, {
   const downpaymentAge       = Number(inputs.downpaymentAge) || 35;
   let downpaymentApplied = startAge > downpaymentAge;
   // Housing grants — one-time OA credits at downpaymentAge, tracked in cumHousingOA/FV for CPF refund.
-  // Property-(sub)type gated: EHG applies to BTO+Resale; Resale Grant and PHG are resale-only
-  // (verified: HDB does not extend PHG to BTO buyers); Step-Up is BTO-only; none apply to
-  // private property or "no property". Previously summed unconditionally — a value left in a
-  // field the UI has since disabled (e.g. PHG after switching hdb_resale → hdb_bto) would
-  // otherwise still silently inflate the OA projection.
+  // Property-type gated: EHG applies to BTO+Resale; Resale Grant and PHG are resale-only (verified:
+  // HDB does not extend PHG to BTO buyers); Step-Up is BTO-only; none apply to private/no-property.
   const _pType = inputs.propertyType || 'hdb_bto';
   const _totalHousingGrants = (_pType === 'hdb_bto' || _pType === 'hdb_resale') ? (
     (Number(inputs.ehgAmount)||0)
@@ -3139,8 +3140,8 @@ function runProjectionEngine(inputs, {
   const oaEduLoanFreq   = inputs.oaEduLoanFreq || 'one-time';
   const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0);
   const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
-  // Housing grants + insurance — declared here so engine loop can reference them.
-  // Property-type gated to match the sidebar (see _totalHousingGrants in the RSS engine for detail).
+  // Housing grants + insurance — declared here so engine loop can reference them
+  // Housing grants — same property-type gating as RSS engine (see _totalHousingGrants for detail).
   const _pTypePE = inputs.propertyType || 'hdb_bto';
   const _totalHousingGrantsPE = (_pTypePE === 'hdb_bto' || _pTypePE === 'hdb_resale') ? (
     (Number(inputs.ehgAmount)||0)
@@ -5965,7 +5966,8 @@ function ReadinessTab({
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
   const [expandedRdTile,  setExpandedRdTile]  = useState(null); // Readiness sub-factor tile expansion
-  const [rdCollapsed,     setRdCollapsed]     = useState(false); // Retirement Readiness 5-dim section collapse
+  const [rdCollapsed,     setRdCollapsed]     = useState(true);  // Retirement Readiness 5-dim — collapsed until gauge clicked
+  const [masCollapsed,    setMasCollapsed]    = useState(true);  // Financial Health 5-pillar — collapsed until Wellness gauge clicked
   const pa           = payoutAge65;
   const ca           = Number(inputs.currentAge) || 35;
   const cy           = Number(inputs.currentYear) || 2026;
@@ -6323,7 +6325,9 @@ function ReadinessTab({
       events.push({ age: 50,           label: "SA Lock-in",  sub: "OA→SA closes at 55",    type: "info"      });
     if (ca < 55 && pa >= 55)
       events.push({ age: 55,           label: "RA Forms",    sub: "SA/OA → RA",            type: "milestone" });
-    events.push({ age: pa,             label: "LIFE Starts", sub: stdPay > 0 ? `${formatCurrency(Math.round(stdPay))}/mo` : "payout begins", type: "success" });
+    const selectedPlanPay = highlightPlan === "escalating" ? escPay : highlightPlan === "basic" ? basPay : stdPay;
+    const selectedPlanLabel = highlightPlan === "escalating" ? "Esc." : highlightPlan === "basic" ? "Basic" : "Std.";
+    events.push({ age: pa,             label: "LIFE Starts", sub: selectedPlanPay > 0 ? `${formatCurrency(Math.round(selectedPlanPay))}/mo (${selectedPlanLabel})` : "payout begins", type: "success" });
     if (oaDrawActive && oaDepletionAge && oaDepletionAge < planningHorizon)
       events.push({ age: oaDepletionAge, label: "OA Depletes", sub: oaIncomeGapYrs > 0 ? `${oaIncomeGapYrs}yr gap risk` : "at horizon", type: "danger" });
     events.push({ age: lifeExpectancy, label: "Life Exp.",   sub: isMale ? "Male median" : "Female median",  type: "info"      });
@@ -6334,7 +6338,7 @@ function ReadinessTab({
     return events
       .filter(e => { if (seen.has(e.age)) return false; seen.add(e.age); return true; })
       .sort((a, b) => a.age - b.age);
-  }, [ca, pa, oaDepletionAge, oaDrawActive, lifeExpectancy, planningHorizon, stdPay, oaIncomeGapYrs, isMale]);
+  }, [ca, pa, oaDepletionAge, oaDrawActive, lifeExpectancy, planningHorizon, stdPay, escPay, basPay, highlightPlan, oaIncomeGapYrs, isMale]);
 
   const tlMinAge = timelineEvents.length ? timelineEvents[0].age - 2 : ca - 2;
   const tlMaxAge = timelineEvents.length ? timelineEvents[timelineEvents.length - 1].age + 2 : planningHorizon + 2;
@@ -6911,8 +6915,11 @@ function ReadinessTab({
             {/* ── Side-by-side: Retirement Readiness gauge (left) | Wellness Score (right) ── */}
             <div className="rd-mas-side-by-side">
 
-              {/* LEFT — Retirement Readiness gauge, matching Wellness anatomy */}
-              <div className="rd-readiness-gauge-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+              {/* LEFT — Retirement Readiness gauge — click to expand the 5-dimension breakdown */}
+              <div className="rd-readiness-gauge-row"
+                onClick={() => setRdCollapsed(false)}
+                title="Click to expand Retirement Readiness — 5 Dimensions"
+                style={{ display: "flex", alignItems: "center", gap: 20, background: rdCollapsed ? "rgba(var(--clr-emerald-rgb),0.06)" : "var(--bg-muted)", border: rdCollapsed ? "1px solid rgba(var(--clr-emerald-rgb),0.3)" : "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px", cursor: rdCollapsed ? "pointer" : "default", transition: "background 0.2s, border-color 0.2s" }}>
                 <div className="mas-wellness-gauge">
                   {(() => {
                     const W2 = 140, H2 = 78, cx2 = 70, cy2 = 74, r2 = 58;
@@ -6952,10 +6959,18 @@ function ReadinessTab({
                     </div>
                   ))}
                 </div>
+                {rdCollapsed && (
+                  <p style={{ fontSize: 10, color: "var(--clr-emerald)", fontWeight: 700, margin: "8px 0 0", textAlign: "center", opacity: 0.9, letterSpacing: "0.04em" }}>
+                    ▾ Click to expand 5 dimensions
+                  </p>
+                )}
               </div>
 
-              {/* RIGHT — Wellness Score gauge ── */}
-              <div className="mas-wellness-row" style={{ display: "flex", alignItems: "center", gap: 20, background: "var(--bg-muted)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px" }}>
+              {/* RIGHT — Wellness Score gauge — click to expand Financial Health — 5 Pillars */}
+              <div className="mas-wellness-row"
+                onClick={() => setMasCollapsed(false)}
+                title="Click to expand Financial Health — 5 Pillars"
+                style={{ display: "flex", alignItems: "center", gap: 20, background: masCollapsed ? "rgba(245,158,11,0.06)" : "var(--bg-muted)", border: masCollapsed ? "1px solid rgba(245,158,11,0.3)" : "1px solid var(--border-subtle)", borderRadius: 14, padding: "12px 16px", cursor: masCollapsed ? "pointer" : "default", transition: "background 0.2s, border-color 0.2s" }}>
                 {/* Arc gauge */}
                 <div className="mas-wellness-gauge">
                   <svg viewBox={`0 0 ${W2} ${H2}`} style={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
@@ -6981,6 +6996,11 @@ function ReadinessTab({
                     MAS-aligned advisory score — unweighted average of the 5 pillars below.
                     Not an official MAS metric.
                   </p>
+                  {masCollapsed && (
+                    <p style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, margin: "4px 0 0", opacity: 0.8, letterSpacing: "0.04em" }}>
+                      ▾ Click to expand 5 pillars
+                    </p>
+                  )}
                   {/* Mini sub-bar breakdown */}
                   {tiles.map(({ title, score: ts, status }) => ts != null && (
                     <div key={title} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
@@ -7182,10 +7202,15 @@ function ReadinessTab({
 
                   {/* ── Divider before MAS tiles ── */}
                   </>}{/* /rdCollapsed */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px" }}>
+                  <div
+                    role="button" tabIndex={0} aria-expanded={!masCollapsed}
+                    onClick={() => { setMasCollapsed(v => !v); setExpandedMasTile(null); }}
+                    onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setMasCollapsed(v => !v)}
+                    style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 8px", cursor: "pointer", userSelect: "none" }}>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
                       Financial Health — 5 pillars
+                      <span style={{ fontSize: 9, color: "var(--text-subtle)", transition: "transform 0.2s", transform: masCollapsed ? "rotate(-90deg)" : "rotate(0deg)", display: "inline-block" }}>▾</span>
                     </span>
                     <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
                   </div>
@@ -7193,7 +7218,8 @@ function ReadinessTab({
               );
             })()}
 
-            {/* ── 5 MAS tiles — 3+2 on mobile via .mas-tiles-grid ── */}
+            {/* ── 5 MAS tiles + expansion panel — hidden when masCollapsed ── */}
+            {!masCollapsed && <>
             <div className="mas-tiles-grid">
               {tiles.map(({ icon, title, label, status, score, tip, pillar }) => (
                 <div key={title} className="mas-tile-card" tabIndex={-1} onFocus={e => e.target.blur()} onClick={() => { setExpandedMasTile(expandedMasTile === title ? null : title); setExpandedRdTile(null); }} style={{ ...cardStyle, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", WebkitTapHighlightColor: "transparent", outline: "none", background: expandedMasTile === title ? "rgba(var(--clr-blue-rgb),0.07)" : "var(--bg-panel)", border: expandedMasTile === title ? `1px solid ${clr[status]}` : "1px solid transparent" }}>
@@ -7234,6 +7260,7 @@ function ReadinessTab({
                 </div>
               );
             })()}
+            </>}{/* /masCollapsed */}
           </div>
         );
       })()}
@@ -9639,7 +9666,7 @@ function CPFPlannerApp() {
     topups:       (Number(inputs.vc3aCash)||0) > 0 || (Number(inputs.vcSaTopup)||0) > 0 || (Number(inputs.vcMaCash)||0) > 0 || (Number(inputs.vcVhr)||0) > 0 || (Number(inputs.mrssGrant)||0) > 0 || (Number(inputs.mmssGrant)||0) > 0 || (Number(inputs.wisAmount)||0) > 0,
     outflows:     (Number(inputs.housingOutflow)||0) !== 12000 || (Number(inputs.medicalUsage)||0) !== 500,
     transfers:    (Number(inputs.oaToSaTransfer)||0) > 0 || (Number(inputs.oaToMaTransfer)||0) > 0,
-    property:     (Number(inputs.propertyValue)||0) !== 500000 || (Number(inputs.sellPropertyAge)||0) > 0 || inputs.propMonetiseEnabled || inputs.usePropertyPledge || (inputs.propertyType && inputs.propertyType !== 'hdb_bto') || (Number(inputs.propertyAge)||0) > 0,
+    property:     (inputs.propertyIntention && inputs.propertyIntention !== 'own') || (Number(inputs.propertyValue)||0) !== 500000 || (Number(inputs.sellPropertyAge)||0) > 0 || inputs.propMonetiseEnabled || inputs.usePropertyPledge || (inputs.propertyType && inputs.propertyType !== 'hdb_bto') || (Number(inputs.propertyAge)||0) > 0,
     privateAssets:(Number(inputs.currentPrivateAssets)||0) > 0 || (Number(inputs.srsBalance)||0) > 0 || (Number(inputs.annualPrivateSaving)||0) > 0 || (Number(inputs.srsAnnualContribution)||0) > 0,
     lifeevents:   (inputs.lifeEvents||[]).length > 0,
     retirement:     (Number(inputs.oaDrawdownMonthly)||0) > 0 || (Number(inputs.targetMonthlyIncome)||0) > 0 || inputs.dieWithZeroEnabled || (Number(inputs.plannedDownpaymentOA)||0) > 0 || (Number(inputs.retirementExpenseRatio)||0) !== 75 || (Number(inputs.retirementHealthcareMonthly)||0) !== 500,
@@ -10554,6 +10581,9 @@ function CPFPlannerApp() {
           }
           // M5 migration: remap old generic 'hdb' propertyType to granular 'hdb_bto'
           if (safe.propertyType === 'hdb') safe.propertyType = 'hdb_bto';
+          // M6 migration: default propertyIntention + monthlyRentExpense
+          if (!safe.propertyIntention) safe.propertyIntention = safe.propertyType === 'none' ? 'none' : 'own';
+          if (safe.monthlyRentExpense === undefined) safe.monthlyRentExpense = 0;
           // FIX-2: srsCitizenPR → citizenStatus migration.
           // Old profiles used srsCitizenPR (boolean) for the SRS cap gate:
           //   true  = SC/PR ($15,300 cap)
@@ -11269,7 +11299,7 @@ function CPFPlannerApp() {
       cpfOARateOverride, cpfSARateOverride, cpfMARateOverride, // Stress Centre CPF rate overrides — must be here so engine recomputes when stress rates change
       secondaryEmploymentEnabled, secondarySalaryGross, secondaryContribStopAge, // Secondary employment — stacked CPF contributions
       loanMonthlyRepayment, loanEndAge, parentSupportMonthly, parentSupportEndAge, marriageAge, housingGrantAmount, childrenData, // M1: Family Milestones — all engine-read, all were missing from engineKey
-      propertyType, loanType, propertyAge,  // M5/NEW: property classification + leasehold age field
+      propertyIntention, propertyType, loanType, propertyAge, monthlyRentExpense,  // M5/NEW: property classification + leasehold age field
     } = debouncedInputs;
     // N-BUG-5 fix: lifeEvents objects carry a UUID `id` field generated at creation time.
     // Including raw lifeEvents in JSON.stringify means deleting+re-adding the same event
@@ -14472,7 +14502,7 @@ ${childrenHtml}
     ${/* G5: private asset growth rate — always show when private assets are configured */(Number(inputs.currentPrivateAssets) || 0) > 0 || (Number(inputs.annualPrivateSaving) || 0) > 0 ? `<div class="row-kv"><span>Private Asset Growth Rate</span><strong>${Number(inputs.privateAssetGrowthRate) || 0}% / yr</strong></div>` : ''}
     ${/* G5: property growth rate — show when property is included in net worth */inputs.includeProperty && (Number(inputs.propertyValue) || 0) > 0 ? `<div class="row-kv"><span>Property Value / Growth</span><strong>${fc(inputs.propertyValue)} · ${Number(inputs.propertyGrowthRate) || 0}% / yr</strong></div>` : '' }
     ${inputs.includeProperty && (Number(inputs.propertyValue)||0)>0?`<div class="row-kv"><span>Property Type / Loan</span><strong>${{"hdb_bto":"HDB BTO","hdb_resale":"HDB Resale","private":"Private","none":"No Property"}[inputs.propertyType||"hdb_bto"]}${ inputs.propertyType==="hdb_resale"||(inputs.propertyType||"").startsWith("private") ? " · " + (Number(inputs.propertyAge)||0) + "yr old" : ""} · Loan: ${{"hdb":"HDB 2.6%","bank":"Bank","none":"None"}[inputs.loanType||"hdb"]}</strong></div>`:''}
-    ${/* Property Monetisation — one-time cash event that materially shifts private assets and RA */inputs.propMonetiseEnabled ? (() => {
+    ${/* Property Monetisation — Own/Buy only */(inputs.propertyIntention === "own" || !inputs.propertyIntention) && inputs.propMonetiseEnabled ? (() => {
       const schemeLabels = { downgrade: 'Downgrade', lbs: 'Lease Buyback Scheme (LBS)', shb: 'Silver Housing Bonus (SHB)' };
       const schLabel = schemeLabels[inputs.propMonetiseScheme || 'downgrade'] || (inputs.propMonetiseScheme || 'Downgrade');
       const pmAge    = Number(inputs.propMonetiseAge) || 65;
@@ -18810,26 +18840,32 @@ ${milestoneSnapshotHtml}
                         <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
                           Term / Whole Life SA ($) <span style={{ color: "var(--text-subtle)" }}>excl. DPS</span>
                         </label>
-                        <input
-                          type="number" min={0} step={50000}
-                          value={inputs.termLifeSumAssured || ""}
-                          placeholder="e.g. 500000"
-                          onChange={e => setInputs(p => ({ ...p, termLifeSumAssured: Number(e.target.value) || 0 }))}
-                          style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }}
-                        />
+                        <div style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--text-subtle)", pointerEvents: "none", userSelect: "none" }}>$</span>
+                          <input
+                            type="number" min={0} step={50000}
+                            value={inputs.termLifeSumAssured || ""}
+                            placeholder="e.g. 500000"
+                            onChange={e => setInputs(p => ({ ...p, termLifeSumAssured: Number(e.target.value) || 0 }))}
+                            style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px 5px 20px", fontSize: 12, color: "var(--text-bright)", outline: "none", boxSizing: "border-box" }}
+                          />
+                        </div>
                       </div>
                       {/* Critical Illness sum assured */}
                       <div style={{ marginBottom: 8 }}>
                         <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>
                           Critical Illness SA ($) <span style={{ color: "var(--text-subtle)" }}>CI or ECI</span>
                         </label>
-                        <input
-                          type="number" min={0} step={50000}
-                          value={inputs.criticalIllnessSumAssured || ""}
-                          placeholder="e.g. 300000"
-                          onChange={e => setInputs(p => ({ ...p, criticalIllnessSumAssured: Number(e.target.value) || 0 }))}
-                          style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px", fontSize: 12, color: "var(--text-bright)", outline: "none" }}
-                        />
+                        <div style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--text-subtle)", pointerEvents: "none", userSelect: "none" }}>$</span>
+                          <input
+                            type="number" min={0} step={50000}
+                            value={inputs.criticalIllnessSumAssured || ""}
+                            placeholder="e.g. 300000"
+                            onChange={e => setInputs(p => ({ ...p, criticalIllnessSumAssured: Number(e.target.value) || 0 }))}
+                            style={{ width: "100%", background: "var(--bg-color)", border: "1px solid var(--border-subtle)", borderRadius: 6, padding: "5px 8px 5px 20px", fontSize: 12, color: "var(--text-bright)", outline: "none", boxSizing: "border-box" }}
+                          />
+                        </div>
                       </div>
                       {/* Integrated Shield Plan toggle */}
                       <div
@@ -21807,35 +21843,41 @@ ${milestoneSnapshotHtml}
             <>
             {/* Property — consolidated section (3rd section of col2) */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
-              <SidebarSectionHeader planBadge={sectionIsLocked("property", plan) ? { tier: "pro", locked: true } : null} id="property" label="Property & Monetisation" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => sectionIsLocked("property", plan) ? setShowUpgradeModal(true) : toggleSection("property")} badge={null} collapsedHint="Housing loan timelines · OA used for housing · Property sale & CPF refund · LBS · Monetisation" />
+              <SidebarSectionHeader planBadge={sectionIsLocked("property", plan) ? { tier: "pro", locked: true } : null} id="property" label="Property & Monetisation" icon={<Home style={{ width: 14, height: 14, color: "var(--clr-blue)" }} />} color="var(--clr-blue)" activeBg="rgba(var(--clr-blue-rgb),0.06)" isOpen={openSections.has("property")} onToggle={() => sectionIsLocked("property", plan) ? setShowUpgradeModal(true) : toggleSection("property")} badge={null} collapsedHint="Own / Rent Out / Renting / None → property type · loan · mortgage · sell & CPF refund · LBS" />
               {openSections.has("property") && <div style={{ padding: "0 16px 16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
-                  {/* Timelines */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {[["contributionStopAge","Contrib Stop Age","t-contrib-stop","Age at which mandatory CPF contributions (employer + employee) stop being modelled. Typically 65 or earlier if you plan to exit the workforce sooner. Existing balances continue earning interest after this age."],["housingStopAge","Housing Stop Age","t-housing-stop","Age at which your housing loan OA deductions stop — when your mortgage is fully repaid. After this age the engine stops deducting housingOutflow from OA, which accelerates OA accumulation."]].map(([n, l, tipId, tipText]) => (
-                      <div key={n}>
-                        <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
-                          {l}<TooltipBox id={tipId} text={tipText} />{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 11, color: "var(--clr-red)" }}>⚠</span>}
-                        </div>
-                        <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} aria-invalid={!!inputErrors[n]} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Inflation — general CPI; separate from propertyGrowthRate which is property-specific appreciation */}
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 2 }}>
-                      Inflation Rate (%)
-                      <TooltipBox id="t-inflation" text="General CPI inflation rate (default 2%). Used for: (1) Real $ toggle — deflates all projected values to today's purchasing power. (2) MAS Wellness hedge score — compares private asset growth vs inflation. This is NOT the property appreciation rate — set property growth below." />
+                  {/* ── Property Intention selector — shown first, gates all other inputs ── */}
+                  <div style={{ marginBottom: 2 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
+                      Property Situation
+                      <TooltipBox id="t-prop-intention" text="Own / Buy: you currently own or plan to purchase a property — all mortgage, CPF, and sale fields apply. Rent Out: you own a property and rent it out — rental income fields are shown. Renting: you rent your home from a landlord — enter your monthly rent expense. None: no property involvement — only retirement timelines shown." />
                     </div>
-                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px" }}>General CPI — not property appreciation (set below)</p>
-                    <input type="text" inputMode="decimal" name="inflationRate" value={inputs.inflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Inflation rate" className={fieldChanged("inflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.inflationRate ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
-                    {inputErrors.inflationRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.inflationRate}</p>}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
+                      {[["own","🏠 Own / Buy"],["rent_out","🏘 Rent Out"],["renting","🏢 Renting"],["none","❌ None"]].map(([val, lbl]) => {
+                        const active = (inputs.propertyIntention || "own") === val;
+                        return (
+                          <button key={val}
+                            onClick={() => {
+                              const updates = { propertyIntention: val };
+                              if (val === "none") { updates.includeProperty = false; updates.propertyType = "none"; }
+                              if (val === "own" && (inputs.propertyType === "none" || !inputs.propertyType)) { updates.propertyType = "hdb_bto"; updates.includeProperty = true; }
+                              if (val === "rent_out") { updates.includeProperty = true; if (inputs.propertyType === "none" || !inputs.propertyType) updates.propertyType = "hdb_bto"; }
+                              if (val === "renting") { updates.includeProperty = false; updates.propertyType = "none"; }
+                              setInputs(p => ({ ...p, ...updates }));
+                            }}
+                            style={{ padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: active ? 800 : 600, border: active ? "2px solid var(--clr-blue)" : "1px solid var(--border-strong)", background: active ? "rgba(var(--clr-blue-rgb),0.12)" : "var(--bg-muted)", color: active ? "var(--clr-blue)" : "var(--text-muted)", cursor: "pointer", transition: "all 0.15s", textAlign: "center" }}>
+                            {lbl}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  {/* Property details */}
-                  <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+
+
+                  {/* Property details — Own/Buy and Rent Out only */}
+                  {(inputs.propertyIntention === "own" || inputs.propertyIntention === "rent_out" || !inputs.propertyIntention) && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     {/* ── Property Type selector ── */}
                     <div style={{ marginBottom: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
@@ -21853,22 +21895,20 @@ ${milestoneSnapshotHtml}
                                   updates.includeProperty   = true;
                                   updates.propertyLeasehold = true;
                                   updates.propertyLeaseYears = 99;
-                                  // Resale-only grants don't apply to BTO — zero so the now-disabled
-                                  // fields don't show stale amounts in the grayed-out state.
+                                  // Resale-only grants don't apply to BTO — clear so disabled fields don't show stale amounts.
                                   updates.cpfHousingGrantResale = 0;
                                   updates.phgAmount = 0;
                                 } else if (val === "hdb_resale") {
                                   updates.includeProperty   = true;
                                   updates.propertyLeasehold = true;
                                   updates.propertyLeaseYears = Math.max(1, 99 - (Number(inputs.propertyAge) || 0));
-                                  // BTO-only Step-Up Grant doesn't apply to Resale.
+                                  // BTO-only grant doesn't apply to Resale.
                                   updates.stepUpGrantAmount = 0;
                                 } else if (val === "private") {
                                   updates.includeProperty = true;
                                   // leasehold toggle left to user
                                   // Grant-zeroing: HDB-only grants must not persist after switching to Private.
-                                  // Engine also gates by propertyType (belt-and-suspenders), but zeroing here
-                                  // keeps fields from showing stale amounts once hidden.
+                                  // Engine now also gates by propertyType (belt-and-suspenders).
                                   updates.ehgAmount = 0;
                                   updates.cpfHousingGrantResale = 0;
                                   updates.phgAmount = 0;
@@ -21881,9 +21921,7 @@ ${milestoneSnapshotHtml}
                                   updates.phgAmount = 0;
                                   updates.stepUpGrantAmount = 0;
                                 }
-                                // LBS/SHB are HDB-only schemes — if the user had one selected and
-                                // switches to private/no-property, reset to Downgrade so the scheme
-                                // selector never points at a now-hidden option.
+                                // LBS/SHB are HDB-only schemes — cascade-reset when switching to non-HDB.
                                 if (val !== "hdb_bto" && val !== "hdb_resale" &&
                                     (inputs.propMonetiseScheme === "lbs" || inputs.propMonetiseScheme === "shb")) {
                                   updates.propMonetiseScheme = "downgrade";
@@ -21986,10 +22024,10 @@ ${milestoneSnapshotHtml}
                       </div>
                     </div>
                   }{/* /propertyType !== 'none' property value block */}
-                  </div>{/* /property details paddingTop:8 div */}
+                  </div>}{/* /property details paddingTop:8 div / intent gate */}
 
-                  {/* Housing loan — locked for foreigners (no OA account) AND hidden when no property */}
-                  {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                  {/* Housing loan — Own/Buy only, locked for foreigners */}
+                  {(inputs.propertyIntention === "own" || !inputs.propertyIntention) && !isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     {/* Payment Source: CPF vs Cash */}
                     <div style={{ marginBottom: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 5 }}>
@@ -22092,8 +22130,8 @@ ${milestoneSnapshotHtml}
                   }
                   </div>}
 
-                  {/* OA Downpayment — locked for foreigners; hidden when no property */}
-                  {!isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div>
+                  {/* OA Downpayment — Own/Buy only */}
+                  {(inputs.propertyIntention === "own" || !inputs.propertyIntention) && !isForeigner && (inputs.propertyType || 'hdb_bto') !== 'none' && <div>
                     <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                       OA Downpayment
                       <TooltipBox id="t-dp-prop" text="One-time OA deduction for property purchase downpayment. Applied once at the specified age if OA balance permits." />
@@ -22105,8 +22143,8 @@ ${milestoneSnapshotHtml}
                     <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>Amount ($) · Age of purchase</p>
                   </div>}
 
-                  {/* Housing Grants — HDB only (BTO/Resale); SC/PR only; credited to OA at downpaymentAge */}
-                  {!isForeigner && (inputs.propertyType === "hdb_bto" || inputs.propertyType === "hdb_resale") && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                  {/* Housing Grants — Own/Buy + HDB only */}
+                  {(inputs.propertyIntention === "own" || !inputs.propertyIntention) && !isForeigner && (inputs.propertyType === "hdb_bto" || inputs.propertyType === "hdb_resale") && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
                       🏠 CPF Housing Grants
                       <TooltipBox id="t-housing-grants" text="One-time OA credits at your downpayment age from HDB/CPF grant approval. Included in cumHousingOA for CPF refund tracking — on property sale these amounts (+ 2.5%/yr interest) must be refunded to OA. Enter amounts from your HDB/CPF approval letter. Grants are SC/PR only. Not available for private property." />
@@ -22267,8 +22305,8 @@ ${milestoneSnapshotHtml}
                       )}
                     </div>}
                   </div>}
-                  {/* Sell Property at Age — hidden when no property */}
-                  {(inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                  {/* Sell Property at Age — Own/Buy only */}
+                  {(inputs.propertyIntention === "own" || !inputs.propertyIntention) && (inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                       Sell Property at Age
                       <TooltipBox id="t-sell-prop" text="When you sell your property, CPF requires refund of OA principal withdrawn for housing + 2.5%/yr accrued interest. The full refund is credited to OA. Property value is removed from net worth at the sale age." />
@@ -22463,8 +22501,30 @@ ${milestoneSnapshotHtml}
                     </div>
                   )}
 
-                  {/* Rental Income — hidden when no property (you need to own to earn rental); available to SC/PR/Foreigner */}
-                  {(inputs.propertyType || 'hdb_bto') !== 'none' && <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+
+                  {/* Renting — monthly rent expense field */}
+                  {inputs.propertyIntention === "renting" && (
+                    <div style={{ paddingTop: 8, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 6 }}>
+                        Monthly Rent Expense
+                        <TooltipBox id="t-monthly-rent" text="Your monthly rental payment to a landlord. Modelled as a cash outflow from private assets each year. Stops at your Contribution Stop Age (when you are assumed to retire or move)." />
+                      </div>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--text-subtle)", pointerEvents: "none" }}>$</span>
+                        <input type="text" inputMode="decimal" name="monthlyRentExpense"
+                          value={getDisplayValue("monthlyRentExpense", inputs.monthlyRentExpense)}
+                          onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
+                          onFocus={() => setFocusedField("monthlyRentExpense")}
+                          aria-label="Monthly rent expense"
+                          className={fieldChanged("monthlyRentExpense") ? "cpf-fc" : undefined}
+                          style={{ width: "100%", padding: "8px 12px 8px 24px", background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Deducted from private assets annually · stops at Contrib Stop Age</p>
+                    </div>
+                  )}
+
+                  {/* Rental Income — Rent Out intent only */}
+                  {(inputs.propertyIntention === "rent_out") && <div style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid rgba(var(--clr-blue-rgb),0.15)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                       <div>
                         <p style={{ fontSize: 12, fontWeight: 800, color: "var(--clr-blue)", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
@@ -22724,6 +22784,30 @@ ${milestoneSnapshotHtml}
                   </div>
 
 
+
+                  {/* ── Timelines & Inflation — always shown at bottom of section ── */}
+                  {/* Timelines — Contrib Stop Age always shown; Housing Stop Age only for Own/Buy */}
+                  <div style={{ display: "grid", gridTemplateColumns: (() => { const intent = inputs.propertyIntention || "own"; return (intent === "own" || intent === "rent_out") ? "1fr 1fr" : "1fr"; })(), gap: 8 }}>
+                    {[["contributionStopAge","Contrib Stop Age","t-contrib-stop","Age at which mandatory CPF contributions (employer + employee) stop being modelled. Typically 65 or earlier if you plan to exit the workforce sooner. Existing balances continue earning interest after this age."],["housingStopAge","Housing Stop Age","t-housing-stop","Age at which your housing loan OA deductions stop — when your mortgage is fully repaid. After this age the engine stops deducting housingOutflow from OA, which accelerates OA accumulation."]].filter(([n]) => n === "contributionStopAge" || (inputs.propertyIntention || "own") === "own" || (inputs.propertyIntention || "own") === "rent_out").map(([n, l, tipId, tipText]) => (
+                      <div key={n}>
+                        <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: inputErrors[n] ? "var(--clr-red)" : "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
+                          {l}<TooltipBox id={tipId} text={tipText} />{inputErrors[n] && <span style={{ marginLeft: 4, fontSize: 11, color: "var(--clr-red)" }}>⚠</span>}
+                        </div>
+                        <input type="text" inputMode="decimal" name={n} value={getDisplayValue(n, inputs[n])} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={() => setFocusedField(n)} aria-label={l} aria-invalid={!!inputErrors[n]} className={fieldChanged(n) ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors[n] ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Inflation — general CPI; separate from propertyGrowthRate which is property-specific appreciation */}
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 2 }}>
+                      Inflation Rate (%)
+                      <TooltipBox id="t-inflation" text="General CPI inflation rate (default 2%). Used for: (1) Real $ toggle — deflates all projected values to today's purchasing power. (2) MAS Wellness hedge score — compares private asset growth vs inflation. This is NOT the property appreciation rate — set property growth below." />
+                    </div>
+                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px" }}>General CPI — not property appreciation (set below)</p>
+                    <input type="text" inputMode="decimal" name="inflationRate" value={inputs.inflationRate} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} aria-label="Inflation rate" className={fieldChanged("inflationRate") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.inflationRate ? "var(--clr-red)" : "var(--border-strong)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
+                    {inputErrors.inflationRate && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.inflationRate}</p>}
+                  </div>
                 </div>
               </div>}
             </div>
