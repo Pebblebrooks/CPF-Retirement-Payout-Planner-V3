@@ -6958,12 +6958,12 @@ function ReadinessTab({
                       <span style={{ fontSize: 10, color: subBarColor(pct), fontWeight: 700, width: 26, textAlign: "right" }}>{pct == null ? "—" : pct}</span>
                     </div>
                   ))}
+                  {rdCollapsed && (
+                    <p style={{ fontSize: 10, color: "var(--clr-emerald)", fontWeight: 700, margin: "8px 0 0", textAlign: "center", opacity: 0.9, letterSpacing: "0.04em" }}>
+                      ▾ Click to expand 5 dimensions
+                    </p>
+                  )}
                 </div>
-                {rdCollapsed && (
-                  <p style={{ fontSize: 10, color: "var(--clr-emerald)", fontWeight: 700, margin: "8px 0 0", textAlign: "center", opacity: 0.9, letterSpacing: "0.04em" }}>
-                    ▾ Click to expand 5 dimensions
-                  </p>
-                )}
               </div>
 
               {/* RIGHT — Wellness Score gauge — click to expand Financial Health — 5 Pillars */}
@@ -7838,7 +7838,12 @@ const GATE_PASSWORDS = {
   pro:    'BetaPro$$2026$$',
   plus:   'BetaPlus$$2026$$',
 };
-const TIER_PASSWORDS = { plus: 'BetaPlus$$2026$$', pro: 'BetaPro$$2026$$' };
+const TIER_PASSWORDS = {
+  plus:   'BetaPlus$$2026$$',
+  pro:    'BetaPro$$2026$$',
+  admin:  'FusionAdmin$$2026$$',  // gate admin (kept for continuity)
+  admin2: 'Admin$$1188$$',         // primary admin — bypasses to Pro instantly
+};
 // Replace both with server-side auth before public launch.
 
 // ── BetaGate ──────────────────────────────────────────────────────────────────
@@ -7975,16 +7980,20 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
   const inputRef = useRef(null);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
 
-  // Admin passwords are gate-only — not present in TIER_PASSWORDS — so only plus/pro recognised here
-  const typedTier = password === TIER_PASSWORDS.pro  ? 'pro'
+  // Admin passwords now in TIER_PASSWORDS — bypass to Pro from both BetaGate and UpgradeModal
+  const typedTier = (password === TIER_PASSWORDS.pro ||
+                     password === TIER_PASSWORDS.admin ||
+                     password === TIER_PASSWORDS.admin2) ? 'pro'
                   : password === TIER_PASSWORDS.plus ? 'plus' : null;
 
   const tryUnlock = () => {
     if (!password) { setError('Please enter your access password.'); return; }
     setSubmitting(true);
     setTimeout(() => {
-      // Admin passwords have been removed from TIER_PASSWORDS — they are gate-only.
-      // Only plus / pro tier passwords are valid here.
+      // Admin passwords bypass all tier guards — jump directly to Pro.
+      if (password === TIER_PASSWORDS.admin || password === TIER_PASSWORDS.admin2) {
+        onUpgrade('pro'); return;
+      }
       if (password === TIER_PASSWORDS.pro) {
         if (currentPlan === 'pro') { setError('You\'re already on Fusion Pro.'); setSubmitting(false); return; }
         onUpgrade('pro'); return;
