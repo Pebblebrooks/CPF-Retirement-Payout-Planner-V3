@@ -17914,7 +17914,13 @@ ${milestoneSnapshotHtml}
               so the restored full brand lockup (text+sub+copy) can ellipsis-truncate
               instead of overflowing the nowrap header row and pushing the gear/Unsaved
               badge off-screen on narrow phones. */}
-          <div className="cpf-logo-block" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minWidth: 0 }}>
+          {/* Logo block — wrapping <a> makes the entire seal+wordmark clickable back to the landing page.
+              textDecoration:none prevents underline; cursor:pointer is implicit on <a> but explicit for clarity. */}
+          <a href="https://fusionweb.ehtan2022.workers.dev/#top"
+             className="cpf-logo-block"
+             aria-label="Fusion 富生 — go to homepage"
+             title="Go to Fusion 富生 homepage"
+             style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, minWidth: 0, textDecoration: "none", cursor: "pointer" }}>
             <div className="cpf-calc-icon-box" style={{ background: "#ffffff", padding: 4, borderRadius: 12, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 1.5px rgba(255,255,255,0.35), 0 2px 8px rgba(0,0,0,0.25)" }}>
               <img src={`data:image/png;base64,${SEAL_B64}`} alt="Fusion 富生 seal" style={{ width: 30, height: 30, display: "block", borderRadius: 6 }} />
             </div>
@@ -17953,7 +17959,7 @@ ${milestoneSnapshotHtml}
                 )}
               </div>{/* /cpf-logo-titlerow */}
             </div>{/* /cpf-logo-textstack */}
-          </div>{/* /cpf-logo-block */}
+          </a>{/* /cpf-logo-block */}
 
           {/* ── Header actions ── */}
           <div className="cpf-header-actions" style={{ display: "flex", alignItems: "center", gap: 5, flex: "1 1 auto", minWidth: 0, justifyContent: "flex-end" }}>
@@ -17961,7 +17967,7 @@ ${milestoneSnapshotHtml}
             {/* NAV ORDER (desktop): Home | Unsaved | Nom/Real | Samples | Share▾ | Report▾ | Display▾ | Reset | ⚙(tablet/mobile) */}
 
             {/* 0. Home — navigates to landing page */}
-            <a href="/" aria-label="Go to landing page" title="Fusion 富生 — Landing page"
+            <a href="https://fusionweb.ehtan2022.workers.dev/#top" aria-label="Go to landing page" title="Fusion 富生 — Landing page"
               style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 11px", borderRadius: 8,
                        background: "var(--bg-panel)", color: "var(--text-muted)", fontSize: 13, fontWeight: 700,
                        border: "1px solid var(--border-strong)", textDecoration: "none", flexShrink: 0,
