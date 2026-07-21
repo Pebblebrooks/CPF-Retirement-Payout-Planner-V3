@@ -17966,16 +17966,17 @@ ${milestoneSnapshotHtml}
 
             {/* NAV ORDER (desktop): Home | Unsaved | Nom/Real | Samples | Share▾ | Report▾ | Display▾ | Reset | ⚙(tablet/mobile) */}
 
-            {/* 0. Home — navigates to landing page */}
-            <a href="https://fusionweb.ehtan2022.workers.dev/#top" aria-label="Go to landing page" title="Fusion 富生 — Landing page"
+            {/* 0. Home — opens welcome guide from step 0 */}
+            <button onClick={() => { setWelcomeStep(0); setShowWelcome(true); }}
+              aria-label="Open welcome guide" title="Welcome Guide"
               style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 11px", borderRadius: 8,
                        background: "var(--bg-panel)", color: "var(--text-muted)", fontSize: 13, fontWeight: 700,
-                       border: "1px solid var(--border-strong)", textDecoration: "none", flexShrink: 0,
+                       border: "1px solid var(--border-strong)", cursor: "pointer", flexShrink: 0,
                        transition: "color 0.15s, background 0.15s" }}
               onMouseEnter={e => { e.currentTarget.style.color = "var(--text-highlight)"; e.currentTarget.style.background = "var(--bg-muted)"; }}
               onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-panel)"; }}>
               <Home style={{ width: 13, height: 13 }} />
-            </a>
+            </button>
 
             {/* 1. Unsaved badge — all viewports (moved first: highest-priority signal) */}
             {hasUnsaved && (
