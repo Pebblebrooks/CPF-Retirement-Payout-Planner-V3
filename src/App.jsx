@@ -7927,9 +7927,13 @@ function BetaGate({ onUnlock }) {
             type="button"
             onClick={() => setShowCode(v => !v)}
             aria-label={showCode ? 'Hide access code' : 'Show access code'}
+            title={showCode ? 'Hide access code' : 'Show access code'}
             style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
                      background: 'transparent', border: 'none', cursor: 'pointer',
-                     color: '#64748b', display: 'flex', alignItems: 'center', padding: 4 }}>
+                     color: showCode ? '#e2e8f0' : '#94a3b8',
+                     display: 'flex', alignItems: 'center', lineHeight: 1,
+                     padding: 4, zIndex: 1,
+                     transition: 'color 0.15s' }}>
             {showCode
               ? <EyeOff style={{ width: 18, height: 18 }} />
               : <Eye    style={{ width: 18, height: 18 }} />}
@@ -8083,7 +8087,7 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
   );
 }
 
-function CPFPlannerApp() {
+function CPFPlannerApp({ freshGateEntry = false }) {
   const rootRef = useRef(null); // used for sandbox-safe downloads
   const rstuRef = useRef(null); // scroll target for gap-alert "Fix in Inflows ↗" banner
   const privateAssetsRef   = useRef(null); // scroll target for "SRS panel ↗" Readiness action CTA
@@ -9341,8 +9345,14 @@ function CPFPlannerApp() {
         lastSavedRef.current = JSON.stringify(mergedPlain);
         setActiveTab(mergedPlain.cpfScheme === 'rss' ? 'rss' : 'readiness'); // Standardize: RSS→rss, all others→readiness
       } else {
-        // Always show welcome modal on fresh load
-        setShowWelcome(true);
+        // Show welcome modal on fresh load — EXCEPT when the user just authenticated
+        // via BetaGate (freshGateEntry=true). In that case skip straight to the app:
+        // Beta$$2026$$ → Lite tier immediately; Admin$$1188$$ → Pro tier immediately.
+        // On subsequent cached sessions freshGateEntry is always false, so the welcome
+        // modal continues to appear normally for returning users.
+        if (!freshGateEntry) {
+          setShowWelcome(true);
+        }
       }
     } catch (e) {
       console.error("Failed to parse URL state");
@@ -33637,6 +33647,10 @@ export default function App() {
   const [gatePassed, setGatePassed] = useState(() => {
     try { return localStorage.getItem('fusion_gate_passed') === '1'; } catch { return false; }
   });
+  // freshGateEntry: true only when the user just authenticated in this session (not a
+  // cached/returning visit). Used by CPFPlannerApp to skip the welcome modal so the app
+  // opens directly — Beta→Lite, Admin→Pro, with no intermediate full-screen overlay.
+  const [freshGateEntry, setFreshGateEntry] = useState(false);
 
   if (!gatePassed) {
     return (
@@ -33649,11 +33663,12 @@ export default function App() {
             else if (tier === 'plus') localStorage.setItem('fusion_plan', 'plus');
             else                      localStorage.removeItem('fusion_plan');
           } catch { /* ignore private-browsing write errors */ }
+          setFreshGateEntry(true); // signal: gate just passed this session → skip welcome modal
           setGatePassed(true);
         }}
       />
     );
   }
 
-  return <CPFPlannerApp />;
+  return <CPFPlannerApp freshGateEntry={freshGateEntry} />;
 }
