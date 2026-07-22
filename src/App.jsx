@@ -7928,15 +7928,18 @@ function BetaGate({ onUnlock }) {
             onClick={() => setShowCode(v => !v)}
             aria-label={showCode ? 'Hide access code' : 'Show access code'}
             title={showCode ? 'Hide access code' : 'Show access code'}
-            style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                     background: 'transparent', border: 'none', cursor: 'pointer',
-                     color: showCode ? '#e2e8f0' : '#94a3b8',
-                     display: 'flex', alignItems: 'center', lineHeight: 1,
-                     padding: 4, zIndex: 1,
-                     transition: 'color 0.15s' }}>
+            onMouseEnter={e => { e.currentTarget.style.color = '#e2e8f0'; e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = showCode ? '#e2e8f0' : '#c8d4e8'; e.currentTarget.style.background = 'transparent'; }}
+            style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                     background: 'transparent', border: '1px solid rgba(200,212,232,0.25)',
+                     borderRadius: 6, cursor: 'pointer',
+                     color: showCode ? '#e2e8f0' : '#c8d4e8',
+                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                     width: 28, height: 28, padding: 0, zIndex: 1,
+                     transition: 'color 0.15s, background 0.15s, border-color 0.15s' }}>
             {showCode
-              ? <EyeOff style={{ width: 18, height: 18 }} />
-              : <Eye    style={{ width: 18, height: 18 }} />}
+              ? <EyeOff style={{ width: 16, height: 16 }} />
+              : <Eye    style={{ width: 16, height: 16 }} />}
           </button>
         </div>
 
@@ -9345,12 +9348,17 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         lastSavedRef.current = JSON.stringify(mergedPlain);
         setActiveTab(mergedPlain.cpfScheme === 'rss' ? 'rss' : 'readiness'); // Standardize: RSS→rss, all others→readiness
       } else {
-        // Show welcome modal on fresh load — EXCEPT when the user just authenticated
-        // via BetaGate (freshGateEntry=true). In that case skip straight to the app:
-        // Beta$$2026$$ → Lite tier immediately; Admin$$1188$$ → Pro tier immediately.
-        // On subsequent cached sessions freshGateEntry is always false, so the welcome
-        // modal continues to appear normally for returning users.
-        if (!freshGateEntry) {
+        // Welcome modal is suppressed for ALL users who authenticated via BetaGate.
+        // fusion_gate_passed='1' is set on first gate login and persists across sessions,
+        // so every return visit (where freshGateEntry is always false) is also covered.
+        // This guarantees: Beta$$2026$$ → Lite tier immediately, every time.
+        //                  Admin$$1188$$ → Pro tier immediately, every time.
+        // Upgrades from Lite → Plus/Pro happen exclusively through the Upgrade button
+        // in the navbar (which opens UpgradeModal) — never via a startup overlay.
+        const gateUserReturning = (() => {
+          try { return localStorage.getItem('fusion_gate_passed') === '1'; } catch { return false; }
+        })();
+        if (!freshGateEntry && !gateUserReturning) {
           setShowWelcome(true);
         }
       }
