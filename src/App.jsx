@@ -7828,30 +7828,26 @@ const LITE_PRESET_IDS = new Set(["blank", "typical35"]);
 // ── Beta password gate ───────────────────────────────────────────────────────────
 // ── Password registry ─────────────────────────────────────────────────────────
 // GATE_PASSWORDS — checked by BetaGate (first launch screen, before the React app renders).
-//   Admin entries: grant immediate Pro access and skip the UpgradeModal entirely.
-//   Tier entries:  admit the user and set their plan; UpgradeModal is not needed.
-// TIER_PASSWORDS — checked by UpgradeModal only (plan changes once inside the app).
-//   Admin passwords are intentionally ABSENT here — admin access is gate-only.
+//   admin: grants immediate Pro access, no second login needed.
+//   beta:  grants immediate Lite access.
+// TIER_PASSWORDS — checked by UpgradeModal only (upgrades once inside the app, from Lite).
+//   Admin is intentionally absent here — admin access is gate-only, never a second login route.
 const GATE_PASSWORDS = {
-  admin:  'FusionAdmin$$2026$$', // legacy admin (kept for continuity)
-  admin2: 'Admin$$1188$$',       // primary admin — bypasses second login, sets Pro directly
-  pro:    'BetaPro$$2026$$',
-  plus:   'BetaPlus$$2026$$',
+  admin: 'Admin$$1188$$',  // administrator — bypasses straight to Pro, no second login
+  beta:  'Beta$$2026$$',   // beta tester — bypasses straight to Lite
 };
 const TIER_PASSWORDS = {
-  plus:   'BetaPlus$$2026$$',
-  pro:    'BetaPro$$2026$$',
-  admin:  'FusionAdmin$$2026$$',  // gate admin (kept for continuity)
-  admin2: 'Admin$$1188$$',         // primary admin — bypasses to Pro instantly
+  plus: 'BetaPlus$$2026$$',
+  pro:  'BetaPro$$2026$$',
 };
 // Replace both with server-side auth before public launch.
 
 // ── BetaGate ──────────────────────────────────────────────────────────────────
 // Full-screen access gate rendered by App() before CPFPlannerApp mounts.
-// Admin passwords (admin / admin2) resolve to tier='pro' and write fusion_plan directly,
-// so CPFPlannerApp starts in Pro mode without requiring a second UpgradeModal entry.
-// Tier passwords (plus / pro) also set the plan at the gate, so the UpgradeModal
-// is never needed for first-time access — it remains available for plan changes only.
+// admin resolves to tier='pro' and writes fusion_plan directly, so CPFPlannerApp
+// starts in Pro mode without requiring a second UpgradeModal entry.
+// beta resolves to tier='lite' — Plus/Pro upgrades happen only via UpgradeModal,
+// once inside the app, using the separate TIER_PASSWORDS registry.
 function BetaGate({ onUnlock }) {
   const [code, setCode]           = useState('');
   const [showCode, setShowCode]   = useState(false);
@@ -7862,11 +7858,8 @@ function BetaGate({ onUnlock }) {
     if (!code.trim()) { setError('Please enter your access code.'); return; }
     setBusy(true);
     setTimeout(() => {
-      if (code === GATE_PASSWORDS.admin2 || code === GATE_PASSWORDS.admin) {
-        onUnlock('pro'); return;                    // admin → Pro, no second login
-      }
-      if (code === GATE_PASSWORDS.pro)  { onUnlock('pro');  return; }
-      if (code === GATE_PASSWORDS.plus) { onUnlock('plus'); return; }
+      if (code === GATE_PASSWORDS.admin) { onUnlock('pro');  return; }  // admin → Pro, no second login
+      if (code === GATE_PASSWORDS.beta)  { onUnlock('lite'); return; }  // beta tester → Lite
       setError('Incorrect access code. Please try again.');
       setBusy(false);
     }, 300);
@@ -7980,20 +7973,14 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
   const inputRef = useRef(null);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80); }, []);
 
-  // Admin passwords now in TIER_PASSWORDS — bypass to Pro from both BetaGate and UpgradeModal
-  const typedTier = (password === TIER_PASSWORDS.pro ||
-                     password === TIER_PASSWORDS.admin ||
-                     password === TIER_PASSWORDS.admin2) ? 'pro'
-                  : password === TIER_PASSWORDS.plus ? 'plus' : null;
+  // Admin is gate-only (see GATE_PASSWORDS) — not checked here, so there is no second admin login route.
+  const typedTier = password === TIER_PASSWORDS.pro  ? 'pro'
+                   : password === TIER_PASSWORDS.plus ? 'plus' : null;
 
   const tryUnlock = () => {
     if (!password) { setError('Please enter your access password.'); return; }
     setSubmitting(true);
     setTimeout(() => {
-      // Admin passwords bypass all tier guards — jump directly to Pro.
-      if (password === TIER_PASSWORDS.admin || password === TIER_PASSWORDS.admin2) {
-        onUpgrade('pro'); return;
-      }
       if (password === TIER_PASSWORDS.pro) {
         if (currentPlan === 'pro') { setError('You\'re already on Fusion Pro.'); setSubmitting(false); return; }
         onUpgrade('pro'); return;
@@ -8014,7 +8001,6 @@ function UpgradeModal({ currentPlan, onUpgrade, onDowngrade, onClose }) {
     { key: 'pro',  label: 'Fusion Pro',  pillBg: TIER_CONFIG.PRO.bg,  pillColor: TIER_CONFIG.PRO.color, note: 'Full access',
       features: ['Everything in Plus, plus:','Strategy tabs A/B/C/D + Tax Optimizer','Monte Carlo simulation (200 runs)','Life Events','Property Monetisation — LBS, SHB','SRS, CPFIS, Investments & Portfolio','Compare — scenario A vs B diff','Household — couple co-planning','PDF Report · Share Link'] },
   ];
-  const highlighted = typedTier ?? (currentPlan === 'plus' ? 'pro' : 'pro');
 
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(2,6,23,0.93)",backdropFilter:"blur(8px)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}
@@ -33658,10 +33644,10 @@ export default function App() {
         onUnlock={(tier) => {
           try {
             localStorage.setItem('fusion_gate_passed', '1');
-            // Admin and tier passwords both write fusion_plan so CPFPlannerApp
-            // initialises at the correct tier without needing a second UpgradeModal entry.
-            if (tier === 'pro')  localStorage.setItem('fusion_plan', 'pro');
-            if (tier === 'plus') localStorage.setItem('fusion_plan', 'plus');
+            // 'lite' is represented by key-absence, matching downgradePlan's convention (line 8287).
+            if (tier === 'pro')       localStorage.setItem('fusion_plan', 'pro');
+            else if (tier === 'plus') localStorage.setItem('fusion_plan', 'plus');
+            else                      localStorage.removeItem('fusion_plan');
           } catch { /* ignore private-browsing write errors */ }
           setGatePassed(true);
         }}
