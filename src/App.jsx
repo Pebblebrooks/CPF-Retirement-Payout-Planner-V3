@@ -164,7 +164,8 @@ const TAB_CONFIG = [
   // "summary" removed from tab strip — accessible via the Score / Overview toggle inside Dashboard
   ["strategy",     "Strategy",       Target,      "#f43f5e"],
   ["accumulation", "Grow/Spend",     BarChart3,   "var(--clr-blue2)"],    // UX: renamed from "Growth" to "Grow", then "Grow/Spend" once Decumulation (former Income Roadmap) moved in
-  ["payout",       "Payout",         TrendingDown, "var(--clr-teal)"],   // Sprint-12: merged rss + life → single payout tab; content switches on cpfScheme
+  ["rss",          "RSS",            Clock,       "var(--clr-blue)"],      // shown only when cpfScheme === 'rss'
+  ["life",         "Payout Plans",   ShieldCheck, "var(--clr-purple)"],   // UX: renamed from "LIFE" — self-explanatory; hidden for foreigners + rss mode
   ["compare",      "Compare",        Split,       "var(--clr-amber3)"],
   // "household" removed from TAB_CONFIG — Sprint-10: merged into Compare sub-tab
   // "table" removed from TAB_CONFIG — Sprint-11: merged into Guide sub-view ('data')
@@ -176,8 +177,8 @@ const TAB_CONFIG = [
 const getVisibleTabs = (cpfScheme, isForeigner, householdEnabled) =>
   TAB_CONFIG.filter(([id]) => {
     if (id === "readiness") return !isForeigner && cpfScheme !== "rss"; // CPF LIFE-centric; not applicable in RSS mode
-    if (id === "payout")    return !isForeigner; // Sprint-12: one tab for both RSS + CPF LIFE payout views
-    // 'life' and 'rss' removed — Sprint-12: merged into 'payout' (see above)
+    if (id === "rss")       return cpfScheme === "rss";
+    if (id === "life")      return cpfScheme !== "rss" && !isForeigner;
     if (id === "household") return false; // Sprint-10: merged into Compare tab
     if (id === "table")     return false; // Sprint-11: merged into Guide sub-view
     return true;
@@ -10925,7 +10926,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       // R6 fix: if the user was on the LIFE tab when switching to RSS, redirect to the RSS tab.
       // The LIFE tab is removed from the tab bar for RSS members; leaving activeTab on "life"
       // causes a blank panel until the user manually clicks another tab.
-      setActiveTab(at => at === 'readiness' ? 'payout' : at);
+      setActiveTab(at => (at === 'life' || at === 'readiness') ? 'rss' : at);
     } else if (rssActionPending === 'reset') {
       setInputs(p => ({
         ...p,
@@ -10951,7 +10952,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         // ── Payout age (CPF LIFE only) ───────────────────────────────────
         payoutAge: 65,
       }));
-      setActiveTab(at => at === 'readiness' ? 'payout' : at);
+      setActiveTab(at => (at === 'life' || at === 'readiness') ? 'rss' : at);
       showToast(`✓ Switched to RSS — contribution & top-up fields reset.${ageClampNote}`);
     }
     setRssActionPending(null); // clear the flag
@@ -13728,7 +13729,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   // Distinct from xirrByAge (which includes all contribution history from current age).
   // Used in LIFE tab "Eff. Return %" chart view and Data Table "LIFE IRR" columns.
   const lifeEffRateByAge = useMemo(() => {
-    if (activeTab !== "payout" && !(activeTab === "guide" && guideView === "data")) return {};
+    if (activeTab !== "life" && activeTab !== "table" && !(activeTab === "guide" && guideView === "data")) return {};
     if (debouncedInputs.cpfScheme === 'rss') return {};
     const pa = payoutAge65;
     const P  = debouncedInputs.applyRaOaTransfer ? raAfterTransfer : raAtPayout;
@@ -13767,7 +13768,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   // Spouse mirror of lifeEffRateByAge
   const spouseLifeEffRateByAge = useMemo(() => {
     if (!householdEnabled) return {};
-    if (activeTab !== "payout" && !(activeTab === "guide" && guideView === "data")) return {};
+    if (activeTab !== "life" && activeTab !== "table" && !(activeTab === "guide" && guideView === "data")) return {};
     const pa = spousePayoutAge;
     const P  = debouncedSpouseInputs.applyRaOaTransfer ? spouseRaAfterTransfer : spouseRaAtPayout;
     if (P <= 0 || !spousePayoutProjection?.length) return {};
@@ -27694,7 +27695,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── RSS TAB — Full drawdown engine (PR-2) ── */}
-            {activeTab === "payout" && cpfScheme === "rss" && (() => {
+            {activeTab === "rss" && (() => {
               const isRSSMode = debouncedInputs.cpfScheme === 'rss';
               if (!isRSSMode) return null;
               // Extract RSS-specific values from the projection array
@@ -27976,12 +27977,12 @@ ${milestoneSnapshotHtml}
             })()}
 
             {/* ── LIFE TAB ── */}
-            {/* R6 fix / Sprint-12: previously guarded activeTab === 'life'; now 'payout' — cpfScheme guard below differentiates RSS vs CPF LIFE content.
+            {/* R6 fix: guard against stale activeTab === "life" when RSS mode is active.
                 The LIFE tab is removed from the tab bar for RSS members (see tab list above),
                 but if the user was already on the LIFE tab before switching to RSS the
                 activeTab state can be "life" momentarily (the switch useEffect also calls
                 setActiveTab to redirect, but this guard is the belt-and-suspenders defence). */}
-            {activeTab === "payout" && debouncedInputs.cpfScheme !== 'rss' && (() => {
+            {activeTab === "life" && debouncedInputs.cpfScheme !== 'rss' && (() => {
               // ── Active-member variable wiring ──────────────────────────────────────
               const isSpouseLife       = lifeTabMember === "spouse" && householdEnabled;
               const activeDisplayProj  = isSpouseLife ? spouseDisplayProjection  : displayProjection;
