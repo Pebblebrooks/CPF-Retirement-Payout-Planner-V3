@@ -160,7 +160,9 @@ const SG_RETIREMENT_BENCHMARKS = {
 // this constant and filter dynamically using the isForeigner / cpfScheme / householdEnabled flags.
 // Format: [id, label, Icon, accentColor]
 const TAB_CONFIG = [
-  ["plan",         "Plan",           Target,      "var(--clr-lime)"],     // Sprint-13: merged Dashboard + Strategy
+  ["readiness",    "Dashboard",      Activity,    "var(--clr-emerald)"],  // UX: merged Readiness + Summary into one Dashboard tab with sub-view toggle
+  // "summary" removed from tab strip — accessible via the Score / Overview toggle inside Dashboard
+  ["strategy",     "Strategy",       Target,      "#f43f5e"],
   ["accumulation", "Grow/Spend",     BarChart3,   "var(--clr-blue2)"],    // UX: renamed from "Growth" to "Grow", then "Grow/Spend" once Decumulation (former Income Roadmap) moved in
   ["payout",       "Payout",         TrendingDown, "var(--clr-teal)"],   // Sprint-12: merged rss + life → single payout tab; content switches on cpfScheme
   ["compare",      "Compare",        Split,       "var(--clr-amber3)"],
@@ -173,7 +175,7 @@ const TAB_CONFIG = [
 // Used by the desktop strip, hamburger dropdown, and keyboard shortcut handler.
 const getVisibleTabs = (cpfScheme, isForeigner, householdEnabled) =>
   TAB_CONFIG.filter(([id]) => {
-    if (id === "plan")      return !isForeigner && cpfScheme !== "rss"; // Sprint-13: merged Dashboard+Strategy
+    if (id === "readiness") return !isForeigner && cpfScheme !== "rss"; // CPF LIFE-centric; not applicable in RSS mode
     if (id === "payout")    return !isForeigner; // Sprint-12: one tab for both RSS + CPF LIFE payout views
     // 'life' and 'rss' removed — Sprint-12: merged into 'payout' (see above)
     if (id === "household") return false; // Sprint-10: merged into Compare tab
@@ -7900,20 +7902,6 @@ function ReadinessTab({
                   </div>
                 </div>
               )}
-              {swrAnalytics.optimalSrsYears && swrAnalytics.optimalSrsYears.yrs !== 10 && (
-                <div style={{ marginTop: 10, padding: '7px 10px', borderRadius: 7,
-                  background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--clr-emerald)' }}>✦ Optimal draw: {swrAnalytics.optimalSrsYears.yrs} yr</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>saves {formatCurrency(swrAnalytics.srsAnnualTax * 10 - swrAnalytics.optimalSrsYears.lifetimeTax)} lifetime vs 10 yr</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Draw / tax / lifetime</span>
-                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-main)' }}>{formatCurrency(swrAnalytics.optimalSrsYears.annualDraw)} · {swrAnalytics.optimalSrsYears.annualTax === 0 ? 'Nil' : formatCurrency(swrAnalytics.optimalSrsYears.annualTax)} · {formatCurrency(swrAnalytics.optimalSrsYears.lifetimeTax)}</span>
-                  </div>
-                </div>
-              )}
-              {swrAnalytics.optimalSrsYears?.yrs === 10 && <p style={{ fontSize: 10, color: 'var(--clr-emerald)', margin: '8px 0 0', fontWeight: 600 }}>✓ Standard 10-yr draw is already optimal.</p>}
               <p style={{ fontSize: 10, color: 'var(--text-subtle)', margin: '8px 0 0', lineHeight: 1.5 }}>
                 OA cash withdrawals and Singapore capital gains are tax-exempt. Only SRS drawdowns contribute to chargeable income.
               </p>
@@ -8836,7 +8824,6 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   const [tableSubTab,    setTableSubTab]    = useState("projection");
   const [ledgerExpanded, setLedgerExpanded] = useState(false);
   const [compareSubTab,  setCompareSubTab]  = useState("compare"); // 'compare' | 'household'
-  const [planSubTab,     setPlanSubTab]     = useState("readiness"); // 'readiness' | 'strategy'
   const [showDataTableGuide, setShowDataTableGuide] = useState(false);
   const [showWisEligibility, setShowWisEligibility] = useState(false); // WIS eligibility panel toggle — must be top-level (Rules of Hooks)
   // Goal Simulator state (Strategy tab → Goal sub-tab)
@@ -8995,8 +8982,8 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   const readinessSidebarUserPref = useRef(null);
   const welcomeBodyRef = useRef(null); // scroll-reset target for welcome modal body
   useEffect(() => {
-    if (activeTab === "plan") {
-      sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Plan tab
+    if (activeTab === "readiness") {
+      sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Readiness
       if (window.innerWidth <= 1024) {
         // Mobile/tablet: ALWAYS close sidebar on Readiness entry regardless of any saved pref.
         // readinessSidebarUserPref may have been set to `true` by a sidebar open action on
@@ -9045,7 +9032,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     // Desktop: reset cpf-tab-content scroll position (on mobile this is overflow-y:visible so no-op).
     if (tabContentRef.current) tabContentRef.current.scrollTop = 0;
     // Scroll the tab strip to position 0 when landing on Readiness (first tab).
-    if (activeTab === 'plan' && tabsStripRef.current) {
+    if (activeTab === 'readiness' && tabsStripRef.current) {
       tabsStripRef.current.scrollTo({ left: 0, behavior: 'instant' });
     }
   }, [activeTab]);
@@ -9730,7 +9717,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     if (window.innerWidth > 1024) {
       readinessSidebarUserPref.current = true;
     }
-    setActiveTab('plan');
+    setActiveTab('readiness');
     showToast('✓ Setup complete — your profile is ready');
   };
 
@@ -9919,7 +9906,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     // Open sidebar so user can see and edit inputs immediately on first landing.
     readinessSidebarUserPref.current = true;
     setSidebarOpen(true);
-    setActiveTab('plan');
+    setActiveTab('readiness');
   };
 
   useEffect(() => {
@@ -12693,7 +12680,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     [displayAccumulation]);
 
   const turboImpacts = useMemo(() => {
-    if (!(activeTab === 'plan' && planSubTab === 'strategy') || (goalStratTab !== 'turbo' && goalStratTab !== 'taxopt')) return {};
+    if (activeTab !== 'strategy' || (goalStratTab !== 'turbo' && goalStratTab !== 'taxopt')) return {};
     const d    = debouncedInputs;
     const pa   = payoutAge65;
     // BUG-ISMALE fix: isMale is NOT a CPFPlannerApp-scope variable — the identifier of
@@ -13181,23 +13168,14 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       : (srsAtPA > 0 ? Math.round(srsAtPA / 5) : 0);
     const srsTaxFast5   = computeIrasTax(Math.round(srsDrawFast5 * 0.5));
 
-    const _rOpt = (Number(debouncedInputs.srsReturnRate) || 4) / 100;
-    const _srsOpts = srsAtPA > 0
-      ? Array.from({ length: 10 }, (_, i) => i + 1).map(yrs => {
-          const draw = _rOpt > 0
-            ? Math.round(srsAtPA * _rOpt / (1 - Math.pow(1 + _rOpt, -yrs)))
-            : Math.round(srsAtPA / yrs);
-          const tax  = computeIrasTax(Math.round(draw * 0.5));
-          return { yrs, annualDraw: draw, annualTax: tax, lifetimeTax: tax * yrs };
-        }).sort((a, b) => a.lifetimeTax - b.lifetimeTax)
-      : [];
-    const optimalSrsYears = _srsOpts[0] || null;
     return { oaAtPA, srsAtPA, privAtPA, portfolioPA, cpfMonthly, gapMonthly, annualGap,
              requiredSWR, sustainYears, depletionAge,
              bucket1Liquid, bucket1Months, srsAnnualDraw, bucket2Annual,
+             // TDB fields (Item 25)
              frsAtPA_tdb, tdb, tdbPct, hasTdb, saBal_tdb,
+             // Tax sequencing fields (Item 22)
              srsChargeableAnnual, srsAnnualTax, effectiveSrsTaxRate, marginalSrsRate,
-             srsDrawFast5, srsTaxFast5, optimalSrsYears };
+             srsDrawFast5, srsTaxFast5 };
   }, [projectionByAge, payoutAge65, highlightPlan, lifePlans, debouncedInputs]);
 
   // Baseline projection — mandatory contributions only, all voluntary inputs zeroed.
@@ -13239,7 +13217,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     // Gate: compute when any slider is set OR when on the compare/summary tab.
     // anySliderSet already handles the "don't compute when nothing is set" case cleanly.
     const anySliderSet = whatIfPayoutAge !== null || whatIfSaTopup !== null || whatIfHousing !== null || whatIfSalaryBump !== null || whatIfContribStop !== null || whatIfOaDrawdown !== null || whatIfSrsContrib !== null || whatIfPrivGrowth !== null;
-    if (activeTab !== "compare" && activeTab !== "summary" && activeTab !== "plan" && !anySliderSet) return null;
+    if (activeTab !== "compare" && activeTab !== "summary" && activeTab !== "readiness" && !anySliderSet) return null;
     // NX8 fix: use debouncedInputs (not live inputs) so the What-If baseline stays in sync
     // with the main projection — previously the 180ms debounce window caused the What-If
     // chart to show new input values against a stale main projection baseline.
@@ -15963,7 +15941,7 @@ ${milestoneSnapshotHtml}
   const handleSidebarToggle = useCallback(() => {
     setSidebarOpen(v => {
       const next = !v;
-      if (activeTab === 'plan') {
+      if (activeTab === 'readiness') {
         // User explicitly toggled while ON Readiness — update both refs so:
         //   sidebarWasOpenRef  → restore this state when leaving Readiness
         //   readinessSidebarUserPref → honour this choice on every future re-entry
@@ -19045,10 +19023,10 @@ ${milestoneSnapshotHtml}
               const isLocked      = isLifeLocked || isPlanLocked;
               const reqTier       = PLAN_REQUIRED_TABS[id];
               return (
-                <button key={id} role="tab" aria-selected={activeTab === id || (id === "plan" && activeTab === "summary")} aria-controls={`panel-${id}`}
+                <button key={id} role="tab" aria-selected={activeTab === id || (id === "readiness" && activeTab === "summary")} aria-controls={`panel-${id}`}
                   onClick={() => { if (isLifeLocked) return; if (isPlanLocked) { setShowUpgradeModal(true); return; } setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
                   title={isLifeLocked ? "CPF LIFE — not available to foreigners" : isPlanLocked ? `Requires Fusion ${reqTier === 'pro' ? 'Pro' : 'Plus'}` : undefined}
-                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLocked ? (isLifeLocked ? "not-allowed" : "pointer") : "pointer", background: "transparent", color: (activeTab === id || (id === "plan" && activeTab === "summary")) ? accent : isLocked ? "var(--text-subtle)" : "var(--text-muted)", borderBottom: (activeTab === id || (id === "plan" && activeTab === "summary")) ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLocked ? 0.55 : 1 }}>
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "10px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: isLocked ? (isLifeLocked ? "not-allowed" : "pointer") : "pointer", background: "transparent", color: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : isLocked ? "var(--text-subtle)" : "var(--text-muted)", borderBottom: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `2px solid ${accent}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0, opacity: isLocked ? 0.55 : 1 }}>
                   <Icon style={{ width: 14, height: 14 }} />{label}
                   {isLifeLocked && <span style={{ fontSize: 11, marginLeft: 2 }}>🔒</span>}
                   {isPlanLocked && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: reqTier === 'pro' ? "#b45309" : "#0284c7", color: reqTier === 'pro' ? "#fef3c7" : "#fff", marginLeft: 4 }}>{reqTier === 'pro' ? 'PRO' : 'PLUS'}</span>}
@@ -19086,7 +19064,7 @@ ${milestoneSnapshotHtml}
                   const reqTier      = PLAN_REQUIRED_TABS[id];
                   return (
                     <button key={id} onClick={() => { if (isLifeLocked) return; if (isPlanLocked) { setShowUpgradeModal(true); setShowTabsMenu(false); return; } setActiveTab(id); setShowTabsMenu(false); if (window.innerWidth <= 1024) setSidebarOpen(false); }}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: (activeTab === id || (id === "plan" && activeTab === "summary")) ? 800 : 600, border: "none", background: (activeTab === id || (id === "plan" && activeTab === "summary")) ? `${accent}18` : "transparent", color: (isPlanLocked||isLifeLocked) ? "var(--text-subtle)" : (activeTab === id || (id === "plan" && activeTab === "summary")) ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: (isPlanLocked||isLifeLocked) ? 0.55 : 1 }}>
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, fontSize: 14, fontWeight: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? 800 : 600, border: "none", background: (activeTab === id || (id === "readiness" && activeTab === "summary")) ? `${accent}18` : "transparent", color: (isPlanLocked||isLifeLocked) ? "var(--text-subtle)" : (activeTab === id || (id === "readiness" && activeTab === "summary")) ? accent : "var(--text-main)", cursor: isLifeLocked ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: (isPlanLocked||isLifeLocked) ? 0.55 : 1 }}>
                       <Icon style={{ width: 13, height: 13 }} />{label}
                       {isLifeLocked && " 🔒"}
                       {isPlanLocked && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4, background: reqTier === 'pro' ? "#b45309" : "#0284c7", color: reqTier === 'pro' ? "#fef3c7" : "#fff", marginLeft: 4 }}>{reqTier === 'pro' ? 'PRO' : 'PLUS'}</span>}
@@ -24000,7 +23978,7 @@ ${milestoneSnapshotHtml}
               borderRadius: "0 2px 0 0",
             }} />
             {/* Persistent KPI strip — hidden on Summary tab (Zone 1 already shows these metrics) */}
-            {activeTab !== "guide" && activeTab !== "summary" && activeTab !== "plan" && (
+            {activeTab !== "guide" && activeTab !== "summary" && activeTab !== "readiness" && (
               <div className="kpi-strip-wrap">
               {/* ── Household 3-column grouped banner (Life + Strategy tabs only) ──────────
                   Replaces the flat KPI strip when household mode is active on these tabs.
@@ -24186,10 +24164,10 @@ ${milestoneSnapshotHtml}
           {/* Tab content panels — scrollable row 2 of main wrap grid */}
           <div ref={tabContentRef} className="cpf-tab-content" data-exec={execDashMode ? "true" : undefined} data-tab={activeTab}>
             {/* ── DASHBOARD TAB sub-view toggle (Score / Overview) ── */}
-            {(activeTab === "plan" || activeTab === "summary") && (
+            {(activeTab === "readiness" || activeTab === "summary") && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px 0", background: "var(--bg-base)" }}>
                 <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
-                  <button onClick={() => setActiveTab("readiness")} style={{ padding: "5px 16px", borderRadius: 7, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: activeTab === "plan" ? "var(--ctrl-active-bg)" : "transparent", color: activeTab === "plan" ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
+                  <button onClick={() => setActiveTab("readiness")} style={{ padding: "5px 16px", borderRadius: 7, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: activeTab === "readiness" ? "var(--ctrl-active-bg)" : "transparent", color: activeTab === "readiness" ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
                     <Activity style={{ width: 12, height: 12, display: "inline", marginRight: 5, verticalAlign: "middle" }} />Readiness score
                   </button>
                   <button onClick={() => setActiveTab("summary")} style={{ padding: "5px 16px", borderRadius: 7, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: activeTab === "summary" ? "var(--ctrl-active-bg)" : "transparent", color: activeTab === "summary" ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
@@ -24226,22 +24204,8 @@ ${milestoneSnapshotHtml}
                 )}
               </div>
             )}
-            {/* ── PLAN TAB: Dashboard + Strategy ── */}
-            {/* Plan sub-tab toggle */}
-            {activeTab === "plan" && (
-              <div style={{ display: "flex", gap: 4, padding: "4px 6px", background: "var(--bg-input)", borderRadius: 10, border: "1px solid var(--border-subtle)", alignSelf: "flex-start", marginBottom: 12, marginLeft: 2 }}>
-                {[{ id: "readiness", label: "🎯 Dashboard" }, { id: "strategy", label: "⚙️ Strategy" }].map(({ id, label }) => (
-                  <button key={id} onClick={() => setPlanSubTab(id)}
-                    style={{ padding: "4px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", transition: "all 0.15s",
-                      background: planSubTab === id ? "var(--ctrl-active-bg)" : "transparent",
-                      color: planSubTab === id ? "#fff" : "var(--text-muted)" }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {/* Dashboard (Readiness) sub-tab */}
-            {activeTab === "plan" && planSubTab === "readiness" && (
+            {/* ── READINESS TAB ── */}
+            {activeTab === "readiness" && (
               <ReadinessTab
                 inputs={inputs}
                 displayAccumulation={displayAccumulation}
@@ -24505,7 +24469,7 @@ ${milestoneSnapshotHtml}
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {gapAlert.annualTopUp > 0 && (
                         <button type="button"
-                          onClick={() => { if (plan !== 'pro') { setShowUpgradeModal(true); return; } setActiveTab("plan"); setPlanSubTab("strategy"); setGoalStratTab("goal"); }}
+                          onClick={() => { if (plan !== 'pro') { setShowUpgradeModal(true); return; } setActiveTab("strategy"); setGoalStratTab("goal"); }}
                           style={{ padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
                             border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
                             background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)",
@@ -31300,8 +31264,8 @@ ${milestoneSnapshotHtml}
                 </div>
               </div>
             )}
-            {/* ── STRATEGY TAB (Sprint-13: sub-tab of Plan) ── */}
-            {activeTab === "plan" && planSubTab === "strategy" && (() => {
+            {/* ── STRATEGY TAB ── */}
+            {activeTab === "strategy" && (() => {
               const pa = payoutAge65; // CQ-2 fix: use debounced value to match payoutProjection data (cpfLifeMonthly at L9137)
               const ca = Number(inputs.currentAge) || 35;
 
