@@ -179,7 +179,7 @@ const getVisibleTabs = (cpfScheme, isForeigner, householdEnabled) =>
     if (id === "readiness") return !isForeigner && cpfScheme !== "rss"; // CPF LIFE-centric; not applicable in RSS mode
     if (id === "rss")       return cpfScheme === "rss";
     if (id === "life")      return cpfScheme !== "rss" && !isForeigner;
-    if (id === "household") return false; // Sprint-10: merged into Compare tab
+    if (id === "household") return !!householdEnabled;
     return true;
   });
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8823,7 +8823,6 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   const [showPresets, setShowPresets] = useState(false);
   const [tableSubTab,    setTableSubTab]    = useState("projection");
   const [ledgerExpanded, setLedgerExpanded] = useState(false);
-  const [compareSubTab,  setCompareSubTab]  = useState("compare"); // 'compare' | 'household'
   const [showDataTableGuide, setShowDataTableGuide] = useState(false);
   const [showWisEligibility, setShowWisEligibility] = useState(false); // WIS eligibility panel toggle — must be top-level (Rules of Hooks)
   // Goal Simulator state (Strategy tab → Goal sub-tab)
@@ -8868,7 +8867,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   const [leMagFocused, setLeMagFocused] = useState(false);
   // BUG-3 fix: Household tab "How this tab works" explainer toggle hoisted from IIFE to top-level.
   // Same Rules-of-Hooks violation as BUG-2: React.useState was called inside a conditional IIFE
-  // (Sprint-10: now rendered inside Compare tab when compareSubTab === "household"), causing hook count to differ
+  // (only executed when activeTab === "household"), causing hook count to differ between renders
   // and throwing React Error #310 (too many re-renders) → blank page on Household sample load.
   const [hhExplainerExpanded, setHhExplainerExpanded] = useState(false);
 
@@ -19924,7 +19923,7 @@ ${milestoneSnapshotHtml}
                       if (plan !== 'pro') { setShowUpgradeModal(true); return; }
                       const next = !householdEnabled;
                       setHouseholdEnabled(next);
-                      if (next) { if (window.innerWidth <= 1024) setSidebarOpen(false); setActiveTab("compare"); setCompareSubTab("household"); }
+                      if (next) { if (window.innerWidth <= 1024) setSidebarOpen(false); setActiveTab("household"); }
                     }}
                     title={plan !== 'pro' ? "Household Mode requires Fusion Pro" : undefined}
                     style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", background: householdEnabled ? "rgba(139,92,246,0.15)" : "rgba(100,116,139,0.12)", color: householdEnabled ? "#8b5cf6" : "var(--text-muted)", border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
@@ -22923,11 +22922,11 @@ ${milestoneSnapshotHtml}
 
                     {(inputs.mortgagePaymentSource || "cpf") === "cpf" && <>{/* ── OA Loan Ledger ── CPF mortgage only: cpfHousingLoanPrincipal + amortisation chart */}
                     <div style={{ marginTop: 10 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                        <label htmlFor="cpfHousingLoanPrincipal" style={{ fontWeight: 600, color: "var(--text-dim)" }}>CPF Loan Outstanding Principal ($)</label>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>
+                        CPF Loan Outstanding Principal ($)
                         <TooltipBox id="t-loan-ledger" text="Enter the current outstanding principal of your CPF OA housing loan. FusionPlus will display a live amortisation chart showing when the loan clears and how much interest accrues." />
-                      </div>
-                      <input id="cpfHousingLoanPrincipal" type="text" inputMode="decimal" name="cpfHousingLoanPrincipal"
+                      </label>
+                      <input type="text" inputMode="decimal" name="cpfHousingLoanPrincipal"
                         value={getDisplayValue("cpfHousingLoanPrincipal", inputs.cpfHousingLoanPrincipal)}
                         onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown}
                         placeholder="0"
@@ -28777,20 +28776,6 @@ ${milestoneSnapshotHtml}
             {activeTab === "compare" && (
               <div className="fhd-tab-inner" style={{ background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 24, display: "flex", flexDirection: "column", gap: 20, boxSizing: "border-box" }}>
 
-                {/* Sprint-10: Compare / Household sub-tab toggle */}
-                <div style={{ display: "flex", gap: 4, padding: "6px 8px", background: "var(--bg-input)", borderRadius: 12, border: "1px solid var(--border-subtle)", alignSelf: "flex-start" }}>
-                  {[{ id: "compare", label: "⇄ Compare Scenarios" }, { id: "household", label: "👨‍👩‍👧 Household" }].map(({ id, label }) => (
-                    <button key={id} onClick={() => { setCompareSubTab(id); if (id === "household" && !householdEnabled) setInputs(p => ({ ...p, householdEnabled: true })); }}
-                      style={{ padding: "5px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", transition: "all 0.15s",
-                        background: compareSubTab === id ? "var(--clr-green)" : "transparent",
-                        color: compareSubTab === id ? "#fff" : "var(--text-muted)" }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Compare content */}
-                {compareSubTab === "compare" && (<>
                 {/* ── SECTION 2: Scenario Comparison ── */}
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -29058,10 +29043,10 @@ ${milestoneSnapshotHtml}
                   )}
                 </div>
               </div>
-            </>)}
+            )}
 
-                {/* Household sub-panel */}
-                {compareSubTab === "household" && (() => {
+            {/* ── HOUSEHOLD TAB ── */}
+            {activeTab === "household" && (() => {
               const fmt = v => `$${Math.round(v).toLocaleString()}`;
               const fmtK = v => `$${(v/1000).toFixed(0)}K`;
               const fmtM = v => `$${(v/1e6).toFixed(2)}M`;
@@ -29672,8 +29657,6 @@ ${milestoneSnapshotHtml}
                 </div>
               );
             })()}
-              </div>
-            )}
 
             {/* ── DATA TABLE TAB ── */}
             {activeTab === "table" && (
