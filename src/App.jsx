@@ -216,8 +216,6 @@ const LIFE_EVENT_TYPES = {
     description: "Annual outflow for child's education: enrichment, tuition, polytechnic, local university (~$30–40k/yr), or overseas university (~$60–150k/yr). Magnitude = annual cost ($). Deducted from private assets. Set age range to child's education years." },
   donation:         { label: "Charitable Giving",   color: "#fbbf24", icon: Heart,         isPoint: false,
     description: "Annual charitable donation to approved IPCs. 250% IRAS tax relief applies (reduces chargeable income). Magnitude = annual donation ($). Deducted from private assets / cash flow for the specified age range." },
-  barista_fire:     { label: "Barista FIRE",          color: "#10b981", icon: Briefcase,     isPoint: false,
-    description: "Semi-retirement with part-time work. Magnitude = monthly part-time gross income ($). Employee CPF mandatory contributions are scaled to the part-time salary; employer CPF is not modelled (gig / freelance arrangement). Income gap vs full salary is funded from private assets." },
 };
 // Convenience: draw source options for medical_crisis
 const DRAW_SOURCE_LABELS = {
@@ -810,11 +808,6 @@ const DEFAULT_INPUTS = {
   oaDrawdownStartAge: 0,         // 0 = disabled; age to begin drawing from OA (must be >= payoutAge)
   oaDrawdownMonthly: 0,          // monthly cash draw from OA (in addition to CPF LIFE)
   oaDrawdownFloor: 0,            // minimum OA balance to preserve (bequest floor); draw stops when OA hits this
-  // SRS rising equity glidepath (Sprint-5 Item 23)
-  srsGlidepathEnabled:        false,  // when true, blended equity/bond return used during SRS drawdown
-  srsGlidepathStartEquityPct: 30,     // % equities at drawdown start age (rises 2%/yr, capped 60%)
-  srsGlidepathEquityReturn:    7,     // equity return assumption (% p.a.)
-  srsBondReturn:               3,     // bond/conservative return assumption (% p.a.)
   // Property Monetisation
   propMonetiseEnabled: false,    // master toggle
   propMonetiseScheme: "downgrade", // "downgrade" | "lbs" | "shb"
@@ -1651,10 +1644,7 @@ const INPUT_LABELS = {
   ehgAmount: "Enhanced CPF Housing Grant", cpfHousingGrantResale: "CPF Housing Grant (Resale)", phgAmount: "Proximity Housing Grant", stepUpGrantAmount: "Step-Up CPF Grant",
   dpsMode: "DPS Mode", dpsAnnualPremium: "DPS Annual Premium", hpsAnnualPremium: "HPS Annual Premium",
   oaDrawdownStartAge: "OA Drawdown Start Age", oaDrawdownMonthly: "OA Monthly Drawdown",
-  oaDrawdownFloor: "OA Drawdown Floor",
-  srsGlidepathEnabled: "SRS Equity Glidepath", srsGlidepathStartEquityPct: "Starting Equity %",
-  srsGlidepathEquityReturn: "Equity Return (%)", srsBondReturn: "Bond Return (%)",
-  propMonetiseEnabled: "Prop Monetise",
+  oaDrawdownFloor: "OA Drawdown Floor", propMonetiseEnabled: "Prop Monetise",
   propMonetiseScheme: "Prop Scheme", propMonetiseAge: "Prop Monetise Age",
   propMonetiseCashProceeds: "Prop Cash Proceeds", propMonetiseRaTopup: "Prop RA Top-up",
   lbsMonthlyPayout: "LBS Monthly Payout", lbsPayoutEndAge: "LBS Payout End Age",
@@ -2096,32 +2086,12 @@ function runRSSEngine(inputs, {
   let srsBalance        = Number(inputs.srsBalance) || 0;
   let srsDrawdownApplied = startAge >= srsDrawStart;
   let srsAnnualDraw      = 0;
-  // Sprint-5 Item 23: rising equity glidepath (no-op when disabled — backward-compatible)
-  const srsGlidepath    = !!inputs.srsGlidepathEnabled;
-  const srsEqPct0       = Math.min(1, Math.max(0, (Number(inputs.srsGlidepathStartEquityPct) || 30) / 100));
-  const srsEqRet        = (Number(inputs.srsGlidepathEquityReturn) || 7) / 100;
-  const srsBndRet_gp    = (Number(inputs.srsBondReturn) || 3) / 100;
-  const srsYearReturn   = (age) => {
-    if (!srsGlidepath || age < srsDrawStart) return srsReturn;
-    const eqPct = Math.min(0.60, srsEqPct0 + 0.02 * (age - srsDrawStart));
-    return eqPct * srsEqRet + (1 - eqPct) * srsBndRet_gp;
-  };
-  const avgGlidepathReturn = (() => {
-    if (!srsGlidepath || !srsDrawdownApplied || srsDrawYears <= 0) return srsReturn;
-    let _gpSum = 0;
-    for (let _i = 0; _i < srsDrawYears; _i++) {
-      const _eqP = Math.min(0.60, srsEqPct0 + 0.02 * _i);
-      _gpSum += _eqP * srsEqRet + (1 - _eqP) * srsBndRet_gp;
-    }
-    return _gpSum / srsDrawYears;
-  })();
   // BUG-2 fix: when member is already past drawdown start age, the loop guard
   // (age === srsDrawStart && !srsDrawdownApplied) can never fire. Pre-compute
   // srsAnnualDraw here so the balance depletes correctly from the first year.
   if (srsDrawdownApplied && srsBalance > 0 && srsDrawYears > 0) {
-    const _pmt1 = avgGlidepathReturn;
-    srsAnnualDraw = _pmt1 > 0
-      ? Math.round(srsBalance * _pmt1 / (1 - Math.pow(1 + _pmt1, -srsDrawYears)))
+    srsAnnualDraw = srsReturn > 0
+      ? Math.round(srsBalance * srsReturn / (1 - Math.pow(1 + srsReturn, -srsDrawYears)))
       : Math.round(srsBalance / srsDrawYears);
   }
   const yearsTo55  = Math.max(0, 55 - startAge);
@@ -2221,13 +2191,6 @@ function runRSSEngine(inputs, {
     const leParentSupport  = activeEvents.filter(e => e.type === 'parent_support');
     const leEducation      = activeEvents.filter(e => e.type === 'education_expense');
     const leDonation       = activeEvents.filter(e => e.type === 'donation');
-    // Barista FIRE: part-time income with scaled employee-only CPF contributions
-    const leBaristaFire    = activeEvents.find(e => e.type === 'barista_fire');
-    const baristaMonthly   = leBaristaFire ? (Number(leBaristaFire.magnitude) || 0) : 0;
-    const baristaAnnual    = baristaMonthly * 12;
-    const baristaScale     = (baristaAnnual > 0 && (Number(inputs.salaryGross) || 0) > 0)
-      ? Math.min(1, baristaAnnual / Number(inputs.salaryGross))
-      : 0;
 
     // MMSS carry
     if (pendingMmssCarry > 0) { ma += pendingMmssCarry; yearGovGrants += pendingMmssCarry; yearInflow += pendingMmssCarry; totalInjected += pendingMmssCarry; pendingMmssCarry = 0; }
@@ -2266,25 +2229,17 @@ function runRSSEngine(inputs, {
     // Private assets
     let yearPrivDrawOut = 0;
     if (age > startAge) { privateAssets = privateAssets * (1 + privateGrowth) + privateSaving; } else { privateAssets += privateSaving; }
-    // Barista FIRE: credit take-home pay (part-time salary minus scaled employee CPF) to private assets
-    if (leBaristaFire && baristaAnnual > 0) {
-      const _baristaEmpCPF = Math.round((baseOA_Emp + baseSA_Emp + baseMA_Emp) * baristaScale);
-      const _baristaTakeHome = Math.max(0, baristaAnnual - _baristaEmpCPF);
-      privateAssets += _baristaTakeHome;
-      yearInflow    += _baristaTakeHome;
-    }
     if (overridePrivDrawdown > 0 && overridePrivDrawdownStart > 0 && age >= overridePrivDrawdownStart) {
       const actualPrivDraw = Math.min(overridePrivDrawdown, Math.max(0, privateAssets));
       privateAssets = Math.max(0, privateAssets - actualPrivDraw);
       yearPrivDrawOut = actualPrivDraw;
     }
 
-    // SRS (Item 23: glidepath-aware growth and PMT)
-    if (age > startAge) srsBalance = srsBalance * (1 + srsYearReturn(age));
+    // SRS
+    if (age > startAge) srsBalance = srsBalance * (1 + srsReturn);
     if (age >= 18 && age <= srsContribStop && age < srsDrawStart) srsBalance += srsContrib;
     if (age === srsDrawStart && !srsDrawdownApplied) {
-      const _pmt1r = avgGlidepathReturn;
-      srsAnnualDraw = srsDrawYears > 0 ? (_pmt1r > 0 ? Math.round(srsBalance * _pmt1r / (1 - Math.pow(1 + _pmt1r, -srsDrawYears))) : Math.round(srsBalance / srsDrawYears)) : srsBalance;
+      srsAnnualDraw = srsDrawYears > 0 ? (srsReturn > 0 ? Math.round(srsBalance * srsReturn / (1 - Math.pow(1 + srsReturn, -srsDrawYears))) : Math.round(srsBalance / srsDrawYears)) : srsBalance;
       srsDrawdownApplied = true;
     }
     if (srsDrawdownApplied && age >= srsDrawStart && age < srsDrawStart + srsDrawYears) { srsBalance = Math.max(0, srsBalance - srsAnnualDraw); }
@@ -2389,9 +2344,7 @@ function runRSSEngine(inputs, {
 
     // Contribution block
     if (age < contribStop && !isForeigner && !leEarlyRetire && !earlyRetireFired) {
-      // Barista FIRE: scale contributions to part-time salary; employer CPF not modelled
-      const _baristaGfScale = leBaristaFire ? baristaScale : salaryCutFactor;
-      const gf = leContribPaused ? 0 : computeGF(age, salaryBump) * _baristaGfScale;
+      const gf = leContribPaused ? 0 : computeGF(age, salaryBump) * salaryCutFactor;
       const mandatorySA_base = Math.round(baseSA_Emp * gf);
       if (isSEP) {
         const nti = Number(inputs.netTradeIncome) || 0;
@@ -3229,32 +3182,12 @@ function runProjectionEngine(inputs, {
   let srsBalance = Number(inputs.srsBalance) || 0;
   let srsDrawdownApplied = startAge >= srsDrawStart;
   let srsAnnualDraw = 0; // computed once at drawdown start age
-  // Sprint-5 Item 23: rising equity glidepath helpers (no-op when disabled)
-  const srsGlidepath_e2  = !!inputs.srsGlidepathEnabled;
-  const srsEqPct0_e2     = Math.min(1, Math.max(0, (Number(inputs.srsGlidepathStartEquityPct) || 30) / 100));
-  const srsEqRet_e2      = (Number(inputs.srsGlidepathEquityReturn) || 7) / 100;
-  const srsBndRet_e2     = (Number(inputs.srsBondReturn) || 3) / 100;
-  const srsYearReturn_e2 = (age) => {
-    if (!srsGlidepath_e2 || age < srsDrawStart) return srsReturn;
-    const eqPct = Math.min(0.60, srsEqPct0_e2 + 0.02 * (age - srsDrawStart));
-    return eqPct * srsEqRet_e2 + (1 - eqPct) * srsBndRet_e2;
-  };
-  const avgGpReturn_e2 = (() => {
-    if (!srsGlidepath_e2 || !srsDrawdownApplied || srsDrawYears <= 0) return srsReturn;
-    let _gpSum2 = 0;
-    for (let _i2 = 0; _i2 < srsDrawYears; _i2++) {
-      const _eqP2 = Math.min(0.60, srsEqPct0_e2 + 0.02 * _i2);
-      _gpSum2 += _eqP2 * srsEqRet_e2 + (1 - _eqP2) * srsBndRet_e2;
-    }
-    return _gpSum2 / srsDrawYears;
-  })();
   // BUG-2 fix: when member is already past drawdown start age, the loop guard
   // (age === srsDrawStart && !srsDrawdownApplied) can never fire. Pre-compute
   // srsAnnualDraw here so the balance depletes correctly from the first year.
   if (srsDrawdownApplied && srsBalance > 0 && srsDrawYears > 0) {
-    const _pmt2 = avgGpReturn_e2;
-    srsAnnualDraw = _pmt2 > 0
-      ? Math.round(srsBalance * _pmt2 / (1 - Math.pow(1 + _pmt2, -srsDrawYears)))
+    srsAnnualDraw = srsReturn > 0
+      ? Math.round(srsBalance * srsReturn / (1 - Math.pow(1 + srsReturn, -srsDrawYears)))
       : Math.round(srsBalance / srsDrawYears);
   }
 
@@ -3468,13 +3401,6 @@ function runProjectionEngine(inputs, {
     } else {
       privateAssets += privateSaving;
     }
-    // Barista FIRE: credit take-home pay to privateAssets
-    if (leBaristaFire && baristaAnnual > 0) {
-      const _baristaEmpCPF2   = Math.round((baseOA_Emp + baseSA_Emp + baseMA_Emp) * baristaScale);
-      const _baristaTakeHome2 = Math.max(0, baristaAnnual - _baristaEmpCPF2);
-      privateAssets += _baristaTakeHome2;
-      yearInflow    += _baristaTakeHome2;
-    }
     if (overridePrivDrawdown > 0 && overridePrivDrawdownStart > 0 && age >= overridePrivDrawdownStart) {
       const actualPrivDraw = Math.min(overridePrivDrawdown, Math.max(0, privateAssets));
       privateAssets = Math.max(0, privateAssets - actualPrivDraw);
@@ -3482,17 +3408,20 @@ function runProjectionEngine(inputs, {
     }
 
     // SRS accumulation and drawdown
-    // 1. Growth (Item 23: glidepath-aware; falls back to flat srsReturn when disabled)
-    if (age > startAge) srsBalance = srsBalance * (1 + srsYearReturn_e2(age));
+    // 1. Growth on existing balance (always, even during drawdown — on remaining balance)
+    if (age > startAge) srsBalance = srsBalance * (1 + srsReturn);
     // 2. Annual contribution (age 18+ only per IRAS rules; up to stop age, only before drawdown starts)
     if (age >= 18 && age <= srsContribStop && age < srsDrawStart) srsBalance += srsContrib;
     // 3. Drawdown: compute fixed annual draw at drawdown start, then deplete over srsDrawYears
     if (age === srsDrawStart && !srsDrawdownApplied) {
-      // PMT = PV × r / (1 − (1+r)^−n) using average blended glidepath return
-      const _pmt2r = avgGpReturn_e2;
+      // Divide balance evenly over the drawdown window — growth continues on remaining balance
+      // NX5 fix: use PMT annuity formula so the level annual draw exactly depletes the
+      // growing SRS balance over srsDrawYears — avoids the large forced-zero discontinuity
+      // that the old "balance / n" approach produced in the final year.
+      // PMT = PV × r / (1 − (1+r)^−n)  where PV = post-growth balance at drawdown start.
       srsAnnualDraw = srsDrawYears > 0
-        ? (_pmt2r > 0
-            ? Math.round(srsBalance * _pmt2r / (1 - Math.pow(1 + _pmt2r, -srsDrawYears)))
+        ? (srsReturn > 0
+            ? Math.round(srsBalance * srsReturn / (1 - Math.pow(1 + srsReturn, -srsDrawYears)))
             : Math.round(srsBalance / srsDrawYears))
         : srsBalance;
       srsDrawdownApplied = true;
@@ -3722,8 +3651,7 @@ function runProjectionEngine(inputs, {
     // leEarlyRetire treats this age as past contribStop — skip the entire contribution block.
     // C2 fix: also check earlyRetireFired so contributions stay blocked in all subsequent years.
     if (age < contribStop && !isForeigner && !leEarlyRetire && !earlyRetireFired) { // B1: foreigners have no CPF obligations
-      const _baristaGfScale2 = leBaristaFire ? baristaScale : 1;
-      const gf = leContribPaused ? 0 : computeGF(age, salaryBump) * _baristaGfScale2;
+      const gf = leContribPaused ? 0 : computeGF(age, salaryBump);
       // mandatorySA_base: used by SEP branch (always from user-entered baseSA_Emp).
       // Non-SEP branch computes its own mandatorySA_dyn below, which may come from
       // the PR G/G rate table when isPR && currentPrYear < 3.
@@ -7491,7 +7419,7 @@ function ReadinessTab({
 
       {/* ── SPRINT-2 ROW: Floor-and-Upside + Three-Bucket panel ── */}
       {swrAnalytics && target > 0 && (swrAnalytics.cpfMonthly > 0 || swrAnalytics.portfolioPA > 0) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
 
           {/* ── Item 18: Floor-and-Upside card ── */}
           <div style={cardStyle}>
@@ -7631,282 +7559,6 @@ function ReadinessTab({
               </div>
             </div>
           </div>
-
-          {/* ── Item 26: FIRE Numbers panel ── */}
-          {(() => {
-            const _ca26  = Number(inputs.currentAge) || 35;
-            const _r26   = (Number(inputs.portfolioAnnualReturn) || 6) / 100;
-            const _gap26 = swrAnalytics.annualGap || 0;
-            const _fire26  = _gap26 > 0 ? Math.round(_gap26 / 0.033) : 0;
-            const _coast26 = _fire26 > 0 && payoutAge65 > _ca26
-              ? Math.round(_fire26 / Math.pow(1 + _r26, payoutAge65 - _ca26))
-              : _fire26;
-            const _portPA26  = swrAnalytics.portfolioPA || 0;
-            const _hasCoast  = _coast26 > 0 && _portPA26 >= _coast26;
-            const _hasFIRE   = _fire26  > 0 && _portPA26 >= _fire26;
-            const _pct26     = _fire26 > 0 ? Math.min(100, Math.round((_portPA26 / _fire26) * 100)) : 0;
-            const _barColor26 = _hasFIRE ? 'var(--clr-green)' : _pct26 >= 60 ? 'var(--clr-amber)' : 'var(--clr-red)';
-            return (
-              <div style={cardStyle}>
-                <p style={{ ...labelStyle, marginBottom: 2 }}>FIRE numbers</p>
-                <p style={{ fontSize: 11, color: 'var(--text-subtle)', marginBottom: 10 }}>
-                  At 3.3% SWR · CPF LIFE floor offset · age {_ca26} → {payoutAge65}
-                </p>
-                {_gap26 > 0 ? (
-                  <>
-                    {/* FIRE Number */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>FIRE Number</span>
-                      <span style={{ fontSize: 16, fontWeight: 900, color: _hasFIRE ? 'var(--clr-green)' : 'var(--text-main)', fontFamily: 'monospace' }}>
-                        {formatCurrency(_fire26)}
-                      </span>
-                    </div>
-                    {/* Progress bar */}
-                    <div style={{ height: 8, borderRadius: 99, background: 'var(--border-subtle)', overflow: 'hidden', marginBottom: 6 }}>
-                      <div style={{ height: '100%', borderRadius: 99, background: _barColor26, width: `${_pct26}%`, transition: 'width 0.5s ease' }} />
-                    </div>
-                    <p style={{ fontSize: 10, color: 'var(--text-subtle)', marginBottom: 10, textAlign: 'right' }}>
-                      Portfolio at PA: {formatCurrency(_portPA26)} ({_pct26}% of FIRE target)
-                    </p>
-                    {/* Coast FIRE Number */}
-                    <div style={{ padding: '8px 10px', borderRadius: 8, marginBottom: 8,
-                      background: _hasCoast ? 'rgba(52,211,153,0.08)' : 'rgba(245,158,11,0.07)',
-                      border: `1px solid ${_hasCoast ? 'rgba(52,211,153,0.25)' : 'rgba(245,158,11,0.2)'}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: _hasCoast ? 'var(--clr-emerald)' : 'var(--clr-amber)' }}>
-                          {_hasCoast ? '🏄 Coast FIRE — achieved!' : 'Coast FIRE number'}
-                        </span>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', fontFamily: 'monospace' }}>
-                          {formatCurrency(_coast26)}
-                        </span>
-                      </div>
-                      <p style={{ fontSize: 10, color: 'var(--text-subtle)', margin: 0 }}>
-                        {_hasCoast
-                          ? `Your portfolio already exceeds the coast threshold — compound growth alone will reach your FIRE Number by age ${payoutAge65}.`
-                          : `Reach this amount by age ${_ca26} and let compound growth do the rest to age ${payoutAge65}.`}
-                      </p>
-                    </div>
-                    <p style={{ fontSize: 10, color: 'var(--text-subtle)', margin: 0, lineHeight: 1.5 }}>
-                      SWR 3.3% calibrated for Singapore 30-yr horizon. CPF LIFE ({formatCurrency(swrAnalytics.cpfMonthly)}/mo) offsets the portfolio draw requirement.
-                    </p>
-                  </>
-                ) : (
-                  <div style={{ padding: 12, borderRadius: 8, background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)', textAlign: 'center' }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--clr-green)', marginBottom: 4 }}>CPF LIFE covers 100% of target</p>
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>No private portfolio draw needed. Your FIRE Number is effectively $0.</p>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-        </div>
-      )}
-
-      {/* ── Sprint-3 Item 21: SWR Sensitivity Table ── */}
-      {swrAnalytics && Number(inputs.targetMonthlyIncome) > 0 && (
-        <details style={{ marginBottom: 16, borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-          <summary style={{ listStyle: 'none', outline: 'none', cursor: 'pointer',
-            padding: '10px 16px', background: 'var(--bg-input)',
-            display: 'flex', alignItems: 'center', gap: 8,
-            fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>
-            <span style={{ fontSize: 16 }}>📊</span>
-            SWR Sensitivity — Portfolio required at payout age {pa}
-            <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-subtle)', marginLeft: 4 }}>click to expand</span>
-          </summary>
-          <div style={{ padding: '14px 16px', background: 'var(--bg-base)' }}>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
-              Singapore-calibrated SWR values at 5% portfolio return. <strong style={{ color: 'var(--text-main)' }}>With CPF LIFE</strong> column uses your current plan's floor offset ({formatCurrency(swrAnalytics.cpfMonthly)}/mo).
-              The <strong style={{ color: 'var(--clr-teal)' }}>highlighted row</strong> matches your planning horizon (to age 95).
-            </p>
-            {(() => {
-              const _SWR_TABLE = [
-                { horizon: 'To age 85', years: 20, swr: 5.8 },
-                { horizon: 'To age 90', years: 25, swr: 5.0 },
-                { horizon: 'To age 95', years: 30, swr: 4.3 },
-                { horizon: 'To age 100', years: 35, swr: 3.8 },
-              ];
-              const _targetAnnual = Number(inputs.targetMonthlyIncome) * 12;
-              const _cpfAnnual    = swrAnalytics.cpfMonthly * 12;
-              const _gapAnnual    = Math.max(0, _targetAnnual - _cpfAnnual);
-              return (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-input)' }}>
-                        {['Horizon', 'SWR', 'Without CPF LIFE', 'With CPF LIFE', 'CPF LIFE saves'].map(h => (
-                          <th key={h} style={{ padding: '7px 10px', textAlign: h === 'Horizon' || h === 'SWR' ? 'left' : 'right',
-                            fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-                            borderBottom: '1px solid var(--border-subtle)' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {_SWR_TABLE.map(({ horizon, years: _yr, swr: _swr }) => {
-                        const _noFloor   = Math.round(_targetAnnual / (_swr / 100));
-                        const _withFloor = _gapAnnual > 0 ? Math.round(_gapAnnual / (_swr / 100)) : 0;
-                        const _saving    = _noFloor - _withFloor;
-                        const _isActive  = pa + 30 >= pa && _yr === 30; // highlight 95 (30yr) row
-                        return (
-                          <tr key={horizon} style={{
-                            background: _isActive ? 'rgba(13,148,136,0.07)' : 'transparent',
-                            borderLeft: _isActive ? '3px solid var(--clr-teal)' : '3px solid transparent',
-                          }}>
-                            <td style={{ padding: '7px 10px', fontWeight: _isActive ? 700 : 400, color: _isActive ? 'var(--clr-teal)' : 'var(--text-main)', borderBottom: '1px solid var(--border-subtle)' }}>{horizon}</td>
-                            <td style={{ padding: '7px 10px', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-subtle)', fontFamily: 'monospace' }}>{_swr}%</td>
-                            <td style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--text-main)', fontFamily: 'monospace', borderBottom: '1px solid var(--border-subtle)' }}>{formatCurrency(_noFloor)}</td>
-                            <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--clr-teal)', fontFamily: 'monospace', borderBottom: '1px solid var(--border-subtle)' }}>{_withFloor > 0 ? formatCurrency(_withFloor) : '—'}</td>
-                            <td style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--clr-green)', fontFamily: 'monospace', borderBottom: '1px solid var(--border-subtle)' }}>{_saving > 0 ? formatCurrency(_saving) : '—'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
-            <p style={{ fontSize: 10, color: 'var(--text-subtle)', marginTop: 10, lineHeight: 1.6 }}>
-              SWR values calibrated for Singapore longevity (female life expectancy 85.2, male 81.1) at 5% nominal portfolio return.
-              The US 4% Trinity Study assumed 30-year horizons — Singapore's longer longevity requires a more conservative base rate.
-              CPF LIFE (SC/PR, RA ≥ $60k) provides a guaranteed floor that structurally reduces the private portfolio draw requirement.
-            </p>
-          </div>
-        </details>
-      )}
-
-      {/* ── Sprint-4 Item 25: TDB + Item 22: SRS Tax Efficiency panels ── */}
-      {swrAnalytics && (swrAnalytics.tdb > 0 || swrAnalytics.srsAnnualDraw > 0) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 16 }}>
-
-          {/* ── TDB: CPF Organic Growth Target ── */}
-          {swrAnalytics.tdb > 0 && (
-            <div style={cardStyle}>
-              <p style={{ ...labelStyle, marginBottom: 2 }}>CPF organic growth target</p>
-              <p style={{ fontSize: 11, color: 'var(--text-subtle)', marginBottom: 10 }}>
-                Min SA today to reach FRS by age {pa} at 4%/yr — no RSTU top-ups needed beyond this
-              </p>
-              {/* TDB progress bar */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                <span style={{ fontSize: 20, fontWeight: 900, fontFamily: 'monospace',
-                  color: swrAnalytics.hasTdb ? 'var(--clr-green)' : 'var(--text-main)' }}>
-                  {swrAnalytics.tdbPct}%
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>of TDB threshold met</span>
-              </div>
-              <div style={{ height: 8, borderRadius: 99, background: 'var(--border-subtle)', overflow: 'hidden', marginBottom: 8 }}>
-                <div style={{ height: '100%', borderRadius: 99, transition: 'width 0.5s ease',
-                  background: swrAnalytics.hasTdb ? 'var(--clr-green)' : swrAnalytics.tdbPct >= 70 ? 'var(--clr-amber)' : 'var(--clr-red)',
-                  width: `${swrAnalytics.tdbPct}%` }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px',
-                  borderRadius: 6, background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Current SA balance</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)', fontFamily: 'monospace' }}>
-                    {formatCurrency(swrAnalytics.saBal_tdb)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px',
-                  borderRadius: 6, background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>TDB threshold</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--clr-teal)', fontFamily: 'monospace' }}>
-                    {formatCurrency(swrAnalytics.tdb)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px',
-                  borderRadius: 6, background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>FRS at age {pa}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                    {formatCurrency(swrAnalytics.frsAtPA_tdb)}
-                  </span>
-                </div>
-              </div>
-              {swrAnalytics.hasTdb ? (
-                <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)' }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--clr-green)', margin: '0 0 2px' }}>✓ TDB achieved — RSTU optional</p>
-                  <p style={{ fontSize: 10, color: 'var(--text-subtle)', margin: 0, lineHeight: 1.5 }}>
-                    Your SA will grow to at least FRS by age {pa} through interest alone. Additional RSTU top-ups still benefit from tax relief but are no longer required for FRS adequacy.
-                  </p>
-                </div>
-              ) : (
-                <p style={{ fontSize: 10, color: 'var(--text-subtle)', lineHeight: 1.5, margin: 0 }}>
-                  Gap: {formatCurrency(Math.max(0, swrAnalytics.tdb - swrAnalytics.saBal_tdb))} more in SA today would eliminate the need for future RSTU top-ups to hit FRS.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* ── Item 22: SRS Tax Efficiency ── */}
-          {swrAnalytics.srsAnnualDraw > 0 && (
-            <div style={cardStyle}>
-              <p style={{ ...labelStyle, marginBottom: 2 }}>SRS tax efficiency</p>
-              <p style={{ fontSize: 11, color: 'var(--text-subtle)', marginBottom: 10 }}>
-                50% concession applies from age 63 · compare draw speeds
-              </p>
-              {/* Current plan row */}
-              <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8,
-                background: 'rgba(13,148,136,0.07)', border: '1px solid rgba(13,148,136,0.18)' }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--clr-teal)', margin: '0 0 6px' }}>
-                  Standard draw (10 yr)
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Annual SRS draw</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: 'var(--text-main)' }}>
-                    {formatCurrency(swrAnalytics.srsAnnualDraw)}/yr
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Chargeable (50%)</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: 'var(--text-main)' }}>
-                    {formatCurrency(swrAnalytics.srsChargeableAnnual)}/yr
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Annual tax</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
-                    color: swrAnalytics.srsAnnualTax === 0 ? 'var(--clr-green)' : 'var(--clr-amber)' }}>
-                    {swrAnalytics.srsAnnualTax === 0 ? 'Nil' : formatCurrency(swrAnalytics.srsAnnualTax)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Effective rate</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)' }}>
-                    {swrAnalytics.effectiveSrsTaxRate}% (marginal {swrAnalytics.marginalSrsRate}%)
-                  </span>
-                </div>
-              </div>
-              {/* Fast draw comparison */}
-              {swrAnalytics.srsDrawFast5 > 0 && (
-                <div style={{ padding: '8px 10px', borderRadius: 8,
-                  background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--clr-amber)', margin: '0 0 6px' }}>
-                    Accelerated draw (5 yr)
-                  </p>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Annual SRS draw</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: 'var(--text-main)' }}>
-                      {formatCurrency(swrAnalytics.srsDrawFast5)}/yr
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Annual tax</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
-                      color: swrAnalytics.srsTaxFast5 > swrAnalytics.srsAnnualTax ? 'var(--clr-red)' : 'var(--clr-green)' }}>
-                      {swrAnalytics.srsTaxFast5 === 0 ? 'Nil' : formatCurrency(swrAnalytics.srsTaxFast5)}
-                      {swrAnalytics.srsTaxFast5 > swrAnalytics.srsAnnualTax
-                        ? ` (+${formatCurrency(swrAnalytics.srsTaxFast5 - swrAnalytics.srsAnnualTax)}/yr)`
-                        : swrAnalytics.srsTaxFast5 < swrAnalytics.srsAnnualTax
-                        ? ` (−${formatCurrency(swrAnalytics.srsAnnualTax - swrAnalytics.srsTaxFast5)}/yr)`
-                        : ' (same)'}
-                    </span>
-                  </div>
-                </div>
-              )}
-              <p style={{ fontSize: 10, color: 'var(--text-subtle)', margin: '8px 0 0', lineHeight: 1.5 }}>
-                OA cash withdrawals and Singapore capital gains are tax-exempt. Only SRS drawdowns contribute to chargeable income.
-              </p>
-            </div>
-          )}
 
         </div>
       )}
@@ -8821,8 +8473,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     return () => { window.removeEventListener('resize', onVpResize); clearTimeout(timer); };
   }, []);
   const [showPresets, setShowPresets] = useState(false);
-  const [tableSubTab,    setTableSubTab]    = useState("projection");
-  const [ledgerExpanded, setLedgerExpanded] = useState(false);
+  const [tableSubTab, setTableSubTab] = useState("projection");
   const [showDataTableGuide, setShowDataTableGuide] = useState(false);
   const [showWisEligibility, setShowWisEligibility] = useState(false); // WIS eligibility panel toggle — must be top-level (Rules of Hooks)
   // Goal Simulator state (Strategy tab → Goal sub-tab)
@@ -8883,7 +8534,6 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   // Reduces visible field count from ~60 to ~15 on first load. Returning users get their
   // last-saved localStorage state restored exactly — no disruption.
   const DEFAULT_OPEN_SECTIONS = ["profile", "cpfBalances", "contribs"];
-  const [quickStartMode, setQuickStartMode] = useState(true); // Sprint-6 Item 31: sidebar progressive disclosure
   const [openSections, setOpenSections] = useState(() => {
     try {
       const saved = localStorage.getItem(SECTIONS_STORAGE_KEY);
@@ -9280,15 +8930,6 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       if ((Number(inp.vcSaTopup) || 0) > 0 || (Number(inp.vc3aCash) || 0) > 0 || (Number(inp.vcMaCash) || 0) > 0)
         errs.vc3aCash = "Foreigners cannot make voluntary CPF top-ups — VC3A, RSTU, and VCMA fields have no effect on the projection.";
     }
-    // D3: minimum age gate — CPF accounts not meaningfully applicable below 16
-    const caD3 = Number(inp.currentAge) || 0;
-    if (caD3 > 0 && caD3 < 16 && !isForeigner)
-      errs.currentAge = "CPF accounts are generally not issued below age 16. The projection may not be meaningful at this age.";
-    // D3: CPF top-ups (RSTU, VC3A, VCMA) require the member to be at least 16
-    if (!isForeigner && caD3 > 0 && caD3 < 16 &&
-        ((Number(inp.vcSaTopup)||0) > 0 || (Number(inp.vc3aCash)||0) > 0 || (Number(inp.vcMaCash)||0) > 0))
-      errs.vc3aCash = "CPF top-ups (RSTU, VC3A, VCMA) require the member to be at least 16 years old.";
-
     const sb = Number(inp.salaryBonus) || 0;
     if (sb < 0 || sb > 2000000) errs.salaryBonus = "0 – $2,000,000";
     // Growth rates: -50% to 50%
@@ -10223,7 +9864,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
 
   // A-01/I-21: compute chargeable income with full IRAS reliefs for accurate marginal rate
   {
-    const _empRate_t   = (currentAge_ui) <= 55 ? 0.20 : (currentAge_ui) <= 60 ? 0.18 : (currentAge_ui) <= 65 ? 0.125 : (currentAge_ui) <= 70 ? 0.075 : 0.05; // CPF 2026 rates
+    const _empRate_t   = (currentAge_ui) <= 55 ? 0.20 : (currentAge_ui) <= 60 ? 0.13 : (currentAge_ui) <= 65 ? 0.075 : 0.05;
     const _cappedOW_t  = Math.min(Number(inputs.salaryGross) || 0, 8000);
     const _awCeil_t    = Math.max(0, 102000 - _cappedOW_t * 12);
     const _cpfRel_t    = _cappedOW_t * _empRate_t * 12 + Math.min(Number(inputs.salaryBonus) || 0, _awCeil_t) * _empRate_t;
@@ -11175,10 +10816,6 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         setDebouncedInputs(safeIn);
         setInputErrors({}); // BUG-4 fix: clear stale red validation borders on load
         lastSavedRef.current = JSON.stringify(safeIn);
-        // Sprint-6 Item 31: reveal Full View if imported profile has advanced fields
-        if ((safeIn.srsBalance||0)>0 || (safeIn.portfolioBalance||0)>0 ||
-            (safeIn.housingOutflow||0)>0 || (safeIn.lifeEvents||[]).length>0)
-          setQuickStartMode(false);
         // Restore optional UI state — each wrapped individually so one bad field
         // doesn't prevent the rest of the profile from loading
         if (p.inputs) {
@@ -13142,39 +12779,9 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       : 0;
     const bucket2Annual = cpfMonthly * 12 + srsAnnualDraw;
 
-    // TDB (Targeted Depletion Benchmark): min SA balance needed TODAY to reach FRS by
-    // payoutAge via 4% CPF interest alone — no voluntary top-ups required beyond this point.
-    // If saBalance >= tdb → "SA organic growth covers FRS — RSTU no longer needed."
-    const rsGrowth_tdb = (Number(debouncedInputs.retirementSumGrowth) || 3) / 100;
-    const frsAtPA_tdb  = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth_tdb, Math.max(0, pa - 2026)));
-    const ca_tdb       = Number(debouncedInputs.currentAge) || 35;
-    const saBal_tdb    = Number(debouncedInputs.saBalance)  || 0;
-    const tdbYears     = Math.max(0, pa - ca_tdb);
-    const tdb          = tdbYears > 0 ? Math.round(frsAtPA_tdb / Math.pow(1.04, tdbYears)) : frsAtPA_tdb;
-    const tdbPct       = tdb > 0 ? Math.min(100, Math.round((saBal_tdb / tdb) * 100)) : 0;
-    const hasTdb       = saBal_tdb >= tdb && tdb > 0;
-
-    // Tax on SRS drawdown (Item 22): 50% concession from age 63
-    const srsDrawAge   = Math.max(Number(debouncedInputs.srsDrawdownStartAge) || 63, 63);
-    const srsChargeableAnnual = srsDrawAge >= 63 ? Math.round(srsAnnualDraw * 0.5) : srsAnnualDraw;
-    const srsAnnualTax        = computeIrasTax(srsChargeableAnnual);
-    const effectiveSrsTaxRate = srsAnnualDraw > 0 ? Math.round((srsAnnualTax / srsAnnualDraw) * 1000) / 10 : 0;
-    const marginalSrsRate     = Math.round(getMarginalRate(srsChargeableAnnual) * 100);
-    // Tax sensitivity: 5-year fast draw vs 10-year standard draw
-    const _r22 = (Number(debouncedInputs.srsReturnRate) || 4) / 100;
-    const srsDrawFast5  = srsAtPA > 0 && _r22 > 0
-      ? Math.round(srsAtPA * _r22 / (1 - Math.pow(1 + _r22, -5)))
-      : (srsAtPA > 0 ? Math.round(srsAtPA / 5) : 0);
-    const srsTaxFast5   = computeIrasTax(Math.round(srsDrawFast5 * 0.5));
-
     return { oaAtPA, srsAtPA, privAtPA, portfolioPA, cpfMonthly, gapMonthly, annualGap,
              requiredSWR, sustainYears, depletionAge,
-             bucket1Liquid, bucket1Months, srsAnnualDraw, bucket2Annual,
-             // TDB fields (Item 25)
-             frsAtPA_tdb, tdb, tdbPct, hasTdb, saBal_tdb,
-             // Tax sequencing fields (Item 22)
-             srsChargeableAnnual, srsAnnualTax, effectiveSrsTaxRate, marginalSrsRate,
-             srsDrawFast5, srsTaxFast5 };
+             bucket1Liquid, bucket1Months, srsAnnualDraw, bucket2Annual };
   }, [projectionByAge, payoutAge65, highlightPlan, lifePlans, debouncedInputs]);
 
   // Baseline projection — mandatory contributions only, all voluntary inputs zeroed.
@@ -13931,9 +13538,8 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   const sorrData = useMemo(() => {
     if (!showSorr) return null;
     const pa        = payoutAge65;
-    const privAtPA   = accumulationByAge.get(pa)?.privateAssets || 0;
-    const srsAtPaSOR = swrAnalytics?.srsAtPA || 0;
-    if (privAtPA === 0 && srsAtPaSOR === 0) return { hasData: false };
+    const privAtPA  = accumulationByAge.get(pa)?.privateAssets || 0;
+    if (privAtPA === 0) return { hasData: false };
 
     const normalRate = (Number(debouncedInputs.privateAssetGrowthRate) || 0) / 100;
     const saving     = (Number(debouncedInputs.annualPrivateSaving)    || 0);
@@ -13975,35 +13581,6 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     // Impact Summary so SORR appears even when no active decumulation strategy.
     const peakPrivGap = rows.length > 0 ? Math.max(0, ...rows.map(r => r.privGap || 0)) : 0;
 
-    // ── Sprint-4 Item 24: SRS SORR extension ──
-    // Track SRS balance under the same crash scenario — same crash rate, same duration.
-    const srsRet_sor    = (Number(debouncedInputs.srsReturnRate) || 4) / 100;
-    const srsDrawAmt_s  = swrAnalytics?.srsAnnualDraw || 0;
-    const srsDrawStart_s = Math.max(Number(debouncedInputs.srsDrawdownStartAge) || 63, 63);
-    let sorrSrsBalance  = srsAtPaSOR;
-    const srsRows       = [];
-    for (let age = pa; age <= maxPA; age++) {
-      const baseSrs    = accumulationByAge.get(age)?.srsBalance || 0;
-      const yearInRet  = age - pa;
-      const sApplied   = yearInRet < sorrCrashYears ? crashRate : srsRet_sor;
-      if (age > pa && srsAtPaSOR > 0) {
-        const inDraw  = age >= srsDrawStart_s;
-        const draw    = inDraw && sorrSrsBalance > 0 ? srsDrawAmt_s : 0;
-        sorrSrsBalance = Math.max(0, sorrSrsBalance * (1 + sApplied) - draw);
-      }
-      srsRows.push({
-        age,
-        baseSrs,
-        sorrSrs:  Math.round(sorrSrsBalance),
-        srsGap:   Math.max(0, Math.round(baseSrs - sorrSrsBalance)),
-        isCrash:  yearInRet < sorrCrashYears,
-      });
-    }
-    const sorrSrsDepletionAge = srsAtPaSOR > 0
-      ? (srsRows.find(r => r.sorrSrs <= 0 && r.baseSrs > 0)?.age || null)
-      : null;
-    const srsTotalGap = Math.round(srsRows.reduce((s, r) => s + (r.srsGap || 0), 0));
-
     return {
       hasData: true,
       rows,
@@ -14013,15 +13590,9 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       peakPrivGap,
       privAtPA,
       crashEndAge: pa + sorrCrashYears,
-      // SRS SORR fields
-      srsRows,
-      sorrSrsDepletionAge,
-      srsTotalGap,
-      srsAtPaSOR,
     };
   }, [showSorr, sorrCrashYears, sorrCrashReturn, strategyChartData, accumulationByAge,
-      payoutAge65, debouncedInputs.privateAssetGrowthRate, debouncedInputs.annualPrivateSaving,
-      debouncedInputs.srsReturnRate, debouncedInputs.srsDrawdownStartAge, swrAnalytics, maxPA]);
+      payoutAge65, debouncedInputs.privateAssetGrowthRate, debouncedInputs.annualPrivateSaving, maxPA]);
 
   // ── F2: Inflation Stress Data ─────────────────────────────────────────────
   // Shows real purchasing-power erosion of CPF LIFE monthly payout under a higher
@@ -14180,7 +13751,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     };
     const ca = Number(debouncedInputs.currentAge) || 35;
     // SC/PR Year 3+ employee CPF rate by age bracket
-    const empRate    = ca <= 55 ? 0.20 : ca <= 60 ? 0.18 : ca <= 65 ? 0.125 : ca <= 70 ? 0.075 : 0.05; // CPF 2026 rates
+    const empRate    = ca <= 55 ? 0.20 : ca <= 60 ? 0.13 : ca <= 65 ? 0.075 : 0.05;
     // OW: capped at $8,000/mo ordinary wage ceiling
     const cappedOW       = Math.min(grossMonthly, 8000);
     const cpfEmployeeOW  = Math.round(cappedOW * empRate);
@@ -15145,7 +14716,6 @@ ${childrenHtml}
   <div class="toc-row"><span>5. Year-by-Year Projection</span><span style="color:#64748b">Key ages at 5-year intervals · CPF Rate % · XIRR yield · private assets · payout age highlighted</span></div>
   <div class="toc-row"><span>6. Cashflow Ledger</span><span style="color:#64748b">Annual inflows · outflows · life events in/out · net flow — matches Data Table</span></div>
   <div class="toc-row"><span>7. Sensitivity Analysis</span><span style="color:#64748b">Housing outflow × SA top-up grid</span></div>
-  ${(swrAnalytics?.annualGap > 0 || swrAnalytics?.tdb > 0 || swrAnalytics?.srsAnnualDraw > 0) ? '<div class="toc-row"><span>Decumulation Analytics</span><span style="color:#64748b">Floor &amp; Upside · Retirement Buckets · FIRE numbers · CPF organic growth · SRS tax efficiency</span></div>' : ''}
   ${isRSSPdf ? '<div class="toc-row"><span>8. RSS Drawdown Analysis</span><span style="color:#64748b">RA drawdown curve · depletion age · CPF LIFE migration · per-year table</span></div>' : ''}
   ${hasSRSPdf ? `<div class="toc-row"><span>${isRSSPdf ? '9' : '8'}. SRS Details</span><span style="color:#64748b">Supplementary Retirement Scheme trajectory</span></div>` : ''}
   ${scenarioA ? `<div class="toc-row"><span>${(isRSSPdf && hasSRSPdf) ? '10' : (isRSSPdf || hasSRSPdf) ? '9' : '8'}. Scenario Comparison</span><span style="color:#64748b">Scenario A vs current — KPI diff table · CPF trajectory chart · key input changes</span></div>` : ''}
@@ -15697,118 +15267,6 @@ ${(() => {
 <p style="font-size:7.5px;color:#94a3b8;margin-top:4px">All other inputs held constant. Each cell is an independent projection run. Rows: housing outflow ±${fc(3000)}/yr from base ${fc(baseH)}. Columns: RSTU top-up ${baseSATopup > 0 ? `±${fc(2000)}/yr from base ${fc(baseSATopup)}` : `+${fc(2000)} / +${fc(4000)} (base is $0 — no negative variation possible)`}.</p>
 </div>
 
-<!-- ═══════════════════ DECUMULATION ANALYTICS (Sprint-9) ══════════════════ -->
-${(swrAnalytics?.annualGap > 0 || swrAnalytics?.tdb > 0 || swrAnalytics?.srsAnnualDraw > 0) ? (() => {
-  const _sa = swrAnalytics;
-  const _target = (Number(inputs.targetMonthlyIncome)||0);
-  const _pa = payoutAge65;
-  const _ca = Number(inputs.currentAge)||35;
-  const _r  = (Number(inputs.portfolioAnnualReturn)||6)/100;
-  // FIRE inline (same formula as Sprint-3 Item 26)
-  const _fireNum   = _sa.annualGap > 0 ? Math.round(_sa.annualGap / 0.033) : 0;
-  const _coastNum  = _fireNum > 0 && _pa > _ca ? Math.round(_fireNum / Math.pow(1+_r, _pa-_ca)) : _fireNum;
-  const _firePct   = _fireNum > 0 ? Math.min(100, Math.round((_sa.portfolioPA/_fireNum)*100)) : 0;
-  const _hasCoast  = _coastNum > 0 && _sa.portfolioPA >= _coastNum;
-  const _hasFire   = _fireNum  > 0 && _sa.portfolioPA >= _fireNum;
-  const _cpfCovPct = _target > 0 && _sa.cpfMonthly > 0 ? Math.min(100,Math.round((_sa.cpfMonthly/_target)*100)) : 0;
-  return \`
-<div class="page-break"></div>
-<div class="sec-hdr sec-hdr-teal"><span class="sec-ico">📊</span><span class="sec-title" style="color:#0f766e">Decumulation Analytics</span></div>
-<p style="font-size:11px;color:#64748b;margin:0 0 14px">Floor &amp; Upside · Retirement Buckets · FIRE Numbers · CPF Organic Growth Target · SRS Tax Efficiency — all at payout age \${_pa}</p>
-
-<!-- Floor and Upside -->
-\${_target > 0 ? \`<div style="margin-bottom:14px;padding:12px 14px;border-radius:8px;border:1px solid #ccfbf1;background:#f0fdfa">
-  <p style="font-size:11px;font-weight:800;color:#0f766e;margin:0 0 8px;text-transform:uppercase;letter-spacing:.06em">Floor and Upside — CPF LIFE vs Portfolio Gap</p>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:11px;color:#64748b">CPF LIFE floor (chosen plan)</span>
-        <span style="font-size:13px;font-weight:800;color:#0f766e">\${fc(_sa.cpfMonthly)}/mo</span>
-      </div>
-      <div style="height:8px;border-radius:4px;background:#e2e8f0;overflow:hidden;margin-bottom:4px">
-        <div style="height:100%;border-radius:4px;background:#0f766e;width:\${_cpfCovPct}%"></div>
-      </div>
-      <p style="font-size:10px;color:#64748b;margin:0">Covers \${_cpfCovPct}% of \${fc(_target)}/mo target — guaranteed for life (SC/PR)</p>
-    </div>
-    <div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:11px;color:#64748b">Portfolio gap (must be funded)</span>
-        <span style="font-size:13px;font-weight:800;color:\${_sa.gapMonthly>0?'#b45309':'#059669'}">\${_sa.gapMonthly>0?fc(_sa.gapMonthly)+'/mo':'Fully covered'}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between">
-        <span style="font-size:11px;color:#64748b">Required SWR</span>
-        <span style="font-size:12px;font-weight:700;color:\${(_sa.requiredSWR||0)<=3.5?'#059669':(_sa.requiredSWR||0)<=5?'#b45309':'#dc2626'}">\${_sa.requiredSWR!=null?_sa.requiredSWR+'%/yr':'—'}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between">
-        <span style="font-size:11px;color:#64748b">Portfolio sustains</span>
-        <span style="font-size:12px;font-weight:700;color:#1e293b">\${_sa.sustainYears===Infinity?'Indefinitely':_sa.sustainYears!=null?'~'+_sa.sustainYears+' yrs'+(_sa.depletionAge?' (to ~'+_sa.depletionAge+')':''):'—'}</span>
-      </div>
-    </div>
-  </div>
-</div>\` : ''}
-
-<!-- Retirement Buckets -->
-<div style="margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-  <div style="padding:10px;border-radius:8px;border:1px solid #ccfbf1;background:#f0fdfa">
-    <p style="font-size:10px;font-weight:800;color:#0f766e;margin:0 0 4px;text-transform:uppercase">Bucket 1 · Liquid</p>
-    <p style="font-size:14px;font-weight:900;color:#1e293b;margin:0 0 2px">\${fc(_sa.bucket1Liquid)}</p>
-    <p style="font-size:10px;color:#64748b;margin:0">OA above floor\${_sa.bucket1Months!=null?' · ~'+_sa.bucket1Months+' mo coverage':''}</p>
-  </div>
-  <div style="padding:10px;border-radius:8px;border:1px solid #dbeafe;background:#eff6ff">
-    <p style="font-size:10px;font-weight:800;color:#1d4ed8;margin:0 0 4px;text-transform:uppercase">Bucket 2 · Stable</p>
-    <p style="font-size:14px;font-weight:900;color:#1e293b;margin:0 0 2px">\${fc(Math.round(_sa.bucket2Annual/12))}/mo</p>
-    <p style="font-size:10px;color:#64748b;margin:0">CPF LIFE + SRS draw</p>
-  </div>
-  <div style="padding:10px;border-radius:8px;border:1px solid #fef3c7;background:#fffbeb">
-    <p style="font-size:10px;font-weight:800;color:#b45309;margin:0 0 4px;text-transform:uppercase">Bucket 3 · Growth</p>
-    <p style="font-size:14px;font-weight:900;color:#1e293b;margin:0 0 2px">\${fc(_sa.portfolioPA)}</p>
-    <p style="font-size:10px;color:#64748b;margin:0">SRS \${fc(_sa.srsAtPA)} + Private \${fc(_sa.privAtPA)}</p>
-  </div>
-</div>
-
-<!-- FIRE Numbers -->
-\${_fireNum > 0 ? \`<div style="margin-bottom:14px;padding:12px 14px;border-radius:8px;border:1px solid \${_hasFire?'#bbf7d0':'#fef3c7'};background:\${_hasFire?'#f0fdf4':'#fffbeb'}">
-  <p style="font-size:11px;font-weight:800;color:\${_hasFire?'#059669':'#b45309'};margin:0 0 8px;text-transform:uppercase;letter-spacing:.06em">FIRE Numbers · 3.3% SWR · CPF LIFE offset</p>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div>
-      <p style="font-size:11px;color:#64748b;margin:0 0 2px">FIRE Number</p>
-      <p style="font-size:18px;font-weight:900;color:\${_hasFire?'#059669':'#1e293b'};margin:0 0 4px;font-family:monospace">\${fc(_fireNum)}</p>
-      <div style="height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden">
-        <div style="height:100%;border-radius:3px;background:\${_hasFire?'#059669':_firePct>=60?'#b45309':'#dc2626'};width:\${_firePct}%"></div>
-      </div>
-      <p style="font-size:10px;color:#64748b;margin:4px 0 0">Portfolio \${fc(_sa.portfolioPA)} · \${_firePct}% of target</p>
-    </div>
-    <div>
-      <p style="font-size:11px;color:#64748b;margin:0 0 2px">Coast FIRE number (today)</p>
-      <p style="font-size:18px;font-weight:900;color:\${_hasCoast?'#059669':'#1e293b'};margin:0 0 4px;font-family:monospace">\${fc(_coastNum)}</p>
-      <p style="font-size:10px;color:\${_hasCoast?'#059669':'#64748b'};margin:0">\${_hasCoast?'🏄 Achieved — portfolio will grow to FIRE number by age '+_pa+' unaided':'Reach this amount now to coast to FIRE by age '+_pa}</p>
-    </div>
-  </div>
-</div>\` : ''}
-
-<!-- TDB -->
-\${_sa.tdb > 0 ? \`<div style="margin-bottom:14px;padding:12px 14px;border-radius:8px;border:1px solid \${_sa.hasTdb?'#bbf7d0':'#e2e8f0'};background:\${_sa.hasTdb?'#f0fdf4':'#f8fafc'}">
-  <p style="font-size:11px;font-weight:800;color:#0f766e;margin:0 0 8px;text-transform:uppercase;letter-spacing:.06em">CPF Organic Growth Target (TDB)</p>
-  <p style="font-size:10px;color:#64748b;margin:0 0 6px">Min SA balance today to reach FRS (\${fc(_sa.frsAtPA_tdb)} at age \${_pa}) via 4%/yr interest alone — no further RSTU top-ups needed.</p>
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-    <div><p style="font-size:10px;color:#64748b;margin:0">Current SA</p><p style="font-size:13px;font-weight:700;margin:0;font-family:monospace">\${fc(_sa.saBal_tdb)}</p></div>
-    <div><p style="font-size:10px;color:#64748b;margin:0">TDB threshold</p><p style="font-size:13px;font-weight:700;color:#0f766e;margin:0;font-family:monospace">\${fc(_sa.tdb)}</p></div>
-    <div><p style="font-size:10px;color:#64748b;margin:0">Progress</p><p style="font-size:13px;font-weight:700;color:\${_sa.hasTdb?'#059669':_sa.tdbPct>=70?'#b45309':'#dc2626'};margin:0">\${_sa.tdbPct}%\${_sa.hasTdb?' ✓ RSTU optional':''}</p></div>
-  </div>
-</div>\` : ''}
-
-<!-- SRS Tax Efficiency -->
-\${_sa.srsAnnualDraw > 0 ? \`<div style="padding:12px 14px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc">
-  <p style="font-size:11px;font-weight:800;color:#334155;margin:0 0 8px;text-transform:uppercase;letter-spacing:.06em">SRS Tax Efficiency — 50% concession from age 63</p>
-  <table style="width:100%;border-collapse:collapse;font-size:11px">
-    <tr style="background:#e2e8f0"><th style="padding:5px 8px;text-align:left">Draw scenario</th><th style="padding:5px 8px;text-align:right">Annual draw</th><th style="padding:5px 8px;text-align:right">Chargeable (50%)</th><th style="padding:5px 8px;text-align:right">Annual tax</th><th style="padding:5px 8px;text-align:right">Eff. rate</th></tr>
-    <tr style="border-bottom:1px solid #e2e8f0"><td style="padding:5px 8px;color:#0f766e;font-weight:700">Standard (10 yr)</td><td style="padding:5px 8px;text-align:right;font-family:monospace">\${fc(_sa.srsAnnualDraw)}</td><td style="padding:5px 8px;text-align:right;font-family:monospace">\${fc(_sa.srsChargeableAnnual)}</td><td style="padding:5px 8px;text-align:right;font-family:monospace;color:\${_sa.srsAnnualTax===0?'#059669':'#b45309'}">\${_sa.srsAnnualTax===0?'Nil':fc(_sa.srsAnnualTax)}</td><td style="padding:5px 8px;text-align:right">\${_sa.effectiveSrsTaxRate}%</td></tr>
-    \${_sa.srsDrawFast5 > 0 ? \`<tr><td style="padding:5px 8px;color:#b45309;font-weight:700">Accelerated (5 yr)</td><td style="padding:5px 8px;text-align:right;font-family:monospace">\${fc(_sa.srsDrawFast5)}</td><td style="padding:5px 8px;text-align:right;font-family:monospace">\${fc(Math.round(_sa.srsDrawFast5*0.5))}</td><td style="padding:5px 8px;text-align:right;font-family:monospace;color:\${_sa.srsTaxFast5>_sa.srsAnnualTax?'#dc2626':'#059669'}">\${_sa.srsTaxFast5===0?'Nil':fc(_sa.srsTaxFast5)+(_sa.srsTaxFast5>_sa.srsAnnualTax?' (+'+fc(_sa.srsTaxFast5-_sa.srsAnnualTax)+'/yr)':'')}</td><td style="padding:5px 8px;text-align:right">—</td></tr>\` : ''}
-  </table>
-  <p style="font-size:10px;color:#64748b;margin:6px 0 0">OA cash withdrawals and Singapore capital gains are tax-exempt. Only SRS drawdowns contribute to chargeable income.</p>
-</div>\` : ''}
-\`;
-})() : ''}
 <!-- ═══════════════════ 8. SRS DETAILS (if applicable) ══════════════════ -->
 ${/* RSS section — only rendered when isRSSPdf (CPF Scheme = RSS). Shows RA drawdown curve, depletion age,
    migration analysis, and per-year drawdown table. Replaces the CPF LIFE payout analysis for RSS members. */
@@ -16069,82 +15527,80 @@ ${milestoneSnapshotHtml}
           --clr-lime: #a3e635;   /* Mandatory Contributions header + body accents */
         }
         .theme-light {
-          /* ── Sprint-7 Item C5: warm stone / neutral palette ─────────────────
-             Replaces the cold blue-grey base with a warm off-white system.
-             All contrast ratios verified WCAG AA on #FAFAF8 base.          ── */
-          --bg-base:       #FAFAF8;                   /* warm stone-50 */
-          --bg-panel:      #FFFFFF;                   /* clean white panels */
-          --bg-input:      #F5F5F4;                   /* warm stone-100 */
-          --bg-muted:      rgba(245,245,244,0.96);
-          --bg-panel-muted:rgba(255,255,255,0.92);
-          --tooltip-bg:    rgba(255,255,255,0.99);
-          --tooltip-text:  #1C1917;                   /* stone-900 */
-          --tooltip-border:rgba(28,25,23,0.14);
-          --tooltip-label: #44403C;                   /* stone-700 */
-          /* ── Borders ── */
-          --border-subtle: #D6D3D1;                   /* stone-300 */
-          --border-strong: #A8A29E;                   /* stone-400 */
-          /* ── Text — warm neutrals, all ≥ 4.5:1 on #FAFAF8 ── */
-          --text-main:      #1C1917;                  /* 19.1:1 ✓ */
-          --text-bright:    #0C0A09;                  /* stone-950 */
-          --text-highlight: #292524;                  /* stone-800 */
-          --text-muted:     #57534E;                  /* 7.2:1 ✓ */
-          --text-subtle:    #78716C;                  /* 4.8:1 ✓ AA Large */
-          --header-bg: rgba(250,250,248,0.98);
-          /* ── Charts ── */
-          --chart-grid: #D6D3D1;
-          --chart-text: #44403C;
+          /* ── Backgrounds: reduced luminance ~15% to ease eye strain ── */
+          --bg-base: #c4d2de;
+          --bg-panel: #d8e4f0;
+          --bg-input: #b8c8d4;
+          --bg-muted: rgba(196,210,222,0.96);
+          --bg-panel-muted: rgba(216,228,240,0.92);
+          --tooltip-bg: rgba(216,228,240,0.99);
+          --tooltip-text: #0d1520;
+          --tooltip-border: rgba(20,40,70,0.25);
+          --tooltip-label: #2a4260;
+          /* ── Borders: stronger contrast on darker base ── */
+          --border-subtle: #7a96ae;
+          --border-strong: #4a6680;
+          /* ── Text: unchanged — already passes WCAG AA ── */
+          --text-main: #162033;
+          --text-bright: #08111e;
+          --text-highlight: #0d2a4a;
+          --text-muted: #2e4560;
+          --text-subtle: #2a4565;
+          --header-bg: rgba(181,200,218,0.98);
+          /* ── Charts: deeper gridlines for contrast on darker bg ── */
+          --chart-grid: #8aa4bc;
+          --chart-text: #1e3350;
           /* ── Hero / KPI panel ── */
-          --hero-left-bg:   #F5F5F4;
-          --hero-right-bg:  #FAFAF8;
-          --hero-border:    #D6D3D1;
-          --ctrl-on-text:   #ffffff;
-          --btn-on-accent:  #ffffff;
-          --ctrl-active-bg: #0F766E;                  /* teal-700 · 5.5:1 on #FFF ✓ */
-          --hero-text:      #1C1917;
-          --hero-label:     #44403C;
-          --hero-card-bg:   rgba(28,25,23,0.05);
-          --hero-acct-bg:   rgba(28,25,23,0.04);
-          --hero-acct-border:rgba(28,25,23,0.12);
-          --hero-ring-bg:   rgba(28,25,23,0.08);
-          --hero-divider:   rgba(28,25,23,0.12);
-          --hero-arrow:     #292524;
-          /* ── Shadows — softer on white ── */
-          --shadow-modal:       0 25px 50px -12px rgba(0,0,0,0.15);
-          --shadow-panel:       0 1px 4px rgba(0,0,0,0.06);
-          --shadow-sticky:      2px 0 4px rgba(0,0,0,0.06);
-          --shadow-mobile-menu: 0 6px 18px rgba(0,0,0,0.10);
-          --shadow-kpi:         0 1px 3px rgba(0,0,0,0.08);
-          /* ── Accent tokens — WCAG AA on warm white ── */
-          --clr-blue:    #1D4ED8;  --clr-blue-rgb:    29,78,216;
-          --clr-green:   #059669;  --clr-green-rgb:   5,150,105;    /* emerald-600 */
-          --clr-emerald: #059669;  --clr-emerald-rgb: 5,150,105;
-          --clr-amber:   #B45309;  --clr-amber-rgb:   180,83,9;
-          --clr-amber2:  #B45309;  --clr-amber2-rgb:  180,83,9;
-          --clr-amber3:  #B45309;  --clr-amber3-rgb:  180,83,9;
-          --clr-purple:  #7C3AED;  --clr-purple-rgb:  124,58,237;
-          --clr-purple2: #7C3AED;  --clr-purple2-rgb: 124,58,237;
-          --clr-violet:  #7C3AED;  --clr-violet-rgb:  124,58,237;
-          --clr-violet2: #8B5CF6;
-          --clr-red:     #DC2626;  --clr-red-rgb:     220,38,38;    /* brand red */
-          --clr-orange:  #EA580C;  --clr-orange-rgb:  234,88,12;
-          --clr-indigo:  #4F46E5;
-          --clr-indigo2: #4F46E5;  --clr-indigo2-rgb: 79,70,229;
-          --clr-cyan:    #0891B2;  --clr-cyan-rgb:    8,145,178;
-          --clr-blue2:   #1E40AF;  --clr-blue2-rgb:   30,64,175;
-          --clr-slate:   #44403C;
-          --clr-teal:    #0F766E;  --clr-teal-rgb:    15,118,110;   /* primary action */
-          --chart-cursor: rgba(28,25,23,0.12);
-          --tooltip-border-inline: rgba(28,25,23,0.14);
-          --tooltip-shadow-inline: 0 8px 24px rgba(0,0,0,0.12);
-          --code-bg:    #F5F5F4;
-          --code-text:  #1C1917;
-          --share-url-color: #0F766E;
-          --mc-total-border: rgba(28,25,23,0.12);
-          --mc-total-color:  #1C1917;
-          /* ── Section-header accents — WCAG AA on #FAFAF8 ── */
-          --clr-sky:  #0369A1;  /* sky-700 · 5.9:1 ✓ */
-          --clr-lime: #16A34A;  /* green-600 · 4.9:1 ✓ */
+          --hero-left-bg: #a8bece;
+          --hero-right-bg: #bccedd;
+          --hero-border: #7a9ab2;
+          --ctrl-on-text: #ffffff;   /* active toggle btn text on --border-strong (#4a6680) = 5.99:1 ✓ */
+          --btn-on-accent: #ffffff;  /* text on bright solid accent buttons (dark-toned in light mode) */
+          --ctrl-active-bg: #1e40af; /* active toggle btn bg — deep blue, 5.3:1 on --bg-panel #d8e4f0 */
+          --hero-text: #0a1c2e;
+          --hero-label: #1e3248;
+          --hero-card-bg: rgba(10,28,46,0.09);
+          --hero-acct-bg: rgba(10,28,46,0.07);
+          --hero-acct-border: rgba(10,28,46,0.20);
+          --hero-ring-bg: rgba(10,28,46,0.14);
+          --hero-divider: rgba(10,28,46,0.20);
+          --hero-arrow: #0d2a4a;
+          /* ── Shadows & interactive ── */
+          --shadow-modal: 0 25px 50px -12px rgba(0,0,0,0.25);
+          --shadow-panel: 0 2px 8px rgba(0,0,0,0.12);
+          --shadow-sticky: 2px 0 5px rgba(0,0,0,0.11);
+          --shadow-mobile-menu: 0 6px 18px rgba(0,0,0,0.16);
+          --shadow-kpi: 0 1px 4px rgba(0,0,0,0.12);
+
+          /* ── Accent colour tokens — WCAG AA on new darker backgrounds ── */
+          --clr-blue:         #1d4ed8;   --clr-blue-rgb:      29,78,216;
+          --clr-green:        #065f46;   --clr-green-rgb:     6,95,70;
+          --clr-emerald:      #065f46;   --clr-emerald-rgb:   6,95,70;
+          --clr-amber:        #92400e;   --clr-amber-rgb:     146,64,14;
+          --clr-amber2:       #92400e;   --clr-amber2-rgb:    146,64,14;
+          --clr-amber3:       #92400e;   --clr-amber3-rgb:    146,64,14;
+          --clr-purple:       #5b21b6;   --clr-purple-rgb:    91,33,182;
+          --clr-purple2:      #5b21b6;   --clr-purple2-rgb:   91,33,182;
+          --clr-violet:       #5b21b6;   --clr-violet-rgb:    91,33,182;
+          --clr-violet2:      #6d28d9;
+          --clr-red:          #b91c1c;   --clr-red-rgb:       185,28,28;
+          --clr-orange:       #c2410c;   --clr-orange-rgb:    194,65,12;
+          --clr-indigo:       #4338ca;
+          --clr-indigo2:      #4338ca;   --clr-indigo2-rgb:   67,56,202;
+          --clr-cyan:         #0e7490;   --clr-cyan-rgb:      14,116,144;
+          --clr-blue2:        #1e40af;   --clr-blue2-rgb:     30,64,175;
+          --clr-slate:        #334155;
+          --chart-cursor: rgba(20,40,70,0.22);
+          --tooltip-border-inline: rgba(20,40,70,0.25);
+          --tooltip-shadow-inline: 0 8px 24px rgba(0,0,0,0.18);
+          --code-bg: #b8c8d4;
+          --code-text: #0d2a4a;
+          --share-url-color: #065f46;
+          --mc-total-border: rgba(20,40,70,0.20);
+          --mc-total-color: #08111e;
+          /* ── Section-header accent colours — WCAG AA on new darker base ── */
+          --clr-sky:  #0059a0;   /* 4.72:1 on #c4d2de — was #0284c7 (3.19:1 fail) */
+          --clr-lime: #166534;   /* 4.62:1 on #c4d2de — was #4d7c0f (3.89:1 fail) */
         }
         /* ══════════════════════════════════════════════════════════════
            LIGHT MODE SPECIFIC OVERRIDES
@@ -19257,18 +18713,6 @@ ${milestoneSnapshotHtml}
 
           </div>
           <div className={`cpf-sidebar-inner${sidebarOpen ? "" : " sidebar-collapsed"}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {/* Sprint-6 Item 31: Quick Start / Full View mode toggle */}
-            <div style={{ display: "flex", gap: 4, padding: "6px 8px", background: "var(--bg-panel)", borderRadius: 12, border: "1px solid var(--border-subtle)", margin: "2px 0 2px", alignItems: "center" }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-subtle)", textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 4, flexShrink: 0 }}>View</span>
-              {[{ id: true, label: "Quick Start" }, { id: false, label: "Full" }].map(({ id, label }) => (
-                <button key={String(id)} onClick={() => setQuickStartMode(id)}
-                  style={{ flex: 1, padding: "4px 0", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", transition: "all 0.15s",
-                    background: quickStartMode === id ? "var(--clr-sky)" : "transparent",
-                    color: quickStartMode === id ? "#fff" : "var(--text-muted)" }}>
-                  {label}
-                </button>
-              ))}
-            </div>
             {/* ── FHD COL 1: Profile & Contributions ──────────────────────────
                 Visible as a column only at ≥1920px / data-mode="fhd".
                 At smaller sizes this wrapper is an invisible flex-column passthrough. */}
@@ -21404,8 +20848,8 @@ ${milestoneSnapshotHtml}
                 Passthrough flex-column on ≤1919px; grid column on ≥1920px. */}
             <div className="sidebar-col sidebar-col-2">
               <div className={`sidebar-col-body${colOpen[2] ? "" : " col-collapsed"}`}>
-            {/* Outflows — Layer 2 */}
-            <div style={{ position: "relative", display: quickStartMode ? "none" : undefined }}>
+            {/* Outflows */}
+            <div style={{ position: "relative" }}>
             {isForeigner && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
                 <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
@@ -21413,8 +20857,8 @@ ${milestoneSnapshotHtml}
             )}
             <div style={{ opacity: isForeigner ? 0.2 : 1, pointerEvents: isForeigner ? "none" : "auto", background: "var(--bg-panel)", border: "1px solid var(--border-subtle)", borderRadius: 16, overflow: "hidden" }}>
 
-            {/* Inflows — Layer 2 */}
-            <div ref={topupsSectionRef} style={{ position: "relative", display: quickStartMode ? "none" : undefined }}>
+            {/* Inflows */}
+            <div ref={topupsSectionRef} style={{ position: "relative" }}>
             {isForeigner && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
                 <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
@@ -21956,8 +21400,8 @@ ${milestoneSnapshotHtml}
             </div>{/* /outflows inner */}
             </div>{/* /outflows gate wrapper */}
 
-            {/* CPF Transfers — Layer 2 */}
-            <div style={{ position: "relative", display: quickStartMode ? "none" : undefined }}>
+            {/* CPF Transfers */}
+            <div style={{ position: "relative" }}>
             {isForeigner && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.55)", pointerEvents: "all" }}>
                 <div style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(var(--clr-amber-rgb),0.4)", borderRadius: 10, padding: "8px 18px", fontSize: 12, color: "var(--clr-amber)", fontWeight: 700 }}>🔒 CPF scheme — not available to foreigners</div>
@@ -22665,8 +22109,6 @@ ${milestoneSnapshotHtml}
 
             {/* ── FHD COL 3: Property, Private Assets & Life Events ──
                 Passthrough flex-column on ≤1919px; grid column on ≥1920px. */}
-            {/* sidebar-col-3 — entirely Layer 2, hidden in Quick Start mode */}
-            {!quickStartMode && (
             <div className="sidebar-col sidebar-col-3">
               <div className={`sidebar-col-body${colOpen[3] ? "" : " col-collapsed"}`}>
             {/* ── Property — Advanced Setting ────────────────────────────────── */}
@@ -23586,45 +23028,6 @@ ${milestoneSnapshotHtml}
                           {inputErrors.srsDrawdownYears && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.srsDrawdownYears}</p>}
                         </div>
                       </div>
-                      {/* Sprint-5 Item 23: SRS Equity Glidepath optional sub-section */}
-                      {Number(inputs.srsDrawdownStartAge) > 0 && (
-                        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10,
-                          background: 'rgba(14,165,233,0.05)', border: '1px solid rgba(14,165,233,0.15)' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                            fontSize: 13, fontWeight: 600, color: 'var(--text-bright)', marginBottom: inputs.srsGlidepathEnabled ? 12 : 0 }}>
-                            <input type="checkbox" name="srsGlidepathEnabled"
-                              checked={!!inputs.srsGlidepathEnabled}
-                              onChange={handleInputChange}
-                              style={{ width: 14, height: 14, accentColor: 'var(--clr-sky)', cursor: 'pointer' }} />
-                            Rising Equity Glidepath
-                            <TooltipBox id="t-srsgp" text="Starts decumulation with a conservative equity allocation that rises 2%/yr (capped at 60%), mitigating sequence-of-returns risk in early retirement while CPF LIFE covers the income floor. The blended return is used for both the PMT calculation and annual growth." />
-                          </label>
-                          {inputs.srsGlidepathEnabled && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                              {[
-                                { name: 'srsGlidepathStartEquityPct', label: 'Start Equity %', suffix: '%', tip: 'Equity allocation at drawdown start age. Rises 2%/yr, capped at 60%.' },
-                                { name: 'srsGlidepathEquityReturn',   label: 'Equity Return', suffix: '% p.a.', tip: 'Expected annual return on the equity portion.' },
-                                { name: 'srsBondReturn',              label: 'Bond Return',   suffix: '% p.a.', tip: 'Expected annual return on the bond/conservative portion.' },
-                              ].map(({ name, label, suffix, tip }) => (
-                                <div key={name}>
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'flex', gap: 4, alignItems: 'center' }}>
-                                    {label} <TooltipBox id={`t-${name}`} text={tip} />
-                                  </div>
-                                  <input type="text" inputMode="decimal" name={name}
-                                    value={inputs[name]}
-                                    onChange={handleInputChange} onBlur={handleBlur}
-                                    onFocus={(e) => e.target.select()}
-                                    style={{ width: '100%', padding: '6px 10px', background: 'var(--bg-muted)',
-                                      border: '1px solid rgba(14,165,233,0.3)', borderRadius: 6,
-                                      color: 'var(--text-bright)', fontSize: 13, outline: 'none',
-                                      fontFamily: 'monospace', boxSizing: 'border-box' }} />
-                                  <p style={{ fontSize: 10, color: 'var(--text-subtle)', margin: '2px 0 0' }}>{suffix}</p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
                       {/* Live SRS projection summary */}
                       {(Number(inputs.srsBalance) > 0 || Number(inputs.srsAnnualContribution) > 0) && (() => {
                         const bal = Number(inputs.srsBalance) || 0;
@@ -23959,7 +23362,6 @@ ${milestoneSnapshotHtml}
                 Hidden for foreigners: no CPF account means no RA, no FRS, no gap concept. */}
               </div>{/* /sidebar-col-3-body */}
             </div>{/* /sidebar-col-3 */}
-            )}{/* /quickStartMode col-3 guard */}
           </div>
 
 
@@ -26393,41 +25795,6 @@ ${milestoneSnapshotHtml}
                     </details>
                   </>);
                 })()}
-                {/* ── Sprint-3 Item 20: Guardrails status badge ── */}
-                {showMonteCarlo && monteCarloData?.rows?.length > 0 && (() => {
-                  const _mcRowG  = monteCarloData.rows.find(r => r.age === payoutAge65);
-                  const _p10G    = _mcRowG?.p10 || 0;
-                  const _p90G    = _mcRowG?.p90 || 0;
-                  const _totalG  = projectionByAge?.get(payoutAge65)?.total || 0;
-                  const _loG     = Math.round(_p10G * 0.8);
-                  const _hiG     = Math.round(_p90G * 1.2);
-                  if (!_p10G || !_p90G) return null;
-                  const _isBelow = _totalG < _loG;
-                  const _isAbove = _totalG > _hiG;
-                  const _gColor  = _isBelow ? "var(--clr-red)" : _isAbove ? "var(--clr-green)" : "var(--clr-amber)";
-                  const _gLabel  = _isBelow
-                    ? "⬇ Below lower guardrail — consider reducing portfolio withdrawals"
-                    : _isAbove
-                    ? "⬆ Above upper guardrail — you can afford to spend more"
-                    : "✓ Within guardrails — base projection is in the safe corridor";
-                  return (
-                    <div style={{ marginBottom: 12, padding: "10px 16px", borderRadius: 12,
-                      border: `1px solid ${_gColor}33`, background: `${_gColor}11`,
-                      display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: _gColor, flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 12, fontWeight: 700, color: _gColor, margin: "0 0 2px" }}>Guardrails Strategy</p>
-                        <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>{_gLabel}</p>
-                      </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <p style={{ fontSize: 10, color: "var(--text-subtle)", margin: "0 0 1px" }}>Lower / Upper threshold</p>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-main)", fontFamily: "monospace", margin: 0 }}>
-                          {formatCurrency(_loG)} / {formatCurrency(_hiG)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })()}
                 {/* ── Chart controls — title + mode buttons, moved directly above chart ── */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
                   <div>
@@ -26521,17 +25888,6 @@ ${milestoneSnapshotHtml}
                       if (showBaseline && baselineProjection) {
                         const blByAge = new Map((baselineProjection.rows || baselineProjection).map ? (baselineProjection.rows || baselineProjection).map(b => [b.age, b]) : []);
                         linesData = linesData.map(row => { const bl = blByAge.get(row.age); return bl ? { ...row, baselineTotal: bl.baselineTotal } : row; });
-                      }
-
-                      // ── Sprint-3 Item 27: Coast FIRE declining curve overlay ────
-                      if (swrAnalytics && swrAnalytics.annualGap > 0) {
-                        const _fireNum27 = Math.round(swrAnalytics.annualGap / 0.033);
-                        const _r27       = (Number(debouncedInputs.portfolioAnnualReturn) || 6) / 100;
-                        const _coast27   = (age) => age <= payoutAge65
-                          ? Math.round(_fireNum27 / Math.pow(1 + _r27, payoutAge65 - age))
-                          : undefined;
-                        stackedData = stackedData.map(row => ({ ...row, coastCurve: _coast27(row.age) }));
-                        linesData   = linesData.map(row   => ({ ...row, coastCurve: _coast27(row.age) }));
                       }
 
                       // ── BALA_CURVE cohort-average overlay ───────────────────────
@@ -26646,22 +26002,7 @@ ${milestoneSnapshotHtml}
                           <Area isAnimationActive={false} type="monotone" dataKey="ma" stackId="1" stroke="#059669" strokeWidth={2} fill="url(#accMaGrad)" name="MA" />
                           <Area isAnimationActive={false} type="monotone" dataKey="sa" stackId="1" connectNulls={false} stroke="#f59e0b" strokeWidth={2} fill="url(#accSaGrad)" name="SA (pre-55)" />
                           <Area isAnimationActive={false} type="monotone" dataKey="ra" stackId="1" connectNulls={false} stroke="var(--clr-purple2)" strokeWidth={2} fill="url(#accRaGrad)" name="RA (from 55)" />
-                          {showMonteCarlo && monteCarloData && (() => {
-                            const _mcRow20 = monteCarloData.rows?.find(r => r.age === payoutAge65);
-                            const _p10_20  = _mcRow20?.p10 || 0;
-                            const _p90_20  = _mcRow20?.p90 || 0;
-                            const _lo20    = Math.round(_p10_20 * 0.8);
-                            const _hi20    = Math.round(_p90_20 * 1.2);
-                            return (
-                              <>
-                                <Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="var(--clr-violet2)" strokeWidth={0.5} strokeDasharray="2 2" fill="var(--clr-purple2)" fillOpacity={0.18} name="MC Band (P10-P90)" legendType="square" />
-                                <Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" />
-                                {_lo20 > 0 && <ReferenceLine y={_lo20} stroke="var(--clr-red)" strokeWidth={1} strokeDasharray="6 3" label={{ value: "↓ Guardrail: reduce draw", position: "insideTopLeft", fill: "var(--clr-red)", fontSize: 10 }} />}
-                                {_hi20 > 0 && <ReferenceLine y={_hi20} stroke="var(--clr-green)" strokeWidth={1} strokeDasharray="6 3" label={{ value: "↑ Guardrail: spend more", position: "insideBottomLeft", fill: "var(--clr-green)", fontSize: 10 }} />}
-                                {swrAnalytics?.annualGap > 0 && <Line isAnimationActive={false} type="monotone" dataKey="coastCurve" stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Coast FIRE threshold" legendType="dashed" />}
-                              </>
-                            );
-                          })()}
+                          {showMonteCarlo && monteCarloData && <><Area isAnimationActive={false} type="monotone" dataKey="mcP90" stroke="var(--clr-violet2)" strokeWidth={0.5} strokeDasharray="2 2" fill="var(--clr-purple2)" fillOpacity={0.18} name="MC Band (P10-P90)" legendType="square" /><Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" /></>}
                           {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={2} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
                           {inputs.showBalaCurve && <Line isAnimationActive={false} type="monotone" dataKey="balaCurve" stroke="var(--clr-amber)" strokeWidth={1.5} strokeDasharray="3 3" dot={false} name="CPF Board cohort avg" />}
                         </AreaChart>
@@ -26694,19 +26035,7 @@ ${milestoneSnapshotHtml}
                           <Line isAnimationActive={false} type="monotone" dataKey="sa"    stroke="#f59e0b"            strokeWidth={2}   dot={false} connectNulls={false} name="SA (pre-55)" />
                           <Line isAnimationActive={false} type="monotone" dataKey="ra"    stroke="var(--clr-purple2)" strokeWidth={2}   dot={false} connectNulls={false} name="RA (from 55)" />
                           <Line isAnimationActive={false} type="monotone" dataKey="total" stroke="var(--clr-slate)"  strokeWidth={1.5} dot={false} connectNulls={false} name="Total CPF" strokeDasharray="6 3" />
-                          {showMonteCarlo && monteCarloData && (() => {
-                            const _mcRow20L = monteCarloData.rows?.find(r => r.age === payoutAge65);
-                            const _p10_20L  = _mcRow20L?.p10 || 0;
-                            const _p90_20L  = _mcRow20L?.p90 || 0;
-                            return (
-                              <>
-                                <Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" />
-                                {_p10_20L > 0 && <ReferenceLine y={Math.round(_p10_20L * 0.8)} stroke="var(--clr-red)" strokeWidth={1} strokeDasharray="6 3" label={{ value: "↓ Guardrail", position: "insideTopLeft", fill: "var(--clr-red)", fontSize: 10 }} />}
-                                {_p90_20L > 0 && <ReferenceLine y={Math.round(_p90_20L * 1.2)} stroke="var(--clr-green)" strokeWidth={1} strokeDasharray="6 3" label={{ value: "↑ Guardrail", position: "insideBottomLeft", fill: "var(--clr-green)", fontSize: 10 }} />}
-                                {swrAnalytics?.annualGap > 0 && <Line isAnimationActive={false} type="monotone" dataKey="coastCurve" stroke="var(--clr-emerald)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Coast FIRE threshold" />}
-                              </>
-                            );
-                          })()}
+                          {showMonteCarlo && monteCarloData && <Line isAnimationActive={false} type="monotone" dataKey="mcP50" stroke="var(--clr-violet)" strokeWidth={2} strokeDasharray="4 3" dot={false} name="MC Median (P50)" />}
                           {showBaseline && baselineProjection && <Line isAnimationActive={false} type="monotone" dataKey="baselineTotal" stroke="var(--clr-slate)" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="Mandatory-only baseline" />}
                           {inputs.showBalaCurve && <Line isAnimationActive={false} type="monotone" dataKey="balaCurve" stroke="var(--clr-amber)" strokeWidth={1.5} strokeDasharray="3 3" dot={false} name="CPF Board cohort avg" />}
                         </LineChart>
@@ -27495,37 +26824,6 @@ ${milestoneSnapshotHtml}
                       );
                     })}
 
-                    {/* Sprint-7 Item D2: Family milestone markers — marriage, children, education, parent support */}
-                    {(() => {
-                      const _fam = [];
-                      const _mar = Number(debouncedInputs.marriageAge) || 0;
-                      if (_mar > 0) _fam.push({ age: _mar, label: `Marriage (${_mar})`, color: '#ec4899', Icon: Heart });
-                      (debouncedInputs.childrenData || []).forEach((child, ci) => {
-                        const _ba = Number(child.birthAge) || 0;
-                        if (_ba > 0) _fam.push({ age: _ba, label: `Child ${ci + 1} born (${_ba})`, color: '#8b5cf6', Icon: Baby });
-                        const _ea = Number(child.educationStartAge) || 0;
-                        if (_ea > 0) _fam.push({ age: _ea, label: `Child ${ci + 1} education (${_ea})`, color: '#0ea5e9', Icon: GraduationCap });
-                      });
-                      const _psAge = Number(debouncedInputs.parentSupportStartAge) || 0;
-                      const _psMo  = Number(debouncedInputs.parentSupportMonthly)  || 0;
-                      if (_psAge > 0 && _psMo > 0) _fam.push({ age: _psAge, label: `Parent support (${_psAge})`, color: '#f97316', Icon: Users });
-                      const _visible = _fam.filter(m => m.age >= ganttStart && m.age <= ganttEnd);
-                      if (_visible.length === 0) return null;
-                      return (
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                          <div style={{ width: 'clamp(90px,22vw,160px)', flexShrink: 0, fontSize: 11, fontWeight: 600, color: '#ec4899', paddingRight: 10, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Family</div>
-                          <div style={{ flex: 1, position: 'relative', height: 18, background: 'var(--bg-panel)', borderRadius: 4, border: '1px solid rgba(236,72,153,0.2)' }}>
-                            {_visible.map(({ age: _age, label: _lbl, color: _clr, Icon: _Ic }) => (
-                              <div key={_lbl} title={_lbl}
-                                style={{ position: 'absolute', top: '50%', transform: 'translate(-50%,-50%)', width: 14, height: 14, borderRadius: '50%', background: _clr, border: '2px solid var(--bg-muted)', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', ...ganttDot(_age) }}>
-                                <_Ic style={{ width: 8, height: 8, color: '#fff' }} />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
                     {/* Phase 2 salary Gantt row — point dot at salaryPhaseAge */}
                     {(() => {
                       const p2Age = inputs.salaryPhaseAge !== "" && inputs.salaryPhaseAge != null && Number(inputs.salaryPhaseAge) !== 0
@@ -28048,19 +27346,6 @@ ${milestoneSnapshotHtml}
                       level as life-chart-header, not nested inside it, so the SC/PR fragment
                       can include all subsequent sibling sections without invalid JSX nesting. */}
                 </div>
-                {/* Sprint-7 Item B6: CPF LIFE eligibility note — SC/PR only, RA ≥ $60k, born 1958+ */}
-                {!isForeigner && (
-                  <div style={{ display: "flex", gap: 8, padding: "7px 12px", borderRadius: 10, marginBottom: 2,
-                    background: "rgba(var(--clr-teal-rgb),0.06)", border: "1px solid rgba(var(--clr-teal-rgb),0.2)",
-                    flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: "var(--clr-teal)", flexShrink: 0, marginRight: 4 }}>CPF LIFE eligibility</span>
-                    {["SC / PR only", "RA ≥ $60,000 for auto-enrolment", "Born 1958 or after"].map(note => (
-                      <span key={note} style={{ fontSize: 11, color: "var(--text-muted)",
-                        padding: "2px 8px", background: "var(--bg-input)", borderRadius: 20,
-                        border: "1px solid var(--border-subtle)" }}>{note}</span>
-                    ))}
-                  </div>
-                )}
                 {/* Gate all SC/PR content. Foreigners → locked SRS redirect panel.
                     Previously the chart, breakeven cards, and sensitivity table were shown
                     with RA=0, producing misleading "Beyond Age 95" crossover cards and $0
@@ -29779,9 +29064,6 @@ ${milestoneSnapshotHtml}
                       </div>
                       {/* Export bar — matches projection table style */}
                       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-                        <button onClick={() => setLedgerExpanded(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: ledgerExpanded ? "rgba(var(--clr-sky-rgb),0.15)" : "var(--bg-input)", color: ledgerExpanded ? "var(--clr-sky)" : "var(--text-muted)", border: `1px solid ${ledgerExpanded ? "rgba(var(--clr-sky-rgb),0.3)" : "var(--border-subtle)"}`, cursor: "pointer", marginRight: 8 }}>
-                          {ledgerExpanded ? "▲ Compact view" : "▼ Show all columns"}
-                        </button>
                         <button onClick={handleExportLedgerCSV} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: "rgba(var(--clr-emerald-rgb),0.15)", color: "var(--clr-green)", border: "1px solid rgba(var(--clr-emerald-rgb),0.3)", cursor: "pointer" }}>
                           <Download style={{ width: 11, height: 11 }} />Download CSV
                         </button>
@@ -29794,22 +29076,10 @@ ${milestoneSnapshotHtml}
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "monospace" }}>
                           <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                             <tr style={{ background: "var(--bg-base)", borderBottom: "2px solid var(--border-strong)" }}>
-                              {/* Anchor col 1: Age — always visible */}
-                              <th style={{ padding: "6px 8px", textAlign: "center", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", position: "sticky", left: 0, zIndex: 20, background: "var(--bg-base)", boxShadow: "var(--shadow-sticky)" }}>Age</th>
-                              {/* Intermediate inflow breakdown — hidden in compact mode */}
-                              {ledgerExpanded && ["Mandatory", "Voluntary", "Grants/WIS", "OA Int.", is55Plus ? "RA Int." : "SA Int.", "MA Int."].map(h => (
-                                <th key={h} style={{ padding: "6px 8px", textAlign: "right", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>{h}</th>
+                              {["Age", "Mandatory", "Voluntary", "Grants/WIS", "OA Int.", is55Plus ? "RA Int." : "SA Int.", "MA Int.", "▶ Total In", "Housing Out", "Medical Out", "OA Draw", "Edu Loan Out", "Loved One Out", "CPFIS Out", "Rent Exp Out", "Events In", "Events Out", "▶ Total Out", "Net Flow"].map((h, i) => (
+                                <th key={h} style={{ padding: "6px 8px", textAlign: i === 0 ? "center" : "right", fontSize: 12, fontWeight: 800, color: i === 15 ? "var(--clr-emerald)" : i === 16 ? "var(--clr-purple)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap",
+                                  ...(i === 0 ? { position: "sticky", left: 0, zIndex: 20, background: "var(--bg-base)", boxShadow: "var(--shadow-sticky)" } : {}) }}>{h}</th>
                               ))}
-                              {/* Anchor col 2: Total In — always visible */}
-                              <th style={{ padding: "6px 8px", textAlign: "right", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>▶ Total In</th>
-                              {/* Intermediate outflow breakdown — hidden in compact mode */}
-                              {ledgerExpanded && ["Housing Out", "Medical Out", "OA Draw", "Edu Loan Out", "Loved One Out", "CPFIS Out", "Rent Exp Out", "Events In", "Events Out"].map((h, i) => (
-                                <th key={h} style={{ padding: "6px 8px", textAlign: "right", fontSize: 12, fontWeight: 800, color: i === 7 ? "var(--clr-emerald)" : i === 8 ? "var(--clr-purple)" : "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>{h}</th>
-                              ))}
-                              {/* Anchor col 3: Total Out — always visible */}
-                              <th style={{ padding: "6px 8px", textAlign: "right", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>▶ Total Out</th>
-                              {/* Anchor col 4: Net Flow — always visible */}
-                              <th style={{ padding: "6px 8px", textAlign: "right", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Net Flow</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -29836,14 +29106,14 @@ ${milestoneSnapshotHtml}
                               return (
                                 <tr key={row.age} style={{ borderBottom: "1px solid var(--border-subtle)", background: isPayout ? "rgba(var(--clr-emerald-rgb),0.08)" : i % 2 === 1 ? "rgba(255,255,255,0.01)" : "transparent" }}>
                                   <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: isPayout ? 900 : 600, color: isPayout ? "var(--clr-emerald)" : "var(--text-highlight)", position: "sticky", left: 0, zIndex: 5, background: isPayout ? "rgba(var(--clr-emerald-rgb),0.12)" : "var(--bg-panel)", boxShadow: "var(--shadow-sticky)", whiteSpace: "nowrap" }}>{row.age}{isPayout ? " ★" : ""}</td>
-                                  {ledgerExpanded && <><td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-green)" }}>{fc2(mandatory)}</td>
+                                  <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-green)" }}>{fc2(mandatory)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#6ee7b7" }}>{fc2(voluntary)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-violet)" }}>{fc2(grants)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-blue)" }}>{fc2(oaInt)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-indigo)" }}>{fc2(saRaInt)}</td>
-                                  <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-violet2)" }}>{fc2(maInt)}</td></>}
+                                  <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-violet2)" }}>{fc2(maInt)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 700, color: "var(--clr-green)", borderLeft: "1px solid var(--border-subtle)" }}>{fc2(totalIn)}</td>
-                                  {ledgerExpanded && <><td style={{ padding: "5px 8px", textAlign: "right", color: "#f472b6" }}>{fc2(housOut)}</td>
+                                  <td style={{ padding: "5px 8px", textAlign: "right", color: "#f472b6" }}>{fc2(housOut)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#fb7185" }}>{fc2(medOut)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-red)" }}>{fc2(oaDraw)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-orange)" }}>{fc2(eduOut)}</td>
@@ -29851,7 +29121,7 @@ ${milestoneSnapshotHtml}
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-orange)" }}>{fc2(cpfisOut)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "#fb7185", fontWeight: rentExpOut > 0 ? 700 : 400 }}>{fc2(rentExpOut)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-emerald)", fontWeight: eventsIn > 0 ? 700 : 400 }}>{fc2(eventsIn)}</td>
-                                  <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-purple)", fontWeight: eventsOut > 0 ? 700 : 400 }}>{fc2(eventsOut)}</td></>}
+                                  <td style={{ padding: "5px 8px", textAlign: "right", color: "var(--clr-purple)", fontWeight: eventsOut > 0 ? 700 : 400 }}>{fc2(eventsOut)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 700, color: "#f472b6", borderLeft: "1px solid var(--border-subtle)" }}>{fc2(totalOut)}</td>
                                   <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 700, color: net >= 0 ? "var(--clr-green)" : "var(--clr-red)" }}>{net >= 0 ? "+" : "-"}{fc2(Math.abs(net))}</td>
                                 </tr>
@@ -29879,14 +29149,14 @@ ${milestoneSnapshotHtml}
                               return (
                                 <tr style={{ borderTop: "2px solid var(--border-strong)", background: "var(--bg-panel)", fontWeight: 800 }}>
                                   <td style={{ padding: "7px 8px", textAlign: "center", color: "var(--text-bright)", fontSize: 12, position: "sticky", left: 0, zIndex: 5, background: "var(--bg-panel)", boxShadow: "var(--shadow-sticky)", fontWeight: 800 }}>TOTAL</td>
-                                  {ledgerExpanded && <><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-green)" }}>{fc3(t.mandatory)}</td>
+                                  <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-green)" }}>{fc3(t.mandatory)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#6ee7b7" }}>{fc3(t.voluntary)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-violet)" }}>{fc3(t.grants)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-blue)" }}>{fc3(t.oaInt)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-indigo)" }}>{fc3(t.saRaInt)}</td>
-                                  <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-violet2)" }}>{fc3(t.maInt)}</td></>}
+                                  <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-violet2)" }}>{fc3(t.maInt)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 900, color: "var(--clr-green)", borderLeft: "1px solid var(--border-strong)" }}>{fc3(totalIn)}</td>
-                                  {ledgerExpanded && <><td style={{ padding: "7px 8px", textAlign: "right", color: "#f472b6" }}>{fc3(t.housOut)}</td>
+                                  <td style={{ padding: "7px 8px", textAlign: "right", color: "#f472b6" }}>{fc3(t.housOut)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#fb7185" }}>{fc3(t.medOut)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-red)" }}>{fc3(t.oaDraw)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-orange)" }}>{fc3(t.eduOut)}</td>
@@ -29894,7 +29164,7 @@ ${milestoneSnapshotHtml}
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-orange)" }}>{fc3(t.cpfisOut)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "#fb7185", fontWeight: t.rentExpOut > 0 ? 900 : 400 }}>{fc3(t.rentExpOut)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-emerald)", fontWeight: 900 }}>{fc3(t.eventsIn)}</td>
-                                  <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-purple)", fontWeight: 900 }}>{fc3(t.eventsOut)}</td></>}
+                                  <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--clr-purple)", fontWeight: 900 }}>{fc3(t.eventsOut)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 900, color: "#f472b6", borderLeft: "1px solid var(--border-strong)" }}>{fc3(totalOut)}</td>
                                   <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 900, color: net>=0?"var(--clr-green)":"var(--clr-red)" }}>{net>=0?"+":"-"}{fc3(Math.abs(net))}</td>
                                 </tr>
@@ -30286,8 +29556,6 @@ ${milestoneSnapshotHtml}
                     </h4>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
-                        [Sparkles, "Sprints 2–8 (2026) — Decumulation Engine, FIRE, Enterprise Analytics", "var(--clr-teal)",
-                          "Eight sprints of new features: (2) SRS/portfolio depletion milestones, SWR analytics useMemo, Floor-and-Upside card, Three-Bucket panel. (3) Guardrails overlay on accumulation chart with P10/P90 thresholds, Coast FIRE declining curve on chart, FIRE Numbers panel (FIRE number + Coast FIRE), SWR Sensitivity table (Singapore-calibrated 3.8–5.8% SWR by horizon). (4) TDB / CPF Organic Growth Target — min SA today to reach FRS organically, SRS tax efficiency panel (50% concession at 63, 10yr vs 5yr draw comparison), SRS SORR extension — same crash scenario applied to SRS balance alongside private assets. (5) Barista FIRE life event — part-time income with scaled employee CPF and take-home credit to private assets; Rising equity glidepath for SRS — equity% rises 2%/yr from drawdown start (capped 60%), configurable via sidebar. (6) Cashflow Ledger column collapse — compact 4-column view (Age / Total In / Total Out / Net Flow) with expand toggle; Sidebar Quick Start / Full mode — hides advanced sections for new users, auto-reveals on profile import. (7) Warm stone light mode palette (#FAFAF8 base, teal-700 primary action); Family milestone Gantt markers (marriage, child birth, education, parent support); CPF LIFE eligibility notice in Payout tab. (8) CPF 2026 employee rate correction (55–60: 18%, 60–65: 12.5%, new 65–70 band at 7.5%); D3 minor account age floor validation (age < 16 blocks top-ups; CPFIS age 18 guard). PDF report now includes a Decumulation Analytics section covering all Sprint 2–8 analytics."],
                         [Target, "Goal Simulator: \"When Can I Stop Contributing?\" (was \"When Can I Retire?\")", "var(--clr-amber)",
                           "The retirement solver has been renamed and clarified. It finds the earliest age you can stop all CPF contributions (mandatory + voluntary) while still projecting RA \u2265 FRS at payout age — using only CPF interest compounding from that point. The result is now labelled \"Earliest stop-contributing age\" to clearly distinguish it from actual retirement readiness. A new amber warning block appears when the result is before your payout age and no bridge income sources (private assets, portfolio, SRS, rental) are configured, reminding you that CPF LIFE does not start until payout age and OA cannot be drawn before 55 without FRS set aside."],
                         [ShieldCheck, "Reliability — Clear All, stress states, and stale solver results", "var(--clr-emerald)",
@@ -32272,7 +31540,7 @@ ${milestoneSnapshotHtml}
                           const baseNW   = Math.max(1, baseCPF + baseProp + basePriv);
 
                           const impacts = [];
-                          if (showSorr && sorrData?.hasData && ((sorrData.peakPrivGap||0) > 0 || (sorrData.srsAtPaSOR||0) > 0))
+                          if (showSorr && sorrData?.hasData && (sorrData.peakPrivGap||0) > 0)
                             impacts.push({ label: "SORR", color: "#ef4444",
                               metric: "Peak private-asset value lost to early-retirement crash",
                               value: sorrData.peakPrivGap });
@@ -32870,15 +32138,6 @@ ${milestoneSnapshotHtml}
                                         <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>Lifetime income at risk</p>
                                         <p style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", margin: 0 }}>{formatCurrency(sorrData.lifetimeGap)}</p>
                                       </div>
-                                      {(sorrData.srsAtPaSOR || 0) > 0 && (
-                                        <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--bg-panel)", border: "1px solid rgba(245,158,11,0.3)" }}>
-                                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 4px", textTransform: "uppercase" }}>SRS depletion age (SORR)</p>
-                                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-emerald)", margin: "0 0 2px" }}>Baseline: {swrAnalytics?.srsAnnualDraw > 0 ? `depletes at drawdown end` : 'No SRS draw'}</p>
-                                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-amber)", margin: 0 }}>
-                                            SORR: {sorrData.sorrSrsDepletionAge ? `Age ${sorrData.sorrSrsDepletionAge}` : 'Sustains drawdown period'}
-                                          </p>
-                                        </div>
-                                      )}
                                     </div>
                                   </>
                                 )}
