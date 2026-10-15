@@ -6036,6 +6036,7 @@ function ReadinessTab({
   // Sprint-2: SWR and bucket analytics (computed in App, no engine cost)
   swrAnalytics,
   scoreDelta,   // Sprint-14: Δ pts from baseline
+  sessionChanges = [],  // Sprint-16: [{label,from,to}]
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
   const [expandedRdTile,  setExpandedRdTile]  = useState(null); // Readiness sub-factor tile expansion
@@ -6992,6 +6993,24 @@ function ReadinessTab({
               <TooltipBox id="t-masPanel" text="Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense). These complement the CPF Retirement Readiness score — they do not change the 100-pt gauge. Set Emergency Fund months, Legacy Planning toggles, and salary in the Profile sidebar. Liquidity and Inflation Hedge are auto-derived from your projection. The Wellness Score is an unweighted average of the five tile scores — it is NOT an official MAS metric." />
             </div>
 
+            {sessionChanges.length > 0 && (
+              <details style={{ marginBottom: 10, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-input)', fontSize: 11 }}>
+                <summary style={{ padding: '6px 12px', cursor: 'pointer', fontWeight: 700, color: 'var(--text-muted)', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: 'var(--clr-amber)', fontWeight: 800 }}>⟳</span>
+                  {sessionChanges.length} change{sessionChanges.length !== 1 ? 's' : ''} from loaded profile
+                </summary>
+                <div style={{ padding: '6px 12px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {sessionChanges.map(({ label, from, to }) => (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: 'var(--text-subtle)', minWidth: 120, fontSize: 11 }}>{label}</span>
+                      <span style={{ fontFamily: 'monospace', color: 'var(--clr-amber)', textDecoration: 'line-through', fontSize: 10 }}>{from}</span>
+                      <span style={{ color: 'var(--text-subtle)', fontSize: 10 }}>→</span>
+                      <span style={{ fontFamily: 'monospace', color: 'var(--clr-teal)', fontWeight: 700, fontSize: 10 }}>{to}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
             {/* ── Side-by-side: Retirement Readiness gauge (left) | Wellness Score (right) ── */}
             <div className="rd-mas-side-by-side">
 
@@ -9013,6 +9032,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   const readinessSidebarUserPref = useRef(null);
   const welcomeBodyRef     = useRef(null); // scroll-reset target for welcome modal body
   const baselineScoreRef   = useRef(null);  // Sprint-14: score delta baseline
+  const baselineInputsRef  = useRef(null);  // Sprint-16: input diff baseline
   useEffect(() => {
     if (activeTab === "plan") {
       sidebarWasOpenRef.current = sidebarOpen; // snapshot exact state before entering Plan tab
@@ -10791,6 +10811,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         // their real inputs as "unsaved" and triggering spurious beforeunload warnings.
         lastSavedRef.current = JSON.stringify(DEFAULT_INPUTS);
         baselineScoreRef.current = null; setScoreDelta(null); // Sprint-14: reset delta
+        baselineInputsRef.current = { ...DEFAULT_INPUTS };  // Sprint-16
         setInputs({ ...DEFAULT_INPUTS });
         setInputErrors({});
         setScenarioA(null);
@@ -11210,6 +11231,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         setInputErrors({}); // BUG-4 fix: clear stale red validation borders on load
         lastSavedRef.current = JSON.stringify(safeIn);
         baselineScoreRef.current = null; setScoreDelta(null); // Sprint-14: reset delta
+        baselineInputsRef.current = { ...safeIn };   // Sprint-16
         // Sprint-6 Item 31: reveal Full View if imported profile has advanced fields
         if ((safeIn.srsBalance||0)>0 || (safeIn.portfolioBalance||0)>0 ||
             (safeIn.housingOutflow||0)>0 || (safeIn.lifeEvents||[]).length>0)
@@ -16001,6 +16023,7 @@ ${milestoneSnapshotHtml}
 <div class="disclaimer">
   <strong style="color:#334155">Legal Disclaimer</strong><br/>${LEGAL_DISCLAIMER}
 </div>
+<p style="font-size:8px;color:#94a3b8;margin-top:8px;text-align:center">&#128161; Excel exports: Plan tab &#8594; Data Table sub-view &#8594; Download XLS | Cashflow Ledger &#8594; Download XLS</p>
 
 </body></html>`;
 
@@ -24351,6 +24374,21 @@ ${milestoneSnapshotHtml}
                 portfolioByAge={portfolioByAge}
                 swrAnalytics={swrAnalytics}
                 scoreDelta={scoreDelta}
+                sessionChanges={baselineInputsRef.current ? (() => {
+                  const _b = baselineInputsRef.current; const _c = debouncedInputs;
+                  return [
+                    {key:'targetMonthlyIncome',label:'Target income',fmt:v=>`$${Math.round(v).toLocaleString()}`},
+                    {key:'payoutAge',label:'Payout age',fmt:v=>`age ${v}`},
+                    {key:'oaBalance',label:'OA balance',fmt:v=>`$${Math.round(v).toLocaleString()}`},
+                    {key:'saBalance',label:'SA balance',fmt:v=>`$${Math.round(v).toLocaleString()}`},
+                    {key:'salaryGross',label:'Monthly salary',fmt:v=>`$${Math.round(v).toLocaleString()}`},
+                    {key:'vcSaTopup',label:'RSTU top-up',fmt:v=>`$${Math.round(v).toLocaleString()}`},
+                    {key:'srsAnnualContribution',label:'SRS contribution',fmt:v=>`$${Math.round(v).toLocaleString()}`},
+                    {key:'oaDrawdownMonthly',label:'OA draw/mo',fmt:v=>`$${Math.round(v).toLocaleString()}`},
+                    {key:'housingOutflow',label:'Housing outflow',fmt:v=>`$${Math.round(v).toLocaleString()}`},
+                  ].filter(f=>String(_b[f.key]||0)!==String(_c[f.key]||0))
+                   .map(f=>({label:f.label,from:f.fmt(_b[f.key]||0),to:f.fmt(_c[f.key]||0)}));
+                })() : []}
               />
             )}
             {/* ── GUIDE TAB — Quick Start view ── */}
@@ -30408,6 +30446,8 @@ ${milestoneSnapshotHtml}
                       {[
                         [Sparkles, "Sprints 9–14 (2026) — PDF Analytics, Tab Consolidation, XLS Exports", "var(--clr-teal)",
                           "Sprint 9: PDF Decumulation Analytics section (Floor+Upside, Buckets, FIRE, TDB, SRS tax table); Sprint 2–8 changelog in Docs. Sprint 10: TooltipBox accessibility fix; Household merged into Compare sub-tab (9→8 tabs). Sprint 11: Data Table merged into Guide sub-view (8→7 tabs); MC run count increased 200→500 for tighter P10/P90 bands. Sprint 12: RSS and CPF LIFE Payout Plans merged into single Payout tab (7→6 tabs). Sprint 13: Dashboard and Strategy merged into Plan tab with Dashboard|Strategy sub-tab toggle (6→5 tabs); SRS drawdown period optimiser — iterates 1–10 years to find the period that minimises lifetime IRAS tax at the 50% statutory concession rate. Sprint 14: Readiness score Δ badge (vs session baseline); Cashflow Ledger XLS download (SpreadsheetML); Year-by-Year Projection XLS download — both open natively in Excel with no library dependency."],
+                        [Sparkles, "Sprints 9–14 (2026) — PDF Analytics, Tab Consolidation, XLS Exports", "var(--clr-teal)",
+                          "Sprint 9: PDF Decumulation Analytics section. Sprint 10: Household→Compare (9→8 tabs). Sprint 11: Data Table→Guide (8→7); MC 200→500 runs. Sprint 12: RSS+LIFE→Payout (7→6). Sprint 13: Dashboard+Strategy→Plan (6→5); SRS drawdown optimiser. Sprint 14: Score Δ badge; Ledger+Projection XLS downloads. Sprint 15: Docs update; focus ring; sub-tab ARIA."],
                         [Sparkles, "Sprints 2–8 (2026) — Decumulation Engine, FIRE, Enterprise Analytics", "var(--clr-teal)",
                           "Eight sprints of new features: (2) SRS/portfolio depletion milestones, SWR analytics useMemo, Floor-and-Upside card, Three-Bucket panel. (3) Guardrails overlay on accumulation chart with P10/P90 thresholds, Coast FIRE declining curve on chart, FIRE Numbers panel (FIRE number + Coast FIRE), SWR Sensitivity table (Singapore-calibrated 3.8–5.8% SWR by horizon). (4) TDB / CPF Organic Growth Target — min SA today to reach FRS organically, SRS tax efficiency panel (50% concession at 63, 10yr vs 5yr draw comparison), SRS SORR extension — same crash scenario applied to SRS balance alongside private assets. (5) Barista FIRE life event — part-time income with scaled employee CPF and take-home credit to private assets; Rising equity glidepath for SRS — equity% rises 2%/yr from drawdown start (capped 60%), configurable via sidebar. (6) Cashflow Ledger column collapse — compact 4-column view (Age / Total In / Total Out / Net Flow) with expand toggle; Sidebar Quick Start / Full mode — hides advanced sections for new users, auto-reveals on profile import. (7) Warm stone light mode palette (#FAFAF8 base, teal-700 primary action); Family milestone Gantt markers (marriage, child birth, education, parent support); CPF LIFE eligibility notice in Payout tab. (8) CPF 2026 employee rate correction (55–60: 18%, 60–65: 12.5%, new 65–70 band at 7.5%); D3 minor account age floor validation (age < 16 blocks top-ups; CPFIS age 18 guard). PDF report now includes a Decumulation Analytics section covering all Sprint 2–8 analytics."],
                         [Target, "Goal Simulator: \"When Can I Stop Contributing?\" (was \"When Can I Retire?\")", "var(--clr-amber)",
