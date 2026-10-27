@@ -32,7 +32,7 @@ import {
   TrendingDown, Pause, HeartPulse, DollarSign, Sunset, Star, Smartphone, Zap,
   Circle,
   Heart, CreditCard, GraduationCap, PiggyBank, Landmark, TableProperties,
-  Lock, Eye, EyeOff
+  Lock, Eye, EyeOff, Sparkles
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
@@ -3406,6 +3406,13 @@ function runProjectionEngine(inputs, {
     const leParentSupport    = activeEvents.filter(e => e.type === 'parent_support');
     const leEducation        = activeEvents.filter(e => e.type === 'education_expense');
     const leDonation         = activeEvents.filter(e => e.type === 'donation');
+    // Barista FIRE: part-time income with scaled employee-only CPF contributions (mirrors runRSSEngine)
+    const leBaristaFire    = activeEvents.find(e => e.type === 'barista_fire');
+    const baristaMonthly   = leBaristaFire ? (Number(leBaristaFire.magnitude) || 0) : 0;
+    const baristaAnnual    = baristaMonthly * 12;
+    const baristaScale     = (baristaAnnual > 0 && (Number(inputs.salaryGross) || 0) > 0)
+      ? Math.min(1, baristaAnnual / Number(inputs.salaryGross))
+      : 0;
     // MMSS grants earned in year N are credited to MA at the start of year N+1 per CPF policy.
     // yearInflow + totalInjected are updated here at the correct year (not at grant computation time).
     if (pendingMmssCarry > 0) {
@@ -6036,6 +6043,7 @@ function ReadinessTab({
   // Sprint-2: SWR and bucket analytics (computed in App, no engine cost)
   swrAnalytics,
   scoreDelta,   // Sprint-14: Δ pts from baseline
+  baselineScoreRef, setScoreDelta,  // Sprint-14: owned by App; passed in so the delta effect can run here
   sessionChanges = [],  // Sprint-16: [{label,from,to}]
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
@@ -6324,11 +6332,11 @@ function ReadinessTab({
   const basPay = scenarioPlan("basic");
 
   useEffect(() => {
-    const s = readinessScore?.score ?? null;
+    const s = score ?? null;
     if (s === null) return;
     if (baselineScoreRef.current === null) { baselineScoreRef.current = s; return; }
     setScoreDelta(Math.round(s - baselineScoreRef.current));
-  }, [readinessScore?.score]); // eslint-disable-line
+  }, [score]); // eslint-disable-line
 
   // ── Phase 3: P10 downside & probability of sufficiency ──────────────────
   // monteCarloData is null when MC toggle is off — all P10 fields degrade gracefully to null/—
@@ -11639,8 +11647,8 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     const is55 = (Number(inputs.currentAge)||0) >= 55;
     const hdrs = ["Age","Mandatory","Voluntary","Grants/WIS","OA Int.",is55?"RA Int.":"SA Int.","MA Int.","▶ Total In","Housing Out","Medical Out","OA Draw","Edu Loan","Loved One","CPFIS Out","Rent Out","Events In","Events Out","▶ Total Out","Net Flow"];
     const fc = v => v ? Math.round(v).toLocaleString() : "0";
-    const dataRows = (ledgerRows||[]).map(r => {const {mandatory,voluntary,grants,oaInt,saRaInt,maInt,housOut,medOut,oaDraw,eduOut,lovedOut,cpfisOut,rentExpOut,eventsIn,eventsOut,totalIn,totalOut,net}=r; return [r.age,fc(mandatory),fc(voluntary),fc(grants),fc(oaInt),fc(saRaInt),fc(maInt),fc(totalIn),fc(housOut),fc(medOut),fc(oaDraw),fc(eduOut),fc(lovedOut),fc(cpfisOut),fc(rentExpOut),fc(eventsIn),fc(eventsOut),fc(totalOut),(net>=0?"+":"-")+fc(Math.abs(net))];});
-    const t=(ledgerRows||[]).reduce((a,r)=>{["mandatory","voluntary","grants","oaInt","saRaInt","maInt","housOut","medOut","oaDraw","eduOut","lovedOut","cpfisOut","rentExpOut","eventsIn","eventsOut","totalIn","totalOut"].forEach(k=>a[k]=(a[k]||0)+(r[k]||0)); a.net=(a.net||0)+(r.net||0); return a;},{});
+    const dataRows = (displayAccumulation||[]).map(r => {const {mandatory,voluntary,grants,oaInt,saRaInt,maInt,housOut,medOut,oaDraw,eduOut,lovedOut,cpfisOut,rentExpOut,eventsIn,eventsOut,totalIn,totalOut,net}=r; return [r.age,fc(mandatory),fc(voluntary),fc(grants),fc(oaInt),fc(saRaInt),fc(maInt),fc(totalIn),fc(housOut),fc(medOut),fc(oaDraw),fc(eduOut),fc(lovedOut),fc(cpfisOut),fc(rentExpOut),fc(eventsIn),fc(eventsOut),fc(totalOut),(net>=0?"+":"-")+fc(Math.abs(net))];});
+    const t=(displayAccumulation||[]).reduce((a,r)=>{["mandatory","voluntary","grants","oaInt","saRaInt","maInt","housOut","medOut","oaDraw","eduOut","lovedOut","cpfisOut","rentExpOut","eventsIn","eventsOut","totalIn","totalOut"].forEach(k=>a[k]=(a[k]||0)+(r[k]||0)); a.net=(a.net||0)+(r.net||0); return a;},{});
     const totRow=["TOTAL",fc(t.mandatory),fc(t.voluntary),fc(t.grants),fc(t.oaInt),fc(t.saRaInt),fc(t.maInt),fc(t.totalIn),fc(t.housOut),fc(t.medOut),fc(t.oaDraw),fc(t.eduOut),fc(t.lovedOut),fc(t.cpfisOut),fc(t.rentExpOut),fc(t.eventsIn),fc(t.eventsOut),fc(t.totalOut),(t.net>=0?"+":"-")+fc(Math.abs(t.net))];
     const th="background:#0f766e;color:#fff;font-weight:bold;padding:4px 8px;";
     const tf="background:#1e293b;color:#fff;font-weight:bold;padding:4px 8px;";
@@ -24374,6 +24382,8 @@ ${milestoneSnapshotHtml}
                 portfolioByAge={portfolioByAge}
                 swrAnalytics={swrAnalytics}
                 scoreDelta={scoreDelta}
+                baselineScoreRef={baselineScoreRef}
+                setScoreDelta={setScoreDelta}
                 sessionChanges={baselineInputsRef.current ? (() => {
                   const _b = baselineInputsRef.current; const _c = debouncedInputs;
                   return [
@@ -27826,7 +27836,7 @@ ${milestoneSnapshotHtml}
               </div>
             )}
             {/* ── RSS TAB — Full drawdown engine (PR-2) ── */}
-            {activeTab === "payout" && cpfScheme === "rss" && (() => {
+            {activeTab === "payout" && debouncedInputs.cpfScheme === "rss" && (() => {
               const isRSSMode = debouncedInputs.cpfScheme === 'rss';
               if (!isRSSMode) return null;
               // Extract RSS-specific values from the projection array
@@ -34875,5 +34885,5 @@ export default function App() {
     );
   }
 
-  return <CPFPlannerApp freshGateEntry={freshGateEntry} />;
+  return <ErrorBoundary><CPFPlannerApp freshGateEntry={freshGateEntry} /></ErrorBoundary>;
 }
