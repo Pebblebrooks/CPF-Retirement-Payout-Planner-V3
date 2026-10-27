@@ -24061,8 +24061,8 @@ ${milestoneSnapshotHtml}
             {/* Gap Alert — compact summary banner; full detail card lives under RSTU in Inflows.
                 Hidden for foreigners: no CPF account means no RA, no FRS, no gap concept. */}
               </div>{/* /sidebar-col-3-body */}
-            </div>{/* /sidebar-col-3 */}
-            )}{/* /quickStartMode col-3 guard */}
+            </div>
+            )}{/* /sidebar-col-3 + quickStartMode guard */}
           </div>
 
 
@@ -29192,7 +29192,6 @@ ${milestoneSnapshotHtml}
                     </div>
                   )}
                 </div>
-              </div>
             </>)}
 
                 {/* Household sub-panel */}
