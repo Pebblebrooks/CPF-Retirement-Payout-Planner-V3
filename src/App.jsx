@@ -7531,7 +7531,7 @@ function ReadinessTab({
           <div style={cardStyle}>
             <p style={{ ...labelStyle, marginBottom: 2 }}>Floor and upside</p>
             <p style={{ fontSize: 11, color: 'var(--text-subtle)', marginBottom: 10 }}>
-              CPF LIFE floor vs portfolio gap at age {pa}{isRealDollars ? ' · today's $' : ''}
+              CPF LIFE floor vs portfolio gap at age {pa}{isRealDollars ? " · today's $" : ''}
             </p>
             {/* Percentage coverage header */}
             {swrAnalytics.cpfMonthly > 0 && (
@@ -15812,7 +15812,7 @@ ${(swrAnalytics?.annualGap > 0 || swrAnalytics?.tdb > 0 || swrAnalytics?.srsAnnu
   const _hasCoast  = _coastNum > 0 && _sa.portfolioPA >= _coastNum;
   const _hasFire   = _fireNum  > 0 && _sa.portfolioPA >= _fireNum;
   const _cpfCovPct = _target > 0 && _sa.cpfMonthly > 0 ? Math.min(100,Math.round((_sa.cpfMonthly/_target)*100)) : 0;
-  return \`
+  return `
 <div class="page-break"></div>
 <div class="sec-hdr sec-hdr-teal"><span class="sec-ico">📊</span><span class="sec-title" style="color:#0f766e">Decumulation Analytics</span></div>
 <p style="font-size:11px;color:#64748b;margin:0 0 14px">Floor &amp; Upside · Retirement Buckets · FIRE Numbers · CPF Organic Growth Target · SRS Tax Efficiency — all at payout age \${_pa}</p>
@@ -15908,7 +15908,7 @@ ${(swrAnalytics?.annualGap > 0 || swrAnalytics?.tdb > 0 || swrAnalytics?.srsAnnu
   </table>
   <p style="font-size:10px;color:#64748b;margin:6px 0 0">OA cash withdrawals and Singapore capital gains are tax-exempt. Only SRS drawdowns contribute to chargeable income.</p>
 </div>\` : ''}
-\`;
+`;
 })() : ''}
 <!-- ═══════════════════ 8. SRS DETAILS (if applicable) ══════════════════ -->
 ${/* RSS section — only rendered when isRSSPdf (CPF Scheme = RSS). Shows RA drawdown curve, depletion age,
@@ -16023,7 +16023,7 @@ ${milestoneSnapshotHtml}
 <div class="disclaimer">
   <strong style="color:#334155">Legal Disclaimer</strong><br/>${LEGAL_DISCLAIMER}
 </div>
-<p style="font-size:8px;color:#94a3b8;margin-top:8px;text-align:center">&#128161; Excel exports: Plan tab &#8594; Data Table sub-view &#8594; Download XLS | Cashflow Ledger &#8594; Download XLS</p>
+<p style="font-size:8px;color:#94a3b8;margin-top:8px;text-align:center">&#128161; Excel exports: Plan tab &#8594; Data Table &#8594; Download XLS | Cashflow Ledger &#8594; Download XLS</p>
 
 </body></html>`;
 
@@ -30446,8 +30446,8 @@ ${milestoneSnapshotHtml}
                       {[
                         [Sparkles, "Sprints 9–14 (2026) — PDF Analytics, Tab Consolidation, XLS Exports", "var(--clr-teal)",
                           "Sprint 9: PDF Decumulation Analytics section (Floor+Upside, Buckets, FIRE, TDB, SRS tax table); Sprint 2–8 changelog in Docs. Sprint 10: TooltipBox accessibility fix; Household merged into Compare sub-tab (9→8 tabs). Sprint 11: Data Table merged into Guide sub-view (8→7 tabs); MC run count increased 200→500 for tighter P10/P90 bands. Sprint 12: RSS and CPF LIFE Payout Plans merged into single Payout tab (7→6 tabs). Sprint 13: Dashboard and Strategy merged into Plan tab with Dashboard|Strategy sub-tab toggle (6→5 tabs); SRS drawdown period optimiser — iterates 1–10 years to find the period that minimises lifetime IRAS tax at the 50% statutory concession rate. Sprint 14: Readiness score Δ badge (vs session baseline); Cashflow Ledger XLS download (SpreadsheetML); Year-by-Year Projection XLS download — both open natively in Excel with no library dependency."],
-                        [Sparkles, "Sprints 9–14 (2026) — PDF Analytics, Tab Consolidation, XLS Exports", "var(--clr-teal)",
-                          "Sprint 9: PDF Decumulation Analytics section. Sprint 10: Household→Compare (9→8 tabs). Sprint 11: Data Table→Guide (8→7); MC 200→500 runs. Sprint 12: RSS+LIFE→Payout (7→6). Sprint 13: Dashboard+Strategy→Plan (6→5); SRS drawdown optimiser. Sprint 14: Score Δ badge; Ledger+Projection XLS downloads. Sprint 15: Docs update; focus ring; sub-tab ARIA."],
+                        [Sparkles, "Sprints 9–14 (2026) — PDF Analytics, Tabs, XLS Exports", "var(--clr-teal)",
+                          "Sprint 9: PDF Decumulation Analytics. Sprints 10-13: 9→5 tabs. Sprint 14: Score Δ badge; XLS exports. Sprint 15: ARIA; focus ring; docs."],
                         [Sparkles, "Sprints 2–8 (2026) — Decumulation Engine, FIRE, Enterprise Analytics", "var(--clr-teal)",
                           "Eight sprints of new features: (2) SRS/portfolio depletion milestones, SWR analytics useMemo, Floor-and-Upside card, Three-Bucket panel. (3) Guardrails overlay on accumulation chart with P10/P90 thresholds, Coast FIRE declining curve on chart, FIRE Numbers panel (FIRE number + Coast FIRE), SWR Sensitivity table (Singapore-calibrated 3.8–5.8% SWR by horizon). (4) TDB / CPF Organic Growth Target — min SA today to reach FRS organically, SRS tax efficiency panel (50% concession at 63, 10yr vs 5yr draw comparison), SRS SORR extension — same crash scenario applied to SRS balance alongside private assets. (5) Barista FIRE life event — part-time income with scaled employee CPF and take-home credit to private assets; Rising equity glidepath for SRS — equity% rises 2%/yr from drawdown start (capped 60%), configurable via sidebar. (6) Cashflow Ledger column collapse — compact 4-column view (Age / Total In / Total Out / Net Flow) with expand toggle; Sidebar Quick Start / Full mode — hides advanced sections for new users, auto-reveals on profile import. (7) Warm stone light mode palette (#FAFAF8 base, teal-700 primary action); Family milestone Gantt markers (marriage, child birth, education, parent support); CPF LIFE eligibility notice in Payout tab. (8) CPF 2026 employee rate correction (55–60: 18%, 60–65: 12.5%, new 65–70 band at 7.5%); D3 minor account age floor validation (age < 16 blocks top-ups; CPFIS age 18 guard). PDF report now includes a Decumulation Analytics section covering all Sprint 2–8 analytics."],
                         [Target, "Goal Simulator: \"When Can I Stop Contributing?\" (was \"When Can I Retire?\")", "var(--clr-amber)",
