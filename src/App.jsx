@@ -6000,6 +6000,309 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
+// computeReadinessScore — pure function (R1). Single source of truth for the 5-dimension
+// Readiness Score; used by ReadinessTab AND the Retirement Health Report so both always agree.
+// Body moved verbatim from ReadinessTab's useMemo — no scoring logic changed.
+// ─────────────────────────────────────────────────────────────────────────────
+function computeReadinessScore({
+  nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
+  lifePlans, highlightPlan, isMale, basicPremiumPct, target,
+  monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
+  milestones, inputs, ca, perfectStormData, payoutAge65,
+}) {
+  // ── 1. FRS Coverage ───────────────────────────────────────────────────
+  const nomMap  = nominalAccumulationByAge || accumulationByAge;
+  const nomPayD = nomMap.get(pa) || {};
+  const raAtPA  = nomPayD.ra || 0;    // always nominal
+  const projFRS = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
+  const projBRS = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
+  const frsRatio    = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
+  const frsSubScore = Math.min(100, Math.round(frsRatio * 100));
+
+  // ── 2. Income Adequacy ─────────────────────────────────────────────────
+  const activePlanObj = lifePlans?.[highlightPlan || "standard"];
+  const rawPayout     = activePlanObj ? (isMale ? activePlanObj.startM : activePlanObj.startF) : 0;
+  const stdMonthly    = (highlightPlan === "basic" && rawPayout > 0)
+    ? rawPayout * (1 - basicPremiumPct / 100) / 0.90
+    : rawPayout;
+  // Portfolio withdrawal adds to monthly retirement income for the adequacy calculation
+  const portWithdrawMoRS = Number(inputs.portfolioWithdrawalMonthly) || 0;
+  const portWithdrawStartRS = Number(inputs.portfolioWithdrawalStartAge) || payoutAge65;
+  const portActiveAtPA = portWithdrawMoRS > 0 && portWithdrawStartRS <= payoutAge65;
+  const totalRetireIncome = stdMonthly + (portActiveAtPA ? portWithdrawMoRS : 0) + (Number(inputs.oaDrawdownMonthly) || 0);
+  // Target: use retirement expense estimate from new spending model if living expenses are set
+  const baseExp = Number(inputs.budgetLivingExpenses) || 0;
+  const retireExpTarget = baseExp > 0
+    ? Math.round(baseExp * (Number(inputs.retirementExpenseRatio) || 75) / 100
+        + (Number(inputs.retirementHealthcareMonthly) || 500))
+    : target; // fall back to targetMonthlyIncome if no living expenses set
+  // incomeRatio kept for sub-bar display; incomeSubScore is null when no target
+  const incomeRatio    = retireExpTarget > 0 ? Math.min(1, totalRetireIncome / retireExpTarget) : (target > 0 ? Math.min(1, stdMonthly / target) : null);
+  const incomeSubScore = retireExpTarget > 0 ? Math.min(100, Math.round((totalRetireIncome / retireExpTarget) * 100)) : (target > 0 ? Math.min(100, Math.round((stdMonthly / target) * 100)) : null);
+
+  // ── 3. Stress Resilience ───────────────────────────────────────────────
+  // Primary signal: Perfect Storm deterministic worst-case (SORR + inflation surge +
+  //   property stress + CPF rate cut + healthcare surge, all combined).
+  //   perfectStormScore = 100 − deltaPct  (e.g. 30% net-worth drop → score 70)
+  // Fallback: P10 Monte Carlo 10th-percentile total vs base case.
+  // Combined (both available): perfectStorm × 0.6 + p10 × 0.4 — named risk outweighs stats.
+  // null when both are unavailable → weight redistributed to other sub-scores.
+  const totalCPFNom_ = (nomPayD.oa || 0) + (nomPayD.sa || 0) + (nomPayD.ma || 0) + (nomPayD.ra || 0);
+  const p10RowAtPA_  = monteCarloData?.rows?.find(r => r.age === pa);
+  const p10Total_    = p10RowAtPA_?.p10 || 0;
+  const p10Score_    = (monteCarloData && totalCPFNom_ > 0 && p10Total_ > 0)
+    ? Math.min(100, Math.round((p10Total_ / totalCPFNom_) * 100))
+    : null;
+  const psScore_     = perfectStormData
+    ? Math.max(0, 100 - (perfectStormData.deltaPct || 0))
+    : null;
+  const p10SubScore  =   // returned as p10SubScore for KPI tile backward-compatibility
+    (psScore_ !== null && p10Score_ !== null) ? Math.round(psScore_ * 0.6 + p10Score_ * 0.4)
+    : psScore_ ?? p10Score_ ?? null;
+
+  // ── 4. Longevity Cover ─────────────────────────────────────────────────
+  // For CPF LIFE members: measures real purchasing power of the flat nominal payout at age 90
+  //   vs the BRS-level payout (minimum adequate standard). At 2 % inflation over 25 yrs the
+  //   nominal payout loses ~39 % of real value — this sub-score captures that decay.
+  // For OA-drawdown members: measures coverage years vs age-90 planning benchmark.
+  const oaDrawActiveL  = (effectiveOaDrawMonthly || 0) > 0 && (effectiveOaDrawStartAge || 0) > 0;
+  const oaDepMilL      = milestones.find(m =>
+    m.label?.toLowerCase().includes('drawdown exhaust') || m.label?.toLowerCase().includes('oa depletion')
+  );
+  const oaDepAgeL      = oaDepMilL?.age || null;
+  const inflRate_      = (Number(inputs.inflationRate) || 2) / 100;
+  const yearsTo90_     = Math.max(0, 90 - pa);
+  const realPayAt90_   = stdMonthly > 0 ? stdMonthly / Math.pow(1 + inflRate_, yearsTo90_) : 0;
+  const brsThreshold_  = interpolateCpfLife(projBRS, 'std', isMale, pa);
+  const longevitySubScore = !oaDrawActiveL
+    ? (brsThreshold_ > 0 ? Math.min(100, Math.round((realPayAt90_ / brsThreshold_) * 100)) : 100)
+    : (oaDepAgeL
+        ? Math.min(100, Math.round(((oaDepAgeL - pa) / Math.max(1, 90 - pa)) * 100))
+        : 100);
+
+  // ── 5. Healthcare Shield ───────────────────────────────────────────────
+  // MA at payout age vs projected Basic Healthcare Sum (BHS). MA reaching BHS means
+  // MediShield Life premiums and moderate medical costs are fully covered.
+  const projBHS_   = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow));
+  const maAtPA_    = nomPayD.ma || 0;
+  const maSubScore = projBHS_ > 0 ? Math.min(100, Math.round((maAtPA_ / projBHS_) * 100)) : 0;
+
+  // ── Age-banded weights ─────────────────────────────────────────────────
+  // Rationale: FRS weight steps down post-retirement (RA locked in, can't be changed).
+  // Healthcare weight escalates sharply — medical costs accelerate from 65+ at 5 %/yr.
+  // Longevity weight escalates post-65 — each remaining year of income matters more.
+  const AGE_WEIGHTS = [
+    { maxAge: 40,  frs: 0.35, inc: 0.25, p10: 0.15, long: 0.15, ma: 0.10 },
+    { maxAge: 54,  frs: 0.30, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.10 },
+    { maxAge: 64,  frs: 0.25, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.15 },
+    { maxAge: 74,  frs: 0.15, inc: 0.25, p10: 0.20, long: 0.20, ma: 0.20 },
+    { maxAge: 999, frs: 0.10, inc: 0.20, p10: 0.15, long: 0.25, ma: 0.30 },
+  ];
+  const wt = AGE_WEIGHTS.find(b => ca <= b.maxAge) || AGE_WEIGHTS[4];
+
+  // ── Weighted composite with graceful degradation ───────────────────────
+  const subScores = [
+    { val: frsSubScore,       wt: wt.frs  },
+    { val: incomeSubScore,    wt: wt.inc  },  // null when no target
+    { val: p10SubScore ?? (totalCPFNom_ > 0 ? 50 : 0), wt: wt.p10 }, // 50 neutral when MC off but CPF exists; 0 when nothing to stress-test
+    { val: longevitySubScore, wt: wt.long },
+    { val: maSubScore,        wt: wt.ma   },
+  ];
+  const active  = subScores.filter(s => s.val !== null);
+  const totalWt = active.reduce((acc, s) => acc + s.wt, 0);
+  const score   = active.length > 0
+    ? Math.round(active.reduce((acc, s) => acc + (s.val * s.wt), 0) / totalWt)
+    : 0;
+
+  const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
+  const label = score >= 75 ? "On Track" : score >= 50 ? "Needs Attention" : "At Risk";
+    return {
+      score, frsRatio, incomeRatio,
+      raAtPA, projFRS, stdMonthly,
+      p10SubScore, longevitySubScore, maSubScore,
+      color, label,
+      // Extra fields consumed by the Health Report (ignored by ReadinessTab's destructure)
+      frsSubScore, incomeSubScore, retireExpTarget, totalRetireIncome,
+      projBRS, projBHS: projBHS_, maAtPA: maAtPA_, totalCPFNom: totalCPFNom_,
+      psScore: psScore_, p10Score: p10Score_, weights: wt,
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Retirement Health Report — pure helpers (no React, no engine calls).
+// Every number in the report comes from datasets the app has already computed;
+// these helpers only classify them and phrase the result. Thresholds are named
+// below so they are auditable and covered by regression assertions.
+// ─────────────────────────────────────────────────────────────────────────────
+const HEALTH_RULES = Object.freeze({
+  scoreOnTrack: 75, scoreAtRisk: 50,   // overall Readiness Score bands (match ReadinessTab labels)
+  frsGood: 1.0, frsWatch: 0.75,        // RA at payout age ÷ projected FRS
+  incomeGood: 100, incomeWatch: 80,    // income-adequacy sub-score
+  dimGood: 75, dimWatch: 50,           // stress-resilience and longevity sub-scores
+  maGood: 100, maWatch: 70,            // healthcare shield: MA at payout ÷ projected BHS (%)
+  mcGood: 80, mcWatch: 50,             // Monte Carlo: % of runs reaching FRS at payout age
+  stormRisk: 30, stormWatch: 15,       // Perfect Storm: net-worth drop (%)
+  swrRisk: 6, swrWatch: 4,             // required withdrawal rate, % of portfolio (rule of thumb)
+  depletionRiskAge: 85,                // portfolio / OA running out before this age is flagged
+});
+
+// Escape text before it is placed into the report's HTML (names, labels, alert text).
+function escapeHtml(v) {
+  return String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Key-order-independent JSON so the same inputs always hash the same.
+function stableStringify(v) {
+  if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null";
+  if (Array.isArray(v)) return "[" + v.map(stableStringify).join(",") + "]";
+  return "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + stableStringify(v[k])).join(",") + "}";
+}
+
+// 32-bit FNV-1a fingerprint of the inputs — lets a printed report be traced back to its inputs.
+function hashInputsFnv(obj) {
+  const s = stableStringify(obj || {});
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, "0").toUpperCase();
+}
+
+// Turns the already-computed datasets into a verdict, findings and a prioritised action list.
+// Datasets that were not run (stress tests are user-toggled) arrive as null and are reported
+// as "not assessed" rather than guessed.
+function buildHealthFindings(d) {
+  const R = HEALTH_RULES;
+  const fmt = d.fmt || (v => "$" + Math.round(Number(v) || 0).toLocaleString("en-US"));
+  const findings = [];
+  const actions = [];
+  const add = (area, severity, title, detail) => findings.push({ area, severity, title, detail });
+  const act = (priority, title, detail) => actions.push({ priority, title, detail });
+  const has = v => v !== null && v !== undefined && !Number.isNaN(v);
+
+  // ── Overall verdict (same bands/labels as the Readiness tab) ─────────────
+  const tone = d.score >= R.scoreOnTrack ? "good" : d.score >= R.scoreAtRisk ? "watch" : "risk";
+  const verdict = {
+    tone,
+    headline: tone === "good" ? "On track for retirement"
+      : tone === "watch" ? "Needs attention before retirement" : "At risk — action recommended",
+    text: `Your Readiness Score is ${d.score}/100 (${d.label}). It blends five dimensions — Retirement Sum coverage, income adequacy, stress resilience, longevity cover and healthcare shield — weighted for your age.`,
+  };
+
+  // ── 1. Retirement Sum (FRS) coverage ─────────────────────────────────────
+  const frsPct = Math.round((d.frsRatio || 0) * 100);
+  if (d.frsRatio >= R.frsGood) {
+    add("Retirement Sum", "good", "Retirement Account meets the projected FRS", `Projected RA at payout age covers ${frsPct}% of the projected Full Retirement Sum.`);
+  } else if (d.frsRatio >= R.frsWatch) {
+    add("Retirement Sum", "watch", `Retirement Account reaches ${frsPct}% of the projected FRS`, "A lower Retirement Account balance reduces the CPF LIFE payout you can start with.");
+  } else {
+    add("Retirement Sum", "risk", `Retirement Account reaches only ${frsPct}% of the projected FRS`, "This is the largest driver of a lower CPF LIFE payout.");
+  }
+  if (d.gapAlert) {
+    const g = d.gapAlert;
+    add("Retirement Sum", g.isUrgent ? "risk" : "watch",
+      `${g.raLabel} is ${fmt(g.frsGap)} short of the FRS`,
+      `Closing the gap with regular top-ups would take about ${fmt(g.monthlyTopUp)}/month for ${g.yearsToGo} year${g.yearsToGo === 1 ? "" : "s"} (assumes 4% p.a. growth).`);
+    act(g.isUrgent ? 1 : 2, `Close the FRS gap: about ${fmt(g.monthlyTopUp)}/month`,
+      `A cash top-up (VC3A / RSTU) of roughly ${fmt(g.annualTopUp)} a year for ${g.yearsToGo} year${g.yearsToGo === 1 ? "" : "s"} is estimated to bring the Retirement Account to the FRS${g.isUrgent ? " — time is short, so the required amount rises each year you wait" : ""}. Check your eligibility and the annual cap before topping up.`);
+  }
+
+  // ── 2. Income adequacy ───────────────────────────────────────────────────
+  if (has(d.incomeSub)) {
+    if (d.incomeSub >= R.incomeGood) {
+      add("Income", "good", "Projected retirement income meets your target", `Projected income covers ${has(d.coveragePct) ? d.coveragePct + "% of" : ""} your monthly target.`);
+    } else if (d.incomeSub >= R.incomeWatch) {
+      add("Income", "watch", `Projected income covers about ${d.incomeSub}% of your target`, d.incomeShortfall > 0 ? `Estimated shortfall: ${fmt(d.incomeShortfall)}/month.` : "A small gap remains against your target.");
+    } else {
+      add("Income", "risk", `Projected income covers only about ${d.incomeSub}% of your target`, d.incomeShortfall > 0 ? `Estimated shortfall: ${fmt(d.incomeShortfall)}/month.` : "A material gap remains against your target.");
+    }
+    if (d.incomeSub < R.incomeGood) {
+      act(d.incomeSub < R.incomeWatch ? 1 : 2, "Narrow the monthly income gap",
+        `Options to review: raise the Retirement Account (top-ups), defer the payout age, add private income sources (portfolio, SRS, property), or revisit the target.${d.incomeShortfall > 0 ? ` Current shortfall: ${fmt(d.incomeShortfall)}/month.` : ""}`);
+    }
+  } else {
+    add("Income", "watch", "Income adequacy not assessed", "No monthly income target is set, so this dimension is excluded from the score.");
+    act(4, "Set a monthly retirement income target", "Without a target the planner cannot judge whether your projected income is enough.");
+  }
+
+  // ── 3. Stress resilience ─────────────────────────────────────────────────
+  if (has(d.p10Sub)) {
+    const sev = d.p10Sub >= R.dimGood ? "good" : d.p10Sub >= R.dimWatch ? "watch" : "risk";
+    add("Resilience", sev, `Stress resilience score ${d.p10Sub}/100`,
+      sev === "good" ? "Your plan holds up well under the stress tests that were run."
+        : "Your projected balances fall materially under the stress tests that were run.");
+  } else {
+    add("Resilience", "watch", "Stress resilience not assessed", "No stress test is switched on, so a neutral value is used in the score.");
+    act(4, "Run a stress test", "Switch on Monte Carlo or the Perfect Storm test in the Plan tab to see how the plan behaves in a bad market or high-inflation scenario.");
+  }
+  if (has(d.mcProb)) {
+    const sev = d.mcProb >= R.mcGood ? "good" : d.mcProb >= R.mcWatch ? "watch" : "risk";
+    add("Resilience", sev, `${d.mcProb}% of Monte Carlo runs reach the FRS at payout age`, "Based on random return paths around your growth assumptions.");
+    if (sev !== "good") act(sev === "risk" ? 2 : 3, "Improve the odds of reaching the FRS", "Higher regular contributions, a longer accumulation period, or a lower-volatility mix would each raise the share of simulations that reach the FRS.");
+  }
+  if (has(d.stormDeltaPct)) {
+    const sev = d.stormDeltaPct >= R.stormRisk ? "risk" : d.stormDeltaPct >= R.stormWatch ? "watch" : "good";
+    add("Resilience", sev, `Perfect Storm lowers projected net worth by ${d.stormDeltaPct}%`, "Combined stress on CPF balances, private assets, property and healthcare costs.");
+  }
+  if (d.sorr && has(d.sorr.sorrDepletionAge) && (!has(d.sorr.baseDepletionAge) || d.sorr.sorrDepletionAge < d.sorr.baseDepletionAge)) {
+    add("Resilience", "watch", `An early-retirement market crash brings depletion forward to age ${d.sorr.sorrDepletionAge}`,
+      has(d.sorr.baseDepletionAge) ? `Without the crash, depletion is at age ${d.sorr.baseDepletionAge}.` : "Without the crash, private assets last through the projection.");
+  }
+  if (has(d.inflLoss) && d.inflLoss > 0) {
+    add("Resilience", "watch", `Higher inflation could erode about ${fmt(d.inflLoss)} of lifetime CPF LIFE purchasing power`, "Compared with your base inflation assumption, over the planning horizon.");
+  }
+
+  // ── 4. Longevity cover ───────────────────────────────────────────────────
+  if (has(d.longevitySub)) {
+    const sev = d.longevitySub >= R.dimGood ? "good" : d.longevitySub >= R.dimWatch ? "watch" : "risk";
+    add("Longevity", sev, `Longevity cover score ${d.longevitySub}/100`,
+      sev === "good" ? "Income at age 90 keeps reasonable purchasing power."
+        : "A flat nominal payout loses purchasing power over a long retirement; income at age 90 is under pressure.");
+    if (sev !== "good") act(3, "Protect income against inflation over a long retirement", "Review the Escalating CPF LIFE plan, which starts lower but rises with age, and whether private income sources can fill the later-life gap.");
+  }
+
+  // ── 5. Healthcare shield ─────────────────────────────────────────────────
+  if (has(d.maSub)) {
+    const sev = d.maSub >= R.maGood ? "good" : d.maSub >= R.maWatch ? "watch" : "risk";
+    add("Healthcare", sev, d.maSub >= R.maGood ? "MediSave reaches the Basic Healthcare Sum" : `MediSave reaches ${d.maSub}% of the projected Basic Healthcare Sum`,
+      sev === "good" ? "MediSave is projected to cover premiums and moderate medical costs." : "A MediSave shortfall leaves more healthcare cost to cash or insurance.");
+    if (sev !== "good") act(3, "Strengthen the MediSave balance", "A cash top-up to MediSave (VCMA) can help it reach the Basic Healthcare Sum; check the annual cap and your eligibility.");
+  }
+
+  // ── 6. Sustainability of private/drawdown income ─────────────────────────
+  if (d.swr) {
+    const s = d.swr;
+    if (has(s.annualGap) && s.annualGap === 0) {
+      add("Sustainability", "good", "CPF LIFE covers your income target", "No portfolio drawdown is needed to meet the target.");
+    } else if (has(s.annualGap) && s.annualGap > 0) {
+      if (has(s.depletionAge) && s.depletionAge < R.depletionRiskAge) {
+        add("Sustainability", "risk", `Private assets could run out around age ${s.depletionAge}`, `Covering the ${fmt(s.annualGap / 12)}/month shortfall from your portfolio is projected to exhaust it earlier than age ${R.depletionRiskAge}.`);
+        act(2, "Make the private-asset drawdown last longer", "Reduce the monthly draw, build the portfolio or SRS balance, or defer the start of withdrawals.");
+      } else if (has(s.requiredSWR) && s.requiredSWR >= R.swrRisk) {
+        add("Sustainability", "risk", `Required withdrawal rate is ${s.requiredSWR}% of your portfolio`, "Rates above about 6% a year are hard to sustain (the 4% rule of thumb is a common benchmark).");
+      } else if (has(s.requiredSWR) && s.requiredSWR >= R.swrWatch) {
+        add("Sustainability", "watch", `Required withdrawal rate is ${s.requiredSWR}% of your portfolio`, "Above the 4% rule-of-thumb benchmark, so returns matter.");
+      } else {
+        add("Sustainability", "good", "Portfolio can sustain the income shortfall", has(s.requiredSWR) ? `Required withdrawal rate is ${s.requiredSWR}% of your portfolio.` : "Projected to last through the planning horizon.");
+      }
+    }
+  }
+  if (has(d.oaExhaustAge) && d.oaExhaustAge < R.depletionRiskAge) {
+    add("Sustainability", "watch", `Your OA drawdown is projected to run out at age ${d.oaExhaustAge}`, "The monthly OA draw you set reaches its floor at this age.");
+  }
+
+  // ── 7. Critical milestone alerts ─────────────────────────────────────────
+  if (d.dangerCount > 0) {
+    add("Alerts", "risk", `${d.dangerCount} critical milestone alert${d.dangerCount === 1 ? "" : "s"} in the projection`, (d.dangerLabels || []).slice(0, 3).join("; "));
+  }
+
+  // Order: risks first, then watch, then good; actions by priority.
+  const rank = { risk: 0, watch: 1, good: 2 };
+  findings.sort((a, b) => rank[a.severity] - rank[b.severity]);
+  actions.sort((a, b) => a.priority - b.priority);
+  return { verdict, findings, actions: actions.slice(0, 6) };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ReadinessTab — Phase 1+2+3 implementation
 // Pure display component: reads computed data via props, writes back via existing
 // App.jsx handlers. Zero engine changes, zero new state in App.jsx.
@@ -6080,120 +6383,12 @@ function ReadinessTab({
     raAtPA, projFRS, stdMonthly,
     p10SubScore, longevitySubScore, maSubScore,
     color: scoreColor, label: scoreLabel,
-  } = useMemo(() => {
-    // ── 1. FRS Coverage ───────────────────────────────────────────────────
-    const nomMap  = nominalAccumulationByAge || accumulationByAge;
-    const nomPayD = nomMap.get(pa) || {};
-    const raAtPA  = nomPayD.ra || 0;    // always nominal
-    const projFRS = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
-    const projBRS = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
-    const frsRatio    = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
-    const frsSubScore = Math.min(100, Math.round(frsRatio * 100));
-
-    // ── 2. Income Adequacy ─────────────────────────────────────────────────
-    const activePlanObj = lifePlans?.[highlightPlan || "standard"];
-    const rawPayout     = activePlanObj ? (isMale ? activePlanObj.startM : activePlanObj.startF) : 0;
-    const stdMonthly    = (highlightPlan === "basic" && rawPayout > 0)
-      ? rawPayout * (1 - basicPremiumPct / 100) / 0.90
-      : rawPayout;
-    // Portfolio withdrawal adds to monthly retirement income for the adequacy calculation
-    const portWithdrawMoRS = Number(inputs.portfolioWithdrawalMonthly) || 0;
-    const portWithdrawStartRS = Number(inputs.portfolioWithdrawalStartAge) || payoutAge65;
-    const portActiveAtPA = portWithdrawMoRS > 0 && portWithdrawStartRS <= payoutAge65;
-    const totalRetireIncome = stdMonthly + (portActiveAtPA ? portWithdrawMoRS : 0) + (Number(inputs.oaDrawdownMonthly) || 0);
-    // Target: use retirement expense estimate from new spending model if living expenses are set
-    const baseExp = Number(inputs.budgetLivingExpenses) || 0;
-    const retireExpTarget = baseExp > 0
-      ? Math.round(baseExp * (Number(inputs.retirementExpenseRatio) || 75) / 100
-          + (Number(inputs.retirementHealthcareMonthly) || 500))
-      : target; // fall back to targetMonthlyIncome if no living expenses set
-    // incomeRatio kept for sub-bar display; incomeSubScore is null when no target
-    const incomeRatio    = retireExpTarget > 0 ? Math.min(1, totalRetireIncome / retireExpTarget) : (target > 0 ? Math.min(1, stdMonthly / target) : null);
-    const incomeSubScore = retireExpTarget > 0 ? Math.min(100, Math.round((totalRetireIncome / retireExpTarget) * 100)) : (target > 0 ? Math.min(100, Math.round((stdMonthly / target) * 100)) : null);
-
-    // ── 3. Stress Resilience ───────────────────────────────────────────────
-    // Primary signal: Perfect Storm deterministic worst-case (SORR + inflation surge +
-    //   property stress + CPF rate cut + healthcare surge, all combined).
-    //   perfectStormScore = 100 − deltaPct  (e.g. 30% net-worth drop → score 70)
-    // Fallback: P10 Monte Carlo 10th-percentile total vs base case.
-    // Combined (both available): perfectStorm × 0.6 + p10 × 0.4 — named risk outweighs stats.
-    // null when both are unavailable → weight redistributed to other sub-scores.
-    const totalCPFNom_ = (nomPayD.oa || 0) + (nomPayD.sa || 0) + (nomPayD.ma || 0) + (nomPayD.ra || 0);
-    const p10RowAtPA_  = monteCarloData?.rows?.find(r => r.age === pa);
-    const p10Total_    = p10RowAtPA_?.p10 || 0;
-    const p10Score_    = (monteCarloData && totalCPFNom_ > 0 && p10Total_ > 0)
-      ? Math.min(100, Math.round((p10Total_ / totalCPFNom_) * 100))
-      : null;
-    const psScore_     = perfectStormData
-      ? Math.max(0, 100 - (perfectStormData.deltaPct || 0))
-      : null;
-    const p10SubScore  =   // returned as p10SubScore for KPI tile backward-compatibility
-      (psScore_ !== null && p10Score_ !== null) ? Math.round(psScore_ * 0.6 + p10Score_ * 0.4)
-      : psScore_ ?? p10Score_ ?? null;
-
-    // ── 4. Longevity Cover ─────────────────────────────────────────────────
-    // For CPF LIFE members: measures real purchasing power of the flat nominal payout at age 90
-    //   vs the BRS-level payout (minimum adequate standard). At 2 % inflation over 25 yrs the
-    //   nominal payout loses ~39 % of real value — this sub-score captures that decay.
-    // For OA-drawdown members: measures coverage years vs age-90 planning benchmark.
-    const oaDrawActiveL  = (effectiveOaDrawMonthly || 0) > 0 && (effectiveOaDrawStartAge || 0) > 0;
-    const oaDepMilL      = milestones.find(m =>
-      m.label?.toLowerCase().includes('drawdown exhaust') || m.label?.toLowerCase().includes('oa depletion')
-    );
-    const oaDepAgeL      = oaDepMilL?.age || null;
-    const inflRate_      = (Number(inputs.inflationRate) || 2) / 100;
-    const yearsTo90_     = Math.max(0, 90 - pa);
-    const realPayAt90_   = stdMonthly > 0 ? stdMonthly / Math.pow(1 + inflRate_, yearsTo90_) : 0;
-    const brsThreshold_  = interpolateCpfLife(projBRS, 'std', isMale, pa);
-    const longevitySubScore = !oaDrawActiveL
-      ? (brsThreshold_ > 0 ? Math.min(100, Math.round((realPayAt90_ / brsThreshold_) * 100)) : 100)
-      : (oaDepAgeL
-          ? Math.min(100, Math.round(((oaDepAgeL - pa) / Math.max(1, 90 - pa)) * 100))
-          : 100);
-
-    // ── 5. Healthcare Shield ───────────────────────────────────────────────
-    // MA at payout age vs projected Basic Healthcare Sum (BHS). MA reaching BHS means
-    // MediShield Life premiums and moderate medical costs are fully covered.
-    const projBHS_   = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow));
-    const maAtPA_    = nomPayD.ma || 0;
-    const maSubScore = projBHS_ > 0 ? Math.min(100, Math.round((maAtPA_ / projBHS_) * 100)) : 0;
-
-    // ── Age-banded weights ─────────────────────────────────────────────────
-    // Rationale: FRS weight steps down post-retirement (RA locked in, can't be changed).
-    // Healthcare weight escalates sharply — medical costs accelerate from 65+ at 5 %/yr.
-    // Longevity weight escalates post-65 — each remaining year of income matters more.
-    const AGE_WEIGHTS = [
-      { maxAge: 40,  frs: 0.35, inc: 0.25, p10: 0.15, long: 0.15, ma: 0.10 },
-      { maxAge: 54,  frs: 0.30, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.10 },
-      { maxAge: 64,  frs: 0.25, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.15 },
-      { maxAge: 74,  frs: 0.15, inc: 0.25, p10: 0.20, long: 0.20, ma: 0.20 },
-      { maxAge: 999, frs: 0.10, inc: 0.20, p10: 0.15, long: 0.25, ma: 0.30 },
-    ];
-    const wt = AGE_WEIGHTS.find(b => ca <= b.maxAge) || AGE_WEIGHTS[4];
-
-    // ── Weighted composite with graceful degradation ───────────────────────
-    const subScores = [
-      { val: frsSubScore,       wt: wt.frs  },
-      { val: incomeSubScore,    wt: wt.inc  },  // null when no target
-      { val: p10SubScore ?? (totalCPFNom_ > 0 ? 50 : 0), wt: wt.p10 }, // 50 neutral when MC off but CPF exists; 0 when nothing to stress-test
-      { val: longevitySubScore, wt: wt.long },
-      { val: maSubScore,        wt: wt.ma   },
-    ];
-    const active  = subScores.filter(s => s.val !== null);
-    const totalWt = active.reduce((acc, s) => acc + s.wt, 0);
-    const score   = active.length > 0
-      ? Math.round(active.reduce((acc, s) => acc + (s.val * s.wt), 0) / totalWt)
-      : 0;
-
-    const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
-    const label = score >= 75 ? "On Track" : score >= 50 ? "Needs Attention" : "At Risk";
-    return {
-      score, frsRatio, incomeRatio,
-      raAtPA, projFRS, stdMonthly,
-      p10SubScore, longevitySubScore, maSubScore,
-      color, label,
-    };
-  }, [
+  } = useMemo(() => computeReadinessScore({
+    nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
+    lifePlans, highlightPlan, isMale, basicPremiumPct, target,
+    monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
+    milestones, inputs, ca, perfectStormData, payoutAge65,
+  }), [
     nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
     lifePlans, highlightPlan, isMale, basicPremiumPct, target,
     monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
@@ -16039,6 +16234,183 @@ ${milestoneSnapshotHtml}
       setExportModal({ type: "pdf", content: html });
     } catch (e) { setConfirmModal({ title: "Report Failed", message: "Could not generate the PDF report: " + e.message, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" }); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
   };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Retirement Health Report — a holistic, narrative report assembled from datasets
+  // the app has ALREADY computed (no extra engine runs). Separate from generatePDF
+  // (numbers pack) and shown in the same preview modal. Paid plans only; CPF LIFE
+  // members only in this version (RSS and foreigner profiles are not covered yet).
+  // ═══════════════════════════════════════════════════════════════════════════
+  const generateHealthReport = () => {
+    if (plan === 'lite') { setShowUpgradeModal(true); return; }
+    if (isForeigner || inputs.cpfScheme === 'rss') {
+      showToast("ℹ️ The Health Report covers CPF LIFE members (not RSS or foreigner profiles) in this version");
+      return;
+    }
+    try {
+      const di = debouncedInputs; // same snapshot the datasets were computed from
+      const pa = payoutAge65;
+      const ca = Number(di.currentAge) || 35;
+      const cy = Number(di.currentYear) || 2026;
+      const fc = n => "$" + Math.round(Number(n) || 0).toLocaleString();
+      const esc = escapeHtml;
+      const rsGrowth = (Number(di.retirementSumGrowth) || 3) / 100;
+      const yearsFromNow = Math.max(0, (cy + Math.max(0, pa - ca)) - 2026);
+      const targetM = Number(di.targetMonthlyIncome) || 0;
+
+      // Score — identical calculation to the Readiness tab (shared pure function)
+      const r = computeReadinessScore({
+        nominalAccumulationByAge: projectionByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
+        lifePlans, highlightPlan, isMale: di.isMale !== false, basicPremiumPct, target: targetM,
+        monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
+        milestones, inputs: di, ca, perfectStormData, payoutAge65,
+      });
+
+      const row = accumulationByAge.get(pa) || {};
+      const totalCpf = (row.oa || 0) + (row.sa || 0) + (row.ma || 0) + (row.ra || 0);
+      const displayPayout = isRealDollars ? applyInflation(r.stdMonthly, pa) : r.stdMonthly;
+      const coveragePct = targetM > 0 ? Math.round(displayPayout / targetM * 100) : null;
+      const incomeShortfall = targetM > 0 ? Math.max(0, targetM - displayPayout) : 0;
+      const mcRow = monteCarloData?.rows?.find(x => x.age === pa) || null;
+      const dangers = (milestones || []).filter(m => m.type === 'danger');
+
+      const H = buildHealthFindings({
+        fmt: fc, score: r.score, label: r.label,
+        frsRatio: r.frsRatio, incomeSub: r.incomeSubScore, incomeRatio: r.incomeRatio,
+        p10Sub: r.p10SubScore, longevitySub: r.longevitySubScore, maSub: r.maSubScore,
+        coveragePct, incomeShortfall, gapAlert,
+        mcProb: monteCarloData?.probSufficiency ?? null,
+        stormDeltaPct: perfectStormData ? perfectStormData.deltaPct : null,
+        sorr: sorrData?.hasData ? { sorrDepletionAge: sorrData.sorrDepletionAge, baseDepletionAge: sorrData.baseDepletionAge } : null,
+        inflLoss: inflationStressData ? inflationStressData.lifetimeLoss : null,
+        swr: swrAnalytics ? { annualGap: swrAnalytics.annualGap, requiredSWR: swrAnalytics.requiredSWR, depletionAge: swrAnalytics.depletionAge, sustainYears: swrAnalytics.sustainYears } : null,
+        oaExhaustAge, dangerCount: dangers.length, dangerLabels: dangers.map(m => m.label), ca, pa,
+      });
+
+      const dateStr = new Date().toLocaleDateString("en-SG", { day: "2-digit", month: "long", year: "numeric" });
+      const fingerprint = hashInputsFnv(di);
+      const dollarMode = isRealDollars ? "Real dollars (today's purchasing power)" : "Nominal dollars";
+      const planName = lifePlans?.[highlightPlan]?.name || (highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1));
+      const sevStyle = { good: ["#166534", "#f0fdf4", "#86efac", "✔"], watch: ["#92400e", "#fffbeb", "#fcd34d", "!"], risk: ["#991b1b", "#fef2f2", "#fca5a5", "✖"] };
+      const dimColor = v => v >= 75 ? "#16a34a" : v >= 50 ? "#d97706" : "#dc2626";
+
+      const bar = (label, v, note) => v === null || v === undefined
+        ? `<div class="dim"><div class="dim-l">${label}</div><div class="dim-b"><div class="dim-na">Not assessed</div></div><div class="dim-n">${note || ""}</div></div>`
+        : `<div class="dim"><div class="dim-l">${label}</div><div class="dim-b"><div class="dim-f" style="width:${Math.max(2, Math.min(100, v))}%;background:${dimColor(v)}"></div></div><div class="dim-n"><b>${Math.round(v)}</b>/100${note ? " · " + note : ""}</div></div>`;
+      const kv = (k, v) => `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`;
+      const finding = f => { const [fg, bg, bd, ic] = sevStyle[f.severity]; return `<div class="fnd" style="background:${bg};border-left:4px solid ${bd};color:${fg}"><div class="fnd-t">${ic} ${esc(f.title)}</div><div class="fnd-d">${esc(f.detail)}</div></div>`; };
+      const nr = what => `<span class="na">Not run — ${what}</span>`;
+
+      const w = r.weights || {};
+      const wRow = (label, k) => w[k] !== undefined && w[k] !== null ? kv(label, `${Math.round(w[k] * 100)}%`) : "";
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Retirement Health Report — ${esc(di.name || "Member")}</title>
+<style>
+@page{size:A4 portrait;margin:14mm}
+*{box-sizing:border-box}
+body{font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;font-size:11px;line-height:1.5;margin:0;background:#fff}
+.page{max-width:780px;margin:0 auto;padding:18px 22px}
+.hdr{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;border-radius:10px;padding:18px 22px;margin-bottom:14px}
+.hdr h1{margin:0 0 2px;font-size:20px}.hdr .sub{opacity:.8;font-size:11px}
+.sec{margin:16px 0 6px;font-size:13px;font-weight:800;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:3px;page-break-after:avoid}
+.score{display:flex;gap:18px;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px}
+.score-n{font-size:44px;font-weight:900;line-height:1;color:${dimColor(r.score)}}.score-l{font-size:15px;font-weight:800}
+.verdict{margin:8px 0 10px;padding:10px 14px;border-radius:8px;background:${sevStyle[H.verdict.tone][1]};border:1px solid ${sevStyle[H.verdict.tone][2]};color:${sevStyle[H.verdict.tone][0]}}
+.verdict b{font-size:13px}
+.dim{display:grid;grid-template-columns:150px 1fr 150px;gap:8px;align-items:center;margin:5px 0}
+.dim-l{font-weight:700}.dim-b{background:#e2e8f0;border-radius:6px;height:10px;overflow:hidden}.dim-f{height:100%}
+.dim-na{font-size:9px;color:#64748b;padding-left:6px;line-height:10px}.dim-n{font-size:10px;color:#475569}
+table.kv{width:100%;border-collapse:collapse}table.kv td{padding:4px 6px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+td.k{color:#475569;width:46%}td.v{font-weight:700;text-align:right}
+.na{color:#94a3b8;font-weight:600;font-style:italic}
+.fnd{border-radius:6px;padding:7px 10px;margin:5px 0;page-break-inside:avoid}.fnd-t{font-weight:800}.fnd-d{font-size:10.5px;margin-top:1px}
+.act{display:flex;gap:10px;margin:6px 0;page-break-inside:avoid}.act-n{flex:0 0 22px;height:22px;border-radius:50%;background:#0f172a;color:#fff;font-weight:800;text-align:center;line-height:22px}
+.act b{display:block}.act span{font-size:10.5px;color:#334155}
+.alt{display:flex;gap:8px;margin:3px 0;font-size:10.5px}.alt i{font-style:normal;font-weight:800;flex:0 0 52px}
+.foot{margin-top:18px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:9px;color:#64748b}
+.foot .fp{font-family:Consolas,monospace}
+.legal{margin-top:6px;font-size:8.5px;color:#94a3b8}
+@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{padding:0}}
+</style></head><body><div class="page">
+
+<div class="hdr"><h1>Retirement Health Report</h1>
+<div class="sub">${esc(di.name || "Member")} · Age ${ca} · Planned CPF LIFE payout at ${pa} · ${esc(dollarMode)} · ${dateStr}</div></div>
+
+<div class="sec">1 · Executive summary</div>
+<div class="score"><div><div class="score-n">${r.score}</div><div style="font-size:9px;color:#64748b">out of 100</div></div>
+<div><div class="score-l" style="color:${dimColor(r.score)}">${esc(r.label)}</div><div style="font-size:10.5px;color:#475569">${esc(H.verdict.text)}</div></div></div>
+<div class="verdict"><b>${esc(H.verdict.headline)}</b></div>
+${bar("Retirement Sum (FRS)", r.frsSubScore, `RA is ${Math.round((r.frsRatio || 0) * 100)}% of projected FRS`)}
+${bar("Income adequacy", r.incomeSubScore, coveragePct !== null ? `covers ${coveragePct}% of target` : "no target set")}
+${bar("Stress resilience", r.p10SubScore, "")}
+${bar("Longevity cover", r.longevitySubScore, "")}
+${bar("Healthcare shield", r.maSubScore, "")}
+<div style="margin-top:8px"><b>Key findings</b></div>
+${H.findings.slice(0, 6).map(finding).join("") || '<div class="na">No findings.</div>'}
+
+<div class="sec">2 · Retirement income adequacy</div>
+<table class="kv">
+${kv(`CPF LIFE payout at ${pa} — ${esc(planName)} plan`, `${fc(displayPayout)}/month`)}
+${kv("Standard · Escalating · Basic (starting monthly)", `${fc(isRealDollars ? applyInflation(lifePlans.standard.start, pa) : lifePlans.standard.start)} · ${fc(isRealDollars ? applyInflation(lifePlans.escalating.start, pa) : lifePlans.escalating.start)} · ${fc(isRealDollars ? applyInflation(lifePlans.basic.start, pa) : lifePlans.basic.start)}`)}
+${kv("Your monthly income target", targetM > 0 ? `${fc(targetM)}/month` : '<span class="na">Not set</span>')}
+${kv("Coverage of target", coveragePct !== null ? `${coveragePct}%` : '<span class="na">n/a</span>')}
+${kv("Estimated monthly shortfall", targetM > 0 ? (incomeShortfall > 0 ? fc(incomeShortfall) + "/month" : "None") : '<span class="na">n/a</span>')}
+</table>
+
+<div class="sec">3 · Balances at the payout age (${pa})</div>
+<table class="kv">
+${kv("Ordinary Account (OA)", fc(row.oa))}${kv("Special / Retirement Account (SA · RA)", fc((row.sa || 0) + (row.ra || 0)))}${kv("MediSave Account (MA)", fc(row.ma))}
+${kv("Total CPF balances", fc(totalCpf))}
+${kv("Projected Full Retirement Sum (nominal)", fc(r.projFRS))}
+${kv("RA as % of projected FRS", `${Math.round((r.frsRatio || 0) * 100)}%`)}
+</table>
+${gapAlert ? `<div class="fnd" style="background:#fffbeb;border-left:4px solid #fcd34d;color:#92400e"><div class="fnd-t">${esc(gapAlert.raLabel)} is ${fc(gapAlert.frsGap)} short of the FRS</div><div class="fnd-d">About ${fc(gapAlert.monthlyTopUp)}/month (${fc(gapAlert.annualTopUp)}/year) for ${gapAlert.yearsToGo} year${gapAlert.yearsToGo === 1 ? "" : "s"} would close it (assumes 4% p.a. growth).</div></div>` : ""}
+
+<div class="sec">4 · Resilience and stress tests</div>
+<table class="kv">
+${kv("Monte Carlo — chance of reaching the FRS at payout age", monteCarloData?.probSufficiency != null ? `${monteCarloData.probSufficiency}%` : nr("switch on Monte Carlo"))}
+${kv("Monte Carlo — total CPF at payout age (P10 · P50 · P90)", mcRow ? `${fc(mcRow.p10)} · ${fc(mcRow.p50)} · ${fc(mcRow.p90)}` : nr("switch on Monte Carlo"))}
+${kv("Perfect Storm — fall in projected net worth", perfectStormData ? `${perfectStormData.deltaPct}% (${fc(perfectStormData.delta)})` : nr("switch on Perfect Storm"))}
+${kv("Market crash early in retirement — private assets run out at", sorrData?.hasData ? (sorrData.sorrDepletionAge ? `age ${sorrData.sorrDepletionAge}${sorrData.baseDepletionAge ? ` (base case: ${sorrData.baseDepletionAge})` : " (base case: lasts)"}` : "Lasts through the projection") : nr("switch on the sequence-of-returns test"))}
+${kv("Higher inflation — lifetime CPF LIFE purchasing power lost", inflationStressData ? fc(inflationStressData.lifetimeLoss) : nr("switch on the inflation stress test"))}
+</table>
+
+<div class="sec">5 · Sustainability of drawdown income</div>
+<table class="kv">
+${swrAnalytics ? `${kv("Monthly shortfall vs target after CPF LIFE", swrAnalytics.annualGap > 0 ? fc(swrAnalytics.annualGap / 12) + "/month" : "None — CPF LIFE covers the target")}
+${swrAnalytics.annualGap > 0 ? kv("Required withdrawal rate on private portfolio", swrAnalytics.requiredSWR != null ? `${swrAnalytics.requiredSWR}% a year` : '<span class="na">n/a (no portfolio)</span>') : ""}
+${swrAnalytics.annualGap > 0 ? kv("Portfolio lasts", swrAnalytics.sustainYears === Infinity ? "Indefinitely (growth exceeds the draw)" : swrAnalytics.depletionAge ? `to about age ${swrAnalytics.depletionAge}` : '<span class="na">n/a</span>') : ""}` : kv("Drawdown analysis", '<span class="na">Not available</span>')}
+${kv("OA drawdown runs out at", oaExhaustAge ? `age ${oaExhaustAge}` : "Not within the projection (or no OA draw set)")}
+</table>
+
+<div class="sec">6 · Milestone alerts in the projection</div>
+${(milestones || []).length ? [...(milestones || [])].sort((a, b) => (a.type === 'danger' ? 0 : 1) - (b.type === 'danger' ? 0 : 1) || a.age - b.age).slice(0, 8).map(m => `<div class="alt"><i style="color:${m.type === 'danger' ? '#dc2626' : m.type === 'warning' ? '#d97706' : '#0f766e'}">Age ${m.age}</i><span><b>${esc(m.label)}</b>${m.detail ? " — " + esc(m.detail) : ""}</span></div>`).join("") : '<div class="na">No milestone alerts.</div>'}
+
+<div class="sec">7 · Suggested next steps</div>
+${H.actions.length ? H.actions.map((a, i) => `<div class="act"><div class="act-n">${i + 1}</div><div><b>${esc(a.title)}</b><span>${esc(a.detail)}</span></div></div>`).join("") : '<div class="na">No actions flagged — keep monitoring as your circumstances change.</div>'}
+
+<div class="sec">8 · Basis and assumptions</div>
+<table class="kv">
+${kv("Current age · CPF LIFE payout age", `${ca} · ${pa}`)}
+${kv("Display basis", esc(dollarMode))}
+${kv("Projected inflation", `${Number.isFinite(Number(di.inflationRate)) && di.inflationRate !== "" ? Number(di.inflationRate) : 2}% a year`)}
+${kv("Retirement Sum growth", `${(rsGrowth * 100).toFixed(1)}% a year`)}
+${kv("2026 Retirement Sums (BRS · FRS · ERS)", `${fc(RETIREMENT_SUMS_2026.BRS)} · ${fc(RETIREMENT_SUMS_2026.FRS)} · ${fc(RETIREMENT_SUMS_2026.ERS)}`)}
+${kv("2026 Basic Healthcare Sum (BHS)", fc(RETIREMENT_SUMS_2026.BHS))}
+${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income", "inc")}${wRow("Score weight — Stress resilience", "p10")}${wRow("Score weight — Longevity", "long")}${wRow("Score weight — Healthcare", "ma")}
+</table>
+<div class="legal">Findings are rule-based classifications of this projection against fixed thresholds (e.g. FRS coverage ≥ 100% good, 75–99% watch, below 75% at risk). They are informational, not financial advice, and stress tests that are switched off are shown as "not run" rather than estimated.</div>
+
+<div class="foot">Generated ${dateStr} · Fusion 富生 · V4-2026 · Input fingerprint <span class="fp">${fingerprint}</span> (identical inputs always give the same fingerprint)
+<div class="legal">${LEGAL_DISCLAIMER}</div></div>
+</div></body></html>`;
+
+      setExportModal({ type: "pdf", title: "🩺 Retirement Health Report", content: html });
+    } catch (err) {
+      console.error("Health report error:", err);
+      showToast("⚠️ Could not build the Health Report — " + (err?.message || "unexpected error"));
+    }
+  };
   // ─── SIDEBAR TOGGLE HANDLER ───────────────────────────────────────────────────
   // Wraps setSidebarOpen so that when the user manually toggles the sidebar while
   // ON the Readiness tab, both refs are updated to reflect their intention:
@@ -18373,7 +18745,7 @@ ${milestoneSnapshotHtml}
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>
-                  {exportModal.type === "pdf" && "📄 PDF Report"}
+                  {exportModal.type === "pdf" && (exportModal.title || "📄 PDF Report")}
                   {exportModal.type === "csv" && "📊 CSV Export — Year-by-Year Projection"}
                   {exportModal.type === "json" && "💾 Profile Backup — JSON"}
                   {exportModal.type === "print" && "🖨️ Data Table — Plain Text"}
@@ -18679,6 +19051,7 @@ ${milestoneSnapshotHtml}
                   <div className="welcome-step3-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
                     {[
                       ["Share Link 🔒 Plus", Link, "Fusion Plus — Generates a URL with your full profile encoded. Anyone opening the link sees your exact inputs and projection — no file needed."],
+                      ["Health Report 🔒 Plus", ShieldCheck, "Fusion Plus — A narrative Retirement Health Report: readiness score, ranked findings, income adequacy, balances at payout age, stress-test results, drawdown sustainability and a prioritised action plan. Stress tests you have switched on are included; others show as not run. CPF LIFE members only."],
                       ["PDF Report 🔒 Plus", Download, "Fusion Plus — Comprehensive multi-section PDF: cover, input parameters & optional features, charts, FRS tracker, year-by-year projection, Cashflow Ledger, sensitivity analysis, and conditional SRS / Scenario Comparison sections."],
                       ["SEP Mode", Briefcase, "Free on all plans — Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr proportionally allocated. BHS, ERS, and AW ceiling enforced."],
                       ["Monte Carlo 🔒 Pro", Activity, "Fusion Pro — 500 simulations with user-selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in the Accumulation tab. Shows probability of meeting FRS at payout age and a live P10–P90 confidence band on the chart."],
@@ -18961,6 +19334,10 @@ ${milestoneSnapshotHtml}
                     {isGeneratingPdf ? "Generating…" : "PDF Report"}{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                   </button>
                   <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
+                    onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowReportMenu(false); return; } generateHealthReport(); setShowReportMenu(false); }}>
+                    <ShieldCheck style={{ width: 13, height: 13 }} />Health Report{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
+                  </button>
+                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
                     onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowReportMenu(false); return; } handleExportCSV(); setShowReportMenu(false); }}>
                     <Download style={{ width: 13, height: 13 }} />CSV – Data{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                   </button>
@@ -19057,6 +19434,10 @@ ${milestoneSnapshotHtml}
                       onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowSettingsMenu(false); return; } if (!isGeneratingPdf) { generatePDF(); setShowSettingsMenu(false); } }}>
                       {isGeneratingPdf ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <Printer style={{ width: 13, height: 13 }} />}
                       {isGeneratingPdf ? "Generating…" : "PDF Report"}{plan==='lite'&&<span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
+                    </button>
+                    <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
+                      onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowSettingsMenu(false); return; } generateHealthReport(); setShowSettingsMenu(false); }}>
+                      <ShieldCheck style={{ width: 13, height: 13 }} />Health Report{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                     </button>
                     <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
                       onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowSettingsMenu(false); return; } handleExportCSV(); setShowSettingsMenu(false); }}>
@@ -30453,6 +30834,8 @@ ${milestoneSnapshotHtml}
                     </h4>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
+                        [ShieldCheck, "Retirement Health Report (Plus)", "var(--clr-emerald)",
+                          "A new narrative report is available under Report → Health Report. It turns your plan into a readiness verdict, ranked findings, income adequacy, balances at payout age, stress-test results, drawdown sustainability and a prioritised next-steps list, plus a basis and assumptions page. Stress tests you have switched on (Monte Carlo, Perfect Storm, sequence-of-returns, inflation) are included; any that are off are shown as not run rather than estimated. Each report carries a date and an input fingerprint so it can be traced to its inputs. Available for CPF LIFE members on Plus and Pro plans; RSS and foreigner profiles are not covered yet."],
                         [Briefcase, "Barista FIRE now applied in projections", "#10b981",
                           "Barista FIRE life events (semi-retirement with part-time work) are now applied by the main CPF projection engine. During the event age range, enter your part-time monthly gross income as the magnitude: employee CPF contributions are scaled to the part-time salary, employer CPF is not modelled (gig / freelance arrangement), and take-home pay after employee CPF is credited to private assets. This also fixes a startup error that could leave the screen blank after logging in."],
                         [ShieldCheck, "Stability fixes — tabs, exports and crash protection", "var(--clr-emerald)",
