@@ -18679,6 +18679,66 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
         .cpf-tabs button[role="tab"]:hover { background: var(--bg-muted) !important; }
         .cpf-tabs button[role="tab"][aria-selected="true"] { background: rgba(var(--clr-emerald-rgb), 0.14) !important; color: var(--text-bright) !important; }
         .theme-light .cpf-tabs button[role="tab"][aria-selected="true"] { color: var(--clr-emerald) !important; }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           FUSION CALM — INPUT SIDEBAR + KPI STRIP (minimalist pass)
+           One column, neutral colour, no helper text until a section opens.
+           ═══════════════════════════════════════════════════════════════════ */
+        /* 1. One focused column instead of three side-by-side */
+        .cpf-layout[data-mode="fhd"] { grid-template-columns: 420px 1fr !important; gap: 40px !important; }
+        .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner { display: flex !important; flex-direction: column !important; gap: 0 !important; }
+        @media (min-width: 1920px) {
+          .cpf-layout[data-mode="auto"] { grid-template-columns: 420px 1fr !important; gap: 40px !important; }
+          .cpf-layout[data-mode="auto"] .cpf-sidebar-inner { display: flex !important; flex-direction: column !important; gap: 0 !important; }
+          .cpf-layout[data-mode="auto"] .sidebar-sticky-bar { display: flex !important; }
+        }
+        .cpf-layout[data-mode="fhd"] .sidebar-sticky-bar { display: flex !important; gap: 8px !important; }
+        .fhd-col-btn, .cpf-layout .fhd-col-btn { display: none !important; }
+        .sidebar-col, .sidebar-col-body { gap: 0 !important; }
+
+        /* 2. Sections become a plain list with hairlines (no boxes, no tints) */
+        .sidebar-col-body > div {
+          background: transparent !important; border: 0 !important; border-radius: 0 !important;
+          border-bottom: 1px solid var(--border-subtle) !important; box-shadow: none !important;
+        }
+        .sidebar-section-header { padding: 18px 4px !important; background: transparent !important; }
+        .sidebar-section-header:hover { background: var(--bg-muted) !important; }
+        .sidebar-section-header span, .sidebar-section-header > div > span {
+          color: var(--text-bright) !important; font-size: 15px !important; font-weight: 600 !important;
+          text-transform: none !important; letter-spacing: 0 !important;
+        }
+        .sidebar-section-header svg { color: var(--text-subtle) !important; opacity: .9; }
+        /* the long italic hint under each closed section is the main source of clutter */
+        .sidebar-section-header + * { display: none !important; }
+
+        /* 3. Fields: neutral labels, soft inputs, one accent on focus */
+        .cpf-sidebar-wrap label, .cpf-sidebar-wrap label * {
+          color: var(--text-muted) !important; font-size: 13px !important; font-weight: 500 !important;
+          text-transform: none !important; letter-spacing: 0 !important;
+        }
+        .cpf-sidebar-wrap input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), .cpf-sidebar-wrap select, .cpf-sidebar-wrap textarea {
+          background: var(--bg-input) !important; border: 1px solid transparent !important; border-radius: 10px !important;
+          padding: 10px 12px !important; font-size: 14px !important; font-family: "Inter", ui-sans-serif, system-ui, sans-serif !important;
+          font-feature-settings: "tnum" 1; color: var(--text-bright) !important; box-shadow: none !important;
+        }
+        .cpf-sidebar-wrap input:focus, .cpf-sidebar-wrap select:focus { border-color: var(--clr-green) !important; outline: none !important; }
+        .cpf-sidebar-wrap [style*="padding: 0px 16px 16px"], .cpf-sidebar-wrap [style*="padding: 0 16px 16px"] { padding: 0 4px 24px !important; }
+        /* nested tinted info boxes (OA Drawdown, Expense Planning, Die with Zero...) -> neutral */
+        .cpf-sidebar-wrap div[style*="background: rgba("] { background: var(--bg-muted) !important; border-color: var(--border-subtle) !important; border-radius: 12px !important; }
+        .cpf-sidebar-wrap [style*="font-style: italic"] { font-style: normal !important; }
+        .cpf-sidebar-wrap p, .cpf-sidebar-wrap [style*="font-size: 13px"] { line-height: 1.55; }
+
+        /* 4. Top KPI strip: one quiet row, big numbers, no tile borders, no NEW badges */
+        .kpi-strip { gap: 0 !important; max-width: none !important; }
+        .kpi-strip > div { background: transparent !important; border: 0 !important; border-radius: 0 !important; padding: 8px 20px !important; text-align: left !important; }
+        .kpi-strip > div + div { border-left: 1px solid var(--border-subtle) !important; }
+        .kpi-strip > div > span[style*="position: absolute"] { display: none !important; }
+        .kpi-strip .cpf-kpi-label { color: var(--text-muted) !important; font-weight: 500 !important; }
+        .kpi-strip .cpf-kpi-value { font-family: var(--font-display) !important; font-weight: 600 !important; font-size: 28px !important; letter-spacing: -0.02em !important; }
+        .kpi-strip-wrap::after { display: none !important; }
+
+        /* 5. Header buttons: quieter */
+        .cpf-sidebar-wrap button:not([role="tab"]) { font-weight: 600; }
       `}</style>
 
       {/* TOAST NOTIFICATION QUEUE — UX-9: multiple toasts stack vertically */}
