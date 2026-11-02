@@ -8951,8 +8951,8 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   // Summary tab collapsible zone states
   const [z2z3Expanded, setZ2z3Expanded] = useState(true);
   const [z5Expanded, setZ5Expanded] = useState(true);
-  const [z6Expanded, setZ6Expanded] = useState(true);
-  const [zCalloutExpanded, setZCalloutExpanded] = useState(true);
+  const [z6Expanded, setZ6Expanded] = useState(false);
+  const [zCalloutExpanded, setZCalloutExpanded] = useState(false);
   // Payout premium percentages for CPF LIFE plans (Basic: 10-20%, Standard: 100%, Escalating: 100%)
   // CPF policy: premium is age-dictated — 10% at 65, +2%/yr of deferral, capped at 20% (age 70).
   const [basicPremiumPct, setBasicPremiumPct] = useState(10);
@@ -16466,6 +16466,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
     <TooltipContext.Provider value={{ show: showTooltipId, set: setShowTooltipId, rect: tooltipRect, setRect: setTooltipRect, isDark }}>
       <ErrorBoundary>
       <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{ width: "100%", display: "flex", flexDirection: "column", background: "var(--bg-base)", color: "var(--text-main)", fontFamily: "system-ui,sans-serif" }}>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" />
       <style>{`
         /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
         html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow-x: clip !important; }
@@ -18581,6 +18582,103 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
         .recharts-wrapper, .recharts-surface, input[type="range"] {
           touch-action: pan-y !important;
         }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           FUSION CALM REDESIGN — appended override layer
+           Goals: fewer boxes, one clear hero, readable type, softer chrome.
+           Hooks: [data-zone] attributes + existing class names. Safe to delete
+           this whole block to revert to the previous look.
+           ═══════════════════════════════════════════════════════════════════ */
+        .theme-dark {
+          --bg-base: #0a101c;
+          --bg-panel: #111a2a;
+          --bg-input: #17233a;
+          --bg-muted: rgba(255,255,255,0.035);
+          --bg-panel-muted: rgba(255,255,255,0.03);
+          --border-subtle: rgba(255,255,255,0.075);
+          --border-strong: rgba(255,255,255,0.15);
+          --text-muted: #a3b3c9;
+          --text-subtle: #8a9ab0;
+          --chart-grid: rgba(255,255,255,0.06);
+        }
+        .theme-dark, .theme-light { --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif; }
+
+        /* Quality floor: visible keyboard focus, reduced motion */
+        .theme-dark button:focus-visible, .theme-light button:focus-visible,
+        .theme-dark summary:focus-visible, .theme-light summary:focus-visible,
+        .theme-dark input:focus-visible, .theme-light input:focus-visible { outline: 2px solid var(--clr-green); outline-offset: 2px; }
+        @media (prefers-reduced-motion: reduce) { .theme-dark *, .theme-light * { transition: none !important; animation: none !important; } }
+
+        /* Breathing room */
+        .cpf-layout { gap: 32px !important; }
+        .cpf-tab-content { padding: 16px 8px 40px !important; }
+        [data-zone] { padding: 24px 28px !important; }
+        [data-zone="z1"] { padding: 32px 36px !important; }
+        [data-zone="gap-alert"], [data-zone="pledge"], [data-zone="ra-oa"], [data-zone="goal"] { padding: 16px 20px !important; }
+
+        /* Visual order on Summary (normal flow only): answer first, evidence next, tools last */
+        :not(.summary-exec-dash) > [data-zone="gap-alert"], :not(.summary-exec-dash) [data-zone="gap-alert"] { order: -1; }
+        :not(.summary-exec-dash) [data-zone="z1"]            { order: 0; }
+        :not(.summary-exec-dash) [data-zone="goal"]          { order: 1; }
+        :not(.summary-exec-dash) [data-zone="nw-chart"]      { order: 2; }
+        :not(.summary-exec-dash) [data-zone="z23-wrap"]      { order: 3; }
+        :not(.summary-exec-dash) [data-zone="z4"]            { order: 4; }
+        :not(.summary-exec-dash) [data-zone="z5"]            { order: 5; }
+        :not(.summary-exec-dash) [data-zone="milestone-snap"]{ order: 6; }
+        :not(.summary-exec-dash) [data-zone="pledge"], :not(.summary-exec-dash) [data-zone="ra-oa"] { order: 7; }
+        :not(.summary-exec-dash) [data-zone="what-if"]       { order: 8; }
+        :not(.summary-exec-dash) [data-zone="z6"]            { order: 9; }
+
+        /* Hero: one number leads. Tiles become a quiet row separated by hairlines */
+        .z1-cols { grid-template-columns: 1.6fr 1fr 1fr !important; gap: 0 !important; }
+        .z1-cols > div { background: transparent !important; border: 0 !important; padding: 4px 28px !important; }
+        .z1-cols > div:first-child { padding-left: 0 !important; }
+        .z1-cols > div + div { border-left: 1px solid var(--border-subtle) !important; }
+        .z1-cols p[style*="monospace"], .z1-cols span[style*="monospace"] {
+          font-family: var(--font-display) !important; font-weight: 600 !important; letter-spacing: -0.02em !important;
+          font-size: clamp(30px, 3.6vw, 44px) !important; line-height: 1.05 !important; font-variant-numeric: lining-nums;
+        }
+        .z1-cols > div:nth-child(2) p[style*="monospace"] { font-size: clamp(38px, 4.8vw, 60px) !important; }
+        .z1-cols > div:nth-child(n+3) p { font-size: clamp(30px, 3.6vw, 44px) !important; }
+        @media (max-width: 900px) {
+          [data-zone] { padding: 20px 20px !important; }
+          [data-zone="z1"] { padding: 24px 22px !important; }
+          .z1-cols { grid-template-columns: 1fr !important; }
+          .z1-cols > div, .z1-cols > div:first-child { padding: 16px 0 !important; }
+          .z1-cols > div + div { border-left: 0 !important; border-top: 1px solid var(--border-subtle) !important; }
+        }
+
+        /* Flatten cards-inside-cards: balances + growth live in one panel, split by a hairline */
+        [data-zone="z2"], [data-zone="z3"] { background: transparent !important; border: 0 !important; padding: 4px 6px !important; }
+        [data-zone="z3"] { border-left: 1px solid var(--border-subtle) !important; padding-left: 28px !important; }
+        @media (max-width: 900px) { [data-zone="z3"] { border-left: 0 !important; padding-left: 6px !important; border-top: 1px solid var(--border-subtle) !important; padding-top: 24px !important; } }
+        [data-zone="z23-wrap"] .z2-z3-grid { gap: 28px !important; }
+        [data-zone="z6"] > div > div > div { box-shadow: none !important; border-color: var(--border-subtle) !important; }
+
+        /* Typography: sentence case, readable minimums, numbers that align but do not shout */
+        .cpf-tab-content [style*="text-transform: uppercase"], .cpf-sidebar-wrap [style*="text-transform: uppercase"] {
+          text-transform: none !important; letter-spacing: 0 !important;
+        }
+        .cpf-tab-content [style*="font-size: 10px"], .cpf-sidebar-wrap [style*="font-size: 10px"] { font-size: 12px !important; }
+        .cpf-tab-content [style*="font-size: 11px"], .cpf-sidebar-wrap [style*="font-size: 11px"] { font-size: 12.5px !important; }
+        .cpf-tab-content [style*="font-size: 12px"], .cpf-sidebar-wrap [style*="font-size: 12px"] { font-size: 13px !important; }
+        .cpf-tab-content p, .cpf-sidebar-wrap p { line-height: 1.55; }
+        .cpf-tab-content [style*="monospace"], .cpf-sidebar-wrap [style*="monospace"] {
+          font-family: "Inter", ui-sans-serif, system-ui, sans-serif; font-feature-settings: "tnum" 1, "cv11" 1;
+        }
+        .z1-cols [style*="monospace"] { font-family: var(--font-display) !important; }
+
+        /* Collapse controls: quiet text buttons, not chrome */
+        [data-collapse-btn] { opacity: 0.75; border-radius: 8px !important; }
+        [data-collapse-btn]:hover { opacity: 1; background: var(--bg-muted) !important; }
+
+        /* Navigation: pill tabs, one hairline, no heavy underline */
+        .cpf-tabs-full-width .cpf-page-wrap { border-bottom: 1px solid var(--border-subtle) !important; padding-top: 6px !important; padding-bottom: 6px !important; }
+        .cpf-tabs { gap: 4px !important; }
+        .cpf-tabs button[role="tab"] { border-radius: 999px !important; padding: 8px 16px !important; font-weight: 600 !important; border-bottom: 0 !important; transition: background .15s, color .15s; }
+        .cpf-tabs button[role="tab"]:hover { background: var(--bg-muted) !important; }
+        .cpf-tabs button[role="tab"][aria-selected="true"] { background: rgba(var(--clr-emerald-rgb), 0.14) !important; color: var(--text-bright) !important; }
+        .theme-light .cpf-tabs button[role="tab"][aria-selected="true"] { color: var(--clr-emerald) !important; }
       `}</style>
 
       {/* TOAST NOTIFICATION QUEUE — UX-9: multiple toasts stack vertically */}
@@ -24960,7 +25058,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
             )}
             {/* ── SUMMARY TAB ── */}
             {activeTab === "summary" && (
-              <div className={execDashMode ? "summary-exec-dash" : ""} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div className={execDashMode ? "summary-exec-dash" : ""} style={{ display: "flex", flexDirection: "column", gap: 28 }}>
 
                 {/* UX-P2-B: Contribution gap alert — moved from buried sidebar position to top of
                     Summary panel. Uses existing gapAlert useMemo (unchanged). Dismissible per
