@@ -25,14 +25,14 @@ import {
   AlertTriangle, Clock, CheckCircle2, Split, BookOpen, Scale,
   LayoutDashboard, RotateCcw, Activity, Bell, X,
   SlidersHorizontal, Percent, Link, Target,
-  Moon, Sun, Monitor, Lightbulb, Copy, ChevronDown, ChevronUp,
+  Moon, Sun, Monitor, Sparkles, Lightbulb, Copy, ChevronDown, ChevronUp,
   ArrowRightLeft, LogOut, Users, ExternalLink, Home, Upload,
   RefreshCw, Share2, Settings,
   Eraser, UserCheck, Building2, Baby,
   TrendingDown, Pause, HeartPulse, DollarSign, Sunset, Star, Smartphone, Zap,
   Circle,
   Heart, CreditCard, GraduationCap, PiggyBank, Landmark, TableProperties,
-  Lock, Eye, EyeOff, Sparkles
+  Lock, Eye, EyeOff
 } from "lucide-react";
 
 const TableIcon = AlignJustify;
@@ -63,6 +63,20 @@ const SHS_BONUS_RA = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const CPF_RATES = { OA: 0.025, SA: 0.04, MA: 0.04, RA: 0.04, EXTRA_1: 0.01, EXTRA_2: 0.01 };
+// 2026 SC / PR(3rd yr+) contribution allocation by age band — CPF Board Table 1 (1 Jan 2026).
+// Fractions of wages; `sa` is credited to RA from 55. Used for age-band step-down (Path C) and Barista FIRE.
+const scAllocBand = (age) => {
+  if (age <= 35) return { total: 0.37,  oa: 0.23,  sa: 0.06,  ma: 0.08  };
+  if (age <= 45) return { total: 0.37,  oa: 0.21,  sa: 0.07,  ma: 0.09  };
+  if (age <= 50) return { total: 0.37,  oa: 0.19,  sa: 0.08,  ma: 0.10  };
+  if (age <= 55) return { total: 0.37,  oa: 0.15,  sa: 0.115, ma: 0.105 };
+  if (age <= 60) return { total: 0.34,  oa: 0.12,  sa: 0.115, ma: 0.105 };
+  if (age <= 65) return { total: 0.25,  oa: 0.035, sa: 0.11,  ma: 0.105 };
+  if (age <= 70) return { total: 0.165, oa: 0.01,  sa: 0.05,  ma: 0.105 };
+  return               { total: 0.125, oa: 0.01,  sa: 0.01,  ma: 0.105 };
+};
+// Employee share of CPF (2026), used for take-home pay on part-time (Barista FIRE) income.
+const scEmployeeRate = (age) => age <= 55 ? 0.20 : age <= 60 ? 0.18 : age <= 65 ? 0.125 : age <= 70 ? 0.075 : 0.05;
 const RETIREMENT_SUMS_2026 = { BRS: 110200, FRS: 220400, ERS: 440800, BHS: 79000 };
 const ANNUAL_LIMIT = 37740;
 const ASSUMED_TARGET_GROWTH = 0.03; // Rev #5: kept as fallback; engine + UI now use inputs.retirementSumGrowth
@@ -2223,8 +2237,10 @@ function runRSSEngine(inputs, {
     const leBaristaFire    = activeEvents.find(e => e.type === 'barista_fire');
     const baristaMonthly   = leBaristaFire ? (Number(leBaristaFire.magnitude) || 0) : 0;
     const baristaAnnual    = baristaMonthly * 12;
-    const baristaScale     = (baristaAnnual > 0 && (Number(inputs.salaryGross) || 0) > 0)
-      ? Math.min(1, baristaAnnual / Number(inputs.salaryGross))
+    // Monthly part-time pay vs monthly salary (salaryGross is monthly). Part-time pay is assumed
+    // to grow with the same salary-growth path, so contributions scale by this ratio.
+    const baristaScale     = (baristaMonthly > 0 && (Number(inputs.salaryGross) || 0) > 0)
+      ? Math.min(1, baristaMonthly / Number(inputs.salaryGross))
       : 0;
 
     // MMSS carry
@@ -2266,7 +2282,7 @@ function runRSSEngine(inputs, {
     if (age > startAge) { privateAssets = privateAssets * (1 + privateGrowth) + privateSaving; } else { privateAssets += privateSaving; }
     // Barista FIRE: credit take-home pay (part-time salary minus scaled employee CPF) to private assets
     if (leBaristaFire && baristaAnnual > 0) {
-      const _baristaEmpCPF = Math.round((baseOA_Emp + baseSA_Emp + baseMA_Emp) * baristaScale);
+      const _baristaEmpCPF = Math.round(baristaAnnual * scEmployeeRate(age)); // employee share only
       const _baristaTakeHome = Math.max(0, baristaAnnual - _baristaEmpCPF);
       privateAssets += _baristaTakeHome;
       yearInflow    += _baristaTakeHome;
@@ -2496,9 +2512,13 @@ function runRSSEngine(inputs, {
           mandatorySA_dyn = Math.round(totalScaled * scSA);
           mandatoryMA_i = Math.round(totalScaled * scMA);
         } else {
-          mandatoryOA_i = Math.round(baseOA_Emp * gf);
-          mandatorySA_dyn = mandatorySA_base;
-          mandatoryMA_i = Math.round(baseMA_Emp * gf);
+          // Path C — user-entered contributions, rescaled to the age band in force this year
+          // (2026 step-down at 55/60/65/70) and re-split by that band's OA/SA/MA allocation.
+          const _bandStart = scAllocBand(startAge), _bandNow = scAllocBand(age);
+          const _cTotal = (baseOA_Emp + baseSA_Emp + baseMA_Emp) * gf * (_bandNow.total / _bandStart.total);
+          mandatoryOA_i   = Math.round(_cTotal * _bandNow.oa / _bandNow.total);
+          mandatorySA_dyn = Math.round(_cTotal * _bandNow.sa / _bandNow.total);
+          mandatoryMA_i   = Math.round(_cTotal * _bandNow.ma / _bandNow.total);
           const totalC = mandatoryOA_i + mandatorySA_dyn + mandatoryMA_i;
           if (totalC > ANNUAL_LIMIT) { const scaleC = ANNUAL_LIMIT / totalC; mandatoryOA_i = Math.round(mandatoryOA_i * scaleC); mandatorySA_dyn = Math.round(mandatorySA_dyn * scaleC); mandatoryMA_i = ANNUAL_LIMIT - mandatoryOA_i - mandatorySA_dyn; }
         }
@@ -2689,6 +2709,7 @@ function runRSSEngine(inputs, {
     cumRaInterest += yearRaInterest;
     oa += oaAvg * rOA * yearFraction; sa += saAvg * rSA * yearFraction; ra += raAvg * rRA * yearFraction; ma += maAvg * rMA * yearFraction;
     if (age < 55) { sa += b1ToSA * yearFraction; ma += b1ToMA * yearFraction; } else { ra += (b1ToRA + b2ToRA) * yearFraction; ma += (b1ToMA + b2ToMA) * yearFraction; }
+    if (age >= 55 && sa > 0) { ra += sa; sa = 0; } // B6: SA is closed from 55 — interest accrued before closure is credited to RA
     // ── Post-depletion / post-migration RA clamp ──────────────────────────────
     // (1) RSS depletion: ra = 0, redirect OA-sourced extra interest back to OA.
     // (2) CPF LIFE migration (years AFTER the migration year): RA premium is now with
@@ -3406,12 +3427,13 @@ function runProjectionEngine(inputs, {
     const leParentSupport    = activeEvents.filter(e => e.type === 'parent_support');
     const leEducation        = activeEvents.filter(e => e.type === 'education_expense');
     const leDonation         = activeEvents.filter(e => e.type === 'donation');
-    // Barista FIRE: part-time income with scaled employee-only CPF contributions (mirrors runRSSEngine)
     const leBaristaFire    = activeEvents.find(e => e.type === 'barista_fire');
     const baristaMonthly   = leBaristaFire ? (Number(leBaristaFire.magnitude) || 0) : 0;
     const baristaAnnual    = baristaMonthly * 12;
-    const baristaScale     = (baristaAnnual > 0 && (Number(inputs.salaryGross) || 0) > 0)
-      ? Math.min(1, baristaAnnual / Number(inputs.salaryGross))
+    // Monthly part-time pay vs monthly salary (salaryGross is monthly). Part-time pay is assumed
+    // to grow with the same salary-growth path, so contributions scale by this ratio.
+    const baristaScale     = (baristaMonthly > 0 && (Number(inputs.salaryGross) || 0) > 0)
+      ? Math.min(1, baristaMonthly / Number(inputs.salaryGross))
       : 0;
     // MMSS grants earned in year N are credited to MA at the start of year N+1 per CPF policy.
     // yearInflow + totalInjected are updated here at the correct year (not at grant computation time).
@@ -3475,7 +3497,7 @@ function runProjectionEngine(inputs, {
     }
     // Barista FIRE: credit take-home pay to privateAssets
     if (leBaristaFire && baristaAnnual > 0) {
-      const _baristaEmpCPF2   = Math.round((baseOA_Emp + baseSA_Emp + baseMA_Emp) * baristaScale);
+      const _baristaEmpCPF2   = Math.round(baristaAnnual * scEmployeeRate(age)); // employee share only
       const _baristaTakeHome2 = Math.max(0, baristaAnnual - _baristaEmpCPF2);
       privateAssets += _baristaTakeHome2;
       yearInflow    += _baristaTakeHome2;
@@ -3894,10 +3916,13 @@ function runProjectionEngine(inputs, {
           mandatorySA_dyn = Math.round(totalScaled * scSA);
           mandatoryMA_i  = Math.round(totalScaled * scMA);
         } else {
-          // Path C — SC or PR3+ from start: use user-entered base fields scaled by gf.
-          mandatoryOA_i  = Math.round(baseOA_Emp * gf);
-          mandatorySA_dyn = mandatorySA_base; // same as Math.round(baseSA_Emp * gf)
-          mandatoryMA_i  = Math.round(baseMA_Emp * gf);
+          // Path C — user-entered contributions, rescaled to the age band in force this year
+          // (2026 step-down at 55/60/65/70) and re-split by that band's OA/SA/MA allocation.
+          const _bandStart = scAllocBand(startAge), _bandNow = scAllocBand(age);
+          const _cTotal = (baseOA_Emp + baseSA_Emp + baseMA_Emp) * gf * (_bandNow.total / _bandStart.total);
+          mandatoryOA_i   = Math.round(_cTotal * _bandNow.oa / _bandNow.total);
+          mandatorySA_dyn = Math.round(_cTotal * _bandNow.sa / _bandNow.total);
+          mandatoryMA_i   = Math.round(_cTotal * _bandNow.ma / _bandNow.total);
           // P3-A fix: Paths A & B cap at OW/AW ceilings which implicitly cap below ANNUAL_LIMIT.
           // Path C (manual entries) has no such ceiling — growth factor (gf) can push totals past
           // $37,740/yr indefinitely. Proportionally scale down to ANNUAL_LIMIT if breached.
@@ -4173,6 +4198,7 @@ function runProjectionEngine(inputs, {
     // Apply extra interest to the correct accounts (MA's share stays in MA, not SA/RA)
     if (age < 55) { sa += b1ToSA * yearFraction; ma += b1ToMA * yearFraction; }
     else           { ra += (b1ToRA + b2ToRA) * yearFraction; ma += (b1ToMA + b2ToMA) * yearFraction; }
+    if (age >= 55 && sa > 0) { ra += sa; sa = 0; } // B6: SA is closed from 55 — interest accrued before closure is credited to RA
 
     // Outflows — housing: CPF mortgage debits OA; Cash mortgage debits private assets
     const activeHousing = age < housingStop ? baseHousing * effHousingFreq : 0;
@@ -6000,309 +6026,6 @@ const FieldResetBtn = ({ name, inputs, setInputs }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// computeReadinessScore — pure function (R1). Single source of truth for the 5-dimension
-// Readiness Score; used by ReadinessTab AND the Retirement Health Report so both always agree.
-// Body moved verbatim from ReadinessTab's useMemo — no scoring logic changed.
-// ─────────────────────────────────────────────────────────────────────────────
-function computeReadinessScore({
-  nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
-  lifePlans, highlightPlan, isMale, basicPremiumPct, target,
-  monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
-  milestones, inputs, ca, perfectStormData, payoutAge65,
-}) {
-  // ── 1. FRS Coverage ───────────────────────────────────────────────────
-  const nomMap  = nominalAccumulationByAge || accumulationByAge;
-  const nomPayD = nomMap.get(pa) || {};
-  const raAtPA  = nomPayD.ra || 0;    // always nominal
-  const projFRS = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
-  const projBRS = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
-  const frsRatio    = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
-  const frsSubScore = Math.min(100, Math.round(frsRatio * 100));
-
-  // ── 2. Income Adequacy ─────────────────────────────────────────────────
-  const activePlanObj = lifePlans?.[highlightPlan || "standard"];
-  const rawPayout     = activePlanObj ? (isMale ? activePlanObj.startM : activePlanObj.startF) : 0;
-  const stdMonthly    = (highlightPlan === "basic" && rawPayout > 0)
-    ? rawPayout * (1 - basicPremiumPct / 100) / 0.90
-    : rawPayout;
-  // Portfolio withdrawal adds to monthly retirement income for the adequacy calculation
-  const portWithdrawMoRS = Number(inputs.portfolioWithdrawalMonthly) || 0;
-  const portWithdrawStartRS = Number(inputs.portfolioWithdrawalStartAge) || payoutAge65;
-  const portActiveAtPA = portWithdrawMoRS > 0 && portWithdrawStartRS <= payoutAge65;
-  const totalRetireIncome = stdMonthly + (portActiveAtPA ? portWithdrawMoRS : 0) + (Number(inputs.oaDrawdownMonthly) || 0);
-  // Target: use retirement expense estimate from new spending model if living expenses are set
-  const baseExp = Number(inputs.budgetLivingExpenses) || 0;
-  const retireExpTarget = baseExp > 0
-    ? Math.round(baseExp * (Number(inputs.retirementExpenseRatio) || 75) / 100
-        + (Number(inputs.retirementHealthcareMonthly) || 500))
-    : target; // fall back to targetMonthlyIncome if no living expenses set
-  // incomeRatio kept for sub-bar display; incomeSubScore is null when no target
-  const incomeRatio    = retireExpTarget > 0 ? Math.min(1, totalRetireIncome / retireExpTarget) : (target > 0 ? Math.min(1, stdMonthly / target) : null);
-  const incomeSubScore = retireExpTarget > 0 ? Math.min(100, Math.round((totalRetireIncome / retireExpTarget) * 100)) : (target > 0 ? Math.min(100, Math.round((stdMonthly / target) * 100)) : null);
-
-  // ── 3. Stress Resilience ───────────────────────────────────────────────
-  // Primary signal: Perfect Storm deterministic worst-case (SORR + inflation surge +
-  //   property stress + CPF rate cut + healthcare surge, all combined).
-  //   perfectStormScore = 100 − deltaPct  (e.g. 30% net-worth drop → score 70)
-  // Fallback: P10 Monte Carlo 10th-percentile total vs base case.
-  // Combined (both available): perfectStorm × 0.6 + p10 × 0.4 — named risk outweighs stats.
-  // null when both are unavailable → weight redistributed to other sub-scores.
-  const totalCPFNom_ = (nomPayD.oa || 0) + (nomPayD.sa || 0) + (nomPayD.ma || 0) + (nomPayD.ra || 0);
-  const p10RowAtPA_  = monteCarloData?.rows?.find(r => r.age === pa);
-  const p10Total_    = p10RowAtPA_?.p10 || 0;
-  const p10Score_    = (monteCarloData && totalCPFNom_ > 0 && p10Total_ > 0)
-    ? Math.min(100, Math.round((p10Total_ / totalCPFNom_) * 100))
-    : null;
-  const psScore_     = perfectStormData
-    ? Math.max(0, 100 - (perfectStormData.deltaPct || 0))
-    : null;
-  const p10SubScore  =   // returned as p10SubScore for KPI tile backward-compatibility
-    (psScore_ !== null && p10Score_ !== null) ? Math.round(psScore_ * 0.6 + p10Score_ * 0.4)
-    : psScore_ ?? p10Score_ ?? null;
-
-  // ── 4. Longevity Cover ─────────────────────────────────────────────────
-  // For CPF LIFE members: measures real purchasing power of the flat nominal payout at age 90
-  //   vs the BRS-level payout (minimum adequate standard). At 2 % inflation over 25 yrs the
-  //   nominal payout loses ~39 % of real value — this sub-score captures that decay.
-  // For OA-drawdown members: measures coverage years vs age-90 planning benchmark.
-  const oaDrawActiveL  = (effectiveOaDrawMonthly || 0) > 0 && (effectiveOaDrawStartAge || 0) > 0;
-  const oaDepMilL      = milestones.find(m =>
-    m.label?.toLowerCase().includes('drawdown exhaust') || m.label?.toLowerCase().includes('oa depletion')
-  );
-  const oaDepAgeL      = oaDepMilL?.age || null;
-  const inflRate_      = (Number(inputs.inflationRate) || 2) / 100;
-  const yearsTo90_     = Math.max(0, 90 - pa);
-  const realPayAt90_   = stdMonthly > 0 ? stdMonthly / Math.pow(1 + inflRate_, yearsTo90_) : 0;
-  const brsThreshold_  = interpolateCpfLife(projBRS, 'std', isMale, pa);
-  const longevitySubScore = !oaDrawActiveL
-    ? (brsThreshold_ > 0 ? Math.min(100, Math.round((realPayAt90_ / brsThreshold_) * 100)) : 100)
-    : (oaDepAgeL
-        ? Math.min(100, Math.round(((oaDepAgeL - pa) / Math.max(1, 90 - pa)) * 100))
-        : 100);
-
-  // ── 5. Healthcare Shield ───────────────────────────────────────────────
-  // MA at payout age vs projected Basic Healthcare Sum (BHS). MA reaching BHS means
-  // MediShield Life premiums and moderate medical costs are fully covered.
-  const projBHS_   = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow));
-  const maAtPA_    = nomPayD.ma || 0;
-  const maSubScore = projBHS_ > 0 ? Math.min(100, Math.round((maAtPA_ / projBHS_) * 100)) : 0;
-
-  // ── Age-banded weights ─────────────────────────────────────────────────
-  // Rationale: FRS weight steps down post-retirement (RA locked in, can't be changed).
-  // Healthcare weight escalates sharply — medical costs accelerate from 65+ at 5 %/yr.
-  // Longevity weight escalates post-65 — each remaining year of income matters more.
-  const AGE_WEIGHTS = [
-    { maxAge: 40,  frs: 0.35, inc: 0.25, p10: 0.15, long: 0.15, ma: 0.10 },
-    { maxAge: 54,  frs: 0.30, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.10 },
-    { maxAge: 64,  frs: 0.25, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.15 },
-    { maxAge: 74,  frs: 0.15, inc: 0.25, p10: 0.20, long: 0.20, ma: 0.20 },
-    { maxAge: 999, frs: 0.10, inc: 0.20, p10: 0.15, long: 0.25, ma: 0.30 },
-  ];
-  const wt = AGE_WEIGHTS.find(b => ca <= b.maxAge) || AGE_WEIGHTS[4];
-
-  // ── Weighted composite with graceful degradation ───────────────────────
-  const subScores = [
-    { val: frsSubScore,       wt: wt.frs  },
-    { val: incomeSubScore,    wt: wt.inc  },  // null when no target
-    { val: p10SubScore ?? (totalCPFNom_ > 0 ? 50 : 0), wt: wt.p10 }, // 50 neutral when MC off but CPF exists; 0 when nothing to stress-test
-    { val: longevitySubScore, wt: wt.long },
-    { val: maSubScore,        wt: wt.ma   },
-  ];
-  const active  = subScores.filter(s => s.val !== null);
-  const totalWt = active.reduce((acc, s) => acc + s.wt, 0);
-  const score   = active.length > 0
-    ? Math.round(active.reduce((acc, s) => acc + (s.val * s.wt), 0) / totalWt)
-    : 0;
-
-  const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
-  const label = score >= 75 ? "On Track" : score >= 50 ? "Needs Attention" : "At Risk";
-    return {
-      score, frsRatio, incomeRatio,
-      raAtPA, projFRS, stdMonthly,
-      p10SubScore, longevitySubScore, maSubScore,
-      color, label,
-      // Extra fields consumed by the Health Report (ignored by ReadinessTab's destructure)
-      frsSubScore, incomeSubScore, retireExpTarget, totalRetireIncome,
-      projBRS, projBHS: projBHS_, maAtPA: maAtPA_, totalCPFNom: totalCPFNom_,
-      psScore: psScore_, p10Score: p10Score_, weights: wt,
-    };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Retirement Health Report — pure helpers (no React, no engine calls).
-// Every number in the report comes from datasets the app has already computed;
-// these helpers only classify them and phrase the result. Thresholds are named
-// below so they are auditable and covered by regression assertions.
-// ─────────────────────────────────────────────────────────────────────────────
-const HEALTH_RULES = Object.freeze({
-  scoreOnTrack: 75, scoreAtRisk: 50,   // overall Readiness Score bands (match ReadinessTab labels)
-  frsGood: 1.0, frsWatch: 0.75,        // RA at payout age ÷ projected FRS
-  incomeGood: 100, incomeWatch: 80,    // income-adequacy sub-score
-  dimGood: 75, dimWatch: 50,           // stress-resilience and longevity sub-scores
-  maGood: 100, maWatch: 70,            // healthcare shield: MA at payout ÷ projected BHS (%)
-  mcGood: 80, mcWatch: 50,             // Monte Carlo: % of runs reaching FRS at payout age
-  stormRisk: 30, stormWatch: 15,       // Perfect Storm: net-worth drop (%)
-  swrRisk: 6, swrWatch: 4,             // required withdrawal rate, % of portfolio (rule of thumb)
-  depletionRiskAge: 85,                // portfolio / OA running out before this age is flagged
-});
-
-// Escape text before it is placed into the report's HTML (names, labels, alert text).
-function escapeHtml(v) {
-  return String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-// Key-order-independent JSON so the same inputs always hash the same.
-function stableStringify(v) {
-  if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null";
-  if (Array.isArray(v)) return "[" + v.map(stableStringify).join(",") + "]";
-  return "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + stableStringify(v[k])).join(",") + "}";
-}
-
-// 32-bit FNV-1a fingerprint of the inputs — lets a printed report be traced back to its inputs.
-function hashInputsFnv(obj) {
-  const s = stableStringify(obj || {});
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-  return h.toString(16).padStart(8, "0").toUpperCase();
-}
-
-// Turns the already-computed datasets into a verdict, findings and a prioritised action list.
-// Datasets that were not run (stress tests are user-toggled) arrive as null and are reported
-// as "not assessed" rather than guessed.
-function buildHealthFindings(d) {
-  const R = HEALTH_RULES;
-  const fmt = d.fmt || (v => "$" + Math.round(Number(v) || 0).toLocaleString("en-US"));
-  const findings = [];
-  const actions = [];
-  const add = (area, severity, title, detail) => findings.push({ area, severity, title, detail });
-  const act = (priority, title, detail) => actions.push({ priority, title, detail });
-  const has = v => v !== null && v !== undefined && !Number.isNaN(v);
-
-  // ── Overall verdict (same bands/labels as the Readiness tab) ─────────────
-  const tone = d.score >= R.scoreOnTrack ? "good" : d.score >= R.scoreAtRisk ? "watch" : "risk";
-  const verdict = {
-    tone,
-    headline: tone === "good" ? "On track for retirement"
-      : tone === "watch" ? "Needs attention before retirement" : "At risk — action recommended",
-    text: `Your Readiness Score is ${d.score}/100 (${d.label}). It blends five dimensions — Retirement Sum coverage, income adequacy, stress resilience, longevity cover and healthcare shield — weighted for your age.`,
-  };
-
-  // ── 1. Retirement Sum (FRS) coverage ─────────────────────────────────────
-  const frsPct = Math.round((d.frsRatio || 0) * 100);
-  if (d.frsRatio >= R.frsGood) {
-    add("Retirement Sum", "good", "Retirement Account meets the projected FRS", `Projected RA at payout age covers ${frsPct}% of the projected Full Retirement Sum.`);
-  } else if (d.frsRatio >= R.frsWatch) {
-    add("Retirement Sum", "watch", `Retirement Account reaches ${frsPct}% of the projected FRS`, "A lower Retirement Account balance reduces the CPF LIFE payout you can start with.");
-  } else {
-    add("Retirement Sum", "risk", `Retirement Account reaches only ${frsPct}% of the projected FRS`, "This is the largest driver of a lower CPF LIFE payout.");
-  }
-  if (d.gapAlert) {
-    const g = d.gapAlert;
-    add("Retirement Sum", g.isUrgent ? "risk" : "watch",
-      `${g.raLabel} is ${fmt(g.frsGap)} short of the FRS`,
-      `Closing the gap with regular top-ups would take about ${fmt(g.monthlyTopUp)}/month for ${g.yearsToGo} year${g.yearsToGo === 1 ? "" : "s"} (assumes 4% p.a. growth).`);
-    act(g.isUrgent ? 1 : 2, `Close the FRS gap: about ${fmt(g.monthlyTopUp)}/month`,
-      `A cash top-up (VC3A / RSTU) of roughly ${fmt(g.annualTopUp)} a year for ${g.yearsToGo} year${g.yearsToGo === 1 ? "" : "s"} is estimated to bring the Retirement Account to the FRS${g.isUrgent ? " — time is short, so the required amount rises each year you wait" : ""}. Check your eligibility and the annual cap before topping up.`);
-  }
-
-  // ── 2. Income adequacy ───────────────────────────────────────────────────
-  if (has(d.incomeSub)) {
-    if (d.incomeSub >= R.incomeGood) {
-      add("Income", "good", "Projected retirement income meets your target", `Projected income covers ${has(d.coveragePct) ? d.coveragePct + "% of" : ""} your monthly target.`);
-    } else if (d.incomeSub >= R.incomeWatch) {
-      add("Income", "watch", `Projected income covers about ${d.incomeSub}% of your target`, d.incomeShortfall > 0 ? `Estimated shortfall: ${fmt(d.incomeShortfall)}/month.` : "A small gap remains against your target.");
-    } else {
-      add("Income", "risk", `Projected income covers only about ${d.incomeSub}% of your target`, d.incomeShortfall > 0 ? `Estimated shortfall: ${fmt(d.incomeShortfall)}/month.` : "A material gap remains against your target.");
-    }
-    if (d.incomeSub < R.incomeGood) {
-      act(d.incomeSub < R.incomeWatch ? 1 : 2, "Narrow the monthly income gap",
-        `Options to review: raise the Retirement Account (top-ups), defer the payout age, add private income sources (portfolio, SRS, property), or revisit the target.${d.incomeShortfall > 0 ? ` Current shortfall: ${fmt(d.incomeShortfall)}/month.` : ""}`);
-    }
-  } else {
-    add("Income", "watch", "Income adequacy not assessed", "No monthly income target is set, so this dimension is excluded from the score.");
-    act(4, "Set a monthly retirement income target", "Without a target the planner cannot judge whether your projected income is enough.");
-  }
-
-  // ── 3. Stress resilience ─────────────────────────────────────────────────
-  if (has(d.p10Sub)) {
-    const sev = d.p10Sub >= R.dimGood ? "good" : d.p10Sub >= R.dimWatch ? "watch" : "risk";
-    add("Resilience", sev, `Stress resilience score ${d.p10Sub}/100`,
-      sev === "good" ? "Your plan holds up well under the stress tests that were run."
-        : "Your projected balances fall materially under the stress tests that were run.");
-  } else {
-    add("Resilience", "watch", "Stress resilience not assessed", "No stress test is switched on, so a neutral value is used in the score.");
-    act(4, "Run a stress test", "Switch on Monte Carlo or the Perfect Storm test in the Plan tab to see how the plan behaves in a bad market or high-inflation scenario.");
-  }
-  if (has(d.mcProb)) {
-    const sev = d.mcProb >= R.mcGood ? "good" : d.mcProb >= R.mcWatch ? "watch" : "risk";
-    add("Resilience", sev, `${d.mcProb}% of Monte Carlo runs reach the FRS at payout age`, "Based on random return paths around your growth assumptions.");
-    if (sev !== "good") act(sev === "risk" ? 2 : 3, "Improve the odds of reaching the FRS", "Higher regular contributions, a longer accumulation period, or a lower-volatility mix would each raise the share of simulations that reach the FRS.");
-  }
-  if (has(d.stormDeltaPct)) {
-    const sev = d.stormDeltaPct >= R.stormRisk ? "risk" : d.stormDeltaPct >= R.stormWatch ? "watch" : "good";
-    add("Resilience", sev, `Perfect Storm lowers projected net worth by ${d.stormDeltaPct}%`, "Combined stress on CPF balances, private assets, property and healthcare costs.");
-  }
-  if (d.sorr && has(d.sorr.sorrDepletionAge) && (!has(d.sorr.baseDepletionAge) || d.sorr.sorrDepletionAge < d.sorr.baseDepletionAge)) {
-    add("Resilience", "watch", `An early-retirement market crash brings depletion forward to age ${d.sorr.sorrDepletionAge}`,
-      has(d.sorr.baseDepletionAge) ? `Without the crash, depletion is at age ${d.sorr.baseDepletionAge}.` : "Without the crash, private assets last through the projection.");
-  }
-  if (has(d.inflLoss) && d.inflLoss > 0) {
-    add("Resilience", "watch", `Higher inflation could erode about ${fmt(d.inflLoss)} of lifetime CPF LIFE purchasing power`, "Compared with your base inflation assumption, over the planning horizon.");
-  }
-
-  // ── 4. Longevity cover ───────────────────────────────────────────────────
-  if (has(d.longevitySub)) {
-    const sev = d.longevitySub >= R.dimGood ? "good" : d.longevitySub >= R.dimWatch ? "watch" : "risk";
-    add("Longevity", sev, `Longevity cover score ${d.longevitySub}/100`,
-      sev === "good" ? "Income at age 90 keeps reasonable purchasing power."
-        : "A flat nominal payout loses purchasing power over a long retirement; income at age 90 is under pressure.");
-    if (sev !== "good") act(3, "Protect income against inflation over a long retirement", "Review the Escalating CPF LIFE plan, which starts lower but rises with age, and whether private income sources can fill the later-life gap.");
-  }
-
-  // ── 5. Healthcare shield ─────────────────────────────────────────────────
-  if (has(d.maSub)) {
-    const sev = d.maSub >= R.maGood ? "good" : d.maSub >= R.maWatch ? "watch" : "risk";
-    add("Healthcare", sev, d.maSub >= R.maGood ? "MediSave reaches the Basic Healthcare Sum" : `MediSave reaches ${d.maSub}% of the projected Basic Healthcare Sum`,
-      sev === "good" ? "MediSave is projected to cover premiums and moderate medical costs." : "A MediSave shortfall leaves more healthcare cost to cash or insurance.");
-    if (sev !== "good") act(3, "Strengthen the MediSave balance", "A cash top-up to MediSave (VCMA) can help it reach the Basic Healthcare Sum; check the annual cap and your eligibility.");
-  }
-
-  // ── 6. Sustainability of private/drawdown income ─────────────────────────
-  if (d.swr) {
-    const s = d.swr;
-    if (has(s.annualGap) && s.annualGap === 0) {
-      add("Sustainability", "good", "CPF LIFE covers your income target", "No portfolio drawdown is needed to meet the target.");
-    } else if (has(s.annualGap) && s.annualGap > 0) {
-      if (has(s.depletionAge) && s.depletionAge < R.depletionRiskAge) {
-        add("Sustainability", "risk", `Private assets could run out around age ${s.depletionAge}`, `Covering the ${fmt(s.annualGap / 12)}/month shortfall from your portfolio is projected to exhaust it earlier than age ${R.depletionRiskAge}.`);
-        act(2, "Make the private-asset drawdown last longer", "Reduce the monthly draw, build the portfolio or SRS balance, or defer the start of withdrawals.");
-      } else if (has(s.requiredSWR) && s.requiredSWR >= R.swrRisk) {
-        add("Sustainability", "risk", `Required withdrawal rate is ${s.requiredSWR}% of your portfolio`, "Rates above about 6% a year are hard to sustain (the 4% rule of thumb is a common benchmark).");
-      } else if (has(s.requiredSWR) && s.requiredSWR >= R.swrWatch) {
-        add("Sustainability", "watch", `Required withdrawal rate is ${s.requiredSWR}% of your portfolio`, "Above the 4% rule-of-thumb benchmark, so returns matter.");
-      } else {
-        add("Sustainability", "good", "Portfolio can sustain the income shortfall", has(s.requiredSWR) ? `Required withdrawal rate is ${s.requiredSWR}% of your portfolio.` : "Projected to last through the planning horizon.");
-      }
-    }
-  }
-  if (has(d.oaExhaustAge) && d.oaExhaustAge < R.depletionRiskAge) {
-    add("Sustainability", "watch", `Your OA drawdown is projected to run out at age ${d.oaExhaustAge}`, "The monthly OA draw you set reaches its floor at this age.");
-  }
-
-  // ── 7. Critical milestone alerts ─────────────────────────────────────────
-  if (d.dangerCount > 0) {
-    add("Alerts", "risk", `${d.dangerCount} critical milestone alert${d.dangerCount === 1 ? "" : "s"} in the projection`, (d.dangerLabels || []).slice(0, 3).join("; "));
-  }
-
-  // Order: risks first, then watch, then good; actions by priority.
-  const rank = { risk: 0, watch: 1, good: 2 };
-  findings.sort((a, b) => rank[a.severity] - rank[b.severity]);
-  actions.sort((a, b) => a.priority - b.priority);
-  return { verdict, findings, actions: actions.slice(0, 6) };
-}
-
-
-// ─────────────────────────────────────────────────────────────────────────────
 // ReadinessTab — Phase 1+2+3 implementation
 // Pure display component: reads computed data via props, writes back via existing
 // App.jsx handlers. Zero engine changes, zero new state in App.jsx.
@@ -6346,7 +6069,7 @@ function ReadinessTab({
   // Sprint-2: SWR and bucket analytics (computed in App, no engine cost)
   swrAnalytics,
   scoreDelta,   // Sprint-14: Δ pts from baseline
-  baselineScoreRef, setScoreDelta,  // Sprint-14: owned by App; passed in so the delta effect can run here
+  onScore,      // Sprint-14 fix: callback(score) → App computes Δ vs session baseline
   sessionChanges = [],  // Sprint-16: [{label,from,to}]
 }) {
   const [expandedMasTile, setExpandedMasTile] = useState(null);
@@ -6383,12 +6106,120 @@ function ReadinessTab({
     raAtPA, projFRS, stdMonthly,
     p10SubScore, longevitySubScore, maSubScore,
     color: scoreColor, label: scoreLabel,
-  } = useMemo(() => computeReadinessScore({
-    nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
-    lifePlans, highlightPlan, isMale, basicPremiumPct, target,
-    monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
-    milestones, inputs, ca, perfectStormData, payoutAge65,
-  }), [
+  } = useMemo(() => {
+    // ── 1. FRS Coverage ───────────────────────────────────────────────────
+    const nomMap  = nominalAccumulationByAge || accumulationByAge;
+    const nomPayD = nomMap.get(pa) || {};
+    const raAtPA  = nomPayD.ra || 0;    // always nominal
+    const projFRS = Math.round(RETIREMENT_SUMS_2026.FRS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const projBRS = Math.round(RETIREMENT_SUMS_2026.BRS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const frsRatio    = projFRS > 0 ? Math.min(1, raAtPA / projFRS) : 0;
+    const frsSubScore = Math.min(100, Math.round(frsRatio * 100));
+
+    // ── 2. Income Adequacy ─────────────────────────────────────────────────
+    const activePlanObj = lifePlans?.[highlightPlan || "standard"];
+    const rawPayout     = activePlanObj ? (isMale ? activePlanObj.startM : activePlanObj.startF) : 0;
+    const stdMonthly    = (highlightPlan === "basic" && rawPayout > 0)
+      ? rawPayout * (1 - basicPremiumPct / 100) / 0.90
+      : rawPayout;
+    // Portfolio withdrawal adds to monthly retirement income for the adequacy calculation
+    const portWithdrawMoRS = Number(inputs.portfolioWithdrawalMonthly) || 0;
+    const portWithdrawStartRS = Number(inputs.portfolioWithdrawalStartAge) || payoutAge65;
+    const portActiveAtPA = portWithdrawMoRS > 0 && portWithdrawStartRS <= payoutAge65;
+    const totalRetireIncome = stdMonthly + (portActiveAtPA ? portWithdrawMoRS : 0) + (Number(inputs.oaDrawdownMonthly) || 0);
+    // Target: use retirement expense estimate from new spending model if living expenses are set
+    const baseExp = Number(inputs.budgetLivingExpenses) || 0;
+    const retireExpTarget = baseExp > 0
+      ? Math.round(baseExp * (Number(inputs.retirementExpenseRatio) || 75) / 100
+          + (Number(inputs.retirementHealthcareMonthly) || 500))
+      : target; // fall back to targetMonthlyIncome if no living expenses set
+    // incomeRatio kept for sub-bar display; incomeSubScore is null when no target
+    const incomeRatio    = retireExpTarget > 0 ? Math.min(1, totalRetireIncome / retireExpTarget) : (target > 0 ? Math.min(1, stdMonthly / target) : null);
+    const incomeSubScore = retireExpTarget > 0 ? Math.min(100, Math.round((totalRetireIncome / retireExpTarget) * 100)) : (target > 0 ? Math.min(100, Math.round((stdMonthly / target) * 100)) : null);
+
+    // ── 3. Stress Resilience ───────────────────────────────────────────────
+    // Primary signal: Perfect Storm deterministic worst-case (SORR + inflation surge +
+    //   property stress + CPF rate cut + healthcare surge, all combined).
+    //   perfectStormScore = 100 − deltaPct  (e.g. 30% net-worth drop → score 70)
+    // Fallback: P10 Monte Carlo 10th-percentile total vs base case.
+    // Combined (both available): perfectStorm × 0.6 + p10 × 0.4 — named risk outweighs stats.
+    // null when both are unavailable → weight redistributed to other sub-scores.
+    const totalCPFNom_ = (nomPayD.oa || 0) + (nomPayD.sa || 0) + (nomPayD.ma || 0) + (nomPayD.ra || 0);
+    const p10RowAtPA_  = monteCarloData?.rows?.find(r => r.age === pa);
+    const p10Total_    = p10RowAtPA_?.p10 || 0;
+    const p10Score_    = (monteCarloData && totalCPFNom_ > 0 && p10Total_ > 0)
+      ? Math.min(100, Math.round((p10Total_ / totalCPFNom_) * 100))
+      : null;
+    const psScore_     = perfectStormData
+      ? Math.max(0, 100 - (perfectStormData.deltaPct || 0))
+      : null;
+    const p10SubScore  =   // returned as p10SubScore for KPI tile backward-compatibility
+      (psScore_ !== null && p10Score_ !== null) ? Math.round(psScore_ * 0.6 + p10Score_ * 0.4)
+      : psScore_ ?? p10Score_ ?? null;
+
+    // ── 4. Longevity Cover ─────────────────────────────────────────────────
+    // For CPF LIFE members: measures real purchasing power of the flat nominal payout at age 90
+    //   vs the BRS-level payout (minimum adequate standard). At 2 % inflation over 25 yrs the
+    //   nominal payout loses ~39 % of real value — this sub-score captures that decay.
+    // For OA-drawdown members: measures coverage years vs age-90 planning benchmark.
+    const oaDrawActiveL  = (effectiveOaDrawMonthly || 0) > 0 && (effectiveOaDrawStartAge || 0) > 0;
+    const oaDepMilL      = milestones.find(m =>
+      m.label?.toLowerCase().includes('drawdown exhaust') || m.label?.toLowerCase().includes('oa depletion')
+    );
+    const oaDepAgeL      = oaDepMilL?.age || null;
+    const inflRate_      = (Number(inputs.inflationRate) || 2) / 100;
+    const yearsTo90_     = Math.max(0, 90 - pa);
+    const realPayAt90_   = stdMonthly > 0 ? stdMonthly / Math.pow(1 + inflRate_, yearsTo90_) : 0;
+    const brsThreshold_  = interpolateCpfLife(projBRS, 'std', isMale, pa);
+    const longevitySubScore = !oaDrawActiveL
+      ? (brsThreshold_ > 0 ? Math.min(100, Math.round((realPayAt90_ / brsThreshold_) * 100)) : 100)
+      : (oaDepAgeL
+          ? Math.min(100, Math.round(((oaDepAgeL - pa) / Math.max(1, 90 - pa)) * 100))
+          : 100);
+
+    // ── 5. Healthcare Shield ───────────────────────────────────────────────
+    // MA at payout age vs projected Basic Healthcare Sum (BHS). MA reaching BHS means
+    // MediShield Life premiums and moderate medical costs are fully covered.
+    const projBHS_   = Math.round(RETIREMENT_SUMS_2026.BHS * Math.pow(1 + rsGrowth, yearsFromNow));
+    const maAtPA_    = nomPayD.ma || 0;
+    const maSubScore = projBHS_ > 0 ? Math.min(100, Math.round((maAtPA_ / projBHS_) * 100)) : 0;
+
+    // ── Age-banded weights ─────────────────────────────────────────────────
+    // Rationale: FRS weight steps down post-retirement (RA locked in, can't be changed).
+    // Healthcare weight escalates sharply — medical costs accelerate from 65+ at 5 %/yr.
+    // Longevity weight escalates post-65 — each remaining year of income matters more.
+    const AGE_WEIGHTS = [
+      { maxAge: 40,  frs: 0.35, inc: 0.25, p10: 0.15, long: 0.15, ma: 0.10 },
+      { maxAge: 54,  frs: 0.30, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.10 },
+      { maxAge: 64,  frs: 0.25, inc: 0.25, p10: 0.20, long: 0.15, ma: 0.15 },
+      { maxAge: 74,  frs: 0.15, inc: 0.25, p10: 0.20, long: 0.20, ma: 0.20 },
+      { maxAge: 999, frs: 0.10, inc: 0.20, p10: 0.15, long: 0.25, ma: 0.30 },
+    ];
+    const wt = AGE_WEIGHTS.find(b => ca <= b.maxAge) || AGE_WEIGHTS[4];
+
+    // ── Weighted composite with graceful degradation ───────────────────────
+    const subScores = [
+      { val: frsSubScore,       wt: wt.frs  },
+      { val: incomeSubScore,    wt: wt.inc  },  // null when no target
+      { val: p10SubScore ?? (totalCPFNom_ > 0 ? 50 : 0), wt: wt.p10 }, // 50 neutral when MC off but CPF exists; 0 when nothing to stress-test
+      { val: longevitySubScore, wt: wt.long },
+      { val: maSubScore,        wt: wt.ma   },
+    ];
+    const active  = subScores.filter(s => s.val !== null);
+    const totalWt = active.reduce((acc, s) => acc + s.wt, 0);
+    const score   = active.length > 0
+      ? Math.round(active.reduce((acc, s) => acc + (s.val * s.wt), 0) / totalWt)
+      : 0;
+
+    const color = score >= 75 ? "var(--clr-green)" : score >= 50 ? "var(--clr-amber)" : "var(--clr-red)";
+    const label = score >= 75 ? "On Track" : score >= 50 ? "Needs Attention" : "At Risk";
+    return {
+      score, frsRatio, incomeRatio,
+      raAtPA, projFRS, stdMonthly,
+      p10SubScore, longevitySubScore, maSubScore,
+      color, label,
+    };
+  }, [
     nominalAccumulationByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
     lifePlans, highlightPlan, isMale, basicPremiumPct, target,
     monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
@@ -6526,16 +6357,14 @@ function ReadinessTab({
   const escPay = scenarioPlan("escalating");
   const basPay = scenarioPlan("basic");
 
+  // Sprint-14 fix: report the score to the App, which owns the session baseline and the Δ badge.
   useEffect(() => {
-    const s = score ?? null;
-    if (s === null) return;
-    if (baselineScoreRef.current === null) { baselineScoreRef.current = s; return; }
-    setScoreDelta(Math.round(s - baselineScoreRef.current));
-  }, [score]); // eslint-disable-line
+    if (typeof onScore === 'function' && Number.isFinite(score)) onScore(score);
+  }, [score, onScore]);
 
   // ── Phase 3: P10 downside & probability of sufficiency ──────────────────
   // monteCarloData is null when MC toggle is off — all P10 fields degrade gracefully to null/—
-  // p10SubScore (for the sub-bar) is returned from the score useMemo above.
+  // p10SubScore (for the sub-bar) is returned from the readinessScore useMemo above.
   const nomMap         = nominalAccumulationByAge || accumulationByAge;
   const nomPayoutData  = nomMap.get(pa) || {};
   const totalCPFNom    = (nomPayoutData.oa || 0) + (nomPayoutData.sa || 0) + (nomPayoutData.ma || 0) + (nomPayoutData.ra || 0);
@@ -6555,7 +6384,7 @@ function ReadinessTab({
   const planningHorizon  = Math.max(pa + 25, 90);
   const oaIncomeGapYrs   = oaDepletionAge ? Math.max(0, lifeExpectancy - oaDepletionAge) : 0;
   // oaDrawActive: used by income waterfall, timeline, and action queue
-  // (longevitySubScore version lives inside the score useMemo as oaDrawActiveL)
+  // (longevitySubScore version lives inside readinessScore useMemo as oaDrawActiveL)
   const oaDrawActive     = (effectiveOaDrawMonthly || 0) > 0 && (effectiveOaDrawStartAge || 0) > 0;
 
   // ── Phase 3: Income waterfall — mirrors strategyChartData logic exactly ──
@@ -8545,11 +8374,9 @@ const TIER_CONFIG = {
 // ── Plan gate helpers ────────────────────────────────────────────────────────────
 // Tiers: 'lite' (free) → 'plus' (paid entry) → 'pro' (paid full)
 const PLAN_REQUIRED_TABS = {
-  strategy: 'pro',   // Strategy A/B/C/D + Tax Optimizer
-  life:     'plus',  // Payout Plans — CPF LIFE comparison
-  compare:  'pro',   // Scenario side-by-side compare
-  table:    'plus',  // Year-by-year Data Table
-  // 'rss' and 'household' remain gated by cpfScheme/householdEnabled, not plan
+  payout:  'plus',  // full CPF LIFE / RSS payout analysis (Guided shows the estimate on the Plan tab)
+  compare: 'plus',  // saved-scenario comparison + Household
+  // Sub-views gated at their toggles: Plan › Strategy and Docs & Data › Data Table → 'plus'
 };
 const PLAN_RANK = { lite: 0, plus: 1, pro: 2 };
 const tabIsLocked = (tabId, plan) => {
@@ -8561,8 +8388,8 @@ const tabIsLocked = (tabId, plan) => {
 const SECTION_PLAN = {
   cashBudget:      'plus', familyEvents: 'plus', topups:    'plus',
   transfers:       'plus', outflows:     'plus', retirement:   'plus',
-  portfolio:       'pro',  property:     'pro',
-  privateAssets:   'pro',  lifeevents:   'pro',
+  portfolio:       'plus',  property:     'plus',
+  privateAssets:   'plus',  lifeevents:   'plus',
 };
 const sectionIsLocked = (sectionId, plan) => {
   const req = SECTION_PLAN[sectionId];
@@ -8875,7 +8702,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   // nulls goalApplied + preApplySnapshot — the "Applied" badge and Revert button never render.
   const isApplyingStrategyRef = useRef(false);
 
-  const [activeTab, setActiveTab] = useState("readiness");
+  const [activeTab, setActiveTab] = useState("plan");
   activeTabRef.current = activeTab; // keep ref current for keyboard shortcut handler
   const [highlightPlan, setHighlightPlan] = useState("standard");
   // HH-5: Independent CPF LIFE plan selector per member (replaces shared householdPlan).
@@ -8951,8 +8778,8 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   // Summary tab collapsible zone states
   const [z2z3Expanded, setZ2z3Expanded] = useState(true);
   const [z5Expanded, setZ5Expanded] = useState(true);
-  const [z6Expanded, setZ6Expanded] = useState(false);
-  const [zCalloutExpanded, setZCalloutExpanded] = useState(false);
+  const [z6Expanded, setZ6Expanded] = useState(true);
+  const [zCalloutExpanded, setZCalloutExpanded] = useState(true);
   // Payout premium percentages for CPF LIFE plans (Basic: 10-20%, Standard: 100%, Escalating: 100%)
   // CPF policy: premium is age-dictated — 10% at 65, +2%/yr of deferral, capped at 20% (age 70).
   const [basicPremiumPct, setBasicPremiumPct] = useState(10);
@@ -9235,6 +9062,10 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   const readinessSidebarUserPref = useRef(null);
   const welcomeBodyRef     = useRef(null); // scroll-reset target for welcome modal body
   const baselineScoreRef   = useRef(null);  // Sprint-14: score delta baseline
+  const handleScore = useCallback((sc) => {
+    if (baselineScoreRef.current === null) { baselineScoreRef.current = sc; return; }
+    setScoreDelta(Math.round(sc - baselineScoreRef.current));
+  }, []);
   const baselineInputsRef  = useRef(null);  // Sprint-16: input diff baseline
   useEffect(() => {
     if (activeTab === "plan") {
@@ -10016,7 +9847,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         }
         // Standardize landing tab: RSS profiles → rss tab (readiness is hidden for RSS);
         // all other shared profiles → readiness, regardless of sender's active tab.
-        setActiveTab(mergedInputs?.cpfScheme === 'rss' ? 'rss' : 'readiness');
+        setActiveTab(mergedInputs?.cpfScheme === 'rss' ? 'payout' : 'plan');
         if (fullState.highlightPlan) setHighlightPlan(fullState.highlightPlan);
         // Bug 6 fix: restore per-member CPF LIFE plan selections from share link
         if (fullState.primaryLifePlan) setPrimaryLifePlan(fullState.primaryLifePlan);
@@ -10100,7 +9931,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         setInputs(mergedLegacy); setDebouncedInputs(mergedLegacy);
         setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedLegacy);
-        setActiveTab(mergedLegacy.cpfScheme === 'rss' ? 'rss' : 'readiness'); // Standardize: RSS→rss, all others→readiness
+        setActiveTab(mergedLegacy.cpfScheme === 'rss' ? 'payout' : 'plan'); // Standardize: RSS→rss, all others→readiness
       } else if (stateParam) {
         // Legacy plain format
         const decoded = JSON.parse(decodeURIComponent(stateParam));
@@ -10109,7 +9940,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         setInputs(mergedPlain); setDebouncedInputs(mergedPlain);
         setInputErrors({}); // BUG-4 fix
         lastSavedRef.current = JSON.stringify(mergedPlain);
-        setActiveTab(mergedPlain.cpfScheme === 'rss' ? 'rss' : 'readiness'); // Standardize: RSS→rss, all others→readiness
+        setActiveTab(mergedPlain.cpfScheme === 'rss' ? 'payout' : 'plan'); // Standardize: RSS→rss, all others→readiness
       } else {
         // Welcome modal is suppressed for ALL users who authenticated via BetaGate.
         // fusion_gate_passed='1' is set on first gate login and persists across sessions,
@@ -11064,7 +10895,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         setIsRealDollars(false);
         setShowMonteCarlo(false);
         setShowBaseline(false);
-        setActiveTab("readiness");
+        setActiveTab("plan");
         setGoalSimView("primary");
         setGoalTargetCombined(0);
         setSpouseGoalResult(null);
@@ -11149,7 +10980,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         setIsRealDollars(false);
         setShowMonteCarlo(false);
         setShowBaseline(false);
-        setActiveTab("readiness");
+        setActiveTab("plan");
         // Clear stress UI states — they live outside inputs and survive Clear otherwise.
         setShowSorr(false); setShowInflationStress(false); setShowPropertyStress(false);
         setShowCpfRateStress(false); setShowHealthcareStress(false); setShowPerfectStorm(false);
@@ -11182,7 +11013,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       // R6 fix: if the user was on the LIFE tab when switching to RSS, redirect to the RSS tab.
       // The LIFE tab is removed from the tab bar for RSS members; leaving activeTab on "life"
       // causes a blank panel until the user manually clicks another tab.
-      setActiveTab(at => at === 'readiness' ? 'payout' : at);
+      setActiveTab(at => at === 'plan' ? 'payout' : at);
     } else if (rssActionPending === 'reset') {
       setInputs(p => ({
         ...p,
@@ -11208,7 +11039,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
         // ── Payout age (CPF LIFE only) ───────────────────────────────────
         payoutAge: 65,
       }));
-      setActiveTab(at => at === 'readiness' ? 'payout' : at);
+      setActiveTab(at => at === 'plan' ? 'payout' : at);
       showToast(`✓ Switched to RSS — contribution & top-up fields reset.${ageClampNote}`);
     }
     setRssActionPending(null); // clear the flag
@@ -11445,7 +11276,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
           // Standardize landing tab: RSS profiles → rss tab (readiness is hidden for RSS);
           // all other file-loaded profiles → readiness for a consistent entry point.
           // (Previously restored the sender's saved activeTab — now dropped for consistency.)
-          setActiveTab(safeIn.cpfScheme === 'rss' ? 'rss' : 'readiness');
+          setActiveTab(safeIn.cpfScheme === 'rss' ? 'payout' : 'plan');
           try { if (p.highlightPlan) setHighlightPlan(p.highlightPlan); } catch {}
           // Bug 4 fix: restore per-member CPF LIFE plan selections
           try { if (p.primaryLifePlan) setPrimaryLifePlan(p.primaryLifePlan); } catch {}
@@ -11836,20 +11667,28 @@ function CPFPlannerApp({ freshGateEntry = false }) {
 
   // Sprint-14 Item 1: Ledger XLS (SpreadsheetML — no library needed)
   const handleExportLedgerXLS = () => {
-    if (!displayAccumulation?.length) return;
+    if (!displayAccumulation || displayAccumulation.length === 0) return;
     const memberName = (inputs.name || "Member").replace(/[^a-zA-Z0-9]/g, "_");
     const filename = `${memberName}_CashflowLedger_${new Date().toISOString().slice(0,10)}.xls`;
-    const is55 = (Number(inputs.currentAge)||0) >= 55;
-    const hdrs = ["Age","Mandatory","Voluntary","Grants/WIS","OA Int.",is55?"RA Int.":"SA Int.","MA Int.","▶ Total In","Housing Out","Medical Out","OA Draw","Edu Loan","Loved One","CPFIS Out","Rent Out","Events In","Events Out","▶ Total Out","Net Flow"];
-    const fc = v => v ? Math.round(v).toLocaleString() : "0";
-    const dataRows = (displayAccumulation||[]).map(r => {const {mandatory,voluntary,grants,oaInt,saRaInt,maInt,housOut,medOut,oaDraw,eduOut,lovedOut,cpfisOut,rentExpOut,eventsIn,eventsOut,totalIn,totalOut,net}=r; return [r.age,fc(mandatory),fc(voluntary),fc(grants),fc(oaInt),fc(saRaInt),fc(maInt),fc(totalIn),fc(housOut),fc(medOut),fc(oaDraw),fc(eduOut),fc(lovedOut),fc(cpfisOut),fc(rentExpOut),fc(eventsIn),fc(eventsOut),fc(totalOut),(net>=0?"+":"-")+fc(Math.abs(net))];});
-    const t=(displayAccumulation||[]).reduce((a,r)=>{["mandatory","voluntary","grants","oaInt","saRaInt","maInt","housOut","medOut","oaDraw","eduOut","lovedOut","cpfisOut","rentExpOut","eventsIn","eventsOut","totalIn","totalOut"].forEach(k=>a[k]=(a[k]||0)+(r[k]||0)); a.net=(a.net||0)+(r.net||0); return a;},{});
-    const totRow=["TOTAL",fc(t.mandatory),fc(t.voluntary),fc(t.grants),fc(t.oaInt),fc(t.saRaInt),fc(t.maInt),fc(t.totalIn),fc(t.housOut),fc(t.medOut),fc(t.oaDraw),fc(t.eduOut),fc(t.lovedOut),fc(t.cpfisOut),fc(t.rentExpOut),fc(t.eventsIn),fc(t.eventsOut),fc(t.totalOut),(t.net>=0?"+":"-")+fc(Math.abs(t.net))];
-    const th="background:#0f766e;color:#fff;font-weight:bold;padding:4px 8px;";
-    const tf="background:#1e293b;color:#fff;font-weight:bold;padding:4px 8px;";
-    const body=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Ledger</x:Name></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body><table border="1" cellpadding="4"><thead><tr>${hdrs.map(h=>`<th style="${th}">${h}</th>`).join("")}</tr></thead><tbody>${dataRows.map((r,i)=>`<tr style="background:${i%2===0?"#f0fdfa":"#fff"}">${r.map(c=>`<td style="padding:3px 7px;white-space:nowrap">${c}</td>`).join("")}</tr>`).join("")}</tbody><tfoot><tr>${totRow.map(c=>`<td style="${tf}">${c}</td>`).join("")}</tr></tfoot></table></body></html>`;
-    const blob=new Blob([body],{type:"application/vnd.ms-excel;charset=utf-8"});
-    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    const is55 = (Number(inputs.currentAge) || 0) >= 55;
+    const cols = [["Mandatory","yearMandatory"],["Voluntary","yearVoluntary"],["Grants/WIS","yearGovGrants"],["OA Interest","yearOaInterest"],[is55 ? "RA Interest" : "SA Interest","yearSaRaInterest"],["MA Interest","yearMaInterest"],["Events In","yearEventsIn"],
+                  ["Housing Out","yearHousingOut"],["Medical Out","yearMedOut"],["OA Draw","yearOaDrawOut"],["Edu Loan Out","yearEduOut"],["Loved One Out","yearLovedOneOut"],["CPFIS Out","yearCpfisOut"],["Events Out","yearEventsOut"]];
+    const inKeys = cols.slice(0, 7).map(c => c[1]); const outKeys = cols.slice(7).map(c => c[1]);
+    const fmt = v => Math.round(v || 0).toLocaleString();
+    const tot = {}; let tIn = 0, tOut = 0;
+    const rows = displayAccumulation.map(r => {
+      cols.forEach(([, k]) => { tot[k] = (tot[k] || 0) + (r[k] || 0); });
+      const tin = inKeys.reduce((x, k) => x + (r[k] || 0), 0), tout = outKeys.reduce((x, k) => x + (r[k] || 0), 0);
+      tIn += tin; tOut += tout;
+      return [r.age, ...cols.map(([, k]) => fmt(r[k])), fmt(tin), fmt(tout), (tin - tout >= 0 ? "+" : "-") + fmt(Math.abs(tin - tout))];
+    });
+    const hdrs = ["Age", ...cols.map(c => c[0]), "Total In", "Total Out", "Net Flow"];
+    const totRow = ["TOTAL", ...cols.map(([, k]) => fmt(tot[k])), fmt(tIn), fmt(tOut), (tIn - tOut >= 0 ? "+" : "-") + fmt(Math.abs(tIn - tOut))];
+    const th = "background:#0f766e;color:#fff;font-weight:bold;padding:4px 8px;", tf = "background:#1e293b;color:#fff;font-weight:bold;padding:4px 8px;";
+    const body = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1" cellpadding="4"><thead><tr>${hdrs.map(h => `<th style="${th}">${h}</th>`).join("")}</tr></thead><tbody>${rows.map((r, i) => `<tr style="background:${i % 2 === 0 ? "#f0fdfa" : "#fff"}">${r.map(c => `<td style="padding:3px 7px;white-space:nowrap">${c}</td>`).join("")}</tr>`).join("")}</tbody><tfoot><tr>${totRow.map(c => `<td style="${tf}">${c}</td>`).join("")}</tr></tfoot></table></body></html>`;
+    const blob = new Blob([body], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const el = document.createElement("a"); el.href = url; el.download = filename; document.body.appendChild(el); el.click(); document.body.removeChild(el); URL.revokeObjectURL(url);
     showToast(`✓ Ledger XLS downloaded: ${filename}`);
   };
 
@@ -13169,7 +13008,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       vc3aMaxRoom,
       vcmaRoom,
     };
-  }, [activeTab, goalStratTab, debouncedInputs, payoutAge65, raAtPayout]);
+  }, [activeTab, planSubTab, goalStratTab, debouncedInputs, payoutAge65, raAtPayout]);
 
 
   // Pre-computed data for Lines chart mode — each account independent (no stacking).
@@ -13954,7 +13793,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     // Finance Ratios silently showed no XIRR values. Skipping all other tabs (accumulation,
     // compare, household, ledger, strategy) avoids the 270-iteration Newton-Raphson cost
     // on input changes while those tabs are open.
-    if (activeTab !== "table" && activeTab !== "summary" && !(activeTab === "guide" && guideView === "data")) return {};
+    if (activeTab !== "summary" && !(activeTab === "guide" && guideView === "data")) return {};
     const pa = payoutAge65; // use debounced value — matches projection/payoutProjection which are also debounced
     const ca = Number(debouncedInputs.currentAge) || 35;
 
@@ -14021,7 +13860,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       }
     }
     return result;
-  }, [activeTab, projection, payoutProjection, payoutAge65, debouncedInputs.currentAge,
+  }, [activeTab, guideView, projection, payoutProjection, payoutAge65, debouncedInputs.currentAge,
       debouncedInputs.cpfScheme, debouncedInputs.rssPayoutStartAge]);
 
   // ── lifeEffRateByAge ─────────────────────────────────────────────────────────
@@ -14064,7 +13903,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       }
     }
     return result;
-  }, [activeTab, payoutProjection, payoutAge65, raAtPayout, raAfterTransfer,
+  }, [activeTab, guideView, payoutProjection, payoutAge65, raAtPayout, raAfterTransfer,
       debouncedInputs.applyRaOaTransfer, debouncedInputs.cpfScheme]);
 
   // Spouse mirror of lifeEffRateByAge
@@ -14098,7 +13937,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       }
     }
     return result;
-  }, [householdEnabled, activeTab, spousePayoutProjection, spousePayoutAge,
+  }, [householdEnabled, activeTab, guideView, spousePayoutProjection, spousePayoutAge,
       spouseRaAtPayout, spouseRaAfterTransfer,
       debouncedSpouseInputs.applyRaOaTransfer]);
 
@@ -14516,7 +14355,8 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     const livingExpenses = Number(debouncedInputs.budgetLivingExpenses) || 0;
     const surplus = Math.max(0, takeHome - estimatedMonthlyTax - livingExpenses);
     // I-09: project living expenses forward to payout age at user-specified inflation rate
-    const expInfl      = (Number(debouncedInputs.budgetExpenseInflation) ?? 2) / 100;
+    const _bei         = debouncedInputs.budgetExpenseInflation;
+    const expInfl      = ((_bei === '' || _bei == null || !Number.isFinite(Number(_bei))) ? 2 : Number(_bei)) / 100;
     const payoutAgeB   = Number(debouncedInputs.payoutAge) || 65;
     const yearsToRetire = Math.max(0, payoutAgeB - ca);
     const projectedExpenses = Math.round(livingExpenses * Math.pow(1 + expInfl, yearsToRetire));
@@ -16234,183 +16074,6 @@ ${milestoneSnapshotHtml}
       setExportModal({ type: "pdf", content: html });
     } catch (e) { setConfirmModal({ title: "Report Failed", message: "Could not generate the PDF report: " + e.message, onConfirm: () => setConfirmModal(null), confirmLabel: "OK", confirmColor: "var(--clr-blue2)" }); } finally { clearTimeout(pdfTimeout); setIsGeneratingPdf(false); }
   };
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Retirement Health Report — a holistic, narrative report assembled from datasets
-  // the app has ALREADY computed (no extra engine runs). Separate from generatePDF
-  // (numbers pack) and shown in the same preview modal. Paid plans only; CPF LIFE
-  // members only in this version (RSS and foreigner profiles are not covered yet).
-  // ═══════════════════════════════════════════════════════════════════════════
-  const generateHealthReport = () => {
-    if (plan === 'lite') { setShowUpgradeModal(true); return; }
-    if (isForeigner || inputs.cpfScheme === 'rss') {
-      showToast("ℹ️ The Health Report covers CPF LIFE members (not RSS or foreigner profiles) in this version");
-      return;
-    }
-    try {
-      const di = debouncedInputs; // same snapshot the datasets were computed from
-      const pa = payoutAge65;
-      const ca = Number(di.currentAge) || 35;
-      const cy = Number(di.currentYear) || 2026;
-      const fc = n => "$" + Math.round(Number(n) || 0).toLocaleString();
-      const esc = escapeHtml;
-      const rsGrowth = (Number(di.retirementSumGrowth) || 3) / 100;
-      const yearsFromNow = Math.max(0, (cy + Math.max(0, pa - ca)) - 2026);
-      const targetM = Number(di.targetMonthlyIncome) || 0;
-
-      // Score — identical calculation to the Readiness tab (shared pure function)
-      const r = computeReadinessScore({
-        nominalAccumulationByAge: projectionByAge, accumulationByAge, pa, rsGrowth, yearsFromNow,
-        lifePlans, highlightPlan, isMale: di.isMale !== false, basicPremiumPct, target: targetM,
-        monteCarloData, effectiveOaDrawMonthly, effectiveOaDrawStartAge,
-        milestones, inputs: di, ca, perfectStormData, payoutAge65,
-      });
-
-      const row = accumulationByAge.get(pa) || {};
-      const totalCpf = (row.oa || 0) + (row.sa || 0) + (row.ma || 0) + (row.ra || 0);
-      const displayPayout = isRealDollars ? applyInflation(r.stdMonthly, pa) : r.stdMonthly;
-      const coveragePct = targetM > 0 ? Math.round(displayPayout / targetM * 100) : null;
-      const incomeShortfall = targetM > 0 ? Math.max(0, targetM - displayPayout) : 0;
-      const mcRow = monteCarloData?.rows?.find(x => x.age === pa) || null;
-      const dangers = (milestones || []).filter(m => m.type === 'danger');
-
-      const H = buildHealthFindings({
-        fmt: fc, score: r.score, label: r.label,
-        frsRatio: r.frsRatio, incomeSub: r.incomeSubScore, incomeRatio: r.incomeRatio,
-        p10Sub: r.p10SubScore, longevitySub: r.longevitySubScore, maSub: r.maSubScore,
-        coveragePct, incomeShortfall, gapAlert,
-        mcProb: monteCarloData?.probSufficiency ?? null,
-        stormDeltaPct: perfectStormData ? perfectStormData.deltaPct : null,
-        sorr: sorrData?.hasData ? { sorrDepletionAge: sorrData.sorrDepletionAge, baseDepletionAge: sorrData.baseDepletionAge } : null,
-        inflLoss: inflationStressData ? inflationStressData.lifetimeLoss : null,
-        swr: swrAnalytics ? { annualGap: swrAnalytics.annualGap, requiredSWR: swrAnalytics.requiredSWR, depletionAge: swrAnalytics.depletionAge, sustainYears: swrAnalytics.sustainYears } : null,
-        oaExhaustAge, dangerCount: dangers.length, dangerLabels: dangers.map(m => m.label), ca, pa,
-      });
-
-      const dateStr = new Date().toLocaleDateString("en-SG", { day: "2-digit", month: "long", year: "numeric" });
-      const fingerprint = hashInputsFnv(di);
-      const dollarMode = isRealDollars ? "Real dollars (today's purchasing power)" : "Nominal dollars";
-      const planName = lifePlans?.[highlightPlan]?.name || (highlightPlan.charAt(0).toUpperCase() + highlightPlan.slice(1));
-      const sevStyle = { good: ["#166534", "#f0fdf4", "#86efac", "✔"], watch: ["#92400e", "#fffbeb", "#fcd34d", "!"], risk: ["#991b1b", "#fef2f2", "#fca5a5", "✖"] };
-      const dimColor = v => v >= 75 ? "#16a34a" : v >= 50 ? "#d97706" : "#dc2626";
-
-      const bar = (label, v, note) => v === null || v === undefined
-        ? `<div class="dim"><div class="dim-l">${label}</div><div class="dim-b"><div class="dim-na">Not assessed</div></div><div class="dim-n">${note || ""}</div></div>`
-        : `<div class="dim"><div class="dim-l">${label}</div><div class="dim-b"><div class="dim-f" style="width:${Math.max(2, Math.min(100, v))}%;background:${dimColor(v)}"></div></div><div class="dim-n"><b>${Math.round(v)}</b>/100${note ? " · " + note : ""}</div></div>`;
-      const kv = (k, v) => `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`;
-      const finding = f => { const [fg, bg, bd, ic] = sevStyle[f.severity]; return `<div class="fnd" style="background:${bg};border-left:4px solid ${bd};color:${fg}"><div class="fnd-t">${ic} ${esc(f.title)}</div><div class="fnd-d">${esc(f.detail)}</div></div>`; };
-      const nr = what => `<span class="na">Not run — ${what}</span>`;
-
-      const w = r.weights || {};
-      const wRow = (label, k) => w[k] !== undefined && w[k] !== null ? kv(label, `${Math.round(w[k] * 100)}%`) : "";
-
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Retirement Health Report — ${esc(di.name || "Member")}</title>
-<style>
-@page{size:A4 portrait;margin:14mm}
-*{box-sizing:border-box}
-body{font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;font-size:11px;line-height:1.5;margin:0;background:#fff}
-.page{max-width:780px;margin:0 auto;padding:18px 22px}
-.hdr{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;border-radius:10px;padding:18px 22px;margin-bottom:14px}
-.hdr h1{margin:0 0 2px;font-size:20px}.hdr .sub{opacity:.8;font-size:11px}
-.sec{margin:16px 0 6px;font-size:13px;font-weight:800;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:3px;page-break-after:avoid}
-.score{display:flex;gap:18px;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px}
-.score-n{font-size:44px;font-weight:900;line-height:1;color:${dimColor(r.score)}}.score-l{font-size:15px;font-weight:800}
-.verdict{margin:8px 0 10px;padding:10px 14px;border-radius:8px;background:${sevStyle[H.verdict.tone][1]};border:1px solid ${sevStyle[H.verdict.tone][2]};color:${sevStyle[H.verdict.tone][0]}}
-.verdict b{font-size:13px}
-.dim{display:grid;grid-template-columns:150px 1fr 150px;gap:8px;align-items:center;margin:5px 0}
-.dim-l{font-weight:700}.dim-b{background:#e2e8f0;border-radius:6px;height:10px;overflow:hidden}.dim-f{height:100%}
-.dim-na{font-size:9px;color:#64748b;padding-left:6px;line-height:10px}.dim-n{font-size:10px;color:#475569}
-table.kv{width:100%;border-collapse:collapse}table.kv td{padding:4px 6px;border-bottom:1px solid #f1f5f9;vertical-align:top}
-td.k{color:#475569;width:46%}td.v{font-weight:700;text-align:right}
-.na{color:#94a3b8;font-weight:600;font-style:italic}
-.fnd{border-radius:6px;padding:7px 10px;margin:5px 0;page-break-inside:avoid}.fnd-t{font-weight:800}.fnd-d{font-size:10.5px;margin-top:1px}
-.act{display:flex;gap:10px;margin:6px 0;page-break-inside:avoid}.act-n{flex:0 0 22px;height:22px;border-radius:50%;background:#0f172a;color:#fff;font-weight:800;text-align:center;line-height:22px}
-.act b{display:block}.act span{font-size:10.5px;color:#334155}
-.alt{display:flex;gap:8px;margin:3px 0;font-size:10.5px}.alt i{font-style:normal;font-weight:800;flex:0 0 52px}
-.foot{margin-top:18px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:9px;color:#64748b}
-.foot .fp{font-family:Consolas,monospace}
-.legal{margin-top:6px;font-size:8.5px;color:#94a3b8}
-@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{padding:0}}
-</style></head><body><div class="page">
-
-<div class="hdr"><h1>Retirement Health Report</h1>
-<div class="sub">${esc(di.name || "Member")} · Age ${ca} · Planned CPF LIFE payout at ${pa} · ${esc(dollarMode)} · ${dateStr}</div></div>
-
-<div class="sec">1 · Executive summary</div>
-<div class="score"><div><div class="score-n">${r.score}</div><div style="font-size:9px;color:#64748b">out of 100</div></div>
-<div><div class="score-l" style="color:${dimColor(r.score)}">${esc(r.label)}</div><div style="font-size:10.5px;color:#475569">${esc(H.verdict.text)}</div></div></div>
-<div class="verdict"><b>${esc(H.verdict.headline)}</b></div>
-${bar("Retirement Sum (FRS)", r.frsSubScore, `RA is ${Math.round((r.frsRatio || 0) * 100)}% of projected FRS`)}
-${bar("Income adequacy", r.incomeSubScore, coveragePct !== null ? `covers ${coveragePct}% of target` : "no target set")}
-${bar("Stress resilience", r.p10SubScore, "")}
-${bar("Longevity cover", r.longevitySubScore, "")}
-${bar("Healthcare shield", r.maSubScore, "")}
-<div style="margin-top:8px"><b>Key findings</b></div>
-${H.findings.slice(0, 6).map(finding).join("") || '<div class="na">No findings.</div>'}
-
-<div class="sec">2 · Retirement income adequacy</div>
-<table class="kv">
-${kv(`CPF LIFE payout at ${pa} — ${esc(planName)} plan`, `${fc(displayPayout)}/month`)}
-${kv("Standard · Escalating · Basic (starting monthly)", `${fc(isRealDollars ? applyInflation(lifePlans.standard.start, pa) : lifePlans.standard.start)} · ${fc(isRealDollars ? applyInflation(lifePlans.escalating.start, pa) : lifePlans.escalating.start)} · ${fc(isRealDollars ? applyInflation(lifePlans.basic.start, pa) : lifePlans.basic.start)}`)}
-${kv("Your monthly income target", targetM > 0 ? `${fc(targetM)}/month` : '<span class="na">Not set</span>')}
-${kv("Coverage of target", coveragePct !== null ? `${coveragePct}%` : '<span class="na">n/a</span>')}
-${kv("Estimated monthly shortfall", targetM > 0 ? (incomeShortfall > 0 ? fc(incomeShortfall) + "/month" : "None") : '<span class="na">n/a</span>')}
-</table>
-
-<div class="sec">3 · Balances at the payout age (${pa})</div>
-<table class="kv">
-${kv("Ordinary Account (OA)", fc(row.oa))}${kv("Special / Retirement Account (SA · RA)", fc((row.sa || 0) + (row.ra || 0)))}${kv("MediSave Account (MA)", fc(row.ma))}
-${kv("Total CPF balances", fc(totalCpf))}
-${kv("Projected Full Retirement Sum (nominal)", fc(r.projFRS))}
-${kv("RA as % of projected FRS", `${Math.round((r.frsRatio || 0) * 100)}%`)}
-</table>
-${gapAlert ? `<div class="fnd" style="background:#fffbeb;border-left:4px solid #fcd34d;color:#92400e"><div class="fnd-t">${esc(gapAlert.raLabel)} is ${fc(gapAlert.frsGap)} short of the FRS</div><div class="fnd-d">About ${fc(gapAlert.monthlyTopUp)}/month (${fc(gapAlert.annualTopUp)}/year) for ${gapAlert.yearsToGo} year${gapAlert.yearsToGo === 1 ? "" : "s"} would close it (assumes 4% p.a. growth).</div></div>` : ""}
-
-<div class="sec">4 · Resilience and stress tests</div>
-<table class="kv">
-${kv("Monte Carlo — chance of reaching the FRS at payout age", monteCarloData?.probSufficiency != null ? `${monteCarloData.probSufficiency}%` : nr("switch on Monte Carlo"))}
-${kv("Monte Carlo — total CPF at payout age (P10 · P50 · P90)", mcRow ? `${fc(mcRow.p10)} · ${fc(mcRow.p50)} · ${fc(mcRow.p90)}` : nr("switch on Monte Carlo"))}
-${kv("Perfect Storm — fall in projected net worth", perfectStormData ? `${perfectStormData.deltaPct}% (${fc(perfectStormData.delta)})` : nr("switch on Perfect Storm"))}
-${kv("Market crash early in retirement — private assets run out at", sorrData?.hasData ? (sorrData.sorrDepletionAge ? `age ${sorrData.sorrDepletionAge}${sorrData.baseDepletionAge ? ` (base case: ${sorrData.baseDepletionAge})` : " (base case: lasts)"}` : "Lasts through the projection") : nr("switch on the sequence-of-returns test"))}
-${kv("Higher inflation — lifetime CPF LIFE purchasing power lost", inflationStressData ? fc(inflationStressData.lifetimeLoss) : nr("switch on the inflation stress test"))}
-</table>
-
-<div class="sec">5 · Sustainability of drawdown income</div>
-<table class="kv">
-${swrAnalytics ? `${kv("Monthly shortfall vs target after CPF LIFE", swrAnalytics.annualGap > 0 ? fc(swrAnalytics.annualGap / 12) + "/month" : "None — CPF LIFE covers the target")}
-${swrAnalytics.annualGap > 0 ? kv("Required withdrawal rate on private portfolio", swrAnalytics.requiredSWR != null ? `${swrAnalytics.requiredSWR}% a year` : '<span class="na">n/a (no portfolio)</span>') : ""}
-${swrAnalytics.annualGap > 0 ? kv("Portfolio lasts", swrAnalytics.sustainYears === Infinity ? "Indefinitely (growth exceeds the draw)" : swrAnalytics.depletionAge ? `to about age ${swrAnalytics.depletionAge}` : '<span class="na">n/a</span>') : ""}` : kv("Drawdown analysis", '<span class="na">Not available</span>')}
-${kv("OA drawdown runs out at", oaExhaustAge ? `age ${oaExhaustAge}` : "Not within the projection (or no OA draw set)")}
-</table>
-
-<div class="sec">6 · Milestone alerts in the projection</div>
-${(milestones || []).length ? [...(milestones || [])].sort((a, b) => (a.type === 'danger' ? 0 : 1) - (b.type === 'danger' ? 0 : 1) || a.age - b.age).slice(0, 8).map(m => `<div class="alt"><i style="color:${m.type === 'danger' ? '#dc2626' : m.type === 'warning' ? '#d97706' : '#0f766e'}">Age ${m.age}</i><span><b>${esc(m.label)}</b>${m.detail ? " — " + esc(m.detail) : ""}</span></div>`).join("") : '<div class="na">No milestone alerts.</div>'}
-
-<div class="sec">7 · Suggested next steps</div>
-${H.actions.length ? H.actions.map((a, i) => `<div class="act"><div class="act-n">${i + 1}</div><div><b>${esc(a.title)}</b><span>${esc(a.detail)}</span></div></div>`).join("") : '<div class="na">No actions flagged — keep monitoring as your circumstances change.</div>'}
-
-<div class="sec">8 · Basis and assumptions</div>
-<table class="kv">
-${kv("Current age · CPF LIFE payout age", `${ca} · ${pa}`)}
-${kv("Display basis", esc(dollarMode))}
-${kv("Projected inflation", `${Number.isFinite(Number(di.inflationRate)) && di.inflationRate !== "" ? Number(di.inflationRate) : 2}% a year`)}
-${kv("Retirement Sum growth", `${(rsGrowth * 100).toFixed(1)}% a year`)}
-${kv("2026 Retirement Sums (BRS · FRS · ERS)", `${fc(RETIREMENT_SUMS_2026.BRS)} · ${fc(RETIREMENT_SUMS_2026.FRS)} · ${fc(RETIREMENT_SUMS_2026.ERS)}`)}
-${kv("2026 Basic Healthcare Sum (BHS)", fc(RETIREMENT_SUMS_2026.BHS))}
-${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income", "inc")}${wRow("Score weight — Stress resilience", "p10")}${wRow("Score weight — Longevity", "long")}${wRow("Score weight — Healthcare", "ma")}
-</table>
-<div class="legal">Findings are rule-based classifications of this projection against fixed thresholds (e.g. FRS coverage ≥ 100% good, 75–99% watch, below 75% at risk). They are informational, not financial advice, and stress tests that are switched off are shown as "not run" rather than estimated.</div>
-
-<div class="foot">Generated ${dateStr} · Fusion 富生 · V4-2026 · Input fingerprint <span class="fp">${fingerprint}</span> (identical inputs always give the same fingerprint)
-<div class="legal">${LEGAL_DISCLAIMER}</div></div>
-</div></body></html>`;
-
-      setExportModal({ type: "pdf", title: "🩺 Retirement Health Report", content: html });
-    } catch (err) {
-      console.error("Health report error:", err);
-      showToast("⚠️ Could not build the Health Report — " + (err?.message || "unexpected error"));
-    }
-  };
   // ─── SIDEBAR TOGGLE HANDLER ───────────────────────────────────────────────────
   // Wraps setSidebarOpen so that when the user manually toggles the sidebar while
   // ON the Readiness tab, both refs are updated to reflect their intention:
@@ -16466,7 +16129,6 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
     <TooltipContext.Provider value={{ show: showTooltipId, set: setShowTooltipId, rect: tooltipRect, setRect: setTooltipRect, isDark }}>
       <ErrorBoundary>
       <div ref={rootRef} className={isDark ? "theme-dark" : "theme-light"} style={{ width: "100%", display: "flex", flexDirection: "column", background: "var(--bg-base)", color: "var(--text-main)", fontFamily: "system-ui,sans-serif" }}>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" />
       <style>{`
         /* ─── VITE OVERRIDES (Fix Desktop White Space) ─── */
         html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow-x: clip !important; }
@@ -18582,163 +18244,6 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
         .recharts-wrapper, .recharts-surface, input[type="range"] {
           touch-action: pan-y !important;
         }
-
-        /* ═══════════════════════════════════════════════════════════════════
-           FUSION CALM REDESIGN — appended override layer
-           Goals: fewer boxes, one clear hero, readable type, softer chrome.
-           Hooks: [data-zone] attributes + existing class names. Safe to delete
-           this whole block to revert to the previous look.
-           ═══════════════════════════════════════════════════════════════════ */
-        .theme-dark {
-          --bg-base: #0a101c;
-          --bg-panel: #111a2a;
-          --bg-input: #17233a;
-          --bg-muted: rgba(255,255,255,0.035);
-          --bg-panel-muted: rgba(255,255,255,0.03);
-          --border-subtle: rgba(255,255,255,0.075);
-          --border-strong: rgba(255,255,255,0.15);
-          --text-muted: #a3b3c9;
-          --text-subtle: #8a9ab0;
-          --chart-grid: rgba(255,255,255,0.06);
-        }
-        .theme-dark, .theme-light { --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif; }
-
-        /* Quality floor: visible keyboard focus, reduced motion */
-        .theme-dark button:focus-visible, .theme-light button:focus-visible,
-        .theme-dark summary:focus-visible, .theme-light summary:focus-visible,
-        .theme-dark input:focus-visible, .theme-light input:focus-visible { outline: 2px solid var(--clr-green); outline-offset: 2px; }
-        @media (prefers-reduced-motion: reduce) { .theme-dark *, .theme-light * { transition: none !important; animation: none !important; } }
-
-        /* Breathing room */
-        .cpf-layout { gap: 32px !important; }
-        .cpf-tab-content { padding: 16px 8px 40px !important; }
-        [data-zone] { padding: 24px 28px !important; }
-        [data-zone="z1"] { padding: 32px 36px !important; }
-        [data-zone="gap-alert"], [data-zone="pledge"], [data-zone="ra-oa"], [data-zone="goal"] { padding: 16px 20px !important; }
-
-        /* Visual order on Summary (normal flow only): answer first, evidence next, tools last */
-        :not(.summary-exec-dash) > [data-zone="gap-alert"], :not(.summary-exec-dash) [data-zone="gap-alert"] { order: -1; }
-        :not(.summary-exec-dash) [data-zone="z1"]            { order: 0; }
-        :not(.summary-exec-dash) [data-zone="goal"]          { order: 1; }
-        :not(.summary-exec-dash) [data-zone="nw-chart"]      { order: 2; }
-        :not(.summary-exec-dash) [data-zone="z23-wrap"]      { order: 3; }
-        :not(.summary-exec-dash) [data-zone="z4"]            { order: 4; }
-        :not(.summary-exec-dash) [data-zone="z5"]            { order: 5; }
-        :not(.summary-exec-dash) [data-zone="milestone-snap"]{ order: 6; }
-        :not(.summary-exec-dash) [data-zone="pledge"], :not(.summary-exec-dash) [data-zone="ra-oa"] { order: 7; }
-        :not(.summary-exec-dash) [data-zone="what-if"]       { order: 8; }
-        :not(.summary-exec-dash) [data-zone="z6"]            { order: 9; }
-
-        /* Hero: one number leads. Tiles become a quiet row separated by hairlines */
-        .z1-cols { grid-template-columns: 1.6fr 1fr 1fr !important; gap: 0 !important; }
-        .z1-cols > div { background: transparent !important; border: 0 !important; padding: 4px 28px !important; }
-        .z1-cols > div:first-child { padding-left: 0 !important; }
-        .z1-cols > div + div { border-left: 1px solid var(--border-subtle) !important; }
-        .z1-cols p[style*="monospace"], .z1-cols span[style*="monospace"] {
-          font-family: var(--font-display) !important; font-weight: 600 !important; letter-spacing: -0.02em !important;
-          font-size: clamp(30px, 3.6vw, 44px) !important; line-height: 1.05 !important; font-variant-numeric: lining-nums;
-        }
-        .z1-cols > div:nth-child(2) p[style*="monospace"] { font-size: clamp(38px, 4.8vw, 60px) !important; }
-        .z1-cols > div:nth-child(n+3) p { font-size: clamp(30px, 3.6vw, 44px) !important; }
-        @media (max-width: 900px) {
-          [data-zone] { padding: 20px 20px !important; }
-          [data-zone="z1"] { padding: 24px 22px !important; }
-          .z1-cols { grid-template-columns: 1fr !important; }
-          .z1-cols > div, .z1-cols > div:first-child { padding: 16px 0 !important; }
-          .z1-cols > div + div { border-left: 0 !important; border-top: 1px solid var(--border-subtle) !important; }
-        }
-
-        /* Flatten cards-inside-cards: balances + growth live in one panel, split by a hairline */
-        [data-zone="z2"], [data-zone="z3"] { background: transparent !important; border: 0 !important; padding: 4px 6px !important; }
-        [data-zone="z3"] { border-left: 1px solid var(--border-subtle) !important; padding-left: 28px !important; }
-        @media (max-width: 900px) { [data-zone="z3"] { border-left: 0 !important; padding-left: 6px !important; border-top: 1px solid var(--border-subtle) !important; padding-top: 24px !important; } }
-        [data-zone="z23-wrap"] .z2-z3-grid { gap: 28px !important; }
-        [data-zone="z6"] > div > div > div { box-shadow: none !important; border-color: var(--border-subtle) !important; }
-
-        /* Typography: sentence case, readable minimums, numbers that align but do not shout */
-        .cpf-tab-content [style*="text-transform: uppercase"], .cpf-sidebar-wrap [style*="text-transform: uppercase"] {
-          text-transform: none !important; letter-spacing: 0 !important;
-        }
-        .cpf-tab-content [style*="font-size: 10px"], .cpf-sidebar-wrap [style*="font-size: 10px"] { font-size: 12px !important; }
-        .cpf-tab-content [style*="font-size: 11px"], .cpf-sidebar-wrap [style*="font-size: 11px"] { font-size: 12.5px !important; }
-        .cpf-tab-content [style*="font-size: 12px"], .cpf-sidebar-wrap [style*="font-size: 12px"] { font-size: 13px !important; }
-        .cpf-tab-content p, .cpf-sidebar-wrap p { line-height: 1.55; }
-        .cpf-tab-content [style*="monospace"], .cpf-sidebar-wrap [style*="monospace"] {
-          font-family: "Inter", ui-sans-serif, system-ui, sans-serif; font-feature-settings: "tnum" 1, "cv11" 1;
-        }
-        .z1-cols [style*="monospace"] { font-family: var(--font-display) !important; }
-
-        /* Collapse controls: quiet text buttons, not chrome */
-        [data-collapse-btn] { opacity: 0.75; border-radius: 8px !important; }
-        [data-collapse-btn]:hover { opacity: 1; background: var(--bg-muted) !important; }
-
-        /* Navigation: pill tabs, one hairline, no heavy underline */
-        .cpf-tabs-full-width .cpf-page-wrap { border-bottom: 1px solid var(--border-subtle) !important; padding-top: 6px !important; padding-bottom: 6px !important; }
-        .cpf-tabs { gap: 4px !important; }
-        .cpf-tabs button[role="tab"] { border-radius: 999px !important; padding: 8px 16px !important; font-weight: 600 !important; border-bottom: 0 !important; transition: background .15s, color .15s; }
-        .cpf-tabs button[role="tab"]:hover { background: var(--bg-muted) !important; }
-        .cpf-tabs button[role="tab"][aria-selected="true"] { background: rgba(var(--clr-emerald-rgb), 0.14) !important; color: var(--text-bright) !important; }
-        .theme-light .cpf-tabs button[role="tab"][aria-selected="true"] { color: var(--clr-emerald) !important; }
-
-        /* ═══════════════════════════════════════════════════════════════════
-           FUSION CALM — INPUT SIDEBAR + KPI STRIP (minimalist pass)
-           One column, neutral colour, no helper text until a section opens.
-           ═══════════════════════════════════════════════════════════════════ */
-        /* 1. One focused column instead of three side-by-side */
-        .cpf-layout[data-mode="fhd"] { grid-template-columns: 420px 1fr !important; gap: 40px !important; }
-        .cpf-layout[data-mode="fhd"] .cpf-sidebar-inner { display: flex !important; flex-direction: column !important; gap: 0 !important; }
-        @media (min-width: 1920px) {
-          .cpf-layout[data-mode="auto"] { grid-template-columns: 420px 1fr !important; gap: 40px !important; }
-          .cpf-layout[data-mode="auto"] .cpf-sidebar-inner { display: flex !important; flex-direction: column !important; gap: 0 !important; }
-          .cpf-layout[data-mode="auto"] .sidebar-sticky-bar { display: flex !important; }
-        }
-        .cpf-layout[data-mode="fhd"] .sidebar-sticky-bar { display: flex !important; gap: 8px !important; }
-        .fhd-col-btn, .cpf-layout .fhd-col-btn { display: none !important; }
-        .sidebar-col, .sidebar-col-body { gap: 0 !important; }
-
-        /* 2. Sections become a plain list with hairlines (no boxes, no tints) */
-        .sidebar-col-body > div {
-          background: transparent !important; border: 0 !important; border-radius: 0 !important;
-          border-bottom: 1px solid var(--border-subtle) !important; box-shadow: none !important;
-        }
-        .sidebar-section-header { padding: 18px 4px !important; background: transparent !important; }
-        .sidebar-section-header:hover { background: var(--bg-muted) !important; }
-        .sidebar-section-header span, .sidebar-section-header > div > span {
-          color: var(--text-bright) !important; font-size: 15px !important; font-weight: 600 !important;
-          text-transform: none !important; letter-spacing: 0 !important;
-        }
-        .sidebar-section-header svg { color: var(--text-subtle) !important; opacity: .9; }
-        /* the long italic hint under each closed section is the main source of clutter */
-        .sidebar-section-header + * { display: none !important; }
-
-        /* 3. Fields: neutral labels, soft inputs, one accent on focus */
-        .cpf-sidebar-wrap label, .cpf-sidebar-wrap label * {
-          color: var(--text-muted) !important; font-size: 13px !important; font-weight: 500 !important;
-          text-transform: none !important; letter-spacing: 0 !important;
-        }
-        .cpf-sidebar-wrap input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), .cpf-sidebar-wrap select, .cpf-sidebar-wrap textarea {
-          background: var(--bg-input) !important; border: 1px solid transparent !important; border-radius: 10px !important;
-          padding: 10px 12px !important; font-size: 14px !important; font-family: "Inter", ui-sans-serif, system-ui, sans-serif !important;
-          font-feature-settings: "tnum" 1; color: var(--text-bright) !important; box-shadow: none !important;
-        }
-        .cpf-sidebar-wrap input:focus, .cpf-sidebar-wrap select:focus { border-color: var(--clr-green) !important; outline: none !important; }
-        .cpf-sidebar-wrap [style*="padding: 0px 16px 16px"], .cpf-sidebar-wrap [style*="padding: 0 16px 16px"] { padding: 0 4px 24px !important; }
-        /* nested tinted info boxes (OA Drawdown, Expense Planning, Die with Zero...) -> neutral */
-        .cpf-sidebar-wrap div[style*="background: rgba("] { background: var(--bg-muted) !important; border-color: var(--border-subtle) !important; border-radius: 12px !important; }
-        .cpf-sidebar-wrap [style*="font-style: italic"] { font-style: normal !important; }
-        .cpf-sidebar-wrap p, .cpf-sidebar-wrap [style*="font-size: 13px"] { line-height: 1.55; }
-
-        /* 4. Top KPI strip: one quiet row, big numbers, no tile borders, no NEW badges */
-        .kpi-strip { gap: 0 !important; max-width: none !important; }
-        .kpi-strip > div { background: transparent !important; border: 0 !important; border-radius: 0 !important; padding: 8px 20px !important; text-align: left !important; }
-        .kpi-strip > div + div { border-left: 1px solid var(--border-subtle) !important; }
-        .kpi-strip > div > span[style*="position: absolute"] { display: none !important; }
-        .kpi-strip .cpf-kpi-label { color: var(--text-muted) !important; font-weight: 500 !important; }
-        .kpi-strip .cpf-kpi-value { font-family: var(--font-display) !important; font-weight: 600 !important; font-size: 28px !important; letter-spacing: -0.02em !important; }
-        .kpi-strip-wrap::after { display: none !important; }
-
-        /* 5. Header buttons: quieter */
-        .cpf-sidebar-wrap button:not([role="tab"]) { font-weight: 600; }
       `}</style>
 
       {/* TOAST NOTIFICATION QUEUE — UX-9: multiple toasts stack vertically */}
@@ -18823,7 +18328,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                     // BUG-3 fix: restore all previously missing state fields
                     // Standardize landing tab: RSS profiles → rss tab (readiness hidden for RSS);
                     // all other profiles → readiness, regardless of sender's active tab.
-                    setActiveTab(safeInp.cpfScheme === 'rss' ? 'rss' : 'readiness');
+                    setActiveTab(safeInp.cpfScheme === 'rss' ? 'payout' : 'plan');
                     if (parsed.highlightPlan) setHighlightPlan(parsed.highlightPlan);
                     if (parsed.primaryLifePlan) setPrimaryLifePlan(parsed.primaryLifePlan);
                     if (parsed.spouseLifePlan)  setSpouseLifePlan(parsed.spouseLifePlan);
@@ -18903,7 +18408,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-bright)", margin: "0 0 3px" }}>
-                  {exportModal.type === "pdf" && (exportModal.title || "📄 PDF Report")}
+                  {exportModal.type === "pdf" && "📄 PDF Report"}
                   {exportModal.type === "csv" && "📊 CSV Export — Year-by-Year Projection"}
                   {exportModal.type === "json" && "💾 Profile Backup — JSON"}
                   {exportModal.type === "print" && "🖨️ Data Table — Plain Text"}
@@ -19069,7 +18574,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                   }
                   // Standardize landing tab across ALL sample loads: RSS scheme → rss tab
                   // (readiness is hidden for RSS); all others including household → readiness.
-                  setActiveTab(merged.cpfScheme === 'rss' ? 'rss' : 'readiness');
+                  setActiveTab(merged.cpfScheme === 'rss' ? 'payout' : 'plan');
                   setShowPresets(false);
                   showToast(`✓ Loaded: ${p.label}`);
                 }} style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--bg-muted)", border: `1px solid ${isPresetLocked ? "var(--border-subtle)" : "var(--border-subtle)"}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%", transition: "border-color 0.15s", opacity: isPresetLocked ? 0.6 : 1 }}
@@ -19209,13 +18714,12 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                   <div className="welcome-step3-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
                     {[
                       ["Share Link 🔒 Plus", Link, "Fusion Plus — Generates a URL with your full profile encoded. Anyone opening the link sees your exact inputs and projection — no file needed."],
-                      ["Health Report 🔒 Plus", ShieldCheck, "Fusion Plus — A narrative Retirement Health Report: readiness score, ranked findings, income adequacy, balances at payout age, stress-test results, drawdown sustainability and a prioritised action plan. Stress tests you have switched on are included; others show as not run. CPF LIFE members only."],
                       ["PDF Report 🔒 Plus", Download, "Fusion Plus — Comprehensive multi-section PDF: cover, input parameters & optional features, charts, FRS tracker, year-by-year projection, Cashflow Ledger, sensitivity analysis, and conditional SRS / Scenario Comparison sections."],
                       ["SEP Mode", Briefcase, "Free on all plans — Self-Employed mode: no mandatory contributions. VC3A up to $37,740/yr proportionally allocated. BHS, ERS, and AW ceiling enforced."],
                       ["Monte Carlo 🔒 Pro", Activity, "Fusion Pro — 500 simulations with user-selectable variance: Mild ±0.5% / Base ±1% / Stress ±2%. Toggle in the Accumulation tab. Shows probability of meeting FRS at payout age and a live P10–P90 confidence band on the chart."],
                       ["Retirement Sum Growth", TrendingUp, "Free on all plans — Control the annual rate at which FRS, BRS, ERS, and BHS targets rise (default 3%). Preset buttons: 2% / 3% / 4%. Found in the Salary section."],
                       ["Phased Salary & Career Break", Briefcase, "Free on all plans — Model two-phase salary growth using Phase 2 Salary in Mandatory Contributions. Career Break events (Life Events panel 🔒 Pro) pause contributions entirely with start/end age bands visible on the chart."],
-                      ["Life Events 🔒 Pro", Activity, "Fusion Pro — Overlay 10 life event types: Retrenchment, Career Break, Medical Crisis, Windfall, Early Retirement, Hyperinflation, Salary Cut, Loan Repayment, Charitable Giving, Barista FIRE (part-time income semi-retirement). Coloured bands on the Grow chart. Family milestones (marriage, children, parent support, education) are modelled in the Family Milestones section."],
+                      ["Life Events 🔒 Pro", Activity, "Fusion Pro — Overlay 9 life event types: Retrenchment, Career Break, Medical Crisis, Windfall, Early Retirement, Hyperinflation, Salary Cut, Loan Repayment, Charitable Giving. Coloured bands on the Grow chart. Family milestones (marriage, children, parent support, education) are modelled in the Family Milestones section."],
                       ["Goal Simulator 🔒 Pro", Target, "Fusion Pro — Set a CPF balance target, click ⚡ Calculate Strategies for three solver plans (A: RSTU only, B: VC3A only, C: blended). Each card shows feasibility, required cash, and Apply to Profile. Found in Strategy tab → Goal Simulator."],
                       ["SRS 🔒 Pro", BookOpen, "Fusion Pro — Supplementary Retirement Scheme: tax-deductible contributions up to $15,300/yr (SC/PR). 50% of withdrawals taxable from age 63. Must deplete within 10 years of first withdrawal. Modelled in the SRS & Private Wealth panel."],
                       ["Property Monetisation 🔒 Pro", Home, "Fusion Pro — Model a one-time monetisation event: downgrade, Lease Buyback Scheme, or Silver Housing Bonus. Net cash proceeds go to private assets; RA top-up credited to RA. Found in the Property & Monetisation panel."],
@@ -19492,10 +18996,6 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                     {isGeneratingPdf ? "Generating…" : "PDF Report"}{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                   </button>
                   <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
-                    onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowReportMenu(false); return; } generateHealthReport(); setShowReportMenu(false); }}>
-                    <ShieldCheck style={{ width: 13, height: 13 }} />Health Report{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
-                  </button>
-                  <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
                     onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowReportMenu(false); return; } handleExportCSV(); setShowReportMenu(false); }}>
                     <Download style={{ width: 13, height: 13 }} />CSV – Data{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                   </button>
@@ -19592,10 +19092,6 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                       onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowSettingsMenu(false); return; } if (!isGeneratingPdf) { generatePDF(); setShowSettingsMenu(false); } }}>
                       {isGeneratingPdf ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> : <Printer style={{ width: 13, height: 13 }} />}
                       {isGeneratingPdf ? "Generating…" : "PDF Report"}{plan==='lite'&&<span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
-                    </button>
-                    <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
-                      onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowSettingsMenu(false); return; } generateHealthReport(); setShowSettingsMenu(false); }}>
-                      <ShieldCheck style={{ width: 13, height: 13 }} />Health Report{plan === 'lite' && <span style={{ fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:4,background:"#0284c7",color:"#fff",marginLeft:4 }}>PLUS</span>}
                     </button>
                     <button className="cpf-nav-dd-item" style={{ color: "var(--clr-green)" }}
                       onClick={() => { if (plan === 'lite') { setShowUpgradeModal(true); setShowSettingsMenu(false); return; } handleExportCSV(); setShowSettingsMenu(false); }}>
@@ -20570,14 +20066,14 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                   </div>
                   <button
                     onClick={() => {
-                      if (plan !== 'pro') { setShowUpgradeModal(true); return; }
+                      if ((PLAN_RANK[plan] ?? 0) < 1) { setShowUpgradeModal(true); return; }
                       const next = !householdEnabled;
                       setHouseholdEnabled(next);
                       if (next) { if (window.innerWidth <= 1024) setSidebarOpen(false); setActiveTab("compare"); setCompareSubTab("household"); }
                     }}
-                    title={plan !== 'pro' ? "Household Mode requires Fusion Pro" : undefined}
+                    title={(PLAN_RANK[plan] ?? 0) < 1 ? "Household Mode requires Fusion Plus" : undefined}
                     style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", background: householdEnabled ? "rgba(139,92,246,0.15)" : "rgba(100,116,139,0.12)", color: householdEnabled ? "#8b5cf6" : "var(--text-muted)", border: `1px solid ${householdEnabled ? "rgba(139,92,246,0.35)" : "var(--border-subtle)"}` }}>
-                    {plan !== 'pro' ? <Lock style={{ width: 11, height: 11 }} /> : householdEnabled ? "Disable" : "Enable"}
+                    {(PLAN_RANK[plan] ?? 0) < 1 ? <Lock style={{ width: 11, height: 11 }} /> : householdEnabled ? "Disable" : "Enable"}
                   </button>
                 </div>
                 {/* ── Household Mode: Spouse inputs panel — inside Profile section when Household Mode is enabled ── */}
@@ -24816,7 +24312,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
             {(activeTab === "plan" || activeTab === "summary") && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px 0", background: "var(--bg-base)" }}>
                 <div style={{ display: "flex", background: "var(--bg-panel)", padding: 3, borderRadius: 10, border: "1px solid var(--border-strong)", gap: 2 }}>
-                  <button onClick={() => setActiveTab("readiness")} style={{ padding: "5px 16px", borderRadius: 7, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: activeTab === "plan" ? "var(--ctrl-active-bg)" : "transparent", color: activeTab === "plan" ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
+                  <button onClick={() => setActiveTab("plan")} style={{ padding: "5px 16px", borderRadius: 7, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: activeTab === "plan" ? "var(--ctrl-active-bg)" : "transparent", color: activeTab === "plan" ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
                     <Activity style={{ width: 12, height: 12, display: "inline", marginRight: 5, verticalAlign: "middle" }} />Readiness score
                   </button>
                   <button onClick={() => setActiveTab("summary")} style={{ padding: "5px 16px", borderRadius: 7, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: activeTab === "summary" ? "var(--ctrl-active-bg)" : "transparent", color: activeTab === "summary" ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
@@ -24858,7 +24354,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
             {activeTab === "plan" && (
               <div style={{ display: "flex", gap: 4, padding: "4px 6px", background: "var(--bg-input)", borderRadius: 10, border: "1px solid var(--border-subtle)", alignSelf: "flex-start", marginBottom: 12, marginLeft: 2 }}>
                 {[{ id: "readiness", label: "🎯 Dashboard" }, { id: "strategy", label: "⚙️ Strategy" }].map(({ id, label }) => (
-                  <button key={id} aria-pressed={planSubTab === id} onClick={() => setPlanSubTab(id)}
+                  <button key={id} aria-pressed={planSubTab === id} onClick={() => { if (id === 'strategy' && (PLAN_RANK[plan] ?? 0) < 1) { setShowUpgradeModal(true); return; } setPlanSubTab(id); }}
                     style={{ padding: "4px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", transition: "all 0.15s",
                       background: planSubTab === id ? "var(--ctrl-active-bg)" : "transparent",
                       color: planSubTab === id ? "#fff" : "var(--text-muted)" }}>
@@ -24921,8 +24417,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                 portfolioByAge={portfolioByAge}
                 swrAnalytics={swrAnalytics}
                 scoreDelta={scoreDelta}
-                baselineScoreRef={baselineScoreRef}
-                setScoreDelta={setScoreDelta}
+                onScore={handleScore}
                 sessionChanges={baselineInputsRef.current ? (() => {
                   const _b = baselineInputsRef.current; const _c = debouncedInputs;
                   return [
@@ -24957,7 +24452,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                       <button aria-pressed={guideView === 'reference'} onClick={() => setGuideView('reference')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'reference' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'reference' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
                         📖 Reference
                       </button>
-                      <button aria-pressed={guideView === 'data'} onClick={() => setGuideView('data')} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'data' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'data' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
+                      <button aria-pressed={guideView === 'data'} onClick={() => { if ((PLAN_RANK[plan] ?? 0) < 1) { setShowUpgradeModal(true); return; } setGuideView('data'); }} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", background: guideView === 'data' ? "var(--ctrl-active-bg)" : "transparent", color: guideView === 'data' ? "#fff" : "var(--text-muted)", transition: "all 0.15s" }}>
                         📊 Data Table
                       </button>
                     </div>
@@ -25118,7 +24613,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
             )}
             {/* ── SUMMARY TAB ── */}
             {activeTab === "summary" && (
-              <div className={execDashMode ? "summary-exec-dash" : ""} style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+              <div className={execDashMode ? "summary-exec-dash" : ""} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
                 {/* UX-P2-B: Contribution gap alert — moved from buried sidebar position to top of
                     Summary panel. Uses existing gapAlert useMemo (unchanged). Dismissible per
@@ -25150,13 +24645,13 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {gapAlert.annualTopUp > 0 && (
                         <button type="button"
-                          onClick={() => { if (plan !== 'pro') { setShowUpgradeModal(true); return; } setActiveTab("plan"); setPlanSubTab("strategy"); setGoalStratTab("goal"); }}
+                          onClick={() => { if ((PLAN_RANK[plan] ?? 0) < 1) { setShowUpgradeModal(true); return; } setActiveTab("plan"); setPlanSubTab("strategy"); setGoalStratTab("goal"); }}
                           style={{ padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700,
                             border: `1px solid ${gapAlert.isUrgent ? "rgba(239,68,68,0.4)" : "rgba(var(--clr-amber3-rgb),0.4)"}`,
                             background: gapAlert.isUrgent ? "rgba(239,68,68,0.12)" : "rgba(var(--clr-amber3-rgb),0.12)",
                             color: gapAlert.isUrgent ? "var(--clr-red)" : "var(--clr-amber)", cursor: "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
                           <Target style={{ width: 11, height: 11, flexShrink: 0 }} />
-                          {plan !== 'pro' ? <><Lock style={{ width: 9, height: 9 }} /> Strategy →</> : "Fix in Strategy →"}
+                          {(PLAN_RANK[plan] ?? 0) < 1 ? <><Lock style={{ width: 9, height: 9 }} /> Strategy →</> : "Fix in Strategy →"}
                         </button>
                       )}
                       <button type="button" onClick={() => setGapAlertDismissed(true)}
@@ -30992,14 +30487,10 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                     </h4>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {[
-                        [ShieldCheck, "Retirement Health Report (Plus)", "var(--clr-emerald)",
-                          "A new narrative report is available under Report → Health Report. It turns your plan into a readiness verdict, ranked findings, income adequacy, balances at payout age, stress-test results, drawdown sustainability and a prioritised next-steps list, plus a basis and assumptions page. Stress tests you have switched on (Monte Carlo, Perfect Storm, sequence-of-returns, inflation) are included; any that are off are shown as not run rather than estimated. Each report carries a date and an input fingerprint so it can be traced to its inputs. Available for CPF LIFE members on Plus and Pro plans; RSS and foreigner profiles are not covered yet."],
-                        [Briefcase, "Barista FIRE now applied in projections", "#10b981",
-                          "Barista FIRE life events (semi-retirement with part-time work) are now applied by the main CPF projection engine. During the event age range, enter your part-time monthly gross income as the magnitude: employee CPF contributions are scaled to the part-time salary, employer CPF is not modelled (gig / freelance arrangement), and take-home pay after employee CPF is credited to private assets. This also fixes a startup error that could leave the screen blank after logging in."],
-                        [ShieldCheck, "Stability fixes — tabs, exports and crash protection", "var(--clr-emerald)",
-                          "(1) The Payout tab for RSS members no longer errors when opened. (2) The Cashflow Ledger XLS download works again. (3) The Docs What's New list loads its icons correctly. (4) The Readiness score Δ badge now updates against your session baseline. (5) The whole app is now wrapped in a recovery screen: if an unexpected error ever occurs you see a Reload Page card instead of a blank page."],
                         [Sparkles, "Sprints 9–14 (2026) — PDF Analytics, Tab Consolidation, XLS Exports", "var(--clr-teal)",
-                          "Sprint 9: PDF Decumulation Analytics section (Floor+Upside, Buckets, FIRE, TDB, SRS tax table); Sprint 2–8 changelog in Docs. Sprint 10: TooltipBox accessibility fix; Household merged into Compare sub-tab (9→8 tabs). Sprint 11: Data Table merged into Guide sub-view (8→7 tabs); MC run count increased 200→500 for tighter P10/P90 bands. Sprint 12: RSS and CPF LIFE Payout Plans merged into single Payout tab (7→6 tabs). Sprint 13: Dashboard and Strategy merged into Plan tab with Dashboard|Strategy sub-tab toggle (6→5 tabs); SRS drawdown period optimiser — iterates 1–10 years to find the period that minimises lifetime IRAS tax at the 50% statutory concession rate. Sprint 14: Readiness score Δ badge (vs session baseline); Cashflow Ledger XLS download (SpreadsheetML); Year-by-Year Projection XLS download — both open natively in Excel with no library dependency. Sprint 15: ARIA labels, keyboard focus rings and documentation updates."],
+                          "Sprint 9: PDF Decumulation Analytics section (Floor+Upside, Buckets, FIRE, TDB, SRS tax table); Sprint 2–8 changelog in Docs. Sprint 10: TooltipBox accessibility fix; Household merged into Compare sub-tab (9→8 tabs). Sprint 11: Data Table merged into Guide sub-view (8→7 tabs); MC run count increased 200→500 for tighter P10/P90 bands. Sprint 12: RSS and CPF LIFE Payout Plans merged into single Payout tab (7→6 tabs). Sprint 13: Dashboard and Strategy merged into Plan tab with Dashboard|Strategy sub-tab toggle (6→5 tabs); SRS drawdown period optimiser — iterates 1–10 years to find the period that minimises lifetime IRAS tax at the 50% statutory concession rate. Sprint 14: Readiness score Δ badge (vs session baseline); Cashflow Ledger XLS download (SpreadsheetML); Year-by-Year Projection XLS download — both open natively in Excel with no library dependency."],
+                        [Sparkles, "Sprints 9–14 (2026) — PDF Analytics, Tabs, XLS Exports", "var(--clr-teal)",
+                          "Sprint 9: PDF Decumulation Analytics. Sprints 10-13: 9→5 tabs. Sprint 14: Score Δ badge; XLS exports. Sprint 15: ARIA; focus ring; docs."],
                         [Sparkles, "Sprints 2–8 (2026) — Decumulation Engine, FIRE, Enterprise Analytics", "var(--clr-teal)",
                           "Eight sprints of new features: (2) SRS/portfolio depletion milestones, SWR analytics useMemo, Floor-and-Upside card, Three-Bucket panel. (3) Guardrails overlay on accumulation chart with P10/P90 thresholds, Coast FIRE declining curve on chart, FIRE Numbers panel (FIRE number + Coast FIRE), SWR Sensitivity table (Singapore-calibrated 3.8–5.8% SWR by horizon). (4) TDB / CPF Organic Growth Target — min SA today to reach FRS organically, SRS tax efficiency panel (50% concession at 63, 10yr vs 5yr draw comparison), SRS SORR extension — same crash scenario applied to SRS balance alongside private assets. (5) Barista FIRE life event — part-time income with scaled employee CPF and take-home credit to private assets; Rising equity glidepath for SRS — equity% rises 2%/yr from drawdown start (capped 60%), configurable via sidebar. (6) Cashflow Ledger column collapse — compact 4-column view (Age / Total In / Total Out / Net Flow) with expand toggle; Sidebar Quick Start / Full mode — hides advanced sections for new users, auto-reveals on profile import. (7) Warm stone light mode palette (#FAFAF8 base, teal-700 primary action); Family milestone Gantt markers (marriage, child birth, education, parent support); CPF LIFE eligibility notice in Payout tab. (8) CPF 2026 employee rate correction (55–60: 18%, 60–65: 12.5%, new 65–70 band at 7.5%); D3 minor account age floor validation (age < 16 blocks top-ups; CPFIS age 18 guard). PDF report now includes a Decumulation Analytics section covering all Sprint 2–8 analytics."],
                         [Target, "Goal Simulator: \"When Can I Stop Contributing?\" (was \"When Can I Retire?\")", "var(--clr-amber)",
@@ -31023,7 +30514,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                         [ShieldCheck, "CPFIS $20k OA / $40k SA floor enforced", "var(--clr-blue2)",
                           "The projection engine now enforces the CPF Investment Scheme floor rules: only OA savings above $20,000 are investible; only SA savings above $40,000 are investible. A live 'Investible (OA − $20k floor): $X' line now appears under the CPFIS OA field. The validation panel shows an error if the entered amount exceeds the investible portion, and the tooltip has been updated with the full policy text including the SA $40k floor."],
                         [Users, "PR Year tenure selector", "var(--clr-purple)",
-                          "When PR is selected, a PR Tenure toggle (Year 1 / Year 2 / Year 3+) and a G/G vs F/G rate-type toggle appear in the Profile section. The engine applies the CPF Board graduated PR rate tables (1 Jan 2026) and advances the tier automatically each projection year; ⚡ Auto-Calc uses the same rates. If PR Year 1 or 2 is selected with a monthly gross salary of $0, a warning explains that mandatory contributions will project as zero until you enter your salary and run Auto-Calc."],
+                          "A three-button PR Year toggle (Year 1 / Year 2 / Year 3+) has been added to the Profile section below Gender. Selecting Year 1 or Year 2 triggers an Auto-Calc warning explaining that the computed figures use full Year 3+ rates and must be manually adjusted. Full engine modelling of graduated PR rates uses the existing G/G and F/G rate tables that advance tier automatically each projection year."],
                         [LayoutDashboard, "Readiness tab sidebar: open by default on desktop", "var(--clr-amber)",
                           "On desktop (viewport > 1024px), the input panel now opens automatically when switching to the Readiness tab for the first time. Previously it always collapsed on first entry, requiring an extra click. Mobile and tablet viewports still collapse the sidebar on tab entry to maximise dashboard space. The choice is remembered on subsequent re-entries."],
                         [Smartphone, "Strategy sub-nav sticky on mobile", "var(--clr-orange)",
@@ -31069,8 +30560,7 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                         ["Five sub-score bars", "FRS Coverage (RA vs projected FRS), Income Adequacy (CPF LIFE payout vs target with income tier label — Active ≥ ERS payout, Comfortable ≥ FRS payout, Basic ≥ BRS payout), Stress Resilience (Perfect Storm worst-case delta; falls back to P10 Monte Carlo when Stress Centre is inactive; shows '—' when both are off), Longevity Cover (real purchasing power of CPF LIFE at age 90 vs BRS-payout floor, or OA coverage years vs age-90 for drawdown members), Healthcare Shield (MA at payout vs projected BHS)."],
                         ["Financial Health Panel", "Five advisory tiles aligned to the MAS Basic Financial Planning Guide (MAS/MoneySense 2024). Emergency Buffer: months of liquid savings vs 3–6 month guideline (set in Profile sidebar). Savings Rate: total CPF contributions + voluntary as % of annual gross salary vs ≥10% MAS minimum. Inflation Hedge: CPF LIFE plan type and private asset return vs inflation rate. Liquidity Ratio: liquid assets (CPF+SRS+private) vs total net worth — penalises >75% property concentration. Legacy Readiness: Will, CPF nomination, and LPA status (set as toggles in Profile sidebar)."],
                         ["What counts as 'on track'?", "FRS Coverage: RA at payout ≥ projected FRS. Income Adequacy: payout ≥ target (tier: Active ≥ ERS, Comfortable ≥ FRS, Basic ≥ BRS). Stress Resilience: perfect storm + P10 net worth ≥ base case. Longevity Cover: real CPF LIFE at age 90 ≥ BRS payout floor. Healthcare Shield: MA ≥ projected BHS. Advisory: Emergency ≥ 6 months, Savings Rate ≥ 20%, Escalating plan or positive real return, Liquidity ≤ 75% property, all 3 legacy docs complete."],
-                        ["Score change badge (Δ)", "A +N / −N pts badge beside the gauge shows how much your Readiness Score has moved since the first score of this session, so you can see the effect of each input change. The baseline resets when you reset the app or load a profile file."],
-["Milestone Snapshots row", "The Milestone Snapshots bar under the gauge shows your projected CPF balance at age 55 (SA lock-in), your payout age, and age 95 (longevity benchmark). Each snapshot shows OA, SA/RA, and MA individually. Balances are shown in nominal dollars by default — toggle Real ($) in Display settings to deflate for inflation."],
+                        ["Milestone Snapshots row", "The Milestone Snapshots bar under the gauge shows your projected CPF balance at age 55 (SA lock-in), your payout age, and age 95 (longevity benchmark). Each snapshot shows OA, SA/RA, and MA individually. Balances are shown in nominal dollars by default — toggle Real ($) in Display settings to deflate for inflation."],
                         ["Setting your target income", "The Target Monthly Income field in the sidebar (Private Assets & Goals section) drives the Income Coverage card, the income roadmap, and the Goal Simulator. Set it to your desired post-retirement monthly household spend. A typical Singapore benchmark is $3,000–$5,000/mo for a single individual, or $5,000–$8,000/mo for a couple."],
                         ["Sidebar auto-opens on Readiness (desktop)", "On desktop (viewport > 1,024px), the sidebar opens automatically when you first land on the Readiness tab so you can immediately adjust inputs and see the gauges update. On mobile and tablet the sidebar collapses to give full dashboard space. Your manual open/close choice is remembered for the rest of the session."],
                         ["RSS and Foreigner mode", "The Readiness tab is hidden for RSS members (born before 1958) and for Foreigners, since both groups have no CPF LIFE entitlement. RSS members see the RSS Drawdown tab instead; Foreigners see only the Summary, Strategy, Accumulation, Compare, Household, Table, and Docs tabs."],
@@ -31676,10 +31166,6 @@ ${wRow("Score weight — Retirement Sum", "frs")}${wRow("Score weight — Income
                         <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#eab308", marginTop: 6, flexShrink: 0 }} />
                           <div><strong style={{ color: "var(--text-highlight)" }}>Hyperinflation:</strong> The magnitude sets an alternative annual inflation rate (%) active during the event age range. This overrides the global Inflation Rate for purchasing-power calculations in those years — useful for stress-testing a supply shock or stagflation scenario on your real retirement income.</div>
-                        </li>
-                        <li style={{ marginBottom: 12, display: "flex", gap: 8 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", marginTop: 6, flexShrink: 0 }} />
-                          <div><strong style={{ color: "var(--text-highlight)" }}>Barista FIRE:</strong> Enter your expected part-time <em>monthly gross income</em> as the magnitude. During the event age range, employee CPF contributions are scaled to the part-time salary (employer CPF is not modelled — gig / freelance arrangement) and take-home pay after employee CPF is credited to private assets. Use it to compare a semi-retirement bridge against full-time work on CPF accumulation and private-asset drawdown.</div>
                         </li>
                         <li style={{ display: "flex", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--clr-blue)", marginTop: 6, flexShrink: 0 }} />
@@ -35433,5 +34919,5 @@ export default function App() {
     );
   }
 
-  return <ErrorBoundary><CPFPlannerApp freshGateEntry={freshGateEntry} /></ErrorBoundary>;
+  return <CPFPlannerApp freshGateEntry={freshGateEntry} />;
 }
